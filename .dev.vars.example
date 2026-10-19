@@ -1,0 +1,3 @@
+# Kopieer naar .dev.vars voor lokale ontwikkeling.
+# Lokaal is er geen Cloudflare Access; dit e-mailadres wordt gebruikt als "aangemelde gebruiker".
+DEV_USER=jij@example.com

@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "huishouden",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-10-19",
+  "observability": { "enabled": true },
+
+  // De React-app wordt als statische bestanden geserveerd.
+  // Alleen /api/* gaat langs de Worker; al de rest is de app zelf.
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "huishouden-db",
+      "database_id": "2fc14175-dc75-4b49-9b1f-a390659e90ca",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "huishouden-bestanden"
+    }
+  ],
+
+  // Vul deze in nadat je Cloudflare Access hebt aangezet (zie README, stap 5).
+  // Zolang ze leeg zijn, weigert de API elke aanvraag.
+  "vars": {
+    "TEAM_DOMAIN": "",
+    "POLICY_AUD": ""
+  }
+}
