@@ -31,10 +31,10 @@
   // Workers AI, enkel voor kastickets die de code niet zelf kan lezen.
   "ai": { "binding": "AI" },
 
-  // Vul deze in nadat je Cloudflare Access hebt aangezet (zie README, stap 5).
-  // Zolang ze leeg zijn, weigert de API elke aanvraag.
+  // Cloudflare Access (zie README, stap 3). Geen geheimen: de Worker gebruikt ze enkel
+  // om te controleren dat een aanvraag echt via jullie Access-login kwam.
   "vars": {
-    "TEAM_DOMAIN": "",
-    "POLICY_AUD": ""
+    "TEAM_DOMAIN": "https://mute-forest-dbb0.cloudflareaccess.com",
+    "POLICY_AUD": "2d8588316b4f2bde4bad5ab221c3f6536612fae5fcffc58823c8d8cdb5369d64"
   }
 }
