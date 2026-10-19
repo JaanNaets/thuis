@@ -143,6 +143,18 @@ Venster gemist? Je vindt de waarden ook terug:
 Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
 e-mailadres in, krijgt een code per mail, en komt in de app. Onderaan staat "Aangemeld als …".
 
+### Lukt inloggen niet?
+
+Het loginscherm zegt altijd "A code has been emailed", ook als Cloudflare niets verstuurt. Komt er geen
+code, controleer dan:
+
+- **De regel in de policy is "Emails", niet "Emails ending in".** Die laatste vergelijkt enkel het domein
+  (`outlook.com`), waardoor je eigen adres niet herkend wordt.
+- **De login methods van de app:** Zero Trust → Access controls → Applications → de app van `thuis` →
+  Configure → Login methods. Daar moet **One-time PIN** aan staan.
+- **Outlook.com** houdt de mail soms tegen. Voeg `noreply@notify.cloudflare.com` toe aan je veilige
+  afzenders, of gebruik een ander adres (bv. Gmail) dat ook in de policy staat.
+
 ## 4. Op je gsm zetten
 
 - **iPhone**: open de app in Safari → deelknop → **Zet op beginscherm**.
