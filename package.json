@@ -1,5 +1,5 @@
 {
-  "name": "huishouden",
+  "name": "thuis",
   "description": "Ons huishouden: aankoopbewijzen, klantenkaarten en meer. Draait op Cloudflare.",
   "scripts": {
     "dev": "vite",

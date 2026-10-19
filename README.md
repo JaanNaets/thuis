@@ -1,4 +1,4 @@
-# Huishouden
+# Thuis
 
 Onze eigen huishoud-app, volledig op Cloudflare. Eerste onderdelen:
 
@@ -62,8 +62,11 @@ De database en de opslag bestaan al in je Cloudflare-account. Je moet de app all
 ### Aanbevolen: automatisch bij elke push (Workers Builds)
 
 1. Ga in het Cloudflare-dashboard naar **Workers & Pages** → **Create** → **Import a repository**.
-2. Kies de GitHub-repo `huishouden`.
-3. Projectnaam: `huishouden`. Die moet gelijk zijn aan `name` in `wrangler.jsonc`.
+2. Kies de GitHub-repo `thuis`. Staat ze er niet tussen? Dan heeft de Cloudflare-app op GitHub enkel
+   toegang tot andere repo's. Ga naar https://github.com/settings/installations → **Cloudflare Workers and
+   Pages** → **Configure**, voeg bij **Repository access** de repo `thuis` toe, sla op en herlaad de pagina
+   in Cloudflare.
+3. Projectnaam: `thuis`. Die moet gelijk zijn aan `name` in `wrangler.jsonc`.
 4. **Build command**: leeg laten. **Deploy command**: `npm run deploy`.
 5. Klik op **Save and Deploy**.
 
@@ -80,12 +83,12 @@ npx wrangler login
 npm run deploy
 ```
 
-Na het uitrollen staat de app op `https://huishouden.<jouw-subdomein>.workers.dev`. De API weigert alles
+Na het uitrollen staat de app op `https://thuis.<jouw-subdomein>.workers.dev`. De API weigert alles
 tot je stap 3 gedaan hebt. Dat is bewust: zonder login kan niemand aan je gegevens.
 
 ## 3. Aanmelden met Cloudflare Access
 
-1. Ga naar **Workers & Pages** → `huishouden` → **Settings** → **Domains & Routes**.
+1. Ga naar **Workers & Pages** → `thuis` → **Settings** → **Domains & Routes**.
 2. Klik bij `workers.dev` op **Enable Cloudflare Access**.
 3. Klik op **Manage Cloudflare Access** en zet in de policy de e-mailadressen van iedereen in het huishouden.
 4. Noteer de twee waarden die Access toont:
@@ -114,7 +117,7 @@ Open de app één keer met internet. Daarna werken je klantenkaarten ook in een 
 
 ## 5. Tablet in kioskmodus
 
-1. Open op de tablet één keer `https://huishouden.<jouw-subdomein>.workers.dev/?kiosk=1` en meld je aan.
+1. Open op de tablet één keer `https://thuis.<jouw-subdomein>.workers.dev/?kiosk=1` en meld je aan.
    Kioskmodus blijft op dat toestel aan (uitzetten met `?kiosk=0`).
 2. Vergrendel de tablet op de app:
    - **Android**: [Fully Kiosk Browser](https://www.fully-kiosk.com) met dezelfde URL als startpagina.
