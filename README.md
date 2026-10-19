@@ -88,25 +88,60 @@ tot je stap 3 gedaan hebt. Dat is bewust: zonder login kan niemand aan je gegeve
 
 ## 3. Aanmelden met Cloudflare Access
 
-1. Ga naar **Workers & Pages** → `thuis` → **Settings** → **Domains & Routes**.
-2. Klik bij `workers.dev` op **Enable Cloudflare Access**.
-3. Klik op **Manage Cloudflare Access** en zet in de policy de e-mailadressen van iedereen in het huishouden.
-4. Noteer de twee waarden die Access toont:
-   - **Team domain**, bv. `https://jullie-team.cloudflareaccess.com`
-   - **Application Audience (AUD) Tag**, een lange code
-5. Vul ze in `wrangler.jsonc` in bij `vars`:
+Cloudflare Access is de portier vóór de app. Wie de link opent, krijgt eerst een loginscherm, en enkel de
+e-mailadressen die je toelaat komen erdoor. De app controleert daarna zelf nog eens of Access de bezoeker
+echt binnenliet (`worker/auth.ts`). Daarvoor heeft ze twee gegevens nodig: het **team domain** en de
+**AUD-tag**. Zolang die ontbreken, weigert de app elke aanvraag.
+
+### A. Inloggen met een code per e-mail (eenmalig)
+
+1. Open in het Cloudflare-dashboard **Zero Trust** (in het menu links). De eerste keer kies je een
+   teamnaam (bv. `naets`) en het gratis plan (tot 50 gebruikers).
+2. Ga naar **Integrations** → **Identity providers** → **Add new identity provider** → **One-time PIN**.
+
+   Zo log je in met een code die je per mail krijgt. Wie in de app moet, heeft geen Cloudflare-account nodig.
+
+### B. Access aanzetten op de app
+
+3. Ga naar **Workers & Pages** → `thuis` → **Settings** → **Domains & Routes**. Staat daar geen knop voor
+   Access, kijk dan in het tabblad **Access** van de Worker.
+4. Klik bij `workers.dev` op **Enable Cloudflare Access**.
+5. In het venster dat verschijnt staan twee waarden. Kopieer ze:
+   - `TEAM_DOMAIN`, bv. `https://naets.cloudflareaccess.com`
+   - `POLICY_AUD`, een lange code van letters en cijfers
+6. Klik op **Manage Cloudflare Access**. Kies in de policy voor **Emails**, vul de e-mailadressen van
+   iedereen in het huishouden in, en sla op.
+
+### C. Langer ingelogd blijven
+
+Standaard moet je elke dag opnieuw inloggen. Voor de kiosk-tablet is dat onwerkbaar.
+
+7. **Zero Trust** → **Access controls** → **Applications** → de app van `thuis` → **Configure** →
+   **Session Duration**: 1 month → opslaan.
+8. **Zero Trust** → **Access controls** → **Access settings** → **Global session duration**: 1 month.
+
+### D. De app de twee waarden geven
+
+9. Vul ze in `wrangler.jsonc` in bij `vars`:
    ```jsonc
    "vars": {
-     "TEAM_DOMAIN": "https://jullie-team.cloudflareaccess.com",
+     "TEAM_DOMAIN": "https://naets.cloudflareaccess.com",
      "POLICY_AUD": "…"
    }
    ```
-6. Commit en push (of `npm run deploy`).
-7. Zet bij de Access-applicatie de **session duration** op een maand. Anders moet de kiosk-tablet
-   elke dag opnieuw inloggen.
+10. Commit en push. Workers Builds rolt de app daarna vanzelf opnieuw uit.
 
-De Worker controleert zelf het ondertekende Access-token (`worker/auth.ts`). Wie Access probeert te
-omzeilen, komt er dus niet in.
+Venster gemist? Je vindt de waarden ook terug:
+
+- AUD-tag: **Zero Trust** → **Access controls** → **Applications** → de app van `thuis` → **Configure** →
+  **Application Audience (AUD) Tag**.
+- Team domain: **Zero Trust** → **Settings** → **Team name**. Het team domain is
+  `https://<teamnaam>.cloudflareaccess.com`.
+
+### Testen
+
+Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
+e-mailadres in, krijgt een code per mail, en komt in de app. Onderaan staat "Aangemeld als …".
 
 ## 4. Op je gsm zetten
 
