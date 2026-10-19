@@ -46,6 +46,14 @@ Je hebt [Node.js](https://nodejs.org) 20 of nieuwer nodig.
    npm run dev
    ```
    Open http://localhost:5173. Alles (database en bestanden) draait lokaal en raakt je echte gegevens niet.
+5. Tests draaien (de ticketlezer):
+   ```sh
+   npm test
+   ```
+
+Kastickets van foto's lezen gebeurt met Workers AI, en dat draait altijd bij Cloudflare. Met gewoon
+`npm run dev` lezen PDF's wel automatisch, maar foto's niet. Wil je dat lokaal ook testen, gebruik dan
+`npx wrangler login` en daarna `npm run dev:ai`.
 
 ## 2. Online zetten
 
@@ -119,6 +127,30 @@ In kioskmodus:
 - keert de app na 5 minuten zonder aanraking terug naar het startscherm en ververst ze de gegevens;
 - worden bestanden in de app zelf geopend, nooit in een nieuw tabblad;
 - staat er geen "Aangemeld als" onderaan.
+
+## Kastickets automatisch lezen
+
+Zodra je bij een nieuwe aankoop een foto of PDF kiest, vult de app de winkel, de datum, het bedrag en de
+categorie in. Automatisch ingevulde velden zijn geel tot je ze zelf aanpast. Er wordt nooit iets opgeslagen
+zonder dat je op **Opslaan** drukt.
+
+Van gratis naar (bijna) gratis:
+
+1. **PDF met tekst** (webshopfacturen): de app haalt de tekst eruit en leest die met gewone code
+   (`shared/receipt.ts`). Dat is gratis en exact.
+2. **Foto, of een gescande PDF**: de Worker laat een verkleinde afbeelding lezen door Workers AI
+   (`worker/routes/receipts.ts`). Een ticket kost ±20-30 *neurons*, en de gratis hoeveelheid is
+   10.000 neurons per dag.
+3. **Altijd code achteraf**: wat de AI zegt, wordt nagekeken. Een datum in de toekomst, een negatief bedrag
+   of een onbekende categorie wordt weggegooid in plaats van ingevuld.
+4. **Categorie uit jullie eigen geschiedenis**: kochten jullie al eerder iets bij dezelfde winkel, dan
+   krijgt het die categorie.
+
+Een harde limiet van 50 AI-lezingen per dag (`AI_DAILY_LIMIT`) zorgt dat je ook op een betaald plan nooit
+boven de gratis hoeveelheid gaat. Op het gratis plan kan het sowieso niets kosten.
+
+Leest de code een winkel niet? Voeg ze toe aan de lijst `STORES` in `shared/receipt.ts`, en voeg bij
+voorkeur een test toe in `test/receipt.test.ts`.
 
 ## De database aanpassen
 

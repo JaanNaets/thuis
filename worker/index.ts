@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { requireAccess } from "./auth";
 import { purchases, files } from "./routes/purchases";
+import { receipts } from "./routes/receipts";
 import { loyaltyCards } from "./routes/loyalty-cards";
 import type { AppEnv } from "./types";
 import { ValidationError } from "./validate";
@@ -12,6 +13,7 @@ app.use("*", requireAccess);
 app.get("/me", (c) => c.json({ email: c.get("user") }));
 app.route("/purchases", purchases);
 app.route("/files", files);
+app.route("/receipts", receipts);
 app.route("/loyalty-cards", loyaltyCards);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));

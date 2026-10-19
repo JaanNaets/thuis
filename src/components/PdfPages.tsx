@@ -1,9 +1,5 @@
-// De "legacy"-build bevat polyfills, zodat PDF's ook op oudere tablets (bv. een iPad in kioskmodus) werken.
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState } from "react";
-
-GlobalWorkerOptions.workerSrc = workerUrl;
+import { getDocument } from "../pdf";
 
 const MAX_PAGES = 20;
 

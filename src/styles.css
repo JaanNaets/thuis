@@ -853,6 +853,59 @@ textarea {
   gap: 10px;
 }
 
+/* Automatisch gelezen velden: zacht boter-geel tot je ze zelf aanpast. */
+input.auto,
+select.auto {
+  background: var(--butter);
+}
+
+input.auto:focus {
+  background: var(--paper);
+}
+
+.read-status {
+  margin: 4px 0 0;
+  padding: 10px 16px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.read-status.busy {
+  background: var(--oat);
+  color: var(--ink-soft);
+}
+
+.read-status.busy::after {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  text-align: left;
+  animation: dots 1.2s steps(4) infinite;
+}
+
+@keyframes dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+
+.read-status.ok {
+  background: var(--sage);
+  color: var(--sage-ink);
+}
+
+.read-status.partial {
+  background: var(--butter);
+  color: var(--butter-ink);
+}
+
+.read-status.none {
+  background: var(--oat);
+  color: var(--ink-soft);
+}
+
 .file-list {
   list-style: none;
   margin: 0;

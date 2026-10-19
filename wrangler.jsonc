@@ -28,6 +28,9 @@
     }
   ],
 
+  // Workers AI, enkel voor kastickets die de code niet zelf kan lezen.
+  "ai": { "binding": "AI" },
+
   // Vul deze in nadat je Cloudflare Access hebt aangezet (zie README, stap 5).
   // Zolang ze leeg zijn, weigert de API elke aanvraag.
   "vars": {

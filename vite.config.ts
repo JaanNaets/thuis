@@ -7,9 +7,9 @@ import { defineConfig, type Plugin } from "vite";
 // Bestanden uit public/ die offline beschikbaar moeten zijn.
 const PUBLIC_FILES = ["/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
 
-// Enkel nodig om iets toe te voegen (camera-scanner, PDF-viewer), niet om kaarten te tonen.
+// Enkel nodig om iets toe te voegen of te bekijken (scanner, PDF), niet om kaarten te tonen.
 // Die worden pas bewaard wanneer ze een eerste keer gebruikt worden.
-const SKIP_PRECACHE = /zxing_reader|pdf\.worker|ponyfill|PdfPages|\.map$/;
+const SKIP_PRECACHE = /zxing_reader|pdf\.worker|assets\/pdf-|ponyfill|PdfPages|\.map$/;
 
 /** Maakt dist/client/sw.js met de lijst van alle gebouwde bestanden die offline moeten werken. */
 function serviceWorker(): Plugin {
@@ -33,8 +33,14 @@ function serviceWorker(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), cloudflare(), serviceWorker()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    // Workers AI draait altijd bij Cloudflare, ook tijdens het ontwikkelen. Gewoon `npm run dev` werkt
+    // volledig lokaal (zonder AI); `npm run dev:ai` gebruikt de echte AI en vraagt een Cloudflare-login.
+    cloudflare({ remoteBindings: mode === "ai" }),
+    serviceWorker(),
+  ],
   // De barcodebibliotheek is bewust een apart, groot bestand dat pas laadt bij de klantenkaarten.
   build: { chunkSizeWarningLimit: 1000 },
-});
+}));
