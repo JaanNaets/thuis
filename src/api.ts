@@ -76,6 +76,8 @@ export function useApi<T>(path: string) {
   }, [path, version]);
 
   const reload = useCallback(() => setVersion((v) => v + 1), []);
+  /** Lokaal aanpassen zonder opnieuw op te halen (bv. +1 in de voorraadlijst, of het antwoord van een POST). */
+  const mutate = setData;
 
   useEffect(() => {
     const onVisible = () => document.visibilityState === "visible" && reload();
@@ -87,5 +89,5 @@ export function useApi<T>(path: string) {
     };
   }, [reload]);
 
-  return { data, error, loading, reload };
+  return { data, error, loading, reload, mutate };
 }

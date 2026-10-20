@@ -11,9 +11,9 @@ import { api } from "../api";
 import { useCard } from "../cards";
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from "../color";
 import { Barcode } from "../components/Barcode";
-import { BarcodeScanner, type ScanResult } from "../components/BarcodeScanner";
-import { Icon } from "../components/Icon";
+import type { ScanResult } from "../barcode-detect";
 import { PageHeader } from "../components/Page";
+import { ScanButtons } from "../components/ScanButtons";
 
 export function CardFormPage() {
   const { id } = useParams();
@@ -37,7 +37,6 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
     color: existing?.color ?? CARD_COLORS[0],
     notes: existing?.notes ?? "",
   });
-  const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -46,7 +45,6 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
     setForm((f) => ({ ...f, [key]: value }));
 
   const onScan = useCallback((result: ScanResult) => {
-    setScanning(false);
     setForm((f) => ({
       ...f,
       card_number: result.rawValue,
@@ -78,9 +76,7 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
     <form className="form page" onSubmit={onSubmit}>
       <PageHeader title={existing ? "Kaart bewerken" : "Nieuwe kaart"} back={-1} />
 
-      <button type="button" className="button scan-button" onClick={() => setScanning(true)}>
-        <Icon name="scan" /> Barcode scannen
-      </button>
+      <ScanButtons tone="lilac" hint="Richt de camera op de barcode van je kaart" onResult={onScan} />
       {scanNote && <p className="muted small">{scanNote}</p>}
 
       <label className="field">
@@ -156,7 +152,6 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
         {saving ? "Opslaan…" : "Opslaan"}
       </button>
 
-      {scanning && <BarcodeScanner onResult={onScan} onClose={() => setScanning(false)} />}
     </form>
   );
 }

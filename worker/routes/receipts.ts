@@ -1,12 +1,10 @@
 import { Hono } from "hono";
 import {
-  CATEGORIES,
   emptyGuess,
   isComplete,
   mergeGuess,
   normalizeGuess,
   parseReceiptText,
-  type Category,
   type ReceiptGuess,
   type ReceiptReadResult,
 } from "../../shared/receipt";
@@ -30,18 +28,28 @@ Geef enkel wat je echt op het document ziet; gebruik null als je twijfelt. Raad 
 - description: korte omschrijving in het Nederlands van wat gekocht werd; bij boodschappen "Boodschappen"; bij één hoofdproduct de productnaam
 - category: een van de toegelaten categorieën, of null`;
 
-const RECEIPT_SCHEMA = {
-  type: "object",
-  properties: {
-    store: { type: ["string", "null"] },
-    date: { type: ["string", "null"] },
-    total: { type: ["number", "null"] },
-    description: { type: ["string", "null"] },
-    category: { type: ["string", "null"], enum: [...CATEGORIES, null] },
-  },
-  required: ["store", "date", "total", "description", "category"],
-  additionalProperties: false,
-};
+/** De categorieën komen uit de database: wat jullie zelf toevoegen, kan de AI ook kiezen. */
+function receiptSchema(categories: string[]) {
+  return {
+    type: "object",
+    properties: {
+      store: { type: ["string", "null"] },
+      date: { type: ["string", "null"] },
+      total: { type: ["number", "null"] },
+      description: { type: ["string", "null"] },
+      category: { type: ["string", "null"], enum: [...categories, null] },
+    },
+    required: ["store", "date", "total", "description", "category"],
+    additionalProperties: false,
+  };
+}
+
+async function expenseCategoryNames(db: D1Database): Promise<string[]> {
+  const { results } = await db
+    .prepare("SELECT name FROM categories WHERE domain = 'expense' AND parent_id IS NULL ORDER BY sort_order")
+    .all<{ name: string }>();
+  return results.map((r) => r.name);
+}
 
 export const receipts = new Hono<AppEnv>();
 
@@ -98,6 +106,7 @@ async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess 
   }
 
   try {
+    const categories = await expenseCategoryNames(env.DB);
     const dataUrl = `data:${image.type};base64,${toBase64(await image.arrayBuffer())}`;
     const result = await env.AI.run(MODEL, {
       messages: [
@@ -105,12 +114,12 @@ async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess 
         {
           role: "user",
           content: [
-            { type: "text", text: `Lees dit document. Toegelaten categorieën: ${CATEGORIES.join(", ")}.` },
+            { type: "text", text: `Lees dit document. Toegelaten categorieën: ${categories.join(", ")}.` },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
       ],
-      response_format: { type: "json_schema", json_schema: { name: "receipt", schema: RECEIPT_SCHEMA, strict: true } },
+      response_format: { type: "json_schema", json_schema: { name: "receipt", schema: receiptSchema(categories), strict: true } },
       // Geen "denkstappen": die kosten extra tokens en zijn voor een ticket niet nodig.
       chat_template_kwargs: { enable_thinking: false },
       temperature: 0,
@@ -118,23 +127,24 @@ async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess 
     });
     const content = result.choices?.[0]?.message?.content;
     const parsed = typeof content === "string" ? safeJson(content) : content;
-    return { guess: normalizeGuess(parsed) };
+    return { guess: normalizeGuess(parsed, new Date(), categories) };
   } catch (err) {
     console.error("AI kon het ticket niet lezen", err);
     return { error: "Automatisch lezen lukte niet. Vul het ticket zelf in." };
   }
 }
 
-async function categoryFromHistory(db: D1Database, store: string): Promise<Category | null> {
+/** Naam van de categorie die jullie het vaakst kozen bij deze winkel. */
+async function categoryFromHistory(db: D1Database, store: string): Promise<string | null> {
   const row = await db
     .prepare(
-      `SELECT category FROM purchases
-       WHERE store = ? COLLATE NOCASE AND category IS NOT NULL
-       GROUP BY category ORDER BY COUNT(*) DESC LIMIT 1`,
+      `SELECT c.name FROM purchases p JOIN categories c ON c.id = p.category_id
+       WHERE p.store = ? COLLATE NOCASE
+       GROUP BY c.id ORDER BY COUNT(*) DESC LIMIT 1`,
     )
     .bind(store)
-    .first<{ category: string }>();
-  return CATEGORIES.find((c) => c === row?.category) ?? null;
+    .first<{ name: string }>();
+  return row?.name ?? null;
 }
 
 function safeJson(text: string): unknown {

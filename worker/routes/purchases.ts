@@ -1,53 +1,127 @@
 import { Hono } from "hono";
-import type { Purchase, PurchaseFile, PurchaseInput, PurchaseListItem } from "../../shared/types";
+import { checkCustomShares, splitEqual } from "../../shared/split";
+import {
+  SPLIT_MODES,
+  type ExpenseShare,
+  type Purchase,
+  type PurchaseDetail,
+  type PurchaseFile,
+  type PurchaseInput,
+  type PurchaseListItem,
+} from "../../shared/types";
 import type { AppEnv } from "../types";
 import {
   asObject,
+  idList,
   optionalCents,
   optionalDate,
+  optionalEnum,
+  optionalId,
   optionalString,
   requiredDate,
   requiredString,
+  ValidationError,
 } from "../validate";
+import { setTagsStatements } from "./taxonomy";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
 const FILE_COLUMNS = "id, purchase_id, filename, content_type, size_bytes, created_at";
 
+function parseShares(value: unknown): ExpenseShare[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length > 20) throw new ValidationError("'shares' moet een lijst zijn");
+  return value.map((v) => {
+    const obj = asObject(v);
+    const cents = optionalCents(obj, "share_cents");
+    return { member_id: requiredString(obj, "member_id", 64), share_cents: cents ?? 0 };
+  });
+}
+
 function parsePurchase(body: unknown): PurchaseInput {
   const obj = asObject(body);
+  const paidBy = optionalId(obj, "paid_by");
   return {
     description: requiredString(obj, "description", 200),
     store: optionalString(obj, "store", 100),
     purchased_on: requiredDate(obj, "purchased_on"),
     amount_cents: optionalCents(obj, "amount_cents"),
-    category: optionalString(obj, "category", 50),
+    category_id: optionalId(obj, "category_id"),
+    paid_by: paidBy,
+    // Van de gezamenlijke rekening betaald: niets te verdelen.
+    split_mode: paidBy ? (optionalEnum(obj, "split_mode", SPLIT_MODES) ?? "equal") : null,
+    shares: parseShares(obj.shares),
     warranty_until: optionalDate(obj, "warranty_until"),
     notes: optionalString(obj, "notes", 2000),
+    tag_ids: idList(obj, "tag_ids"),
   };
 }
 
+/** Wie welk deel draagt. Bij "gelijk" en "persoonlijk" rekent de server zelf, zodat het altijd klopt. */
+async function resolveShares(db: D1Database, input: PurchaseInput): Promise<ExpenseShare[]> {
+  const { paid_by: payer, amount_cents: amount, split_mode: mode } = input;
+  if (!payer || amount === null || !mode) return [];
+
+  switch (mode) {
+    case "personal":
+      return [{ member_id: payer, share_cents: amount }];
+    case "equal": {
+      const { results } = await db.prepare("SELECT id FROM members WHERE active = 1").all<{ id: string }>();
+      return splitEqual(amount, results.map((r) => r.id), payer);
+    }
+    case "custom": {
+      const shares = input.shares ?? [];
+      const problem = checkCustomShares(amount, shares);
+      if (problem) throw new ValidationError(problem);
+      return shares.filter((s) => s.share_cents > 0);
+    }
+  }
+}
+
+function shareStatements(db: D1Database, purchaseId: string, shares: ExpenseShare[]): D1PreparedStatement[] {
+  return [
+    db.prepare("DELETE FROM expense_shares WHERE purchase_id = ?").bind(purchaseId),
+    ...shares.map((s) =>
+      db
+        .prepare("INSERT INTO expense_shares (purchase_id, member_id, share_cents) VALUES (?, ?, ?)")
+        .bind(purchaseId, s.member_id, s.share_cents),
+    ),
+  ];
+}
+
+// Een categorie met al haar subcategorieën (voor ?category=).
+const CATEGORY_TREE = `SELECT id FROM (
+  WITH RECURSIVE sub(id) AS (
+    SELECT ?3 UNION ALL SELECT c2.id FROM categories c2 JOIN sub ON c2.parent_id = sub.id
+  ) SELECT id FROM sub)`;
+
 export const purchases = new Hono<AppEnv>();
 
-// Lijst, met optioneel zoeken (?q=) en filter op lopende garantie (?warranty=active).
+// Lijst, met optioneel zoeken (?q=), lopende garantie (?warranty=active), categorie (?category=) en tag (?tag=).
 purchases.get("/", async (c) => {
   const q = c.req.query("q")?.trim();
   const activeWarranty = c.req.query("warranty") === "active" ? 1 : 0;
 
   const { results } = await c.env.DB.prepare(
-    `SELECT p.*,
+    `SELECT p.*, c.name AS category_name, c.color AS category_color,
        (SELECT COUNT(*) FROM purchase_files f WHERE f.purchase_id = p.id) AS file_count,
        (SELECT f.id FROM purchase_files f
           WHERE f.purchase_id = p.id AND f.content_type LIKE 'image/%'
           ORDER BY f.created_at LIMIT 1) AS thumbnail_file_id
      FROM purchases p
-     WHERE (?1 IS NULL OR p.description LIKE ?1 OR p.store LIKE ?1 OR p.category LIKE ?1)
+     LEFT JOIN categories c ON c.id = p.category_id
+     WHERE (?1 IS NULL OR p.description LIKE ?1 OR p.store LIKE ?1 OR c.name LIKE ?1
+            OR EXISTS (SELECT 1 FROM taggings g JOIN tags t ON t.id = g.tag_id
+                       WHERE g.entity_type = 'purchase' AND g.entity_id = p.id AND t.name LIKE ?1))
        AND (?2 = 0 OR p.warranty_until >= date('now'))
+       AND (?3 IS NULL OR p.category_id IN (${CATEGORY_TREE}))
+       AND (?4 IS NULL OR EXISTS (SELECT 1 FROM taggings g
+                                  WHERE g.entity_type = 'purchase' AND g.entity_id = p.id AND g.tag_id = ?4))
      ORDER BY p.purchased_on DESC, p.created_at DESC
      LIMIT 200`,
   )
-    .bind(q ? `%${q}%` : null, activeWarranty)
+    .bind(q ? `%${q}%` : null, activeWarranty, c.req.query("category") || null, c.req.query("tag") || null)
     .all<PurchaseListItem>();
 
   return c.json(results);
@@ -55,68 +129,106 @@ purchases.get("/", async (c) => {
 
 purchases.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const [purchase, files] = await c.env.DB.batch([
-    c.env.DB.prepare("SELECT * FROM purchases WHERE id = ?").bind(id),
-    c.env.DB.prepare(
-      `SELECT ${FILE_COLUMNS} FROM purchase_files WHERE purchase_id = ? ORDER BY created_at`,
-    ).bind(id),
+  const db = c.env.DB;
+  const [purchase, files, shares, tags, items] = await db.batch([
+    db
+      .prepare(
+        `SELECT p.*, c.name AS category_name, c.color AS category_color
+         FROM purchases p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
+      )
+      .bind(id),
+    db.prepare(`SELECT ${FILE_COLUMNS} FROM purchase_files WHERE purchase_id = ? ORDER BY created_at`).bind(id),
+    db.prepare("SELECT member_id, share_cents FROM expense_shares WHERE purchase_id = ?").bind(id),
+    db.prepare("SELECT tag_id FROM taggings WHERE entity_type = 'purchase' AND entity_id = ?").bind(id),
+    db
+      .prepare(
+        `SELECT DISTINCT i.id, i.name FROM stock_movements m JOIN items i ON i.id = m.item_id
+         WHERE m.purchase_id = ? ORDER BY i.name COLLATE NOCASE`,
+      )
+      .bind(id),
   ]);
 
-  const row = purchase.results[0] as Purchase | undefined;
+  const row = purchase.results[0] as Omit<PurchaseDetail, "files" | "shares" | "tag_ids" | "items"> | undefined;
   if (!row) return c.json({ error: "Aankoop niet gevonden" }, 404);
-  return c.json({ ...row, files: files.results as PurchaseFile[] });
+  const detail: PurchaseDetail = {
+    ...row,
+    files: files.results as PurchaseFile[],
+    shares: shares.results as ExpenseShare[],
+    tag_ids: (tags.results as { tag_id: string }[]).map((t) => t.tag_id),
+    items: items.results as PurchaseDetail["items"],
+  };
+  return c.json(detail);
 });
 
 purchases.post("/", async (c) => {
   const input = parsePurchase(await c.req.json());
+  const shares = await resolveShares(c.env.DB, input);
   const id = crypto.randomUUID();
+  const db = c.env.DB;
 
-  const row = await c.env.DB.prepare(
-    `INSERT INTO purchases
-       (id, description, store, purchased_on, amount_cents, category, warranty_until, notes, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     RETURNING *`,
-  )
-    .bind(
-      id,
-      input.description,
-      input.store,
-      input.purchased_on,
-      input.amount_cents,
-      input.category,
-      input.warranty_until,
-      input.notes,
-      c.get("user"),
-    )
-    .first<Purchase>();
+  const [inserted] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO purchases
+           (id, description, store, purchased_on, amount_cents, category_id, paid_by, split_mode,
+            warranty_until, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING *`,
+      )
+      .bind(
+        id,
+        input.description,
+        input.store,
+        input.purchased_on,
+        input.amount_cents,
+        input.category_id,
+        input.paid_by,
+        input.split_mode,
+        input.warranty_until,
+        input.notes,
+        c.get("user"),
+      ),
+    ...shareStatements(db, id, shares),
+    ...setTagsStatements(db, "purchase", id, input.tag_ids),
+  ]);
 
-  return c.json(row, 201);
+  return c.json(inserted.results[0] as Purchase, 201);
 });
 
 purchases.put("/:id", async (c) => {
+  const id = c.req.param("id");
   const input = parsePurchase(await c.req.json());
+  const db = c.env.DB;
+  const exists = await db.prepare("SELECT 1 FROM purchases WHERE id = ?").bind(id).first();
+  if (!exists) return c.json({ error: "Aankoop niet gevonden" }, 404);
+  const shares = await resolveShares(db, input);
 
-  const row = await c.env.DB.prepare(
-    `UPDATE purchases
-     SET description = ?, store = ?, purchased_on = ?, amount_cents = ?,
-         category = ?, warranty_until = ?, notes = ?
-     WHERE id = ?
-     RETURNING *`,
-  )
-    .bind(
-      input.description,
-      input.store,
-      input.purchased_on,
-      input.amount_cents,
-      input.category,
-      input.warranty_until,
-      input.notes,
-      c.req.param("id"),
-    )
-    .first<Purchase>();
+  const [updated] = await db.batch([
+    db
+      .prepare(
+        `UPDATE purchases
+         SET description = ?, store = ?, purchased_on = ?, amount_cents = ?, category_id = ?,
+             paid_by = ?, split_mode = ?, warranty_until = ?, notes = ?
+         WHERE id = ?
+         RETURNING *`,
+      )
+      .bind(
+        input.description,
+        input.store,
+        input.purchased_on,
+        input.amount_cents,
+        input.category_id,
+        input.paid_by,
+        input.split_mode,
+        input.warranty_until,
+        input.notes,
+        id,
+      ),
+    ...shareStatements(db, id, shares),
+    ...setTagsStatements(db, "purchase", id, input.tag_ids),
+  ]);
 
-  if (!row) return c.json({ error: "Aankoop niet gevonden" }, 404);
-  return c.json(row);
+  return c.json(updated.results[0] as Purchase);
 });
 
 purchases.delete("/:id", async (c) => {
@@ -131,8 +243,11 @@ purchases.delete("/:id", async (c) => {
     await c.env.FILES.delete(results.map((r) => r.r2_key));
   }
 
-  const { meta } = await c.env.DB.prepare("DELETE FROM purchases WHERE id = ?").bind(id).run();
-  if (meta.changes === 0) return c.json({ error: "Aankoop niet gevonden" }, 404);
+  const [, deleted] = await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM taggings WHERE entity_type = 'purchase' AND entity_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM purchases WHERE id = ?").bind(id),
+  ]);
+  if (deleted.meta.changes === 0) return c.json({ error: "Aankoop niet gevonden" }, 404);
   return c.body(null, 204);
 });
 

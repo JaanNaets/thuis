@@ -1,14 +1,22 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { PurchaseFile, PurchaseWithFiles } from "../../shared/types";
+import { SPLIT_MODES, type PurchaseDetail as Detail, type PurchaseFile } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
+import { Avatar } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
 import { FileViewer } from "../components/FileViewer";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/Page";
 import { formatBytes, formatCents, formatDate, warrantyStatus } from "../format";
 import { prepareUpload } from "../image";
+import { memberById, nameForEmail, useTaxonomy } from "../taxonomy";
+
+const SPLIT_LABELS: Record<(typeof SPLIT_MODES)[number], string> = {
+  equal: "gelijk verdeeld",
+  personal: "persoonlijk",
+  custom: "aangepast verdeeld",
+};
 
 // HEIC kan enkel Safari tonen; die tonen we als bestand in plaats van als afbeelding.
 const PREVIEWABLE = ["image/jpeg", "image/png", "image/webp"];
@@ -17,7 +25,8 @@ export function PurchaseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { data: p, error, reload } = useApi<PurchaseWithFiles>(`/purchases/${id}`);
+  const { data: p, error, reload } = useApi<Detail>(`/purchases/${id}`);
+  const { data: taxonomy } = useTaxonomy();
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [viewing, setViewing] = useState<PurchaseFile>();
   const [busy, setBusy] = useState(false);
@@ -27,6 +36,10 @@ export function PurchaseDetail() {
   if (!p) return null;
 
   const warranty = warrantyStatus(p.warranty_until);
+  const payer = memberById(taxonomy, p.paid_by);
+  const tags = taxonomy?.tags.filter((t) => p.tag_ids.includes(t.id)) ?? [];
+  // Bij een verdeling over meerdere mensen tonen we wie hoeveel draagt.
+  const shares = p.shares.length > 1 ? p.shares : [];
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -91,12 +104,31 @@ export function PurchaseDetail() {
             <p className="receipt-store">{p.store ?? "Aankoop"}</p>
             <p className="receipt-date">{formatDate(p.purchased_on)}</p>
             <dl className="receipt-lines">
-              {p.category && (
+              {p.category_name && (
                 <div>
                   <dt>Categorie</dt>
-                  <dd>{p.category}</dd>
+                  <dd>{p.category_name}</dd>
                 </div>
               )}
+              <div>
+                <dt>Betaald door</dt>
+                <dd className="payer">
+                  {payer ? (
+                    <>
+                      <Avatar member={payer} size="small" /> {payer.name}
+                      {p.split_mode && <span className="muted"> · {SPLIT_LABELS[p.split_mode]}</span>}
+                    </>
+                  ) : (
+                    "Gezamenlijke rekening"
+                  )}
+                </dd>
+              </div>
+              {shares.map((s) => (
+                <div key={s.member_id} className="share-line">
+                  <dt>Deel {memberById(taxonomy, s.member_id)?.name ?? "?"}</dt>
+                  <dd>{formatCents(s.share_cents)}</dd>
+                </div>
+              ))}
               <div>
                 <dt>Garantie</dt>
                 <dd>
@@ -114,8 +146,17 @@ export function PurchaseDetail() {
               <span>Totaal</span>
               <strong>{formatCents(p.amount_cents) || "—"}</strong>
             </div>
+            {tags.length > 0 && (
+              <p className="receipt-tags">
+                {tags.map((t) => (
+                  <span key={t.id} className={`tag-chip static tone-${t.color ?? "butter"}`}>
+                    {t.name}
+                  </span>
+                ))}
+              </p>
+            )}
             {p.notes && <p className="receipt-notes">{p.notes}</p>}
-            <p className="receipt-footer">Bewaard door {p.created_by}</p>
+            <p className="receipt-footer">Bewaard door {nameForEmail(taxonomy, p.created_by)}</p>
           </section>
         </div>
 
@@ -158,6 +199,27 @@ export function PurchaseDetail() {
             </button>
           )}
           {actionError && <p className="error">{actionError}</p>}
+
+          <h2 className="panel-title">In voorraad</h2>
+          {p.items.length > 0 && (
+            <ul className="link-list">
+              {p.items.map((item) => (
+                <li key={item.id}>
+                  <Link to={`/voorraad/${item.id}`} className="tone-sky">
+                    <Icon name="package" size={18} />
+                    <span className="link-main">{item.name}</span>
+                    <Icon name="next" size={18} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link to={`/voorraad/nieuw?aankoop=${p.id}`} className="button tinted tone-sky">
+            <Icon name="package" /> {p.items.length > 0 ? "Nog iets in voorraad zetten" : "In voorraad zetten"}
+          </Link>
+          <p className="muted small">
+            Een toestel of iets dat je bijhoudt: zo vind je het later terug, met dit bewijsstuk en de garantie.
+          </p>
         </section>
       </div>
 

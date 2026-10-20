@@ -2,6 +2,8 @@
 // De Worker gebruikt dezelfde functies om een AI-antwoord na te kijken, zodat er nooit
 // een onmogelijke datum of een raar bedrag in het formulier belandt.
 
+// De standaardcategorieën voor aankopen. In de database kunnen er meer staan (zie migrations/0003);
+// deze namen gebruikt de code om winkels in te delen.
 export const CATEGORIES = [
   "Boodschappen",
   "Elektronica",
@@ -21,7 +23,8 @@ export type ReceiptGuess = {
   purchased_on: string | null; // YYYY-MM-DD
   amount_cents: number | null;
   description: string | null;
-  category: Category | null;
+  /** Naam van een categorie (de app zoekt de bijhorende categorie op). */
+  category: string | null;
 };
 
 export type ReceiptReadResult = {
@@ -229,8 +232,15 @@ export function parseReceiptText(text: string, today = new Date()): ReceiptGuess
   };
 }
 
-/** Maakt van een onbetrouwbaar antwoord (bv. van de AI) een geldige gok, of null per veld. */
-export function normalizeGuess(raw: unknown, today = new Date()): ReceiptGuess {
+/**
+ * Maakt van een onbetrouwbaar antwoord (bv. van de AI) een geldige gok, of null per veld.
+ * `categories`: de namen die mogen (hoofdletters maken niet uit).
+ */
+export function normalizeGuess(
+  raw: unknown,
+  today = new Date(),
+  categories: readonly string[] = CATEGORIES,
+): ReceiptGuess {
   const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
   const str = (v: unknown, max: number) =>
     typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, max) : null;
@@ -248,7 +258,8 @@ export function normalizeGuess(raw: unknown, today = new Date()): ReceiptGuess {
   else if (typeof total === "string") cents = parseAmount(total);
   if (cents !== null && (cents <= 0 || cents >= 10_000_000)) cents = null;
 
-  const category = CATEGORIES.find((c) => c === o.category) ?? known?.category ?? null;
+  const rawCategory = str(o.category, 50)?.toLowerCase();
+  const category = categories.find((c) => c.toLowerCase() === rawCategory) ?? known?.category ?? null;
 
   return {
     store,

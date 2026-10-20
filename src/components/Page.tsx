@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
+import { TONES, type Tone } from "../../shared/types";
 import { greeting } from "../device";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
-export type Tone = "peach" | "butter" | "sage" | "mint" | "sky" | "lilac" | "rose";
+export type { Tone };
 
 /** Kop van een hoofdscherm: begroeting, grote titel, korte samenvatting en (op tablet) een actieknop. */
 export function PageHero({
@@ -50,7 +51,7 @@ export function PageHeader({ title, back, actions }: { title: string; back: stri
   );
 }
 
-export function EmptyState({ icon, tone, children }: { icon: "receipt" | "card"; tone: Tone; children: ReactNode }) {
+export function EmptyState({ icon, tone, children }: { icon: IconName; tone: Tone; children: ReactNode }) {
   return (
     <div className={`empty tone-${tone}`}>
       <span className="empty-mark">
@@ -61,12 +62,10 @@ export function EmptyState({ icon, tone, children }: { icon: "receipt" | "card";
   );
 }
 
-const CATEGORY_TONES: Tone[] = ["peach", "butter", "sage", "mint", "sky", "lilac", "rose"];
-
-/** Elke categorie krijgt altijd dezelfde pastelkleur. */
+/** Iets zonder eigen kleur krijgt op basis van zijn naam altijd dezelfde pastelkleur. */
 export function toneForCategory(category: string | null): Tone {
   if (!category) return "butter";
   let hash = 0;
   for (const ch of category.toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return CATEGORY_TONES[hash % CATEGORY_TONES.length];
+  return TONES[hash % TONES.length];
 }

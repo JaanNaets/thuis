@@ -1,9 +1,13 @@
 # Thuis
 
-Onze eigen huishoud-app, volledig op Cloudflare. Eerste onderdelen:
+Onze eigen huishoud-app, volledig op Cloudflare. Onderdelen:
 
 - **Aankopen**: kastickets en facturen bewaren (foto of PDF), met garantie-opvolging.
-- **Klantenkaarten**: barcode tonen aan de kassa, ook **zonder internet**.
+- **Uitgaven**: wie betaalde wat, wie wie nog hoeveel moet, en waar het geld per maand naartoe gaat.
+- **Voorraad**: wat er in huis is en waar, met vervaldatums, "bijna op" en een logboek van elke wijziging.
+- **Klantenkaarten**: barcode tonen aan de kassa, ook **zonder internet**. Inlezen met de camera of uit een
+  foto of screenshot.
+- **Meer**: wie er in huis woont, en de indeling in categorieën, plaatsen en tags.
 
 Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kioskmodus.
 
@@ -12,7 +16,7 @@ Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kiosk
 ```
 src/         React-app (wat je op het scherm ziet)
 worker/      API op Cloudflare Workers (Hono)
-shared/      Types die app en API allebei gebruiken
+shared/      Types en logica die app en API allebei gebruiken (verdelen, voorraad, ticketlezer)
 migrations/  Databaseschema (D1), één SQL-bestand per wijziging
 sw/          Service worker: zorgt dat klantenkaarten offline werken
 ```
@@ -46,7 +50,7 @@ Je hebt [Node.js](https://nodejs.org) 20 of nieuwer nodig.
    npm run dev
    ```
    Open http://localhost:5173. Alles (database en bestanden) draait lokaal en raakt je echte gegevens niet.
-5. Tests draaien (de ticketlezer):
+5. Tests draaien (ticketlezer, verdelen, voorraad):
    ```sh
    npm test
    ```
@@ -202,6 +206,55 @@ boven de gratis hoeveelheid gaat. Op het gratis plan kan het sowieso niets koste
 Leest de code een winkel niet? Voeg ze toe aan de lijst `STORES` in `shared/receipt.ts`, en voeg bij
 voorkeur een test toe in `test/receipt.test.ts`.
 
+## Wie betaalde wat
+
+Bij elke aankoop kies je wie betaalde en voor wie het was:
+
+- **Iedereen**: gelijk verdeeld over wie in huis woont. Een cent die niet deelbaar is, draagt wie betaalde.
+- **Enkel mij**: persoonlijk, telt niet mee in wat de anderen moeten.
+- **Aangepast**: je typt zelf wie hoeveel draagt (samen moet het precies het bedrag zijn).
+- **Gezamenlijk**: betaald van de gemeenschappelijke rekening. Telt niet mee.
+
+Onder **Uitgaven** zie je wie wie nog hoeveel moet. Heb je het overgeschreven, druk dan op **Terugbetaald**
+(minder mag ook: dan blijft de rest openstaan). Iemand die al eens aangemeld heeft, is vanzelf lid. Je partner
+voeg je vooraf toe bij **Meer → Huishouden**, met het e-mailadres waarmee die later aanmeldt.
+
+## Voorraad
+
+- **Verbruik** (melk, wasmiddel, ...) raakt op; **Bezit** (wasmachine, boormachine, ...) blijft.
+- Elk item ligt op een of meer **plaatsen** (Keuken › Koelkast). Met − en + in de lijst pas je de voorraad
+  meteen aan: − neemt eerst weg wat het eerst vervalt.
+- Stel **"bijna op onder"** in, dan verschijnt het item in de filter **Bijna op**. Dat is meteen je boodschappenlijst.
+- **Scannen** zoekt het product eerst in jullie eigen voorraad, en anders gratis in
+  [Open Food Facts](https://world.openfoodfacts.org) (naam, merk, categorie). Geen AI, geen kosten.
+- Een aankoop met garantie kan je **in voorraad zetten**. Zo hangt het toestel aan zijn kasticket en garantie.
+- Iets weg uit huis maar wil je de geschiedenis houden? **Archiveren** in plaats van verwijderen.
+
+## Klantenkaart uit een foto
+
+Bij een nieuwe kaart kan je **Scannen** (camera) of **Uit foto** kiezen. Uit foto werkt met een foto van de
+kaart, maar ook met een screenshot uit de app van de winkel. Het lezen gebeurt volledig op je toestel.
+
+## Hoe de gegevens ingedeeld zijn
+
+De database is gebouwd om later uit te breiden tot een volledige "home ERP" (agenda, onderhoud, budgetten, ...):
+
+| Tabel | Wat |
+| ----- | --- |
+| `members` | Wie in het huishouden woont. Gekoppeld aan het e-mailadres van de login. |
+| `categories` | Eén boom per **domein**: `expense` (aankopen) en `item` (voorraad). Later kan er een domein bij. |
+| `locations` | Plaatsen in huis, ook een boom. |
+| `tags` + `taggings` | Vrije labels op om het even wat (`entity_type` = `purchase`, `item`, ...). |
+| `purchases` | Aankopen en uitgaven, met `paid_by` en `split_mode`. |
+| `expense_shares` | Wie welk deel van een aankoop draagt. Samen altijd het volledige bedrag. |
+| `settlements` | Terugbetalingen tussen leden. |
+| `items` | Producten en bezittingen, met type, eenheid, barcode en minimum. |
+| `stock_levels` | Hoeveel er nu op elke plaats ligt. |
+| `stock_movements` | Logboek van elke voorraadwijziging; wordt nooit aangepast. Kan naar een aankoop verwijzen. |
+
+Opsommingen (zoals het type van een item of de reden van een beweging) controleert de Worker, niet de database.
+Zo kan er later een waarde bij zonder de tabel te herbouwen.
+
 ## De database aanpassen
 
 Elke schemawijziging is een nieuw SQL-bestand in `migrations/`. Pas nooit een bestaand bestand aan.
@@ -224,7 +277,7 @@ Pas je `wrangler.jsonc` aan (bv. een nieuwe binding)? Draai dan `npm run cf-type
 - **Bedragen** staan in cent in de database (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
 - **Foto's** worden in de browser verkleind tot max. 2000 px voor de upload.
 - **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen pastel slecht.
-- **Offline**: alleen klantenkaarten. Aankopen bekijken of toevoegen vraagt internet.
+- **Offline**: alleen klantenkaarten. Al de rest bekijken of aanpassen vraagt internet.
 - De R2-bucket staat in de regio *ENAM* (Noord-Amerika). Wil je je bestanden in Europa, maak dan een
   nieuwe bucket aan met `npx wrangler r2 bucket create huishouden-bestanden-eu --jurisdiction eu`. Pas daarna
   in `wrangler.jsonc` de `bucket_name` aan en voeg `"jurisdiction": "eu"` toe. Doe dat bij voorkeur voor je

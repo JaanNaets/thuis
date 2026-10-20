@@ -76,3 +76,51 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+const dateTime = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const monthName = new Intl.DateTimeFormat("nl-BE", { month: "long", year: "numeric" });
+// Zonder duizendtallen: "1.000" zou bij het terug inlezen 1 worden.
+const number = new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 3, useGrouping: false });
+
+/** SQLite bewaart "2026-10-19 14:32:00" in UTC; we tonen het in lokale tijd. */
+export function formatDateTime(sqlUtc: string): string {
+  return dateTime.format(new Date(`${sqlUtc.replace(" ", "T")}Z`));
+}
+
+/** "2026-10" → "oktober 2026". */
+export function formatMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return monthName.format(new Date(y, m - 1, 1));
+}
+
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const date = new Date(y, m - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function thisMonth(): string {
+  return today().slice(0, 7);
+}
+
+export function formatNumber(n: number): string {
+  return number.format(n);
+}
+
+/** "1 fles", "3 flessen", "1,5 kg". */
+export function formatQuantity(quantity: number, unit: string, plurals: Record<string, string>): string {
+  const word = quantity === 1 ? unit : (plurals[unit] ?? unit);
+  return `${formatNumber(quantity)} ${word}`;
+}
+
+/** "1,5" of "1.5" → 1.5. Leeg = null, onleesbaar = NaN. */
+export function parseQuantity(input: string): number | null {
+  const s = input.trim().replace(",", ".");
+  if (s === "") return null;
+  return /^\d+(\.\d{1,3})?$/.test(s) ? Number(s) : NaN;
+}
+
+/** Aantal dagen tot een datum (negatief = voorbij). */
+export function daysUntil(iso: string): number {
+  return Math.round((parseLocalDate(iso).getTime() - parseLocalDate(today()).getTime()) / 86_400_000);
+}

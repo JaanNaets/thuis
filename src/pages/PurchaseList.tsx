@@ -36,7 +36,7 @@ export function PurchaseList() {
           <input
             type="search"
             placeholder="Zoeken"
-            aria-label="Zoek op omschrijving, winkel of categorie"
+            aria-label="Zoek op omschrijving, winkel, categorie of tag"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -64,7 +64,7 @@ export function PurchaseList() {
           return (
             <li key={p.id}>
               <Link to={`/aankopen/${p.id}`} className="list-item">
-                <div className={`thumb tone-${toneForCategory(p.category)}`}>
+                <div className={`thumb tone-${p.category_color ?? toneForCategory(p.category_name)}`}>
                   {p.thumbnail_file_id ? (
                     <img src={`/api/files/${p.thumbnail_file_id}`} alt="" loading="lazy" />
                   ) : (
@@ -74,7 +74,7 @@ export function PurchaseList() {
                 <div className="list-main">
                   <strong>{p.description}</strong>
                   <span className="muted">
-                    {[p.store, formatDate(p.purchased_on)].filter(Boolean).join(" · ")}
+                    {[p.store, formatDate(p.purchased_on), p.category_name].filter(Boolean).join(" · ")}
                   </span>
                   {warranty.tone !== "none" && <span className={`badge ${warranty.tone}`}>{warranty.label}</span>}
                 </div>
