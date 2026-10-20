@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link, useNavigate } from "../router";
 import { SPLIT_MODES, type PurchaseDetail as Detail, type PurchaseFile } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -105,84 +106,86 @@ export function PurchaseDetail() {
         }
       />
 
-      <div className="detail-grid">
-        <section className="card">
-          <div className="purchase-summary">
-            <span className="amount-big">{formatCents(p.amount_cents) || "—"}</span>
-            <span className="muted">{formatDate(p.purchased_on)}</span>
-          </div>
-          <dl className="dl">
-            {p.vendor_name && (
+      <div className="split">
+        <aside className="split-aside">
+          <section className="card">
+            <div className="purchase-summary">
+              <span className="amount-big">{formatCents(p.amount_cents) || "—"}</span>
+              <span className="muted">{formatDate(p.purchased_on)}</span>
+            </div>
+            <dl className="dl">
+              {p.vendor_name && (
+                <div>
+                  <dt>Verkoper</dt>
+                  <dd>
+                    {p.vendor_name}
+                    {vendor?.website && (
+                      <a className="btn btn-ghost btn-icon btn-sm" href={vendor.website} target="_blank" rel="noreferrer" aria-label="Website">
+                        <Icon name="external" size={15} />
+                      </a>
+                    )}
+                    {vendor?.phone && (
+                      <a className="btn btn-ghost btn-icon btn-sm" href={`tel:${vendor.phone}`} aria-label="Bellen">
+                        <Icon name="phone" size={15} />
+                      </a>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {p.category_name && (
+                <div>
+                  <dt>Categorie</dt>
+                  <dd>
+                    <span className={`dot tone-${p.category_color ?? "butter"}`} /> {p.category_name}
+                  </dd>
+                </div>
+              )}
               <div>
-                <dt>Verkoper</dt>
+                <dt>Betaald door</dt>
                 <dd>
-                  {p.vendor_name}
-                  {vendor?.website && (
-                    <a className="btn btn-ghost btn-icon btn-sm" href={vendor.website} target="_blank" rel="noreferrer" aria-label="Website">
-                      <Icon name="external" size={15} />
-                    </a>
-                  )}
-                  {vendor?.phone && (
-                    <a className="btn btn-ghost btn-icon btn-sm" href={`tel:${vendor.phone}`} aria-label="Bellen">
-                      <Icon name="phone" size={15} />
-                    </a>
+                  {payer ? (
+                    <>
+                      <Avatar member={payer} size="sm" /> {payer.name}
+                      {p.split_mode && <span className="muted">· {SPLIT_LABELS[p.split_mode]}</span>}
+                    </>
+                  ) : (
+                    "Gezamenlijke rekening"
                   )}
                 </dd>
               </div>
-            )}
-            {p.category_name && (
-              <div>
-                <dt>Categorie</dt>
-                <dd>
-                  <span className={`dot tone-${p.category_color ?? "butter"}`} /> {p.category_name}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt>Betaald door</dt>
-              <dd>
-                {payer ? (
-                  <>
-                    <Avatar member={payer} size="sm" /> {payer.name}
-                    {p.split_mode && <span className="muted">· {SPLIT_LABELS[p.split_mode]}</span>}
-                  </>
-                ) : (
-                  "Gezamenlijke rekening"
-                )}
-              </dd>
-            </div>
-            {shares.map((s) => (
-              <div key={s.member_id} className="sub">
-                <dt>Deel {memberById(taxonomy, s.member_id)?.name ?? "?"}</dt>
-                <dd>{formatCents(s.share_cents)}</dd>
-              </div>
-            ))}
-            <div>
-              <dt>Garantie</dt>
-              <dd>
-                <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>
-              </dd>
-            </div>
-          </dl>
-          {tags.length > 0 && (
-            <p className="tag-line">
-              {tags.map((t) => (
-                <span key={t.id} className={`tag static tone-${t.color ?? "butter"}`}>
-                  {t.name}
-                </span>
+              {shares.map((s) => (
+                <div key={s.member_id} className="sub">
+                  <dt>Deel {memberById(taxonomy, s.member_id)?.name ?? "?"}</dt>
+                  <dd>{formatCents(s.share_cents)}</dd>
+                </div>
               ))}
-            </p>
-          )}
-          {p.notes && (
-            <p className="note-block">
-              <Icon name="note" size={16} />
-              <span>{p.notes}</span>
-            </p>
-          )}
-          <p className="footnote">Bewaard door {nameForEmail(taxonomy, p.created_by)}</p>
-        </section>
+              <div>
+                <dt>Garantie</dt>
+                <dd>
+                  <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>
+                </dd>
+              </div>
+            </dl>
+            {tags.length > 0 && (
+              <p className="tag-line">
+                {tags.map((t) => (
+                  <span key={t.id} className={`tag static tone-${t.color ?? "butter"}`}>
+                    {t.name}
+                  </span>
+                ))}
+              </p>
+            )}
+            {p.notes && (
+              <p className="note-block">
+                <Icon name="note" size={16} />
+                <span>{p.notes}</span>
+              </p>
+            )}
+            <p className="footnote">Bewaard door {nameForEmail(taxonomy, p.created_by)}</p>
+          </section>
+        </aside>
 
-        <div className="stack">
+        <div className="split-main">
           <section className="card">
             <CardHead
               icon="file"

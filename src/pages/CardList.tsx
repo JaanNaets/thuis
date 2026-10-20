@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "../router";
 import { useCards } from "../cards";
 import { DEFAULT_CARD_COLOR, textColorFor } from "../color";
 import { Icon } from "../components/Icon";

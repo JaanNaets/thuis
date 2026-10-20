@@ -1,15 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link, useNavigate } from "../router";
 import { isLow } from "../../shared/stock";
-import {
-  ITEM_TYPES,
-  MOVEMENT_REASONS,
-  UNITS,
-  type ItemDetail as Detail,
-  type StockAction,
-  type StockActionInput,
-  type Taxonomy,
-} from "../../shared/types";
+import { ITEM_TYPES, MOVEMENT_REASONS, UNITS, type ItemDetail as Detail, type StockAction, type StockActionInput, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { CardHead, LevelMeter, QuantityField, SubmitButton, TreeSelect } from "../components/Controls";
@@ -106,8 +99,8 @@ export function ItemDetail() {
         }
       />
 
-      <div className="detail-grid">
-        <div className="stack">
+      <div className="split">
+        <aside className="split-aside">
           <section className="card">
             <div className="stock-head">
               <p className="stock-total">
@@ -130,7 +123,7 @@ export function ItemDetail() {
             </div>
 
             {item.levels.length > 0 && (
-              <ul className="rows levels" style={{ borderTop: "1px solid var(--border)", borderRadius: 0 }}>
+              <ul className="rows levels">
                 {item.levels.map((level) => (
                   <li key={level.location_id}>
                     <div className="row">
@@ -147,7 +140,13 @@ export function ItemDetail() {
                         <strong>{formatNumber(level.quantity)}</strong>
                       ) : (
                         <span className="stepper">
-                          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => quick("consume", level.location_id)} aria-label="Eén minder">
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={busy}
+                            onClick={() => quick("consume", level.location_id)}
+                            aria-label="Eén minder"
+                          >
                             <Icon name="minus" size={16} />
                           </button>
                           <span className="stepper-value">
@@ -244,9 +243,9 @@ export function ItemDetail() {
               </p>
             )}
           </section>
-        </div>
+        </aside>
 
-        <div className="stack">
+        <div className="split-main">
           {item.purchases.length > 0 && (
             <section className="card">
               <CardHead icon="receipt" title="Aankoop" description="Bewijsstuk en garantie" />
@@ -294,9 +293,7 @@ export function ItemDetail() {
                           {m.vendor_name && <span className="muted"> bij {m.vendor_name}</span>}
                         </span>
                         <span className="row-meta">
-                          <span>
-                            {[m.location_name, nameForEmail(taxonomy, m.created_by), formatDateTime(m.created_at)].filter(Boolean).join(" · ")}
-                          </span>
+                          <span>{[m.location_name, nameForEmail(taxonomy, m.created_by), formatDateTime(m.created_at)].filter(Boolean).join(" · ")}</span>
                         </span>
                         {m.note && (
                           <span className="row-meta" style={{ color: "var(--foreground)" }}>
@@ -377,9 +374,7 @@ function StockForm({
     item.default_location_id && item.default_location_id !== initialLocation ? item.default_location_id : null,
   );
   const levelQuantity = (id: string | null) => levels.find((l) => l.location_id === id)?.quantity ?? 0;
-  const [quantity, setQuantity] = useState(() =>
-    action === "count" || action === "move" ? formatNumber(levelQuantity(initialLocation)) : "1",
-  );
+  const [quantity, setQuantity] = useState(() => (action === "count" || action === "move" ? formatNumber(levelQuantity(initialLocation)) : "1"));
   const [expires, setExpires] = useState("");
   const [vendor, setVendor] = useState(() => taxonomy.vendors.find((v) => v.id === item.vendor_id)?.name ?? "");
   const [note, setNote] = useState("");

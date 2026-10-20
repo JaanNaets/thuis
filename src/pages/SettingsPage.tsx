@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link } from "../router";
 import { descendantIds, flattenTree } from "../../shared/tree";
 import type { Category, CategoryDomain, Location, Member, Tag, Taxonomy, Tone, Vendor } from "../../shared/types";
 import { api } from "../api";
@@ -25,11 +26,23 @@ const WHAT = { member: "lid", category: "categorie", location: "plaats", tag: "t
 
 type Section = "household" | "vendors" | "categories" | "locations" | "tags" | "device";
 
+/** De tab staat in het adres (/meer?tab=plaatsen), zodat je er vanuit de zijbalk naartoe kan. */
+const SLUGS: Record<Section, string> = {
+  household: "huishouden",
+  vendors: "verkopers",
+  categories: "categorieen",
+  locations: "plaatsen",
+  tags: "tags",
+  device: "toestel",
+};
+
 export function SettingsPage() {
   const { data: taxonomy, error } = useTaxonomy();
   const [editing, setEditing] = useState<Editing>();
   const [domain, setDomain] = useState<CategoryDomain>("item");
-  const [section, setSection] = useState<Section>("household");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = (Object.keys(SLUGS) as Section[]).find((k) => SLUGS[k] === searchParams.get("tab")) ?? "household";
+  const setSection = (next: Section) => setSearchParams({ tab: SLUGS[next] }, { replace: true });
 
   return (
     <div className="page">
@@ -54,7 +67,14 @@ export function SettingsPage() {
 
       {taxonomy && (
         <div className="settings-grid" key={section}>
-          <Card show={section === "household"} icon="users" title="Huishouden" desc="Wie zich aanmeldt, komt hier vanzelf bij" onAdd={() => setEditing({ kind: "member" })} addLabel="Lid">
+          <Card
+            show={section === "household"}
+            icon="users"
+            title="Huishouden"
+            desc="Wie zich aanmeldt, komt hier vanzelf bij"
+            onAdd={() => setEditing({ kind: "member" })}
+            addLabel="Lid"
+          >
             <ul className="rows stagger">
               {taxonomy.members.map((m, i) => (
                 <li key={m.id} style={stagger(i)}>
@@ -77,7 +97,14 @@ export function SettingsPage() {
             </ul>
           </Card>
 
-          <Card show={section === "vendors"} icon="store" title="Verkopers" desc="Winkels, webshops en mensen waar je iets kocht" onAdd={() => setEditing({ kind: "vendor" })} addLabel="Verkoper">
+          <Card
+            show={section === "vendors"}
+            icon="store"
+            title="Verkopers"
+            desc="Winkels, webshops en mensen waar je iets kocht"
+            onAdd={() => setEditing({ kind: "vendor" })}
+            addLabel="Verkoper"
+          >
             {taxonomy.vendors.length === 0 ? (
               <p className="card-body hint">Verkopers verschijnen hier vanzelf zodra je ze bij een aankoop invult.</p>
             ) : (
@@ -125,7 +152,14 @@ export function SettingsPage() {
             />
           </Card>
 
-          <Card show={section === "locations"} icon="pin" title="Plaatsen" desc="Kamers, kasten en vakken" onAdd={() => setEditing({ kind: "location" })} addLabel="Plaats">
+          <Card
+            show={section === "locations"}
+            icon="pin"
+            title="Plaatsen"
+            desc="Kamers, kasten en vakken"
+            onAdd={() => setEditing({ kind: "location" })}
+            addLabel="Plaats"
+          >
             <TreeList nodes={flattenTree(taxonomy.locations)} onEdit={(l) => setEditing({ kind: "location", item: l })} />
           </Card>
 
@@ -136,7 +170,13 @@ export function SettingsPage() {
               ) : (
                 <div className="tag-picker">
                   {taxonomy.tags.map((t) => (
-                    <button key={t.id} type="button" className={`tag static tone-${t.color ?? "butter"}`} style={{ cursor: "pointer" }} onClick={() => setEditing({ kind: "tag", item: t })}>
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`tag static tone-${t.color ?? "butter"}`}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setEditing({ kind: "tag", item: t })}
+                    >
                       {t.name}
                       <span className="tag-count">{t.usage}</span>
                     </button>
@@ -354,7 +394,13 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
             <span className="label">
               <Icon name="note" size={15} /> Notitie
             </span>
-            <textarea rows={2} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Klantnummer, contactpersoon, openingsuren…" />
+            <textarea
+              rows={2}
+              maxLength={2000}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Klantnummer, contactpersoon, openingsuren…"
+            />
           </label>
           {editing.item && editing.item.usage > 0 && (
             <Link to={`/aankopen?verkoper=${editing.item.id}`} className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={onDone}>

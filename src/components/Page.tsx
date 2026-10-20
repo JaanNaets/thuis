@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "../router";
 import { TONES, type Tone } from "../../shared/types";
+import { useSession } from "../session";
+import { Avatar } from "./Controls";
 import { Icon, type IconName } from "./Icon";
 
 export type { Tone };
@@ -27,9 +29,10 @@ function BackLink({ back, className, children }: { back: Back; className?: strin
  * Kop van elk scherm (zie STIJLBOEK.md → Paginakop).
  *
  * - `badge`: korte status naast de titel ("2 bijna op");
- * - `back`: waar "terug" naartoe gaat; wordt ook het middelste stuk van het kruimelpad;
- * - `actions`: acties op het item zelf (bv. Bewerken). Op tablet in de paneelbalk, op een gsm naast de titel;
- * - `primary`: de hoofdactie van het scherm. Enkel op tablet; op een gsm doet de zwevende + knop dat.
+ * - `description`: korte uitleg; op tablet klein en grijs naast de titel;
+ * - `back`: waar "terug" naartoe gaat; wordt ook het eerste stuk van het kruimelpad;
+ * - `actions`: acties op het item zelf (bv. Bewerken), rechts naast de titel;
+ * - `primary`: de hoofdactie van het scherm. Op tablet rechtsboven in de paneelbalk; op een gsm doet de zwevende + knop dat.
  *
  * Op een gsm verschijnt bovenaan een kleine titelbalk zodra de grote titel uit beeld schuift.
  */
@@ -48,6 +51,7 @@ export function PageHead({
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
+  const { me } = useSession();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -74,19 +78,21 @@ export function PageHead({
     <>
       <div className="panel-bar">
         <nav className="breadcrumb" aria-label="Kruimelpad">
-          <Link to="/">
-            <Icon name="home" size={16} /> Thuis
-          </Link>
-          {back && (
-            <>
-              <span className="sep">/</span>
-              <BackLink back={back}>{back.label}</BackLink>
-            </>
-          )}
-          <span className="sep">/</span>
+          {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Thuis</Link>}
+          <Icon name="next" size={14} className="sep" />
           <span className="current">{title}</span>
         </nav>
-        {actions && <div className="panel-actions">{actions}</div>}
+        <div className="panel-actions">
+          {primary}
+          {me && (
+            <>
+              <span className="panel-sep" />
+              <Link to="/meer" className="panel-avatar" title={`${me.member.name} · ${me.email}`} aria-label="Instellingen">
+                <Avatar member={me.member} />
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {back && (
@@ -95,19 +101,14 @@ export function PageHead({
         </BackLink>
       )}
       <header className="page-head">
-        <div style={{ minWidth: 0 }}>
+        <div className="page-title">
           <h1 ref={titleRef}>
             {title}
             {badge}
           </h1>
           {description && <p className="page-desc">{description}</p>}
         </div>
-        {(actions || primary) && (
-          <div className="page-actions">
-            {actions && <span className="narrow">{actions}</span>}
-            {primary && <span className="wide">{primary}</span>}
-          </div>
-        )}
+        {actions && <div className="page-actions">{actions}</div>}
       </header>
 
       <div className="topbar" data-visible={compact} aria-hidden={!compact}>

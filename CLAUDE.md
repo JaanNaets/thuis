@@ -15,6 +15,9 @@ commits en uitleg.
 
 ## Code
 
+- Navigeren altijd met `Link`, `NavLink` en `useNavigate` uit `src/router.tsx` (vloeiende schermwissels), nooit
+  rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
+
 - Bedragen in cent, datums als `YYYY-MM-DD`. Opmaak via `src/format.ts`.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

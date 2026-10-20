@@ -1,69 +1,74 @@
 /* ------------------------------------------------------------------
    Thuis: stijlblad. Lees eerst STIJLBOEK.md: daar staat waarom, wanneer en hoe.
-   Mobiel eerst. Vanaf 768px: grijs canvas, zijbalk en een wit paneel (smalle zijbalk),
-   vanaf 1100px een brede zijbalk met tekst en tellers.
+   Mobiel eerst. Vanaf 768px: lichtgrijs canvas, zijbalk en een wit paneel (smalle zijbalk),
+   vanaf 1100px een brede zijbalk met tekst, zoeken en de plaatsen in huis.
    ------------------------------------------------------------------ */
 
 :root {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
 
-  /* Vlakken */
-  --canvas: #f6f6f7;
+  /* Vlakken: wit paneel op een lichtgrijs canvas. Grijs = achtergrond, nooit een rand. */
+  --canvas: #f0f0f0;
   --background: #ffffff;
-  --subtle: #fafafa;
-  --muted: #f4f4f5;
-  --muted-strong: #e9e9ec;
+  --subtle: #f7f7f7; /* kopstrook van een tabel, zoekveld */
+  --muted: #f2f2f2; /* pillen, secundaire knoppen, hover */
+  --muted-strong: #e7e7e7;
+  --nav-active: #e2e2e2; /* actief item in de zijbalk */
+  --field: #fcfcfc; /* invoervelden */
 
-  /* Tekst */
-  --foreground: #18181b;
-  --text-soft: #3f3f46;
-  --muted-foreground: #71717a;
-  --faint: #a1a1aa;
+  /* Tekst: bijna zwart, en drie zachte grijzen. */
+  --foreground: #1d1d1f;
+  --text-soft: #3a3a3c;
+  --muted-foreground: #8a8a8e;
+  --faint: #b0b0b4;
 
-  /* Lijnen */
-  --border: #ececee;
-  --border-strong: #dedee3;
-  --input: #e4e4e7;
-  --ring: #a1a1aa;
+  /* Lijnen: dun en licht. */
+  --border: #ebebeb;
+  --border-strong: #e2e2e2;
+  --divider: #f1f1f1; /* tussen rijen en secties */
+  --input: #e6e6e6;
+  --ring: #d4d4d8;
 
   /* Acties */
-  --primary: #18181b;
-  --primary-hover: #2c2c31;
-  --primary-foreground: #fafafa;
-  --destructive: #dc2626;
+  --primary: #28282a;
+  --primary-hover: #3a3a3d;
+  --primary-foreground: #ffffff;
+  --destructive: #e5484d;
 
-  /* Eén accent: blauw. Voor merk, info, selectie en meldingen; nooit voor grote vlakken. */
-  --accent: #4a6cf7;
-  --accent-strong: #3b5be6;
-  --accent-soft: #f1f4ff;
-  --accent-line: #c9d4fd;
-  --accent-ink: #3150d4;
-  --accent-gradient: linear-gradient(180deg, #6283ff 0%, #4a63f0 100%);
+  /* Eén accent: helder blauw. Voor merk, info, selectie en meldingen; nooit voor grote vlakken. */
+  --accent: #2f86eb;
+  --accent-strong: #1f74da;
+  --accent-soft: #eaf4fe;
+  --accent-line: #a7cff6;
+  --accent-ink: #2a7fd8;
+  --accent-gradient: linear-gradient(180deg, #62aefa 0%, #2f80ed 100%);
+  --brand-gradient: linear-gradient(180deg, #5b8cff 0%, #4a5ff0 100%);
 
   /* Status */
-  --success: #15803d;
-  --success-bg: #effaf3;
-  --success-solid: #22c55e;
-  --warning: #b45309;
-  --warning-bg: #fff8eb;
-  --warning-solid: #f59e0b;
-  --danger: #b91c1c;
-  --danger-bg: #fef2f2;
-  --danger-solid: #ef4444;
+  --success: #1a7f45;
+  --success-bg: #ecf9f1;
+  --success-solid: #30c26b;
+  --warning: #b25e09;
+  --warning-bg: #fff6e8;
+  --warning-solid: #f5a524;
+  --danger: #c62a2f;
+  --danger-bg: #fdf0f0;
+  --danger-solid: #ef4b51;
 
-  --radius-sm: 6px;
-  --radius: 8px;
+  --radius-sm: 7px;
+  --radius: 9px;
   --radius-md: 10px;
-  --radius-lg: 12px;
+  --radius-lg: 14px;
   --radius-xl: 16px;
-  --radius-panel: 14px;
+  --radius-panel: 16px;
 
-  --shadow-xs: 0 1px 2px 0 rgb(16 24 40 / 0.05);
-  --shadow-sm: 0 1px 3px 0 rgb(16 24 40 / 0.08), 0 1px 2px -1px rgb(16 24 40 / 0.06);
-  --shadow-md: 0 4px 8px -2px rgb(16 24 40 / 0.08), 0 2px 4px -2px rgb(16 24 40 / 0.05);
-  --shadow-lg: 0 16px 32px -8px rgb(16 24 40 / 0.14), 0 4px 8px -4px rgb(16 24 40 / 0.06);
-  --focus-ring: 0 0 0 3px rgb(74 108 247 / 0.22);
+  /* Schaduwen: amper zichtbaar. Een rand doet het werk, de schaduw geeft enkel wat diepte. */
+  --shadow-xs: 0 1px 1px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 0 0 1px rgb(0 0 0 / 0.03);
+  --shadow-md: 0 6px 16px -4px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.16), 0 6px 12px -6px rgb(0 0 0 / 0.06);
+  --focus-ring: 0 0 0 3px rgb(47 134 235 / 0.2);
 
   /* Beweging: één familie curves, zie STIJLBOEK.md → Beweging. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -76,18 +81,19 @@
   color-scheme: light;
 }
 
-/* Kleuren van categorieën, tags en leden: enkel voor stipjes, avatars en kleine vlakken. */
-.tone-peach { --tone: #f97316; }
-.tone-butter { --tone: #eab308; }
-.tone-sage { --tone: #22c55e; }
-.tone-mint { --tone: #14b8a6; }
-.tone-sky { --tone: #0ea5e9; }
-.tone-lilac { --tone: #8b5cf6; }
-.tone-rose { --tone: #f43f5e; }
+/* Kleuren van categorieën, tags, plaatsen en leden: enkel voor stipjes, iconen, avatars en kleine vlakken. */
+.tone-peach { --tone: #f5883a; }
+.tone-butter { --tone: #e9b23a; }
+.tone-sage { --tone: #3fbf74; }
+.tone-mint { --tone: #26b5a5; }
+.tone-sky { --tone: #2f9be8; }
+.tone-lilac { --tone: #a26ae6; }
+.tone-rose { --tone: #ef5a7a; }
 
 [class*="tone-"] {
-  --tone-soft: color-mix(in oklab, var(--tone) 10%, white);
-  --tone-line: color-mix(in oklab, var(--tone) 22%, white);
+  --tone-soft: color-mix(in oklab, var(--tone) 9%, white);
+  --tone-line: color-mix(in oklab, var(--tone) 20%, white);
+  --tone-mid: color-mix(in oklab, var(--tone) 82%, white);
   --tone-ink: color-mix(in oklab, var(--tone) 62%, black);
 }
 
@@ -112,7 +118,10 @@ body {
   font-optical-sizing: auto;
   font-size: 15px;
   line-height: 1.5;
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -136,7 +145,7 @@ h2,
 h3 {
   margin: 0;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.018em;
   line-height: 1.25;
 }
 
@@ -149,7 +158,21 @@ svg {
 }
 
 ::selection {
-  background: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font: 500 11px/1 var(--font-sans);
+  letter-spacing: 0.02em;
 }
 
 .muted {
@@ -204,7 +227,7 @@ svg {
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(5px);
   }
 }
 
@@ -301,8 +324,71 @@ svg {
 }
 
 /* Een nieuw scherm schuift zacht binnen; vaste elementen doen niet mee. */
-.page > :not(.fab, .topbar, .panel-bar, dialog, .scanner, .viewer) {
-  animation: page-in 0.4s var(--ease-out) backwards;
+.page > :not(.fab, .topbar, .panel-bar, .split, dialog, .scanner, .viewer) {
+  animation: page-in 0.45s var(--ease-out) backwards;
+}
+
+/* In een zijkolom-scherm komen zijkolom en kaarten na elkaar binnen. */
+.split > * {
+  animation: page-in 0.45s var(--ease-out) backwards;
+}
+
+.split > * + * {
+  animation-delay: 0.06s;
+}
+
+
+/*
+ * Schermwissels: View Transitions (de router doet dat voor elke Link, NavLink en useNavigate
+ * uit src/router.tsx). Op een gsm vloeit het hele scherm in elkaar over; de onderbalk blijft
+ * gewoon staan en zijn vlak schuift mee. Op tablet vloeit enkel het witte paneel over;
+ * de zijbalk blijft live, zodat het grijze vlak naar het nieuwe item glijdt.
+ */
+/* Het oude scherm verdwijnt sneller dan het nieuwe verschijnt: zo zie je nooit twee schermen door elkaar. */
+::view-transition-old(root) {
+  animation-duration: 0.14s;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+  animation-timing-function: ease;
+}
+
+.tabbar {
+  view-transition-name: tabbar;
+}
+
+::view-transition-old(tabbar) {
+  display: none;
+}
+
+::view-transition-new(tabbar) {
+  animation: none;
+}
+
+/* Laadstreepje bovenaan, enkel als een scherm eerst nog code moet ophalen (bv. de eerste kaart). */
+.nav-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 300;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s 0.15s,
+    transform 0.3s var(--ease-out);
+}
+
+.nav-progress[data-active="true"] {
+  opacity: 1;
+  transform: scaleX(0.8);
+  transition:
+    opacity 0.2s 0.1s,
+    transform 2.4s var(--ease-out) 0.1s;
 }
 
 /* ---------- app-schaal (gsm) ---------- */
@@ -438,6 +524,7 @@ svg {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+
 /* ---------- paginakop ---------- */
 
 .page-head {
@@ -448,12 +535,17 @@ svg {
   margin-bottom: 20px;
 }
 
+.page-title {
+  min-width: 0;
+}
+
 .page-head h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
   font-size: 26px;
+  letter-spacing: -0.025em;
   overflow-wrap: anywhere;
 }
 
@@ -467,15 +559,10 @@ svg {
   font-size: 14px;
 }
 
-.page-actions,
-.page-actions > span {
+.page-actions {
   display: flex;
   gap: 8px;
   flex: none;
-}
-
-.page-actions > .wide {
-  display: none;
 }
 
 .crumb {
@@ -493,7 +580,9 @@ svg {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s, background-color 0.2s;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
 }
 
 .crumb:hover {
@@ -526,7 +615,9 @@ svg {
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
-  transition: opacity 0.25s, transform 0.35s var(--ease-out);
+  transition:
+    opacity 0.25s,
+    transform 0.35s var(--ease-out);
 }
 
 .topbar[data-visible="true"] {
@@ -560,24 +651,31 @@ svg {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  height: 36px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 13px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   background: var(--muted);
   color: var(--foreground);
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
   transition:
-    background-color 0.18s,
-    border-color 0.18s,
-    color 0.18s,
-    box-shadow 0.18s,
-    transform 0.15s var(--ease-out);
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    box-shadow 0.2s,
+    transform 0.16s var(--ease-out);
+}
+
+.btn svg {
+  transition:
+    color 0.2s,
+    transform 0.3s var(--spring);
 }
 
 .btn:active:not(:disabled) {
@@ -594,25 +692,38 @@ svg {
   box-shadow: var(--focus-ring);
 }
 
+/* Donker, met een glanslijntje bovenaan. Eén per scherm. */
 .btn-primary {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: var(--shadow-xs), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.16),
+    0 2px 6px -2px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
+/* Wit met een dunne rand; het icoon is gevuld en grijs, de tekst donker. */
 .btn-outline {
   background: var(--background);
-  border-color: var(--border-strong);
+  border-color: var(--input);
+  color: var(--text-soft);
   box-shadow: var(--shadow-xs);
+}
+
+.btn-outline svg,
+.btn-ghost svg {
+  color: var(--muted-foreground);
 }
 
 .btn-ghost {
   background: transparent;
+  color: var(--text-soft);
 }
 
 .btn-danger {
   background: var(--destructive);
   color: #fff;
+  box-shadow: 0 1px 2px rgb(229 72 77 / 0.25);
 }
 
 .btn-danger-ghost {
@@ -627,15 +738,21 @@ svg {
   .btn-primary:hover:not(:disabled) {
     background: var(--primary-hover);
   }
-  .btn-outline:hover:not(:disabled),
-  .btn-ghost:hover:not(:disabled) {
-    background: var(--subtle);
-  }
   .btn-outline:hover:not(:disabled) {
+    background: #fafafa;
     border-color: var(--ring);
+    color: var(--foreground);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  .btn-outline:hover:not(:disabled) svg,
+  .btn-ghost:hover:not(:disabled) svg {
+    color: var(--text-soft);
   }
   .btn-danger:hover:not(:disabled) {
-    background: #b91c1c;
+    background: #d63c41;
   }
   .btn-danger-ghost:hover:not(:disabled) {
     background: var(--danger-bg);
@@ -643,9 +760,9 @@ svg {
 }
 
 .btn-sm {
-  height: 32px;
-  padding: 0 11px;
-  border-radius: var(--radius-sm);
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
   font-size: 13px;
   gap: 6px;
 }
@@ -656,12 +773,12 @@ svg {
 }
 
 .btn-icon {
-  width: 36px;
+  width: 34px;
   padding: 0;
 }
 
 .btn-icon.btn-sm {
-  width: 32px;
+  width: 30px;
 }
 
 .btn-block {
@@ -703,7 +820,7 @@ svg {
   background: var(--background);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
 }
 
 .card-head {
@@ -711,16 +828,17 @@ svg {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 14px 16px 12px;
 }
 
 .card-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
 }
 
 .card-desc {
@@ -730,7 +848,7 @@ svg {
 }
 
 .card-head .card-desc {
-  padding-left: 30px;
+  padding-left: 29px;
 }
 
 .card-body {
@@ -741,13 +859,15 @@ svg {
 .icon-tile {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex: none;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   background: var(--accent-gradient);
   color: #fff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 1px 2px rgb(74 99 240 / 0.35);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 1px 2px rgb(47 128 237 / 0.35);
 }
 
 .section-title {
@@ -766,27 +886,35 @@ svg {
 }
 
 .footnote {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  margin: 0 16px;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--divider);
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
 /* ---------- lijsten en tabellen ---------- */
 
+/*
+ * Rijen staan iets naar binnen in hun kaart: de scheidingslijnen raken de rand niet
+ * en een rij krijgt bij hover een afgerond grijs vlak (zoals in de referentie).
+ */
 .rows {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.rows > li + li {
-  border-top: 1px solid var(--border);
+.card > .rows {
+  padding: 0 8px 8px;
 }
 
-.card-head + .rows,
-.card-body + .rows {
-  border-top: 1px solid var(--border);
+.card > .rows:first-child {
+  padding-top: 8px;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--divider);
 }
 
 .row {
@@ -794,26 +922,15 @@ svg {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 60px;
-  padding: 10px 16px;
+  min-height: 58px;
+  padding: 10px;
   border: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
-  transition: background-color 0.18s;
-}
-
-.rows > li:last-child > .row {
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-
-.card > .rows:first-child > li:first-child > .row {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
-.card > .rows:first-child > li:only-child > .row {
-  border-radius: var(--radius-lg);
+  transition: background-color 0.2s;
 }
 
 a.row,
@@ -825,7 +942,7 @@ button.row {
   a.row:hover,
   button.row:hover,
   .row-link:hover {
-    background: var(--subtle);
+    background: #f9f9f9;
   }
 }
 
@@ -850,22 +967,22 @@ button.row:active,
   align-items: center;
   gap: 12px;
   align-self: stretch;
-  margin: -10px 0 -10px -16px;
-  padding: 10px 0 10px 16px;
+  margin: -10px 0 -10px -10px;
+  padding: 10px 0 10px 10px;
   border-radius: inherit;
-  transition: background-color 0.18s;
+  transition: background-color 0.2s;
 }
 
 .row-media {
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex: none;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--subtle);
   color: var(--muted-foreground);
 }
@@ -877,7 +994,7 @@ button.row:active,
 .row-media[class*="tone-"] {
   border-color: var(--tone-line);
   background: var(--tone-soft);
-  color: var(--tone-ink);
+  color: var(--tone-mid);
 }
 
 .row-media img {
@@ -888,7 +1005,7 @@ button.row:active,
 
 .row-media .letter {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 450;
 }
 
 .row-main {
@@ -902,9 +1019,10 @@ button.row:active,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
 }
 
 .row-meta {
@@ -915,7 +1033,7 @@ button.row:active,
   min-width: 0;
   overflow: hidden;
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .row-meta > span:not(.badge) {
@@ -927,14 +1045,16 @@ button.row:active,
 .row-end {
   flex: none;
   text-align: right;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .row-chevron {
   color: var(--faint);
-  transition: transform 0.25s var(--ease-out), color 0.2s;
+  transition:
+    transform 0.3s var(--ease-out),
+    color 0.2s;
 }
 
 @media (hover: hover) {
@@ -951,26 +1071,28 @@ button.row:active,
   display: none;
 }
 
-/* Groepsrij in een lijst (bv. per categorie). */
+/* Groepsrij in een lijst (bv. per categorie): een stil grijs label, geen balk. */
 .rows > li.group-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  background: var(--subtle);
+  padding: 14px 10px 6px;
   color: var(--muted-foreground);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
+}
+
+.rows > li.group-row + li {
+  border-top: 0;
+}
+
+.card > .rows > li.group-row:first-child {
+  padding-top: 6px;
 }
 
 .group-count {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-}
-
-/* Op een gsm is de kopstrook verborgen: dan begint de kaart met een groepsrij. */
-.card > .table-head + .rows > li.group-row:first-child {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 /* Kolommen per tabel. Kolommen met .xl verschijnen pas vanaf 1100px. */
@@ -988,46 +1110,43 @@ button.row:active,
 
 /* ---------- badges, stipjes, avatars, meter ---------- */
 
+/* Pil: grijs vlak, geen rand. Met kleur enkel voor een status. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--background);
+  background: var(--muted);
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 500;
+  letter-spacing: -0.005em;
   white-space: nowrap;
 }
 
 .badge-secondary {
-  border-color: transparent;
   background: var(--muted);
 }
 
 .badge-accent {
-  border-color: transparent;
   background: var(--accent-soft);
   color: var(--accent-ink);
 }
 
 .badge-success {
-  border-color: transparent;
   background: var(--success-bg);
   color: var(--success);
 }
 
 .badge-warning {
-  border-color: transparent;
   background: var(--warning-bg);
   color: var(--warning);
 }
 
 .badge-danger {
-  border-color: transparent;
   background: var(--danger-bg);
   color: var(--danger);
 }
@@ -1045,6 +1164,7 @@ button.row:active,
   background: var(--tone, var(--faint));
 }
 
+/* Pastel rondje met een dunne gekleurde letter. */
 .avatar {
   display: inline-grid;
   place-items: center;
@@ -1053,22 +1173,24 @@ button.row:active,
   flex: none;
   border-radius: 50%;
   background: var(--tone-soft, var(--muted));
-  color: var(--tone-ink, var(--foreground));
+  color: var(--tone-mid, var(--muted-foreground));
   box-shadow: inset 0 0 0 1px var(--tone-line, var(--border));
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1;
 }
 
 .avatar.sm {
   width: 20px;
   height: 20px;
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .avatar.lg {
   width: 38px;
   height: 38px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 /* Niveaumeter: tien streepjes, zoals de AI-score in de referentie. */
@@ -1110,15 +1232,18 @@ button.row:active,
 
 /* ---------- tabs, filters, zoeken ---------- */
 
-/* Tabs met tellers en een lijn die naar de actieve tab schuift. */
+/* Tabs als grijze pil met een wit vlak dat naar de actieve tab glijdt. */
 .tabs {
   position: relative;
   display: flex;
-  gap: 22px;
-  margin: 0 -16px 16px;
-  padding: 0 16px;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 14px;
+  padding: 3px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--muted);
   scrollbar-width: none;
 }
 
@@ -1128,21 +1253,23 @@ button.row:active,
 
 .tab {
   position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   flex: none;
-  height: 42px;
-  padding: 0;
+  height: 30px;
+  padding: 0 12px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 0.25s;
 }
 
 .tab:hover,
@@ -1151,27 +1278,43 @@ button.row:active,
 }
 
 .tab-count {
-  min-width: 22px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  background: var(--muted);
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 0.05);
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 20px;
+  font-size: 11.5px;
+  line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  transition: background-color 0.25s;
+}
+
+.tab[aria-selected="true"] .tab-count {
+  background: var(--muted);
 }
 
 .tabs-indicator {
   position: absolute;
-  bottom: 0;
+  top: 3px;
+  bottom: 3px;
   left: 0;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--foreground);
-  transition: transform 0.45s var(--ease-out), width 0.45s var(--ease-out);
+  border-radius: 8px;
+  background: var(--background);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 0 0 1px rgb(0 0 0 / 0.025);
+  transition:
+    transform 0.45s var(--ease-out),
+    width 0.45s var(--ease-out);
   pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .tab {
+    height: 36px;
+  }
 }
 
 .toolbar {
@@ -1219,18 +1362,29 @@ button.row:active,
   align-items: center;
   gap: 6px;
   flex: none;
-  height: 34px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  height: 32px;
+  padding: 0 9px 0 11px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
   background: var(--background);
   box-shadow: var(--shadow-xs);
   color: var(--foreground);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s, transform 0.15s var(--ease-out);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.2s,
+    color 0.2s,
+    transform 0.16s var(--ease-out);
+}
+
+@media (hover: hover) {
+  .filter:hover {
+    border-color: var(--ring);
+  }
 }
 
 .filter:active {
@@ -1269,6 +1423,10 @@ button.row:active,
   opacity: 0.75;
 }
 
+.filter.active > svg {
+  color: var(--accent-ink);
+}
+
 .filter select {
   position: absolute;
   inset: 0;
@@ -1290,6 +1448,24 @@ button.row:active,
   display: grid;
   gap: 16px;
   max-width: 680px;
+}
+
+/*
+ * Een formulier of kaart als heel scherm: de balken bovenaan lopen over de volle breedte,
+ * enkel de inhoud blijft smal.
+ */
+.page.form,
+.page.card-page {
+  max-width: none;
+}
+
+.page.form > :not(.panel-bar, .page-head, .topbar, .crumb) {
+  width: 100%;
+  max-width: 680px;
+}
+
+.page.card-page > :not(.panel-bar, .page-head, .topbar, .crumb) {
+  max-width: 560px;
 }
 
 .form-section {
@@ -1349,16 +1525,18 @@ select,
 textarea {
   width: 100%;
   min-width: 0;
-  height: 36px;
-  padding: 0 11px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid var(--input);
-  border-radius: var(--radius);
-  background: var(--background);
+  border-radius: var(--radius-md);
+  background: var(--field);
   color: var(--foreground);
   font: inherit;
   font-size: 16px; /* onder 16px zoomt iOS in bij het typen */
-  box-shadow: var(--shadow-xs);
-  transition: border-color 0.18s, box-shadow 0.18s, background-color 0.3s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.3s;
 }
 
 @media (pointer: fine) {
@@ -1381,7 +1559,7 @@ textarea {
 textarea {
   height: auto;
   min-height: 84px;
-  padding: 9px 11px;
+  padding: 9px 12px;
   resize: vertical;
   line-height: 1.5;
 }
@@ -1389,7 +1567,7 @@ textarea {
 select {
   appearance: none;
   padding-right: 32px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 9px center;
   text-overflow: ellipsis;
@@ -1400,7 +1578,16 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--accent);
+  background-color: var(--background);
   box-shadow: var(--focus-ring);
+}
+
+@media (hover: hover) {
+  input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])):hover:not(:focus),
+  select:hover:not(:focus),
+  textarea:hover:not(:focus) {
+    border-color: var(--ring);
+  }
 }
 
 input::placeholder,
@@ -1410,7 +1597,7 @@ textarea::placeholder {
 
 [aria-invalid="true"] {
   border-color: var(--destructive) !important;
-  box-shadow: 0 0 0 3px rgb(220 38 38 / 0.15) !important;
+  box-shadow: 0 0 0 3px rgb(229 72 77 / 0.15) !important;
 }
 
 input[type="date"] {
@@ -1426,7 +1613,7 @@ input[type="date"] {
 
 @keyframes auto-flash {
   from {
-    box-shadow: 0 0 0 6px rgb(74 108 247 / 0.25);
+    box-shadow: 0 0 0 6px rgb(47 134 235 / 0.22);
   }
 }
 
@@ -1453,9 +1640,11 @@ input[type="checkbox"] {
   bottom: 3px;
   left: 3px;
   width: calc((100% - 6px) / var(--n));
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--background);
-  box-shadow: var(--shadow-sm);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 0 0 1px rgb(0 0 0 / 0.025);
   transform: translateX(calc(var(--i) * 100%));
   transition: transform 0.45s var(--ease-out);
 }
@@ -1632,7 +1821,7 @@ input[type="checkbox"] {
   gap: 6px;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--input);
   border-radius: var(--radius-sm);
   background: var(--background);
   color: var(--text-soft);
@@ -1773,6 +1962,7 @@ input[type="checkbox"] {
   color: var(--muted-foreground);
   background: var(--subtle);
 }
+
 
 /* ---------- skeleton & lege staat ---------- */
 
@@ -1937,13 +2127,13 @@ dialog.sheet[open]::backdrop {
   align-items: center;
   gap: 10px;
   max-width: 100%;
-  padding: 9px 8px 9px 12px;
+  padding: 8px 8px 8px 14px;
   border: 1px solid var(--accent-line);
   border-radius: var(--radius-md);
   background: var(--accent-soft);
   color: var(--accent-ink);
-  box-shadow: var(--shadow-md);
-  font-size: 14px;
+  box-shadow: 0 8px 20px -8px rgb(47 134 235 / 0.25);
+  font-size: 13.5px;
   font-weight: 500;
   pointer-events: auto;
   animation: toast-in 0.5s var(--spring) backwards;
@@ -1976,7 +2166,7 @@ dialog.sheet[open]::backdrop {
 
 .toast-close:hover {
   opacity: 1;
-  background: rgb(74 108 247 / 0.1);
+  background: rgb(47 134 235 / 0.1);
 }
 
 @keyframes toast-in {
@@ -2041,7 +2231,7 @@ dialog.sheet[open]::backdrop {
   gap: 16px;
   min-height: 44px;
   padding: 9px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--divider);
 }
 
 .dl dt {
@@ -2099,17 +2289,6 @@ dialog.sheet[open]::backdrop {
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 16px 16px;
-}
-
-.detail-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.stack {
-  display: grid;
-  gap: 16px;
-  align-content: start;
 }
 
 .gallery {
@@ -2236,11 +2415,6 @@ dialog.sheet[open]::backdrop {
 
 .share-input input {
   text-align: right;
-}
-
-.expenses-grid {
-  display: grid;
-  gap: 16px;
 }
 
 .balance {
@@ -2474,8 +2648,15 @@ dialog.sheet[open]::backdrop {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 8px;
-  padding: 14px 16px 16px;
-  border-top: 1px solid var(--border);
+  margin: 0 16px;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.card > .rows.levels {
+  margin: 0 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--divider);
 }
 
 .stock-actions .btn {
@@ -2580,10 +2761,6 @@ dialog.sheet[open]::backdrop {
   font-size: 13px;
   letter-spacing: 0.06em;
   opacity: 0.75;
-}
-
-.card-page {
-  max-width: 560px;
 }
 
 .barcode-panel {
@@ -2833,6 +3010,189 @@ dialog.sheet[open]::backdrop {
   backdrop-filter: blur(8px);
 }
 
+
+/* ---------- zoekpalet (⌘K) ---------- */
+
+dialog.palette {
+  position: fixed;
+  inset: 0;
+  flex-direction: column;
+  width: min(580px, calc(100vw - 24px));
+  height: fit-content;
+  max-height: min(540px, calc(100dvh - 24px));
+  margin: max(12px, 12vh) auto auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transition:
+    opacity 0.2s,
+    transform 0.35s var(--ease-out),
+    overlay 0.35s allow-discrete,
+    display 0.35s allow-discrete;
+}
+
+dialog.palette[open] {
+  display: flex;
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  dialog.palette[open] {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+dialog.palette::backdrop {
+  background: rgb(24 24 27 / 0);
+  transition:
+    background-color 0.3s,
+    overlay 0.35s allow-discrete,
+    display 0.35s allow-discrete;
+}
+
+dialog.palette[open]::backdrop {
+  background: rgb(24 24 27 / 0.16);
+}
+
+@starting-style {
+  dialog.palette[open]::backdrop {
+    background: rgb(24 24 27 / 0);
+  }
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  height: 54px;
+  padding: 0 14px 0 18px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--muted-foreground);
+}
+
+.palette-search input,
+.palette-search input:focus {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 15px;
+}
+
+.palette-list {
+  position: relative;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 8px 8px;
+}
+
+.palette-highlight {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: var(--h);
+  border-radius: var(--radius);
+  background: var(--muted);
+  transform: translateY(var(--top));
+  transition:
+    transform 0.26s var(--ease-out),
+    height 0.26s var(--ease-out);
+  pointer-events: none;
+}
+
+.palette-group {
+  padding: 10px 10px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.palette-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-soft);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.palette-option > svg:first-child {
+  color: var(--muted-foreground);
+  transition: color 0.15s;
+}
+
+.palette-option[aria-selected="true"] {
+  color: var(--foreground);
+}
+
+.palette-option[aria-selected="true"] > svg:first-child {
+  color: var(--text-soft);
+}
+
+.palette-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hint {
+  flex: none;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.palette-go {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 0.2s,
+    transform 0.3s var(--ease-out);
+}
+
+.palette-option[aria-selected="true"] .palette-go {
+  opacity: 1;
+  transform: none;
+}
+
+.palette-empty {
+  padding: 28px 12px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-align: center;
+  animation: fade-in 0.25s;
+}
+
+/* ---------- indeling met zijkolom (details, uitgaven) ---------- */
+
+.split,
+.split-aside,
+.split-main {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+
 /* ---------- tablet & kiosk (vanaf 768px) ---------- */
 
 @media (min-width: 768px) {
@@ -2853,18 +3213,46 @@ dialog.sheet[open]::backdrop {
     inset: 8px 8px 8px var(--sidebar);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 0 28px 48px;
+    padding: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--background);
-    box-shadow: var(--shadow-xs);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+    view-transition-name: panel;
+  }
+
+  /* Enkel het paneel vloeit over; de rest (zijbalk) is meteen het nieuwe scherm, live. */
+  ::view-transition-old(root) {
+    display: none;
+  }
+
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  ::view-transition-old(panel),
+  ::view-transition-new(panel) {
+    animation-duration: 0.26s;
+    animation-timing-function: ease;
+  }
+
+  .page {
+    padding: 0 20px 48px;
+  }
+
+  /* Schermen met een zijkolom vullen het paneel tot onderaan. */
+  .page:has(> .split) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding-bottom: 0;
   }
 
   .offline-note {
-    margin-top: 16px;
+    margin: 12px 20px 0;
   }
 
-  /* Bovenaan het paneel: kruimelpad links, acties rechts. Blijft staan bij scrollen. */
+  /* Bovenaan het paneel: kruimelpad links, hoofdactie en wie je bent rechts. Blijft staan bij scrollen. */
   .panel-bar {
     position: sticky;
     top: 0;
@@ -2873,9 +3261,9 @@ dialog.sheet[open]::backdrop {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    height: 56px;
-    margin: 0 -28px 24px;
-    padding: 0 20px 0 28px;
+    height: 58px;
+    margin: 0 -20px;
+    padding: 0 12px 0 20px;
     border-bottom: 1px solid var(--border);
     background: rgb(255 255 255 / 0.9);
     -webkit-backdrop-filter: saturate(1.8) blur(12px);
@@ -2893,9 +3281,9 @@ dialog.sheet[open]::backdrop {
 
   .breadcrumb a,
   .breadcrumb button {
+    flex: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
     padding: 0;
     border: 0;
     background: none;
@@ -2911,7 +3299,7 @@ dialog.sheet[open]::backdrop {
   }
 
   .breadcrumb .sep {
-    color: var(--border-strong);
+    color: var(--faint);
   }
 
   .breadcrumb .current {
@@ -2924,180 +3312,99 @@ dialog.sheet[open]::backdrop {
 
   .panel-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
     flex: none;
   }
 
-  /* Zijbalk op het canvas: werkplek bovenaan, menu, instellingen en wie aangemeld is onderaan. */
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 40;
-    display: flex;
-    flex-direction: column;
-    width: var(--sidebar);
-    padding: max(8px, env(safe-area-inset-top)) 10px 10px;
-    user-select: none;
+  .panel-actions .btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
-  .workspace {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    height: 48px;
-    margin-bottom: 14px;
-    padding: 0 9px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--background);
-    box-shadow: var(--shadow-xs);
-    font-size: 14.5px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+  .panel-sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: var(--border);
   }
 
-  .brand-mark {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    flex: none;
-    border-radius: var(--radius);
-    background: var(--accent-gradient);
-    color: #fff;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 1px 3px rgb(74 99 240 / 0.4);
-  }
-
-  .nav-text,
-  .nav-section,
-  .nav-count {
+  .panel-sep:first-child {
     display: none;
   }
 
-  .nav-section {
-    padding: 14px 10px 6px;
-    color: var(--faint);
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .sidebar-nav {
-    position: relative;
-    display: grid;
-    gap: 4px;
-  }
-
-  .sidebar-indicator {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 36px;
+  /* Wie aangemeld is: een afgerond vierkantje, zoals de foto in de referentie. */
+  .panel-avatar {
     border-radius: var(--radius);
-    background: var(--background);
-    box-shadow: var(--shadow-xs), inset 0 0 0 1px var(--border);
-    transform: translateY(calc(var(--i, 0) * 40px));
-    transition: transform 0.45s var(--ease-out), opacity 0.2s;
-    pointer-events: none;
+    transition:
+      transform 0.2s var(--ease-out),
+      box-shadow 0.2s;
   }
 
-  .sidebar a {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    height: 36px;
-    padding: 0 10px;
+  .panel-avatar .avatar {
+    width: 34px;
+    height: 34px;
     border-radius: var(--radius);
-    color: var(--text-soft);
     font-size: 14px;
-    font-weight: 500;
-    transition: color 0.2s, background-color 0.2s;
   }
 
-  .sidebar a svg {
-    color: var(--muted-foreground);
-    transition: transform 0.35s var(--spring), color 0.2s;
+  .panel-avatar:hover {
+    box-shadow: 0 0 0 3px var(--muted);
   }
 
-  .sidebar a:hover:not(.active) {
-    background: rgb(0 0 0 / 0.035);
+  .panel-avatar:active {
+    transform: scale(0.94);
   }
 
-  .sidebar a.active {
-    color: var(--foreground);
-  }
-
-  .sidebar a.active svg {
-    color: var(--foreground);
-  }
-
-  .sidebar a:active svg {
-    transform: scale(0.88);
-  }
-
-  .sidebar-bottom {
-    display: grid;
-    gap: 4px;
-    margin-top: auto;
-  }
-
-  .sidebar-bottom a.active {
-    background: var(--background);
-    box-shadow: var(--shadow-xs), inset 0 0 0 1px var(--border);
-  }
-
-  .user-card {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 8px;
-    padding: 10px 6px 2px;
-    border-top: 1px solid var(--border);
-  }
-
-  .user-card .who {
-    display: none;
-    min-width: 0;
-  }
-
-  .user-card .who strong {
-    display: block;
-    font-size: 13.5px;
-    font-weight: 500;
-  }
-
-  .user-card .who small {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--muted-foreground);
-    font-size: 12px;
-  }
-
+  /* De paginakop wordt een rij: kleine titel links, acties rechts, lijn eronder over de hele breedte. */
   .page-head {
-    margin-bottom: 20px;
+    align-items: center;
+    min-height: 56px;
+    margin: 0 -20px 20px;
+    padding: 10px 14px 10px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-title {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
   }
 
   .page-head h1 {
-    font-size: 22px;
+    flex: none;
+    gap: 8px;
+    max-width: 100%;
+    font-size: 15.5px;
+    letter-spacing: -0.012em;
   }
 
-  .page-actions > .wide {
-    display: flex;
+  .page-desc {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
   }
 
-  .page-actions > .narrow {
-    display: none;
+  .page-actions .btn {
+    height: 32px;
   }
 
-  .tabs {
-    margin: 0 0 16px;
-    padding: 0;
+  /* In een formulier staat de kop in het raster; de rasterafstand telt al mee. */
+  .page.form > .panel-bar {
+    margin-bottom: -16px;
+  }
+
+  .page.form > .page-head {
+    margin-bottom: 4px;
+  }
+
+  /* Zijkolom links met secties onder elkaar, kaarten rechts. */
+  .split {
+    flex: 1;
   }
 
   .filters {
@@ -3106,23 +3413,24 @@ dialog.sheet[open]::backdrop {
     flex-wrap: wrap;
   }
 
-  /* Tabellen: grijze kopstrook en kolommen; rijen volgen hetzelfde raster. */
+  /* Tabellen: een grijze kopstrook binnen de kaart; rijen volgen hetzelfde raster. */
   .table-head {
     display: grid;
     grid-template-columns: var(--cols);
+    align-items: center;
     gap: 16px;
-    margin: 6px 6px 0;
-    padding: 8px 12px;
-    border-radius: var(--radius);
+    height: 38px;
+    margin: 8px 8px 2px;
+    padding: 0 10px;
+    border-radius: var(--radius-md);
     background: var(--subtle);
-    border: 1px solid var(--border);
     color: var(--muted-foreground);
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 400;
   }
 
-  .table .rows {
-    border-top: 0;
+  .card-head + .table-head {
+    margin-top: 0;
   }
 
   .table .row {
@@ -3130,7 +3438,6 @@ dialog.sheet[open]::backdrop {
     grid-template-columns: var(--cols);
     gap: 16px;
     min-height: 58px;
-    padding: 9px 18px;
   }
 
   .table .col {
@@ -3161,19 +3468,9 @@ dialog.sheet[open]::backdrop {
     justify-self: end;
   }
 
-  .table .rows > li.group-row {
-    padding: 7px 18px;
-    border-radius: 0 !important;
-  }
-
   .table .end {
     justify-content: flex-end;
     text-align: right;
-  }
-
-  .table .row-link {
-    margin: -9px 0 -9px -18px;
-    padding: 9px 0 9px 18px;
   }
 
   .toaster {
@@ -3233,13 +3530,376 @@ dialog.sheet[open]::backdrop {
     font-size: 17px;
   }
 
-  .expenses-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
+  /* ---------- zijbalk ---------- */
+
+  /* Op het grijze canvas: werkplek bovenaan, zoeken, menu, de plaatsen in huis, Instellingen onderaan. */
+  .sidebar {
+    --item: 36px;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: var(--sidebar);
+    padding: max(8px, env(safe-area-inset-top)) 10px 10px;
+    user-select: none;
   }
 
-  .expenses-grid > .span {
-    grid-column: 1 / -1;
+  .workspace {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: none;
+    height: 46px;
+    margin-bottom: 25px;
+    padding: 0 8px;
+    border-radius: var(--radius-lg);
+    background: var(--background);
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.04),
+      0 1px 3px rgb(0 0 0 / 0.05);
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    transition: box-shadow 0.25s;
+  }
+
+  .workspace:hover {
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.06),
+      0 3px 8px rgb(0 0 0 / 0.06);
+  }
+
+  /* Lijntje tussen werkplek en zoeken. */
+  .workspace::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: -13px;
+    height: 1px;
+    background: #e2e2e2;
+  }
+
+  .brand-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 8px;
+    background: var(--brand-gradient);
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 1px 3px rgb(74 95 240 / 0.4);
+  }
+
+  .workspace-note {
+    margin-left: auto;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+
+  .sidebar-search {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: none;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: var(--radius-md);
+    background: #f6f6f6;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
+  }
+
+  .sidebar-search:hover {
+    border-color: #dadada;
+    background: #f9f9f9;
+  }
+
+  .sidebar-search kbd {
+    margin-left: auto;
+    border-color: #e5e5e5;
+    background: transparent;
+  }
+
+  .sidebar-scroll {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -10px;
+    padding: 0 10px 12px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-text,
+  .nav-section,
+  .nav-count,
+  .sidebar-places {
+    display: none;
+  }
+
+  .nav-section {
+    padding: 18px 10px 6px;
+    color: #9a9a9e;
+    font-size: 12px;
+    font-weight: 450;
+  }
+
+  .sidebar-nav {
+    position: relative;
+    display: grid;
+    gap: 1px;
+    margin-top: 12px;
+  }
+
+  /* Grijs vlak dat naar het actieve item glijdt. */
+  .sidebar-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--item);
+    border-radius: var(--radius);
+    background: var(--nav-active);
+    transform: translateY(calc(var(--i, 0) * (var(--item) + 1px)));
+    transition:
+      transform 0.5s var(--ease-out),
+      opacity 0.2s;
+    pointer-events: none;
+  }
+
+  .sidebar-nav a,
+  .sidebar-bottom a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: var(--item);
+    padding: 0 10px;
+    border-radius: var(--radius);
+    color: var(--text-soft);
+    font-size: 13.5px;
+    font-weight: 450;
+    transition:
+      color 0.2s,
+      background-color 0.2s,
+      font-weight 0.2s;
+  }
+
+  .sidebar-nav a svg,
+  .sidebar-bottom a svg {
+    color: var(--muted-foreground);
+    transition:
+      transform 0.35s var(--spring),
+      color 0.2s;
+  }
+
+  .sidebar-nav a:hover:not(.active),
+  .sidebar-bottom a:hover:not(.active) {
+    background: rgb(0 0 0 / 0.035);
+  }
+
+  .sidebar-nav a.active,
+  .sidebar-bottom a.active {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .sidebar-nav a.active svg,
+  .sidebar-bottom a.active svg {
+    color: var(--foreground);
+  }
+
+  .sidebar-nav a:active svg,
+  .sidebar-bottom a:active svg {
+    transform: scale(0.86);
+  }
+
+  .sidebar-bottom {
+    display: grid;
+    gap: 1px;
+    flex: none;
+    padding-top: 8px;
+  }
+
+  .sidebar-bottom a.active {
+    background: var(--nav-active);
+  }
+
+  /* De plaatsen in huis, als een boom met een hulplijn. */
+  .place-tree {
+    list-style: none;
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    padding: 0;
+  }
+
+  .place-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .place-link,
+  .place-add {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--radius);
+    color: var(--text-soft);
+    font-size: 13.5px;
+    font-weight: 450;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+
+  .place-link:hover {
+    background: rgb(0 0 0 / 0.035);
+  }
+
+  .place-link[aria-current="page"] {
+    background: var(--nav-active);
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .place-row .place-link {
+    padding-right: 32px;
+  }
+
+  .place-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .place-icon {
+    display: grid;
+    color: var(--tone);
+  }
+
+  .place-toggle {
+    position: absolute;
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--faint);
+    cursor: pointer;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
+  }
+
+  .place-toggle:hover {
+    background: rgb(0 0 0 / 0.05);
+    color: var(--text-soft);
+  }
+
+  .place-toggle svg {
+    transition: transform 0.4s var(--ease-out);
+  }
+
+  .place-toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
+  /* Openklappen zonder hoogte te meten: de rij groeit van 0fr naar 1fr. */
+  .place-children {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 0.4s var(--ease-out),
+      opacity 0.25s;
+  }
+
+  .place-children[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  .place-children > ul {
+    position: relative;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+  }
+
+  .place-children > ul::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 17px;
+    width: 1px;
+    background: #dcdcdc;
+  }
+
+  .place-children li {
+    display: flex;
+    margin-top: 1px;
+  }
+
+  .place-children[data-open="true"] li {
+    animation: slide-down 0.35s var(--ease-out) backwards;
+    animation-delay: calc(var(--k, 0) * 30ms);
+  }
+
+  .place-link.child {
+    margin-left: 26px;
+    padding-left: calc(12px + var(--depth, 0) * 12px);
+  }
+
+  .place-add {
+    color: var(--muted-foreground);
+  }
+
+  .place-add:hover {
+    color: var(--foreground);
+  }
+
+  .place-add svg {
+    margin: 0 1px;
+    transition: transform 0.35s var(--spring);
+  }
+
+  .place-add:hover svg {
+    transform: rotate(90deg);
   }
 }
 
@@ -3247,12 +3907,32 @@ dialog.sheet[open]::backdrop {
   .table .xl {
     display: none !important;
   }
+
+  /* Smalle zijbalk: enkel iconen, het zoekveld wordt een vierkantje. */
+  .sidebar-search {
+    width: 48px;
+    padding: 0;
+  }
 }
 
-/* Breed genoeg: de zijbalk krijgt tekst, secties en tellers. */
+/* Breed genoeg: de zijbalk krijgt tekst, zoeken, secties, tellers en de plaatsen. */
 @media (min-width: 1100px) {
   :root {
     --sidebar: 248px;
+  }
+
+  .sidebar {
+    --item: 32px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 12px 12px;
+  }
+
+  .sidebar-scroll {
+    margin: 0 -12px;
+    padding: 0 12px 12px;
+  }
+
+  .sidebar-nav {
+    margin-top: 0;
   }
 
   .table-purchases {
@@ -3267,7 +3947,8 @@ dialog.sheet[open]::backdrop {
     display: inline;
   }
 
-  .nav-section {
+  .nav-section,
+  .sidebar-places {
     display: block;
   }
 
@@ -3275,47 +3956,71 @@ dialog.sheet[open]::backdrop {
     display: inline-flex;
     margin-left: auto;
     color: var(--faint);
-    font-size: 12.5px;
+    font-size: 12px;
+    font-weight: 450;
     font-variant-numeric: tabular-nums;
   }
 
   .nav-count.warn {
     min-width: 20px;
-    height: 20px;
+    height: 18px;
+    align-items: center;
     justify-content: center;
     padding: 0 6px;
-    border-radius: 999px;
+    border-radius: 6px;
     background: var(--warning-bg);
     color: var(--warning);
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
   }
 
   .workspace,
-  .sidebar a,
-  .user-card {
+  .sidebar-search,
+  .sidebar-nav a,
+  .sidebar-bottom a {
     justify-content: flex-start;
   }
 
-  .user-card .who {
-    display: block;
-  }
-
-  .app main {
-    padding: 0 32px 56px;
-  }
-
-  .panel-bar {
-    margin: 0 -32px 24px;
-    padding: 0 20px 0 32px;
+  .sidebar-search kbd {
+    display: inline-flex;
   }
 }
 
+/* Detail en uitgaven: zijkolom van 320px met secties, rechts de kaarten. */
 @media (min-width: 960px) {
-  .detail-grid {
-    grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
-    align-items: start;
-    gap: 20px;
+  .page-head:has(~ .split) {
+    margin-bottom: 0;
+  }
+
+  .split {
+    grid-template-columns: 320px minmax(0, 1fr);
+    align-content: stretch;
+    gap: 0;
+    margin: 0 -20px;
+  }
+
+  .split-aside {
+    gap: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .split-aside > .card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Secties in de zijkolom: gescheiden door een lijn die de randen niet raakt. */
+  .split-aside > .card + .card::before {
+    content: "";
+    display: block;
+    margin: 0 16px;
+    border-top: 1px solid var(--divider);
+  }
+
+  .split-main {
+    padding: 20px 20px 48px;
   }
 }
 
@@ -3338,6 +4043,12 @@ dialog.sheet[open]::backdrop {
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link, useNavigate } from "../router";
 import { api } from "../api";
 import { useCard } from "../cards";
 import { DEFAULT_CARD_COLOR } from "../color";

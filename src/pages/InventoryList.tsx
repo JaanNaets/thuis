@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link, useNavigate } from "../router";
 import { expiresSoon, isLow } from "../../shared/stock";
 import { descendantIds, flattenTree, rootOf } from "../../shared/tree";
 import { ITEM_TYPES, UNITS, type BarcodeLookup, type ItemDetail, type ItemListItem, type ItemType, type Taxonomy } from "../../shared/types";
@@ -17,7 +18,10 @@ type Tab = "all" | "low" | "expiring" | "archived";
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
 function fold(s: string): string {
-  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 }
 
 export function expiryBadge(nextExpiry: string | null): { label: string; className: string } | null {
@@ -39,7 +43,18 @@ export function InventoryList() {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("all");
   const [type, setType] = useState<ItemType | null>(null);
-  const [locationId, setLocationId] = useState<string | null>(null);
+  // De plaats staat in het adres (?plaats=), zodat de boom in de zijbalk er rechtstreeks naartoe kan.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const locationId = searchParams.get("plaats");
+  const setLocationId = (id: string | null) =>
+    setSearchParams(
+      (p) => {
+        if (id) p.set("plaats", id);
+        else p.delete("plaats");
+        return p;
+      },
+      { replace: true },
+    );
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [tagId, setTagId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -275,15 +290,7 @@ function groupByCategory(items: ItemListItem[], taxonomy: Taxonomy) {
     }));
 }
 
-function StockRow({
-  item,
-  taxonomy,
-  onQuick,
-}: {
-  item: ItemListItem;
-  taxonomy: Taxonomy;
-  onQuick: (item: ItemListItem, action: "add" | "consume") => void;
-}) {
+function StockRow({ item, taxonomy, onQuick }: { item: ItemListItem; taxonomy: Taxonomy; onQuick: (item: ItemListItem, action: "add" | "consume") => void }) {
   const low = isLow(item.quantity, item.min_quantity);
   const expiry = expiryBadge(item.next_expiry);
   const places = item.levels
@@ -316,7 +323,13 @@ function StockRow({
         <span>{places || "—"}</span>
       </span>
       <span className="col xl">{expiry ? <span className={`badge ${expiry.className}`}>{expiry.label}</span> : <span className="muted">—</span>}</span>
-      <span className="col xl">{item.min_quantity !== null && item.type === "consumable" ? <LevelMeter quantity={item.quantity} min={item.min_quantity} /> : <span className="muted">—</span>}</span>
+      <span className="col xl">
+        {item.min_quantity !== null && item.type === "consumable" ? (
+          <LevelMeter quantity={item.quantity} min={item.min_quantity} />
+        ) : (
+          <span className="muted">—</span>
+        )}
+      </span>
       {item.type === "consumable" ? (
         <div className="stepper col-end">
           <button

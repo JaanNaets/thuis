@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link } from "../router";
 import type { PurchaseListItem } from "../../shared/types";
 import { useApi } from "../api";
 import { FilterToggle, Tabs } from "../components/Controls";

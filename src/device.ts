@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "./router";
 
 const KIOSK_KEY = "huishouden:kiosk";
 

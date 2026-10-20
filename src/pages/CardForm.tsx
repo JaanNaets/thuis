@@ -1,5 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { useNavigate } from "../router";
 import {
   BARCODE_FORMATS,
   isBarcodeFormat,

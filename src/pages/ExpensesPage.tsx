@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { Link } from "../router";
 import type { ExpenseEntry, ExpenseSummary, SettlementInput, Taxonomy, Transfer } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -26,11 +26,7 @@ export function ExpensesPage() {
   const object = (id: string) => (id === taxonomy?.me.id ? "jou" : (memberById(taxonomy, id)?.name ?? "?"));
 
   const first = data?.transfers[0];
-  const description = data
-    ? first
-      ? `${subject(first.from)} moet ${object(first.to)} nog ${formatCents(first.amount_cents)}`
-      : "Iedereen staat gelijk"
-    : " ";
+  const description = data ? (first ? `${subject(first.from)} moet ${object(first.to)} nog ${formatCents(first.amount_cents)}` : "Iedereen staat gelijk") : " ";
 
   return (
     <div className="page">
@@ -48,65 +44,78 @@ export function ExpensesPage() {
       {!data && loading && <SkeletonRows rows={4} />}
 
       {data && taxonomy && (
-        <div className="expenses-grid">
-          <section className="card">
-            <CardHead icon="transfer" title="Wie moet wie" description="Over alle aankopen en terugbetalingen heen" />
-            {data.transfers.length === 0 ? (
-              <div className="card-body">
-                <p className="balance-even">
-                  <span className="ok">
-                    <Icon name="check" size={16} />
-                  </span>
-                  Alles is verrekend
-                </p>
-              </div>
-            ) : (
-              data.transfers.map((t) => (
-                <Balance key={`${t.from}-${t.to}`} transfer={t} taxonomy={taxonomy} text={`${subject(t.from)} moet ${object(t.to)} nog`} onSettle={() => setSettling(t)} />
-              ))
-            )}
-            {taxonomy.members.filter((m) => m.active === 1).length < 2 && (
-              <p className="footnote">
-                Nog alleen in het huishouden.{" "}
-                <Link to="/meer" className="link">
-                  Voeg je partner toe
-                </Link>{" "}
-                om uitgaven te verdelen.
-              </p>
-            )}
-          </section>
-
-          <section className="card">
-            <CardHead
-              icon="wallet"
-              title={capitalize(formatMonth(month))}
-              action={
-                <div className="btn-row">
-                  <button type="button" className="btn btn-outline btn-icon btn-sm" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorige maand">
-                    <Icon name="prev" size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-icon btn-sm"
-                    onClick={() => setMonth((m) => shiftMonth(m, 1))}
-                    aria-label="Volgende maand"
-                    disabled={month >= thisMonth()}
-                  >
-                    <Icon name="next" size={16} />
-                  </button>
+        <div className="split">
+          <aside className="split-aside">
+            <section className="card">
+              <CardHead icon="transfer" title="Wie moet wie" description="Over alle aankopen en terugbetalingen heen" />
+              {data.transfers.length === 0 ? (
+                <div className="card-body">
+                  <p className="balance-even">
+                    <span className="ok">
+                      <Icon name="check" size={16} />
+                    </span>
+                    Alles is verrekend
+                  </p>
                 </div>
-              }
-            />
-            <MonthTotal cents={data.month.total_cents} />
-            <p className="month-sub">
-              {data.month.by_member.length > 1
-                ? data.month.by_member.map((m) => `${subject(m.member_id)} ${formatCents(m.share_cents)}`).join(" · ")
-                : "uitgegeven deze maand"}
-            </p>
-            <CategoryBars key={month} rows={data.month.by_category} />
-          </section>
+              ) : (
+                data.transfers.map((t) => (
+                  <Balance
+                    key={`${t.from}-${t.to}`}
+                    transfer={t}
+                    taxonomy={taxonomy}
+                    text={`${subject(t.from)} moet ${object(t.to)} nog`}
+                    onSettle={() => setSettling(t)}
+                  />
+                ))
+              )}
+              {taxonomy.members.filter((m) => m.active === 1).length < 2 && (
+                <p className="footnote">
+                  Nog alleen in het huishouden.{" "}
+                  <Link to="/meer" className="link">
+                    Voeg je partner toe
+                  </Link>{" "}
+                  om uitgaven te verdelen.
+                </p>
+              )}
+            </section>
 
-          <section className="span">
+            <section className="card">
+              <CardHead
+                icon="wallet"
+                title={capitalize(formatMonth(month))}
+                action={
+                  <div className="btn-row">
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-icon btn-sm"
+                      onClick={() => setMonth((m) => shiftMonth(m, -1))}
+                      aria-label="Vorige maand"
+                    >
+                      <Icon name="prev" size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-icon btn-sm"
+                      onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                      aria-label="Volgende maand"
+                      disabled={month >= thisMonth()}
+                    >
+                      <Icon name="next" size={16} />
+                    </button>
+                  </div>
+                }
+              />
+              <MonthTotal cents={data.month.total_cents} />
+              <p className="month-sub">
+                {data.month.by_member.length > 1
+                  ? data.month.by_member.map((m) => `${subject(m.member_id)} ${formatCents(m.share_cents)}`).join(" · ")
+                  : "uitgegeven deze maand"}
+              </p>
+              <CategoryBars key={month} rows={data.month.by_category} />
+            </section>
+          </aside>
+
+          <section className="split-main">
             <h2 className="section-title">In {formatMonth(month).split(" ")[0]}</h2>
             {data.entries.length === 0 ? (
               <EmptyState icon="wallet" title="Nog niets deze maand">
@@ -341,8 +350,7 @@ function SettleForm({ transfer, taxonomy, onDone }: { transfer: Transfer; taxono
   return (
     <form className="form" onSubmit={onSubmit}>
       <p className="muted" style={{ marginTop: -8 }}>
-        {memberById(taxonomy, transfer.from)?.name} betaalt {memberById(taxonomy, transfer.to)?.name} terug. Minder mag ook:
-        dan blijft de rest openstaan.
+        {memberById(taxonomy, transfer.from)?.name} betaalt {memberById(taxonomy, transfer.to)?.name} terug. Minder mag ook: dan blijft de rest openstaan.
       </p>
       <div className="field-row">
         <label className="field">

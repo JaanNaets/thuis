@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
+import { useNavigate } from "../router";
 import type { ReceiptGuess, ReceiptReadResult } from "../../shared/receipt";
 import { splitEqual } from "../../shared/split";
 import type { Purchase, PurchaseDetail, PurchaseInput, SplitMode, Taxonomy } from "../../shared/types";
