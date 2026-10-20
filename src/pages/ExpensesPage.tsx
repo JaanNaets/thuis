@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import type { ExpenseEntry, ExpenseSummary, SettlementInput, Taxonomy, Transfer } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { Avatar, SubmitButton } from "../components/Controls";
+import { Avatar, CardHead, SubmitButton } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { SkeletonRows, stagger, useCountUp } from "../components/Motion";
 import { EmptyState, PageHead, toneForCategory } from "../components/Page";
@@ -50,12 +50,7 @@ export function ExpensesPage() {
       {data && taxonomy && (
         <div className="expenses-grid">
           <section className="card">
-            <header className="card-head">
-              <div>
-                <h2 className="card-title">Wie moet wie</h2>
-                <p className="card-desc">Over alle aankopen en terugbetalingen heen</p>
-              </div>
-            </header>
+            <CardHead icon="transfer" title="Wie moet wie" description="Over alle aankopen en terugbetalingen heen" />
             {data.transfers.length === 0 ? (
               <div className="card-body">
                 <p className="balance-even">
@@ -82,21 +77,26 @@ export function ExpensesPage() {
           </section>
 
           <section className="card">
-            <div className="month-switch">
-              <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorige maand">
-                <Icon name="prev" />
-              </button>
-              <h2>{formatMonth(month)}</h2>
-              <button
-                type="button"
-                className="btn btn-ghost btn-icon btn-sm"
-                onClick={() => setMonth((m) => shiftMonth(m, 1))}
-                aria-label="Volgende maand"
-                disabled={month >= thisMonth()}
-              >
-                <Icon name="next" />
-              </button>
-            </div>
+            <CardHead
+              icon="wallet"
+              title={capitalize(formatMonth(month))}
+              action={
+                <div className="btn-row">
+                  <button type="button" className="btn btn-outline btn-icon btn-sm" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Vorige maand">
+                    <Icon name="prev" size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-icon btn-sm"
+                    onClick={() => setMonth((m) => shiftMonth(m, 1))}
+                    aria-label="Volgende maand"
+                    disabled={month >= thisMonth()}
+                  >
+                    <Icon name="next" size={16} />
+                  </button>
+                </div>
+              }
+            />
             <MonthTotal cents={data.month.total_cents} />
             <p className="month-sub">
               {data.month.by_member.length > 1
@@ -113,7 +113,13 @@ export function ExpensesPage() {
                 Elke aankoop telt hier mee.
               </EmptyState>
             ) : (
-              <div className="card">
+              <div className="card table table-entries">
+                <div className="table-head" aria-hidden="true">
+                  <span>Omschrijving</span>
+                  <span>Betaald door</span>
+                  <span>Datum</span>
+                  <span className="end">Bedrag</span>
+                </div>
                 <ul className="rows stagger" key={month}>
                   {data.entries.map((e, i) => (
                     <li key={`${e.kind}-${e.id}`} style={stagger(i)}>
@@ -170,11 +176,15 @@ function Balance({ transfer, taxonomy, text, onSettle }: { transfer: Transfer; t
         </p>
         <p className="balance-amount">{formatCents(amount)}</p>
       </div>
-      <button type="button" className="btn btn-primary" onClick={onSettle}>
+      <button type="button" className="btn btn-outline" onClick={onSettle}>
         <Icon name="check" size={16} /> Terugbetaald
       </button>
     </div>
   );
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function MonthTotal({ cents }: { cents: number }) {
@@ -209,22 +219,41 @@ function EntryRow({ entry, taxonomy, onDeleted }: { entry: ExpenseEntry; taxonom
     const tone = entry.category_color ?? toneForCategory(entry.category_name);
     return (
       <Link to={`/aankopen/${entry.id}`} className="row">
-        <span className={`row-media tone-${tone}`}>
-          <Icon name="receipt" size={16} />
-        </span>
-        <span className="row-main">
-          <span className="row-title">{entry.description}</span>
-          <span className="row-meta">
-            <span>{formatDate(entry.date)}</span>
-            {payer ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                <Avatar member={payer} size="sm" /> {payer.name}
-                {entry.split_mode && ` · ${SPLIT_SHORT[entry.split_mode]}`}
-              </span>
-            ) : (
-              <span>gezamenlijk</span>
-            )}
+        <span className="cell-main">
+          <span className={`row-media tone-${tone}`}>
+            <Icon name="receipt" size={16} />
           </span>
+          <span className="row-main">
+            <span className="row-title">{entry.description}</span>
+            <span className="row-meta narrow-only">
+              <span>{formatDate(entry.date)}</span>
+              {payer ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Avatar member={payer} size="sm" /> {payer.name}
+                  {entry.split_mode && ` · ${SPLIT_SHORT[entry.split_mode]}`}
+                </span>
+              ) : (
+                <span>gezamenlijk</span>
+              )}
+            </span>
+            {entry.category_name && <span className="row-meta wide-only">{entry.category_name}</span>}
+          </span>
+        </span>
+        <span className="col">
+          {payer ? (
+            <>
+              <Avatar member={payer} size="sm" />
+              <span>
+                {payer.name}
+                {entry.split_mode && <span className="muted"> · {SPLIT_SHORT[entry.split_mode]}</span>}
+              </span>
+            </>
+          ) : (
+            <span className="badge badge-secondary">Gezamenlijk</span>
+          )}
+        </span>
+        <span className="col">
+          <span>{formatDate(entry.date)}</span>
         </span>
         <span className="row-end">{formatCents(entry.amount_cents)}</span>
       </Link>
@@ -247,21 +276,33 @@ function EntryRow({ entry, taxonomy, onDeleted }: { entry: ExpenseEntry; taxonom
 
   return (
     <div className="row">
-      <span className="row-media tone-sage">
-        <Icon name="transfer" size={16} />
-      </span>
-      <span className="row-main">
-        <span className="row-title">
-          {from?.name} betaalde {to?.name} terug
+      <span className="cell-main">
+        <span className="row-media tone-sage">
+          <Icon name="transfer" size={16} />
         </span>
-        <span className="row-meta">
-          <span>{[formatDate(entry.date), entry.note].filter(Boolean).join(" · ")}</span>
+        <span className="row-main">
+          <span className="row-title">
+            {from?.name} betaalde {to?.name} terug
+          </span>
+          <span className="row-meta">
+            <span className="narrow-only">{formatDate(entry.date)}</span>
+            {entry.note && <span>{entry.note}</span>}
+          </span>
         </span>
       </span>
-      <span className="row-end">{formatCents(entry.amount_cents)}</span>
-      <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={remove} aria-label="Terugbetaling verwijderen">
-        <Icon name="trash" size={15} />
-      </button>
+      <span className="col">
+        <Avatar member={from} size="sm" />
+        <span>{from?.name}</span>
+      </span>
+      <span className="col">
+        <span>{formatDate(entry.date)}</span>
+      </span>
+      <span className="row-end" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {formatCents(entry.amount_cents)}
+        <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={remove} aria-label="Terugbetaling verwijderen">
+          <Icon name="trash" size={15} />
+        </button>
+      </span>
     </div>
   );
 }

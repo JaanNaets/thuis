@@ -7,7 +7,7 @@ export type { Tone };
 
 type Back = { to: string | -1; label: string };
 
-function BackLink({ back, className, children }: { back: Back; className: string; children: ReactNode }) {
+function BackLink({ back, className, children }: { back: Back; className?: string; children: ReactNode }) {
   const navigate = useNavigate();
   if (back.to === -1) {
     return (
@@ -24,20 +24,25 @@ function BackLink({ back, className, children }: { back: Back; className: string
 }
 
 /**
- * Kop van een scherm: titel, korte uitleg en acties.
- * Op een gsm verschijnt bovenaan een kleine titelbalk zodra de grote titel uit beeld schuift.
+ * Kop van elk scherm (zie STIJLBOEK.md → Paginakop).
  *
- * - `primary`: de hoofdactie; op een gsm doet de zwevende knop dat, dus enkel op tablet zichtbaar;
- * - `actions`: altijd zichtbaar (bv. bewerken).
+ * - `badge`: korte status naast de titel ("2 bijna op");
+ * - `back`: waar "terug" naartoe gaat; wordt ook het middelste stuk van het kruimelpad;
+ * - `actions`: acties op het item zelf (bv. Bewerken). Op tablet in de paneelbalk, op een gsm naast de titel;
+ * - `primary`: de hoofdactie van het scherm. Enkel op tablet; op een gsm doet de zwevende + knop dat.
+ *
+ * Op een gsm verschijnt bovenaan een kleine titelbalk zodra de grote titel uit beeld schuift.
  */
 export function PageHead({
   title,
+  badge,
   description,
   back,
   actions,
   primary,
 }: {
   title: string;
+  badge?: ReactNode;
   description?: ReactNode;
   back?: Back;
   actions?: ReactNode;
@@ -67,6 +72,23 @@ export function PageHead({
 
   return (
     <>
+      <div className="panel-bar">
+        <nav className="breadcrumb" aria-label="Kruimelpad">
+          <Link to="/">
+            <Icon name="home" size={16} /> Thuis
+          </Link>
+          {back && (
+            <>
+              <span className="sep">/</span>
+              <BackLink back={back}>{back.label}</BackLink>
+            </>
+          )}
+          <span className="sep">/</span>
+          <span className="current">{title}</span>
+        </nav>
+        {actions && <div className="panel-actions">{actions}</div>}
+      </div>
+
       {back && (
         <BackLink back={back} className="crumb">
           <Icon name="back" size={16} /> {back.label}
@@ -74,16 +96,20 @@ export function PageHead({
       )}
       <header className="page-head">
         <div style={{ minWidth: 0 }}>
-          <h1 ref={titleRef}>{title}</h1>
+          <h1 ref={titleRef}>
+            {title}
+            {badge}
+          </h1>
           {description && <p className="page-desc">{description}</p>}
         </div>
         {(actions || primary) && (
           <div className="page-actions">
-            {actions}
-            {primary && <span className="page-actions wide">{primary}</span>}
+            {actions && <span className="narrow">{actions}</span>}
+            {primary && <span className="wide">{primary}</span>}
           </div>
         )}
       </header>
+
       <div className="topbar" data-visible={compact} aria-hidden={!compact}>
         <div className="topbar-side">
           {back && (
@@ -103,7 +129,7 @@ export function EmptyState({ icon, title, children, action }: { icon: IconName; 
   return (
     <div className="empty">
       <span className="empty-icon">
-        <Icon name={icon} size={20} />
+        <Icon name={icon} size={18} />
       </span>
       <strong>{title}</strong>
       {children && <p>{children}</p>}

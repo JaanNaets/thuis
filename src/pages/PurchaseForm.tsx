@@ -350,7 +350,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
           />
           {form.paid_by === JOINT && <span className="hint">Van de gezamenlijke rekening: telt niet mee in wie wat betaalde.</span>}
           {members.length < 2 && form.paid_by !== JOINT && (
-            <span className="hint">Voeg je partner toe bij Meer → Huishouden om uitgaven te verdelen.</span>
+            <span className="hint">Voeg je partner toe bij Instellingen → Huishouden om uitgaven te verdelen.</span>
           )}
         </div>
 

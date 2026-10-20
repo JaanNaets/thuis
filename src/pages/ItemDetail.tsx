@@ -12,7 +12,7 @@ import {
 } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { QuantityField, SubmitButton, TreeSelect } from "../components/Controls";
+import { CardHead, LevelMeter, QuantityField, SubmitButton, TreeSelect } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
 import { Num, stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
@@ -119,15 +119,18 @@ export function ItemDetail() {
                 {low && <span className="badge badge-warning">{item.quantity === 0 ? "Op" : "Bijna op"}</span>}
                 {expiry && <span className={`badge ${expiry.className}`}>{expiry.label}</span>}
                 {item.min_quantity !== null && (
-                  <span>
-                    minimum {formatNumber(item.min_quantity)} {unitWord(item.min_quantity, item.unit)}
-                  </span>
+                  <>
+                    {item.type === "consumable" && <LevelMeter quantity={item.quantity} min={item.min_quantity} />}
+                    <span>
+                      minimum {formatNumber(item.min_quantity)} {unitWord(item.min_quantity, item.unit)}
+                    </span>
+                  </>
                 )}
               </p>
             </div>
 
             {item.levels.length > 0 && (
-              <ul className="rows levels" style={{ borderTop: "1px solid var(--border)" }}>
+              <ul className="rows levels" style={{ borderTop: "1px solid var(--border)", borderRadius: 0 }}>
                 {item.levels.map((level) => (
                   <li key={level.location_id}>
                     <div className="row">
@@ -246,9 +249,7 @@ export function ItemDetail() {
         <div className="stack">
           {item.purchases.length > 0 && (
             <section className="card">
-              <header className="card-head">
-                <h2 className="card-title">Aankoop</h2>
-              </header>
+              <CardHead icon="receipt" title="Aankoop" description="Bewijsstuk en garantie" />
               <ul className="rows">
                 {item.purchases.map((p) => {
                   const warranty = warrantyStatus(p.warranty_until);
@@ -275,12 +276,7 @@ export function ItemDetail() {
           )}
 
           <section className="card">
-            <header className="card-head">
-              <div>
-                <h2 className="card-title">Geschiedenis</h2>
-                <p className="card-desc">Elke wijziging, met wie en waar</p>
-              </div>
-            </header>
+            <CardHead icon="clock" title="Geschiedenis" description="Elke wijziging, met wie en waar" />
             {item.movements.length === 0 ? (
               <p className="card-body muted small">Nog niets gebeurd.</p>
             ) : (

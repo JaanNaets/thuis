@@ -1,19 +1,19 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { expiresSoon, isLow } from "../../shared/stock";
 import { descendantIds, flattenTree, rootOf } from "../../shared/tree";
-import { UNITS, type BarcodeLookup, type ItemDetail, type ItemListItem, type ItemType, type Taxonomy } from "../../shared/types";
+import { ITEM_TYPES, UNITS, type BarcodeLookup, type ItemDetail, type ItemListItem, type ItemType, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
 import type { ScanResult } from "../barcode-detect";
 import { BarcodeScanner } from "../components/BarcodeScanner";
-import { TreeSelect } from "../components/Controls";
+import { FilterSelect, LevelMeter, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { Num, SkeletonRows, stagger } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { daysUntil, formatDate, formatNumber, today } from "../format";
 import { categoryTone, categoryTree, locationTree, useTaxonomy } from "../taxonomy";
 
-type View = "all" | "low" | "expiring";
+type Tab = "all" | "low" | "expiring" | "archived";
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
 function fold(s: string): string {
@@ -37,18 +37,31 @@ export function unitWord(quantity: number, unit: keyof typeof UNITS): string {
 export function InventoryList() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<View>("all");
+  const [tab, setTab] = useState<Tab>("all");
   const [type, setType] = useState<ItemType | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [tagId, setTagId] = useState<string | null>(null);
-  const [archived, setArchived] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
+  const archived = tab === "archived";
   const { data, error, loading, reload, mutate } = useApi<ItemListItem[]>(archived ? "/items?archived=1" : "/items");
   const { data: taxonomy } = useTaxonomy();
   const now = today();
+
+  // De tellers in de tabs komen van de gewone lijst; in het archief blijven de laatste staan.
+  const lastCounts = useRef<{ all: number; low: number; expiring: number }>(undefined);
+  const counts = useMemo(() => {
+    if (data && !archived) {
+      lastCounts.current = {
+        all: data.length,
+        low: data.filter((i) => isLow(i.quantity, i.min_quantity)).length,
+        expiring: data.filter((i) => expiresSoon(i.next_expiry, now)).length,
+      };
+    }
+    return lastCounts.current;
+  }, [data, archived, now]);
 
   // Op een plaats gefilterd: toon enkel wat daar (of in een vak eronder) ligt.
   const shown = useMemo(() => {
@@ -71,8 +84,8 @@ export function InventoryList() {
         if (cats && !(item.category_id && cats.has(item.category_id))) return false;
         if (tagId && !item.tag_ids.includes(tagId)) return false;
         if (type && item.type !== type) return false;
-        if (view === "low" && !isLow(item.quantity, item.min_quantity)) return false;
-        if (view === "expiring" && !expiresSoon(item.next_expiry, now)) return false;
+        if (tab === "low" && !isLow(item.quantity, item.min_quantity)) return false;
+        if (tab === "expiring" && !expiresSoon(item.next_expiry, now)) return false;
         if (q) {
           const haystack = [
             item.name,
@@ -87,11 +100,9 @@ export function InventoryList() {
         }
         return true;
       });
-  }, [data, taxonomy, query, view, type, locationId, categoryId, tagId, now]);
+  }, [data, taxonomy, query, tab, type, locationId, categoryId, tagId, now]);
 
-  const lowCount = data?.filter((i) => isLow(i.quantity, i.min_quantity)).length ?? 0;
-  const expiringCount = data?.filter((i) => expiresSoon(i.next_expiry, now)).length ?? 0;
-  const filtered = Boolean(query.trim() || view !== "all" || type || locationId || categoryId || tagId || archived);
+  const filtered = Boolean(query.trim() || type || locationId || categoryId || tagId);
 
   async function quick(item: ItemListItem, action: "add" | "consume") {
     setActionError(undefined);
@@ -117,30 +128,32 @@ export function InventoryList() {
     }
   }
 
-  const description = data ? (
-    archived ? (
-      "Gearchiveerd: weg uit huis, geschiedenis bewaard"
-    ) : (
-      <>
-        {data.length === 1 ? "1 item" : `${data.length} items`}
-        {lowCount > 0 && ` · ${lowCount} bijna op`}
-        {expiringCount > 0 && ` · ${expiringCount} vervalt binnenkort`}
-      </>
-    )
-  ) : (
-    " "
-  );
+  const groups = taxonomy ? groupByCategory(shown, taxonomy) : [];
+  let index = 0;
 
   return (
     <div className="page">
       <PageHead
         title="Voorraad"
-        description={description}
+        badge={counts && counts.low > 0 ? <span className="badge badge-warning">{counts.low} bijna op</span> : undefined}
+        description="Wat er in huis is, waar het ligt en wanneer het vervalt"
         primary={
           <Link to="/voorraad/nieuw" className="btn btn-primary">
             <Icon name="plus" size={16} /> Nieuw item
           </Link>
         }
+      />
+
+      <Tabs
+        label="Voorraad"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: "all", label: "Alles", count: counts?.all },
+          { value: "low", label: "Bijna op", count: counts?.low },
+          { value: "expiring", label: "Vervalt binnenkort", count: counts?.expiring },
+          { value: "archived", label: "Archief" },
+        ]}
       />
 
       <div className="toolbar">
@@ -159,51 +172,31 @@ export function InventoryList() {
         </button>
       </div>
 
-      <div className="chips" role="group" aria-label="Snelle filters">
-        <Chip on={view === "low"} onClick={() => setView(view === "low" ? "all" : "low")} count={lowCount}>
-          Bijna op
-        </Chip>
-        <Chip on={view === "expiring"} onClick={() => setView(view === "expiring" ? "all" : "expiring")} count={expiringCount}>
-          Vervalt binnenkort
-        </Chip>
-        <Chip on={type === "consumable"} onClick={() => setType(type === "consumable" ? null : "consumable")}>
-          Verbruik
-        </Chip>
-        <Chip on={type === "asset"} onClick={() => setType(type === "asset" ? null : "asset")}>
-          Bezit
-        </Chip>
-        <Chip on={archived} onClick={() => setArchived((a) => !a)}>
-          <Icon name="archive" size={14} /> Archief
-        </Chip>
-      </div>
-
       {taxonomy && (
-        <div className="filter-row">
-          <TreeSelect
+        <div className="filters">
+          <FilterSelect
+            label="Soort"
+            all="Alle"
+            value={type}
+            onChange={(v) => setType(v as ItemType | null)}
+            options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: ITEM_TYPES[t].label }))}
+          />
+          <FilterSelect
             label="Plaats"
-            className={locationId ? "active" : undefined}
-            nodes={locationTree(taxonomy)}
+            all="Overal"
             value={locationId}
             onChange={setLocationId}
-            empty="Alle plaatsen"
+            options={locationTree(taxonomy).map((l) => ({ value: l.id, label: l.name, depth: l.depth }))}
           />
-          <TreeSelect
+          <FilterSelect
             label="Categorie"
-            className={categoryId ? "active" : undefined}
-            nodes={categoryTree(taxonomy, "item")}
+            all="Alle"
             value={categoryId}
             onChange={setCategoryId}
-            empty="Alle categorieën"
+            options={categoryTree(taxonomy, "item").map((c) => ({ value: c.id, label: c.name, depth: c.depth }))}
           />
           {taxonomy.tags.length > 0 && (
-            <select aria-label="Tag" className={tagId ? "active" : undefined} value={tagId ?? ""} onChange={(e) => setTagId(e.target.value || null)}>
-              <option value="">Alle tags</option>
-              {taxonomy.tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <FilterSelect label="Tag" all="Alle" value={tagId} onChange={setTagId} options={taxonomy.tags.map((t) => ({ value: t.id, label: t.name }))} />
           )}
         </div>
       )}
@@ -213,38 +206,47 @@ export function InventoryList() {
       {!error && !loading && taxonomy && shown.length === 0 && (
         <EmptyState
           icon="package"
-          title={filtered ? "Niets gevonden" : "Nog niets in voorraad"}
+          title={filtered || tab !== "all" ? "Niets gevonden" : "Nog niets in voorraad"}
           action={
-            !filtered && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setScanning(true)}>
+            !filtered &&
+            tab === "all" && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setScanning(true)}>
                 <Icon name="scan" size={16} /> Scan iets uit je kast
               </button>
             )
           }
         >
-          {filtered ? "Pas de filters aan of zoek op iets anders." : "Scan een barcode: naam, merk en categorie komen vanzelf."}
+          {filtered || tab !== "all" ? "Pas de filters aan of kies een andere tab." : "Scan een barcode: naam, merk en categorie komen vanzelf."}
         </EmptyState>
       )}
 
-      {taxonomy &&
-        groupByCategory(shown, taxonomy).map((group) => (
-          <section key={group.id ?? "none"} className="group">
-            <h2 className="section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className={`dot tone-${group.tone}`} />
-              {group.name}
-              <span style={{ color: "var(--ring)" }}>{group.items.length}</span>
-            </h2>
-            <div className="card">
-              <ul className="rows stagger">
-                {group.items.map((item, i) => (
-                  <li key={item.id} style={stagger(i)}>
+      {taxonomy && shown.length > 0 && (
+        <div className="card table table-stock">
+          <div className="table-head" aria-hidden="true">
+            <span>Item</span>
+            <span>Plaats</span>
+            <span className="xl">Vervalt</span>
+            <span className="xl">Niveau</span>
+            <span className="end">Voorraad</span>
+          </div>
+          <ul className="rows stagger" key={tab}>
+            {groups.map((group) => (
+              <Fragment key={group.id ?? "none"}>
+                <li className="group-row" style={stagger(index++)}>
+                  <span className={`dot tone-${group.tone}`} />
+                  {group.name}
+                  <span className="group-count">{group.items.length}</span>
+                </li>
+                {group.items.map((item) => (
+                  <li key={item.id} style={stagger(index++)}>
                     <StockRow item={item} taxonomy={taxonomy} onQuick={quick} />
                   </li>
                 ))}
-              </ul>
-            </div>
-          </section>
-        ))}
+              </Fragment>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Link to="/voorraad/nieuw" className="fab" aria-label="Nieuw item">
         <Icon name="plus" size={24} />
@@ -252,15 +254,6 @@ export function InventoryList() {
 
       {scanning && <BarcodeScanner hint="Scan een product" onResult={onScan} onClose={() => setScanning(false)} />}
     </div>
-  );
-}
-
-function Chip({ on, onClick, count, children }: { on: boolean; onClick: () => void; count?: number; children: ReactNode }) {
-  return (
-    <button type="button" className="chip" aria-pressed={on} onClick={onClick}>
-      {children}
-      {count !== undefined && count > 0 && <span className="chip-count">{count}</span>}
-    </button>
   );
 }
 
@@ -309,17 +302,23 @@ function StockRow({
         </span>
         <span className="row-main">
           <span className="row-title">{item.name}</span>
-          {(meta || low || expiry) && (
+          {(meta || low || expiry || subcategory) && (
             <span className="row-meta">
-              {meta && <span>{meta}</span>}
+              {meta && <span className="narrow-only">{meta}</span>}
+              {subcategory && <span className="wide-only">{subcategory}</span>}
               {low && <span className="badge badge-warning">{item.quantity === 0 ? "Op" : "Bijna op"}</span>}
-              {expiry && <span className={`badge ${expiry.className}`}>{expiry.label}</span>}
+              {expiry && <span className={`badge ${expiry.className} narrow-only`}>{expiry.label}</span>}
             </span>
           )}
         </span>
       </Link>
+      <span className="col">
+        <span>{places || "—"}</span>
+      </span>
+      <span className="col xl">{expiry ? <span className={`badge ${expiry.className}`}>{expiry.label}</span> : <span className="muted">—</span>}</span>
+      <span className="col xl">{item.min_quantity !== null && item.type === "consumable" ? <LevelMeter quantity={item.quantity} min={item.min_quantity} /> : <span className="muted">—</span>}</span>
       {item.type === "consumable" ? (
-        <div className="stepper">
+        <div className="stepper col-end">
           <button
             type="button"
             className="btn btn-ghost"

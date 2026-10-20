@@ -4,7 +4,7 @@ import { descendantIds, flattenTree } from "../../shared/tree";
 import type { Category, CategoryDomain, Location, Member, Tag, Taxonomy, Tone, Vendor } from "../../shared/types";
 import { api } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { Avatar, Segmented, SubmitButton, Switch, ToneSwatches, TreeSelect } from "../components/Controls";
+import { Avatar, CardHead, Segmented, SubmitButton, Switch, Tabs, ToneSwatches, TreeSelect } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
 import { stagger } from "../components/Motion";
 import { PageHead, toneForCategory } from "../components/Page";
@@ -23,19 +23,38 @@ type Editing =
 
 const WHAT = { member: "lid", category: "categorie", location: "plaats", tag: "tag", vendor: "verkoper" } as const;
 
+type Section = "household" | "vendors" | "categories" | "locations" | "tags" | "device";
+
 export function SettingsPage() {
   const { data: taxonomy, error } = useTaxonomy();
   const [editing, setEditing] = useState<Editing>();
   const [domain, setDomain] = useState<CategoryDomain>("item");
+  const [section, setSection] = useState<Section>("household");
 
   return (
     <div className="page">
-      <PageHead title="Meer" description="Wie er in huis woont en hoe alles ingedeeld is" />
+      <PageHead title="Instellingen" description="Wie er in huis woont en hoe alles ingedeeld is" />
       {error && <p className="error">{error}</p>}
 
       {taxonomy && (
-        <div className="settings-grid">
-          <Card icon="users" title="Huishouden" desc="Wie zich aanmeldt, komt hier vanzelf bij" onAdd={() => setEditing({ kind: "member" })} addLabel="Lid">
+        <Tabs
+          label="Instellingen"
+          value={section}
+          onChange={setSection}
+          tabs={[
+            { value: "household", label: "Huishouden", count: taxonomy.members.length },
+            { value: "vendors", label: "Verkopers", count: taxonomy.vendors.length },
+            { value: "categories", label: "Categorieën" },
+            { value: "locations", label: "Plaatsen", count: taxonomy.locations.length },
+            { value: "tags", label: "Tags", count: taxonomy.tags.length },
+            { value: "device", label: "Dit toestel" },
+          ]}
+        />
+      )}
+
+      {taxonomy && (
+        <div className="settings-grid" key={section}>
+          <Card show={section === "household"} icon="users" title="Huishouden" desc="Wie zich aanmeldt, komt hier vanzelf bij" onAdd={() => setEditing({ kind: "member" })} addLabel="Lid">
             <ul className="rows stagger">
               {taxonomy.members.map((m, i) => (
                 <li key={m.id} style={stagger(i)}>
@@ -58,7 +77,7 @@ export function SettingsPage() {
             </ul>
           </Card>
 
-          <Card icon="store" title="Verkopers" desc="Winkels, webshops en mensen waar je iets kocht" onAdd={() => setEditing({ kind: "vendor" })} addLabel="Verkoper">
+          <Card show={section === "vendors"} icon="store" title="Verkopers" desc="Winkels, webshops en mensen waar je iets kocht" onAdd={() => setEditing({ kind: "vendor" })} addLabel="Verkoper">
             {taxonomy.vendors.length === 0 ? (
               <p className="card-body hint">Verkopers verschijnen hier vanzelf zodra je ze bij een aankoop invult.</p>
             ) : (
@@ -86,7 +105,7 @@ export function SettingsPage() {
             )}
           </Card>
 
-          <Card icon="folder" title="Categorieën" onAdd={() => setEditing({ kind: "category", domain })} addLabel="Categorie">
+          <Card show={section === "categories"} icon="folder" title="Categorieën" onAdd={() => setEditing({ kind: "category", domain })} addLabel="Categorie">
             <div className="card-body" style={{ paddingTop: 14, paddingBottom: 14 }}>
               <Segmented
                 label="Soort categorieën"
@@ -106,11 +125,11 @@ export function SettingsPage() {
             />
           </Card>
 
-          <Card icon="pin" title="Plaatsen" desc="Kamers, kasten en vakken" onAdd={() => setEditing({ kind: "location" })} addLabel="Plaats">
+          <Card show={section === "locations"} icon="pin" title="Plaatsen" desc="Kamers, kasten en vakken" onAdd={() => setEditing({ kind: "location" })} addLabel="Plaats">
             <TreeList nodes={flattenTree(taxonomy.locations)} onEdit={(l) => setEditing({ kind: "location", item: l })} />
           </Card>
 
-          <Card icon="tag" title="Tags" desc="Vrije labels over alles heen" onAdd={() => setEditing({ kind: "tag" })} addLabel="Tag">
+          <Card show={section === "tags"} icon="tag" title="Tags" desc="Vrije labels over alles heen" onAdd={() => setEditing({ kind: "tag" })} addLabel="Tag">
             <div className="card-body">
               {taxonomy.tags.length === 0 ? (
                 <p className="hint">Bv. "Vakantie Italië", "Verbouwing" of "Baby".</p>
@@ -127,7 +146,7 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card icon="tablet" title="Dit toestel">
+          <Card show={section === "device"} icon="tablet" title="Dit toestel" desc="Instellingen die enkel voor dit toestel gelden">
             <div className="card-body">
               <Switch
                 checked={isKiosk}
@@ -148,6 +167,7 @@ export function SettingsPage() {
 }
 
 function Card({
+  show,
   icon,
   title,
   desc,
@@ -155,6 +175,8 @@ function Card({
   addLabel,
   children,
 }: {
+  /** Enkel de kaart van de gekozen tab is zichtbaar. */
+  show: boolean;
   icon: IconName;
   title: string;
   desc?: string;
@@ -162,21 +184,21 @@ function Card({
   addLabel?: string;
   children: ReactNode;
 }) {
+  if (!show) return null;
   return (
     <section className="card">
-      <header className="card-head">
-        <div>
-          <h2 className="card-title">
-            <Icon name={icon} size={16} /> {title}
-          </h2>
-          {desc && <p className="card-desc">{desc}</p>}
-        </div>
-        {onAdd && (
-          <button type="button" className="btn btn-outline btn-sm" onClick={onAdd}>
-            <Icon name="plus" size={15} /> {addLabel}
-          </button>
-        )}
-      </header>
+      <CardHead
+        icon={icon}
+        title={title}
+        description={desc}
+        action={
+          onAdd && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={onAdd}>
+              <Icon name="plus" size={15} /> {addLabel}
+            </button>
+          )
+        }
+      />
       {children}
     </section>
   );
@@ -197,7 +219,7 @@ function TreeList<T extends Category | Location>({
   tone?: (node: T) => Tone | null;
 }) {
   return (
-    <ul className="rows stagger" style={{ borderTop: "1px solid var(--border)" }}>
+    <ul className="rows stagger">
       {nodes.map((n, i) => {
         const t = tone?.(n);
         return (

@@ -7,7 +7,8 @@ Onze eigen huishoud-app, volledig op Cloudflare. Onderdelen:
 - **Voorraad**: wat er in huis is en waar, met vervaldatums, "bijna op" en een logboek van elke wijziging.
 - **Klantenkaarten**: barcode tonen aan de kassa, ook **zonder internet**. Inlezen met de camera of uit een
   foto of screenshot.
-- **Meer**: wie er in huis woont, verkopers, en de indeling in categorieën, plaatsen en tags.
+- **Instellingen** (op de gsm: **Meer**): wie er in huis woont, verkopers, en de indeling in categorieën,
+  plaatsen en tags.
 
 Overal waar je iets registreert (een aankoop, een item, een aanvulling van de voorraad, een terugbetaling, een
 kaart) kan je een **notitie** kwijt, en waar het past ook de **verkoper**.
@@ -22,6 +23,7 @@ worker/      API op Cloudflare Workers (Hono)
 shared/      Types en logica die app en API allebei gebruiken (verdelen, voorraad, ticketlezer)
 migrations/  Databaseschema (D1), één SQL-bestand per wijziging
 sw/          Service worker: zorgt dat klantenkaarten offline werken
+STIJLBOEK.md Hoe de app eruitziet en aanvoelt: lees dit voor je iets bouwt
 ```
 
 | Onderdeel      | Cloudflare-dienst                                     |
@@ -220,7 +222,7 @@ Bij elke aankoop kies je wie betaalde en voor wie het was:
 
 Onder **Uitgaven** zie je wie wie nog hoeveel moet. Heb je het overgeschreven, druk dan op **Terugbetaald**
 (minder mag ook: dan blijft de rest openstaan). Iemand die al eens aangemeld heeft, is vanzelf lid. Je partner
-voeg je vooraf toe bij **Meer → Huishouden**, met het e-mailadres waarmee die later aanmeldt.
+voeg je vooraf toe bij **Instellingen → Huishouden** (op de gsm: **Meer**), met het e-mailadres waarmee die later aanmeldt.
 
 ## Voorraad
 
@@ -245,7 +247,7 @@ Je vult een verkoper in bij:
 - een **voorraaditem**: waar je het meestal koopt;
 - **Erbij** in de voorraad: waar je het deze keer kocht (staat in de geschiedenis).
 
-Bij **Meer → Verkopers** geef je een verkoper een website, telefoonnummer en notitie (klantnummer,
+Bij **Instellingen → Verkopers** geef je een verkoper een website, telefoonnummer en notitie (klantnummer,
 contactpersoon, ...), en zie je al je aankopen bij die verkoper.
 
 ## Klantenkaart uit een foto
@@ -296,9 +298,8 @@ Pas je `wrangler.jsonc` aan (bv. een nieuwe binding)? Draai dan `npm run cf-type
 - **Bedragen** staan in cent in de database (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
 - **Foto's** worden in de browser verkleind tot max. 2000 px voor de upload.
 - **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen gekleurde codes slecht.
-- **Ontwerp**: wit en strak, in de stijl van shadcn/ui, met lettertype Geist. De kleuren en maten staan als
-  variabelen bovenaan `src/styles.css`, de animatiecurves ook (`--ease-out`, `--spring`). Wie in de instellingen
-  van zijn toestel "minder beweging" aanzet, krijgt geen animaties.
+- **Ontwerp**: zie [STIJLBOEK.md](STIJLBOEK.md). Daar staat hoe elk scherm, onderdeel en elke tekst eruitziet,
+  met een checklist voor nieuwe onderdelen. Raadpleeg het altijd voor je iets aan de app verandert.
 - **Offline**: alleen klantenkaarten. Al de rest bekijken of aanpassen vraagt internet.
 - De R2-bucket staat in de regio *ENAM* (Noord-Amerika). Wil je je bestanden in Europa, maak dan een
   nieuwe bucket aan met `npx wrangler r2 bucket create huishouden-bestanden-eu --jurisdiction eu`. Pas daarna

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { SPLIT_MODES, type PurchaseDetail as Detail, type PurchaseFile } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { Avatar } from "../components/Controls";
+import { Avatar, CardHead } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
 import { FileViewer } from "../components/FileViewer";
 import { Icon } from "../components/Icon";
@@ -184,12 +184,11 @@ export function PurchaseDetail() {
 
         <div className="stack">
           <section className="card">
-            <header className="card-head">
-              <div>
-                <h2 className="card-title">Bewijsstukken</h2>
-                <p className="card-desc">{p.files.length === 0 ? "Nog geen foto of PDF" : `${p.files.length} bestand${p.files.length === 1 ? "" : "en"}`}</p>
-              </div>
-            </header>
+            <CardHead
+              icon="file"
+              title="Bewijsstukken"
+              description={p.files.length === 0 ? "Nog geen foto of PDF" : `${p.files.length} bestand${p.files.length === 1 ? "" : "en"}`}
+            />
             <ul className="gallery stagger">
               {p.files.map((f, i) => (
                 <li key={f.id} style={stagger(i)}>
@@ -231,14 +230,9 @@ export function PurchaseDetail() {
           </section>
 
           <section className="card">
-            <header className="card-head">
-              <div>
-                <h2 className="card-title">In voorraad</h2>
-                <p className="card-desc">Een toestel of iets dat je bijhoudt, met dit bewijsstuk en de garantie erbij.</p>
-              </div>
-            </header>
+            <CardHead icon="package" title="In voorraad" description="Een toestel of iets dat je bijhoudt, met dit bewijsstuk en de garantie erbij." />
             {p.items.length > 0 && (
-              <ul className="rows" style={{ borderTop: "1px solid var(--border)" }}>
+              <ul className="rows">
                 {p.items.map((item) => (
                   <li key={item.id}>
                     <Link to={`/voorraad/${item.id}`} className="row" style={{ minHeight: 52 }}>

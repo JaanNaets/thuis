@@ -1,9 +1,9 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FlatNode, TreeNode } from "../../shared/tree";
 import { TONES, type Member, type Tone } from "../../shared/types";
 import { formatNumber, parseQuantity } from "../format";
 import { Icon, type IconName } from "./Icon";
-import { Spinner } from "./Motion";
+import { Num, Spinner } from "./Motion";
 
 /** Keuze uit enkele opties, met een wit vlak dat naar de gekozen optie schuift. */
 export function Segmented<T extends string>({
@@ -171,5 +171,126 @@ export function SubmitButton({ busy, children, className = "btn btn-primary" }: 
       {busy && <Spinner />}
       {children}
     </button>
+  );
+}
+
+/** Tabs met tellers; een lijn schuift naar de actieve tab. */
+export function Tabs<T extends string>({
+  label,
+  value,
+  tabs,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  tabs: { value: T; label: string; count?: number }[];
+  onChange: (value: T) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [line, setLine] = useState<{ x: number; w: number }>();
+  const widths = tabs.map((t) => `${t.label}${t.count ?? ""}`).join("|");
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (el) setLine({ x: el.offsetLeft, w: el.offsetWidth });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [value, widths]);
+
+  return (
+    <div className="tabs" role="tablist" aria-label={label} ref={ref}>
+      {tabs.map((t) => (
+        <button key={t.value} type="button" role="tab" aria-selected={t.value === value} className="tab" onClick={() => onChange(t.value)}>
+          {t.label}
+          {t.count !== undefined && (
+            <span className="tab-count">
+              <Num value={t.count} />
+            </span>
+          )}
+        </button>
+      ))}
+      {line && <span className="tabs-indicator" style={{ width: line.w, transform: `translateX(${line.x}px)` }} />}
+    </div>
+  );
+}
+
+/** Filterpil: "Plaats  Keuken ⌄". Het hele vlak opent de gewone keuzelijst van het toestel. */
+export function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+  all,
+}: {
+  label: string;
+  value: string | null;
+  options: { value: string; label: string; depth?: number }[];
+  onChange: (value: string | null) => void;
+  /** Tekst voor "geen filter", bv. "Alle". */
+  all: string;
+}) {
+  const current = options.find((o) => o.value === value);
+  return (
+    <label className={`filter ${value ? "active" : ""}`}>
+      <span className="filter-label">{label}</span>
+      <span className="filter-value">{current?.label ?? all}</span>
+      <Icon name="down" size={14} />
+      <select aria-label={label} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+        <option value="">{all}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {"\u00a0\u00a0\u00a0\u00a0".repeat(o.depth ?? 0) + o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Filter dat je aan- of uitzet ("Bezit", "Archief"). */
+export function FilterToggle({ on, onChange, children }: { on: boolean; onChange: (on: boolean) => void; children: ReactNode }) {
+  return (
+    <button type="button" className="filter" aria-pressed={on} onClick={() => onChange(!on)}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Niveaumeter: tien streepjes die vollopen tot twee keer het minimum.
+ * Groen = genoeg, oranje = onder het minimum, rood = op.
+ */
+export function LevelMeter({ quantity, min }: { quantity: number; min: number }) {
+  const filled = quantity <= 0 ? 0 : Math.max(1, Math.min(10, Math.round((quantity / (min * 2)) * 10)));
+  const state = quantity <= 0 ? "out" : quantity < min ? "low" : "";
+  return (
+    <span className={`meter ${state}`} title={`${formatNumber(quantity)} van minimum ${formatNumber(min)}`}>
+      <span className="meter-bars" aria-hidden="true">
+        {Array.from({ length: 10 }, (_, k) => (
+          <i key={k} className={k < filled ? "on" : ""} style={{ "--k": k } as CSSProperties} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** Kop van een kaart: blauw icoontegeltje, titel, korte uitleg en eventueel een actie rechts. */
+export function CardHead({ icon, title, description, action }: { icon: IconName; title: string; description?: ReactNode; action?: ReactNode }) {
+  return (
+    <header className="card-head">
+      <div style={{ minWidth: 0 }}>
+        <h2 className="card-title">
+          <span className="icon-tile">
+            <Icon name={icon} size={13} />
+          </span>
+          {title}
+        </h2>
+        {description && <p className="card-desc">{description}</p>}
+      </div>
+      {action}
+    </header>
   );
 }

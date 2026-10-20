@@ -12,6 +12,9 @@ export function isTone(value: unknown): value is Tone {
 
 export type Me = { email: string; member: Member };
 
+/** Tellers voor de navigatie. */
+export type Stats = { purchases: number; items: number; low: number; expiring: number; cards: number };
+
 // ---------- huishouden en indeling ----------
 
 export type Member = {

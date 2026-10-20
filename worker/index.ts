@@ -5,6 +5,7 @@ import { items } from "./routes/items";
 import { loyaltyCards } from "./routes/loyalty-cards";
 import { files, purchases } from "./routes/purchases";
 import { receipts } from "./routes/receipts";
+import { stats } from "./routes/stats";
 import { categories, ensureMember, locations, members, tags, taxonomy } from "./routes/taxonomy";
 import { vendors } from "./routes/vendors";
 import type { AppEnv } from "./types";
@@ -28,6 +29,7 @@ app.route("/categories", categories);
 app.route("/locations", locations);
 app.route("/tags", tags);
 app.route("/vendors", vendors);
+app.route("/stats", stats);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {

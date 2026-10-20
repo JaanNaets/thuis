@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { PurchaseListItem } from "../../shared/types";
 import { useApi } from "../api";
+import { FilterToggle, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { SkeletonRows, stagger } from "../components/Motion";
 import { EmptyState, PageHead, toneForCategory } from "../components/Page";
@@ -15,33 +16,48 @@ export const WARRANTY_BADGE: Record<WarrantyStatus["tone"], string> = {
   none: "badge-muted",
 };
 
+const hasWarranty = (p: PurchaseListItem) => ["ok", "soon"].includes(warrantyStatus(p.warranty_until).tone);
+
+type Tab = "all" | "warranty";
+
 export function PurchaseList() {
   const [query, setQuery] = useState("");
-  const [onlyWarranty, setOnlyWarranty] = useState(false);
-  // Vanuit Meer → Verkopers: enkel de aankopen bij die verkoper.
+  const [tab, setTab] = useState<Tab>("all");
+  // Vanuit Instellingen → Verkopers: enkel de aankopen bij die verkoper.
   const [searchParams, setSearchParams] = useSearchParams();
   const vendorId = searchParams.get("verkoper");
   const { data: taxonomy } = useTaxonomy();
   const vendor = taxonomy?.vendors.find((v) => v.id === vendorId);
   const debouncedQuery = useDebounced(query.trim(), 300);
-  const filtered = Boolean(debouncedQuery) || onlyWarranty || Boolean(vendorId);
+  const filtered = Boolean(debouncedQuery) || Boolean(vendorId);
 
   const params = new URLSearchParams();
   if (debouncedQuery) params.set("q", debouncedQuery);
-  if (onlyWarranty) params.set("warranty", "active");
   if (vendorId) params.set("vendor", vendorId);
   const { data, error, loading } = useApi<PurchaseListItem[]>(`/purchases?${params}`);
+  const withWarranty = data?.filter(hasWarranty) ?? [];
+  const shown = tab === "warranty" ? withWarranty : (data ?? []);
 
   return (
     <div className="page">
       <PageHead
         title="Aankopen"
-        description={data ? <Summary items={data} filtered={filtered} /> : " "}
+        description="Kastickets, facturen en garanties, met wie wat betaalde"
         primary={
           <Link to="/aankopen/nieuw" className="btn btn-primary">
             <Icon name="plus" size={16} /> Nieuwe aankoop
           </Link>
         }
+      />
+
+      <Tabs
+        label="Aankopen"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: "all", label: filtered ? "Resultaten" : "Alle", count: data?.length },
+          { value: "warranty", label: "Met garantie", count: data ? withWarranty.length : undefined },
+        ]}
       />
 
       <div className="toolbar">
@@ -56,60 +72,74 @@ export function PurchaseList() {
           />
         </label>
       </div>
-      <div className="chips">
-        {vendorId && (
-          <button type="button" className="chip" aria-pressed="true" onClick={() => setSearchParams({}, { replace: true })}>
+      {vendorId && (
+        <div className="filters">
+          <FilterToggle on onChange={() => setSearchParams({}, { replace: true })}>
             <Icon name="store" size={14} /> {vendor?.name ?? "Verkoper"} <Icon name="close" size={14} />
-          </button>
-        )}
-        <button type="button" className="chip" aria-pressed={onlyWarranty} onClick={() => setOnlyWarranty((v) => !v)}>
-          <Icon name="clock" size={14} /> Met lopende garantie
-        </button>
-      </div>
+          </FilterToggle>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {!data && loading && <SkeletonRows />}
-      {data?.length === 0 && (
+      {data && shown.length === 0 && (
         <EmptyState
           icon="receipt"
-          title={filtered ? "Niets gevonden" : "Nog geen aankopen"}
+          title={filtered || tab !== "all" ? "Niets gevonden" : "Nog geen aankopen"}
           action={
-            !filtered && (
-              <Link to="/aankopen/nieuw" className="btn btn-primary btn-sm">
+            !filtered &&
+            tab === "all" && (
+              <Link to="/aankopen/nieuw" className="btn btn-outline btn-sm">
                 <Icon name="plus" size={16} /> Eerste aankoop
               </Link>
             )
           }
         >
-          {filtered ? "Probeer een ander woord." : "Trek een foto van een kasticket: de app vult de rest in."}
+          {filtered || tab !== "all" ? "Probeer een ander woord of een andere tab." : "Trek een foto van een kasticket: de app vult de rest in."}
         </EmptyState>
       )}
 
-      {data && data.length > 0 && (
-        <div className="card">
-          <ul className="rows stagger">
-            {data.map((p, i) => {
+      {shown.length > 0 && (
+        <div className="card table table-purchases">
+          <div className="table-head" aria-hidden="true">
+            <span>Aankoop</span>
+            <span>Verkoper</span>
+            <span>Datum</span>
+            <span className="xl">Garantie</span>
+            <span className="end">Bedrag</span>
+          </div>
+          <ul className="rows stagger" key={tab}>
+            {shown.map((p, i) => {
               const warranty = warrantyStatus(p.warranty_until);
               const tone = p.category_color ?? toneForCategory(p.category_name);
+              const running = warranty.tone === "ok" || warranty.tone === "soon";
               return (
                 <li key={p.id} style={stagger(i)}>
                   <Link to={`/aankopen/${p.id}`} className="row">
-                    <span className={`row-media ${p.thumbnail_file_id ? "" : `tone-${tone}`}`}>
-                      {p.thumbnail_file_id ? (
-                        <img src={`/api/files/${p.thumbnail_file_id}`} alt="" loading="lazy" />
-                      ) : (
-                        <Icon name={p.file_count > 0 ? "file" : "receipt"} size={18} />
-                      )}
-                    </span>
-                    <span className="row-main">
-                      <span className="row-title">{p.description}</span>
-                      <span className="row-meta">
-                        <span>{[p.vendor_name, formatDate(p.purchased_on)].filter(Boolean).join(" · ")}</span>
-                        {(warranty.tone === "ok" || warranty.tone === "soon") && (
-                          <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>
+                    <span className="cell-main">
+                      <span className={`row-media ${p.thumbnail_file_id ? "" : `tone-${tone}`}`}>
+                        {p.thumbnail_file_id ? (
+                          <img src={`/api/files/${p.thumbnail_file_id}`} alt="" loading="lazy" />
+                        ) : (
+                          <Icon name={p.file_count > 0 ? "file" : "receipt"} size={17} />
                         )}
                       </span>
+                      <span className="row-main">
+                        <span className="row-title">{p.description}</span>
+                        <span className="row-meta narrow-only">
+                          <span>{[p.vendor_name, formatDate(p.purchased_on)].filter(Boolean).join(" · ")}</span>
+                          {running && <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>}
+                        </span>
+                        {p.category_name && <span className="row-meta wide-only">{p.category_name}</span>}
+                      </span>
                     </span>
+                    <span className="col">
+                      <span>{p.vendor_name ?? "—"}</span>
+                    </span>
+                    <span className="col">
+                      <span>{formatDate(p.purchased_on)}</span>
+                    </span>
+                    <span className="col xl">{running && <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>}</span>
                     <span className="row-end">{formatCents(p.amount_cents)}</span>
                   </Link>
                 </li>
@@ -123,18 +153,6 @@ export function PurchaseList() {
         <Icon name="plus" size={24} />
       </Link>
     </div>
-  );
-}
-
-function Summary({ items, filtered }: { items: PurchaseListItem[]; filtered: boolean }) {
-  if (filtered) return <>{items.length === 1 ? "1 resultaat" : `${items.length} resultaten`}</>;
-  if (items.length === 0) return <>Kastickets, facturen en garanties</>;
-  const running = items.filter((p) => ["ok", "soon"].includes(warrantyStatus(p.warranty_until).tone)).length;
-  return (
-    <>
-      {items.length === 1 ? "1 aankoop" : `${items.length} aankopen`}
-      {running > 0 && ` · ${running} met lopende garantie`}
-    </>
   );
 }
 

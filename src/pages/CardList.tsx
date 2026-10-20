@@ -29,7 +29,7 @@ export function CardList() {
           icon="card"
           title="Nog geen kaarten"
           action={
-            <Link to="/kaarten/nieuw" className="btn btn-primary btn-sm">
+            <Link to="/kaarten/nieuw" className="btn btn-outline btn-sm">
               <Icon name="plus" size={16} /> Eerste kaart
             </Link>
           }

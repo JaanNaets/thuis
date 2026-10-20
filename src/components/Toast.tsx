@@ -5,13 +5,18 @@ type Toast = { id: number; message: string; icon: IconName; leaving: boolean };
 
 const ToastContext = createContext<(message: string, icon?: IconName) => void>(() => {});
 
-const VISIBLE_MS = 2600;
+const VISIBLE_MS = 3500;
 const LEAVE_MS = 250;
 
 /** Korte bevestiging onderaan ("Opgeslagen"), die vanzelf weer wegschuift. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(0);
+
+  const dismiss = useCallback((id: number) => {
+    setToasts((list) => list.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), LEAVE_MS);
+  }, []);
 
   const show = useCallback((message: string, icon: IconName = "check") => {
     const id = nextId.current++;
@@ -27,10 +32,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toaster" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.leaving ? "leaving" : ""}`}>
-            <span className="toast-icon">
-              <Icon name={t.icon} size={14} />
-            </span>
+            <Icon name={t.icon} size={16} className="toast-icon" />
             {t.message}
+            <button type="button" className="toast-close" onClick={() => dismiss(t.id)} aria-label="Sluiten">
+              <Icon name="close" size={14} />
+            </button>
           </div>
         ))}
       </div>
