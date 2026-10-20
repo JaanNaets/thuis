@@ -15,11 +15,11 @@ export function FilePicker({ files, onChange }: { files: File[]; onChange: (file
 
   return (
     <div className="file-picker">
-      <div className="button-row">
-        <button type="button" className="button" onClick={() => cameraRef.current?.click()}>
+      <div className="btn-row">
+        <button type="button" className="btn btn-outline" onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto nemen
         </button>
-        <button type="button" className="button" onClick={() => fileRef.current?.click()}>
+        <button type="button" className="btn btn-outline" onClick={() => fileRef.current?.click()}>
           <Icon name="upload" /> Bestand kiezen
         </button>
       </div>
@@ -49,12 +49,12 @@ export function FilePicker({ files, onChange }: { files: File[]; onChange: (file
         <ul className="file-list">
           {files.map((file, i) => (
             <li key={`${file.name}-${i}`}>
-              <Icon name={file.type.startsWith("image/") ? "camera" : "file"} size={16} />
+              <Icon name={file.type.startsWith("image/") ? "image" : "file"} size={16} />
               <span className="file-name">{file.name}</span>
-              <span className="muted">{formatBytes(file.size)}</span>
+              <span className="muted small">{formatBytes(file.size)}</span>
               <button
                 type="button"
-                className="icon-button small"
+                className="btn btn-ghost btn-icon btn-sm"
                 aria-label={`${file.name} verwijderen`}
                 onClick={() => onChange(files.filter((_, j) => j !== i))}
               >

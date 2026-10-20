@@ -55,11 +55,12 @@ export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: strin
           <button
             key={tag.id}
             type="button"
-            className={`tag-chip tone-${tag.color ?? "butter"} ${on ? "on" : ""}`}
+            className={`tag tone-${tag.color ?? "butter"}`}
             aria-pressed={on}
             onClick={() => toggle(tag.id)}
           >
-            {on && <Icon name="check" size={14} />}
+            <Icon name="check" size={14} className="check" />
+            {!on && <span className="dot" />}
             {tag.name}
           </button>
         );
@@ -70,17 +71,18 @@ export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: strin
             autoFocus
             maxLength={40}
             value={name}
-            placeholder="Nieuwe tag"
+            placeholder="Naam van de tag"
             aria-label="Naam van de nieuwe tag"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={onKeyDown}
+            onBlur={() => !name.trim() && setAdding(false)}
           />
-          <button type="button" className="icon-button small" onClick={create} disabled={busy} aria-label="Tag toevoegen">
-            <Icon name="check" size={18} />
+          <button type="button" className="btn btn-outline btn-icon btn-sm" onClick={create} disabled={busy} aria-label="Tag toevoegen">
+            <Icon name="check" size={16} />
           </button>
         </span>
       ) : (
-        <button type="button" className="tag-chip add" onClick={() => setAdding(true)}>
+        <button type="button" className="tag add" onClick={() => setAdding(true)}>
           <Icon name="plus" size={14} /> Tag
         </button>
       )}

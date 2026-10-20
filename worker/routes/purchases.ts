@@ -23,6 +23,7 @@ import {
   ValidationError,
 } from "../validate";
 import { setTagsStatements } from "./taxonomy";
+import { resolveVendor } from "./vendors";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
@@ -44,7 +45,7 @@ function parsePurchase(body: unknown): PurchaseInput {
   const paidBy = optionalId(obj, "paid_by");
   return {
     description: requiredString(obj, "description", 200),
-    store: optionalString(obj, "store", 100),
+    vendor: optionalString(obj, "vendor", 100),
     purchased_on: requiredDate(obj, "purchased_on"),
     amount_cents: optionalCents(obj, "amount_cents"),
     category_id: optionalId(obj, "category_id"),
@@ -98,30 +99,39 @@ const CATEGORY_TREE = `SELECT id FROM (
 
 export const purchases = new Hono<AppEnv>();
 
-// Lijst, met optioneel zoeken (?q=), lopende garantie (?warranty=active), categorie (?category=) en tag (?tag=).
+// Lijst, met optioneel zoeken (?q=), lopende garantie (?warranty=active), categorie (?category=), tag (?tag=)
+// en verkoper (?vendor=).
 purchases.get("/", async (c) => {
   const q = c.req.query("q")?.trim();
   const activeWarranty = c.req.query("warranty") === "active" ? 1 : 0;
 
   const { results } = await c.env.DB.prepare(
-    `SELECT p.*, c.name AS category_name, c.color AS category_color,
+    `SELECT p.*, v.name AS vendor_name, c.name AS category_name, c.color AS category_color,
        (SELECT COUNT(*) FROM purchase_files f WHERE f.purchase_id = p.id) AS file_count,
        (SELECT f.id FROM purchase_files f
           WHERE f.purchase_id = p.id AND f.content_type LIKE 'image/%'
           ORDER BY f.created_at LIMIT 1) AS thumbnail_file_id
      FROM purchases p
      LEFT JOIN categories c ON c.id = p.category_id
-     WHERE (?1 IS NULL OR p.description LIKE ?1 OR p.store LIKE ?1 OR c.name LIKE ?1
+     LEFT JOIN vendors v ON v.id = p.vendor_id
+     WHERE (?1 IS NULL OR p.description LIKE ?1 OR v.name LIKE ?1 OR c.name LIKE ?1 OR p.notes LIKE ?1
             OR EXISTS (SELECT 1 FROM taggings g JOIN tags t ON t.id = g.tag_id
                        WHERE g.entity_type = 'purchase' AND g.entity_id = p.id AND t.name LIKE ?1))
        AND (?2 = 0 OR p.warranty_until >= date('now'))
        AND (?3 IS NULL OR p.category_id IN (${CATEGORY_TREE}))
        AND (?4 IS NULL OR EXISTS (SELECT 1 FROM taggings g
                                   WHERE g.entity_type = 'purchase' AND g.entity_id = p.id AND g.tag_id = ?4))
+       AND (?5 IS NULL OR p.vendor_id = ?5)
      ORDER BY p.purchased_on DESC, p.created_at DESC
      LIMIT 200`,
   )
-    .bind(q ? `%${q}%` : null, activeWarranty, c.req.query("category") || null, c.req.query("tag") || null)
+    .bind(
+      q ? `%${q}%` : null,
+      activeWarranty,
+      c.req.query("category") || null,
+      c.req.query("tag") || null,
+      c.req.query("vendor") || null,
+    )
     .all<PurchaseListItem>();
 
   return c.json(results);
@@ -133,8 +143,11 @@ purchases.get("/:id", async (c) => {
   const [purchase, files, shares, tags, items] = await db.batch([
     db
       .prepare(
-        `SELECT p.*, c.name AS category_name, c.color AS category_color
-         FROM purchases p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = ?`,
+        `SELECT p.*, v.name AS vendor_name, c.name AS category_name, c.color AS category_color
+         FROM purchases p
+         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN vendors v ON v.id = p.vendor_id
+         WHERE p.id = ?`,
       )
       .bind(id),
     db.prepare(`SELECT ${FILE_COLUMNS} FROM purchase_files WHERE purchase_id = ? ORDER BY created_at`).bind(id),
@@ -163,6 +176,7 @@ purchases.get("/:id", async (c) => {
 purchases.post("/", async (c) => {
   const input = parsePurchase(await c.req.json());
   const shares = await resolveShares(c.env.DB, input);
+  const vendorId = await resolveVendor(c.env.DB, input.vendor);
   const id = crypto.randomUUID();
   const db = c.env.DB;
 
@@ -170,7 +184,7 @@ purchases.post("/", async (c) => {
     db
       .prepare(
         `INSERT INTO purchases
-           (id, description, store, purchased_on, amount_cents, category_id, paid_by, split_mode,
+           (id, description, vendor_id, purchased_on, amount_cents, category_id, paid_by, split_mode,
             warranty_until, notes, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING *`,
@@ -178,7 +192,7 @@ purchases.post("/", async (c) => {
       .bind(
         id,
         input.description,
-        input.store,
+        vendorId,
         input.purchased_on,
         input.amount_cents,
         input.category_id,
@@ -202,19 +216,20 @@ purchases.put("/:id", async (c) => {
   const exists = await db.prepare("SELECT 1 FROM purchases WHERE id = ?").bind(id).first();
   if (!exists) return c.json({ error: "Aankoop niet gevonden" }, 404);
   const shares = await resolveShares(db, input);
+  const vendorId = await resolveVendor(db, input.vendor);
 
   const [updated] = await db.batch([
     db
       .prepare(
         `UPDATE purchases
-         SET description = ?, store = ?, purchased_on = ?, amount_cents = ?, category_id = ?,
+         SET description = ?, vendor_id = ?, purchased_on = ?, amount_cents = ?, category_id = ?,
              paid_by = ?, split_mode = ?, warranty_until = ?, notes = ?
          WHERE id = ?
          RETURNING *`,
       )
       .bind(
         input.description,
-        input.store,
+        vendorId,
         input.purchased_on,
         input.amount_cents,
         input.category_id,

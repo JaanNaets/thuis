@@ -10,6 +10,7 @@ import {
   type Tag,
   type Taxonomy,
   type Tone,
+  type Vendor,
 } from "../../shared/types";
 import type { AppEnv } from "../types";
 import {
@@ -22,6 +23,7 @@ import {
   requiredString,
   ValidationError,
 } from "../validate";
+import { VENDORS_QUERY } from "./vendors";
 
 type Obj = Record<string, unknown>;
 
@@ -44,7 +46,7 @@ export const taxonomy = new Hono<AppEnv>();
 
 taxonomy.get("/", async (c) => {
   const me = await ensureMember(c.env.DB, c.get("user"));
-  const [members, categories, locations, tags] = await c.env.DB.batch([
+  const [members, categories, locations, tags, vendors] = await c.env.DB.batch([
     c.env.DB.prepare("SELECT * FROM members ORDER BY active DESC, created_at"),
     c.env.DB.prepare("SELECT id, domain, parent_id, name, color, sort_order FROM categories"),
     c.env.DB.prepare("SELECT id, parent_id, name, sort_order FROM locations"),
@@ -52,6 +54,7 @@ taxonomy.get("/", async (c) => {
       `SELECT t.id, t.name, t.color, (SELECT COUNT(*) FROM taggings g WHERE g.tag_id = t.id) AS usage
        FROM tags t ORDER BY t.name COLLATE NOCASE`,
     ),
+    c.env.DB.prepare(VENDORS_QUERY),
   ]);
   const result: Taxonomy = {
     me,
@@ -59,6 +62,7 @@ taxonomy.get("/", async (c) => {
     categories: categories.results as Category[],
     locations: locations.results as Location[],
     tags: tags.results as Tag[],
+    vendors: vendors.results as Vendor[],
   };
   return c.json(result);
 });

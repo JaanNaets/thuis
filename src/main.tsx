@@ -1,5 +1,5 @@
-import "@fontsource-variable/fraunces/soft.css";
-import "@fontsource-variable/instrument-sans/wght.css";
+import "@fontsource-variable/geist/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";

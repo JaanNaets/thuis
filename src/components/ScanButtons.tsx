@@ -1,14 +1,14 @@
 import { useRef, useState } from "react";
-import type { Tone } from "../../shared/types";
 import { detectInImage, type ScanResult } from "../barcode-detect";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { Alert } from "./Controls";
 import { Icon } from "./Icon";
 
 /**
  * Een barcode inlezen: live met de camera, of van een foto of screenshot die je al hebt
  * (handig voor kaarten die enkel in de app van de winkel staan).
  */
-export function ScanButtons({ onResult, hint, tone }: { onResult: (r: ScanResult) => void; hint: string; tone: Tone }) {
+export function ScanButtons({ onResult, hint }: { onResult: (r: ScanResult) => void; hint: string }) {
   const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState<{ tone: "busy" | "none"; text: string }>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -30,13 +30,13 @@ export function ScanButtons({ onResult, hint, tone }: { onResult: (r: ScanResult
 
   return (
     <div className="scan-buttons">
-      <div className="button-row">
-        <button type="button" className={`button tinted tone-${tone}`} onClick={() => setScanning(true)}>
+      <div className="btn-row">
+        <button type="button" className="btn btn-outline" onClick={() => setScanning(true)}>
           <Icon name="scan" /> Scannen
         </button>
         <button
           type="button"
-          className={`button tinted tone-${tone}`}
+          className="btn btn-outline"
           disabled={status?.tone === "busy"}
           onClick={() => fileRef.current?.click()}
         >
@@ -54,11 +54,7 @@ export function ScanButtons({ onResult, hint, tone }: { onResult: (r: ScanResult
           if (file) fromPhoto(file);
         }}
       />
-      {status && (
-        <p className={`read-status ${status.tone}`} role="status">
-          {status.text}
-        </p>
-      )}
+      {status && <Alert tone={status.tone}>{status.text}</Alert>}
       {scanning && (
         <BarcodeScanner
           hint={hint}

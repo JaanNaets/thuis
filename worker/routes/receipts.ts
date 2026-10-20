@@ -138,8 +138,10 @@ async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess 
 async function categoryFromHistory(db: D1Database, store: string): Promise<string | null> {
   const row = await db
     .prepare(
-      `SELECT c.name FROM purchases p JOIN categories c ON c.id = p.category_id
-       WHERE p.store = ? COLLATE NOCASE
+      `SELECT c.name FROM purchases p
+       JOIN categories c ON c.id = p.category_id
+       JOIN vendors v ON v.id = p.vendor_id
+       WHERE v.name = ? COLLATE NOCASE
        GROUP BY c.id ORDER BY COUNT(*) DESC LIMIT 1`,
     )
     .bind(store)

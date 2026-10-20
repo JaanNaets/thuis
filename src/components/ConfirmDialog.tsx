@@ -11,10 +11,16 @@ const ConfirmContext = createContext<(options: ConfirmOptions) => Promise<boolea
  */
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
+  // De tekst blijft staan terwijl het venster wegschuift.
+  const [shown, setShown] = useState<ConfirmOptions | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const confirm = useCallback(
-    (options: ConfirmOptions) => new Promise<boolean>((resolve) => setPending({ ...options, resolve })),
+    (options: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        setShown(options);
+        setPending({ ...options, resolve });
+      }),
     [],
   );
 
@@ -38,25 +44,29 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           e.preventDefault();
           close(false);
         }}
+        onClick={(e) => e.target === e.currentTarget && close(false)}
       >
-        {pending && (
-          <>
-            <h2>{pending.title}</h2>
-            {pending.body && <p className="muted">{pending.body}</p>}
+        <div className="sheet-handle" />
+        {shown && (
+          <div className="sheet-body">
+            <div style={{ display: "grid", gap: 6 }}>
+              <h2>{shown.title}</h2>
+              {shown.body && <p className="muted">{shown.body}</p>}
+            </div>
             <div className="sheet-actions">
-              <button type="button" className="button quiet" onClick={() => close(false)}>
+              <button type="button" className="btn btn-outline" onClick={() => close(false)}>
                 Annuleren
               </button>
               <button
                 type="button"
-                className={`button ${pending.danger ? "danger-solid" : "primary"}`}
+                className={`btn ${shown.danger ? "btn-danger" : "btn-primary"}`}
                 onClick={() => close(true)}
                 autoFocus
               >
-                {pending.confirmLabel ?? "OK"}
+                {shown.confirmLabel ?? "OK"}
               </button>
             </div>
-          </>
+          </div>
         )}
       </dialog>
     </ConfirmContext>

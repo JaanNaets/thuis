@@ -7,7 +7,10 @@ Onze eigen huishoud-app, volledig op Cloudflare. Onderdelen:
 - **Voorraad**: wat er in huis is en waar, met vervaldatums, "bijna op" en een logboek van elke wijziging.
 - **Klantenkaarten**: barcode tonen aan de kassa, ook **zonder internet**. Inlezen met de camera of uit een
   foto of screenshot.
-- **Meer**: wie er in huis woont, en de indeling in categorieën, plaatsen en tags.
+- **Meer**: wie er in huis woont, verkopers, en de indeling in categorieën, plaatsen en tags.
+
+Overal waar je iets registreert (een aankoop, een item, een aanvulling van de voorraad, een terugbetaling, een
+kaart) kan je een **notitie** kwijt, en waar het past ook de **verkoper**.
 
 Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kioskmodus.
 
@@ -230,6 +233,21 @@ voeg je vooraf toe bij **Meer → Huishouden**, met het e-mailadres waarmee die 
 - Een aankoop met garantie kan je **in voorraad zetten**. Zo hangt het toestel aan zijn kasticket en garantie.
 - Iets weg uit huis maar wil je de geschiedenis houden? **Archiveren** in plaats van verwijderen.
 
+## Verkopers
+
+Een verkoper is een winkel, een webshop, een vakman of iemand op 2dehands. Typ de naam bij een aankoop: bestaande
+verkopers verschijnen terwijl je typt, een nieuwe naam wordt vanzelf een nieuwe verkoper. Hoofdletters maken niet
+uit ("colruyt" en "Colruyt" zijn dezelfde).
+
+Je vult een verkoper in bij:
+
+- een **aankoop**: waar je het kocht (de ticketlezer vult hem in);
+- een **voorraaditem**: waar je het meestal koopt;
+- **Erbij** in de voorraad: waar je het deze keer kocht (staat in de geschiedenis).
+
+Bij **Meer → Verkopers** geef je een verkoper een website, telefoonnummer en notitie (klantnummer,
+contactpersoon, ...), en zie je al je aankopen bij die verkoper.
+
 ## Klantenkaart uit een foto
 
 Bij een nieuwe kaart kan je **Scannen** (camera) of **Uit foto** kiezen. Uit foto werkt met een foto van de
@@ -242,6 +260,7 @@ De database is gebouwd om later uit te breiden tot een volledige "home ERP" (age
 | Tabel | Wat |
 | ----- | --- |
 | `members` | Wie in het huishouden woont. Gekoppeld aan het e-mailadres van de login. |
+| `vendors` | Verkopers: winkels, webshops, vakmensen. Aankopen, items en voorraadbewegingen verwijzen ernaar. |
 | `categories` | Eén boom per **domein**: `expense` (aankopen) en `item` (voorraad). Later kan er een domein bij. |
 | `locations` | Plaatsen in huis, ook een boom. |
 | `tags` + `taggings` | Vrije labels op om het even wat (`entity_type` = `purchase`, `item`, ...). |
@@ -276,7 +295,10 @@ Pas je `wrangler.jsonc` aan (bv. een nieuwe binding)? Draai dan `npm run cf-type
 
 - **Bedragen** staan in cent in de database (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
 - **Foto's** worden in de browser verkleind tot max. 2000 px voor de upload.
-- **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen pastel slecht.
+- **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen gekleurde codes slecht.
+- **Ontwerp**: wit en strak, in de stijl van shadcn/ui, met lettertype Geist. De kleuren en maten staan als
+  variabelen bovenaan `src/styles.css`, de animatiecurves ook (`--ease-out`, `--spring`). Wie in de instellingen
+  van zijn toestel "minder beweging" aanzet, krijgt geen animaties.
 - **Offline**: alleen klantenkaarten. Al de rest bekijken of aanpassen vraagt internet.
 - De R2-bucket staat in de regio *ENAM* (Noord-Amerika). Wil je je bestanden in Europa, maak dan een
   nieuwe bucket aan met `npx wrangler r2 bucket create huishouden-bestanden-eu --jurisdiction eu`. Pas daarna

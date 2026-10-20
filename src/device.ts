@@ -71,10 +71,3 @@ export function registerServiceWorker() {
     navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("Service worker niet geregistreerd", err));
   });
 }
-
-export function greeting(now = new Date()): string {
-  const hour = now.getHours();
-  const part = hour < 6 ? "Goeienacht" : hour < 12 ? "Goeiemorgen" : hour < 18 ? "Goeiemiddag" : "Goeieavond";
-  const date = new Intl.DateTimeFormat("nl-BE", { weekday: "long", day: "numeric", month: "long" }).format(now);
-  return `${part} · ${date}`;
-}

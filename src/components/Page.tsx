@@ -1,68 +1,118 @@
-import type { ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router";
 import { TONES, type Tone } from "../../shared/types";
-import { greeting } from "../device";
 import { Icon, type IconName } from "./Icon";
 
 export type { Tone };
 
-/** Kop van een hoofdscherm: begroeting, grote titel, korte samenvatting en (op tablet) een actieknop. */
-export function PageHero({
+type Back = { to: string | -1; label: string };
+
+function BackLink({ back, className, children }: { back: Back; className: string; children: ReactNode }) {
+  const navigate = useNavigate();
+  if (back.to === -1) {
+    return (
+      <button type="button" className={className} onClick={() => navigate(-1)}>
+        {children}
+      </button>
+    );
+  }
+  return (
+    <Link to={back.to} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Kop van een scherm: titel, korte uitleg en acties.
+ * Op een gsm verschijnt bovenaan een kleine titelbalk zodra de grote titel uit beeld schuift.
+ *
+ * - `primary`: de hoofdactie; op een gsm doet de zwevende knop dat, dus enkel op tablet zichtbaar;
+ * - `actions`: altijd zichtbaar (bv. bewerken).
+ */
+export function PageHead({
   title,
-  summary,
-  tone,
-  action,
+  description,
+  back,
+  actions,
+  primary,
 }: {
   title: string;
-  summary?: ReactNode;
-  tone: Tone;
-  action?: ReactNode;
+  description?: ReactNode;
+  back?: Back;
+  actions?: ReactNode;
+  primary?: ReactNode;
 }) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [compact, setCompact] = useState(false);
+
+  // Zodra de onderkant van de grote titel onder de balk schuift. Eén meting per frame.
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const el = titleRef.current;
+      if (el) setCompact(el.getBoundingClientRect().bottom < 50);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    check();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
-    <header className={`hero tone-${tone}`}>
-      <div>
-        <p className="eyebrow">{greeting()}</p>
-        <h1>
-          <span className="mark">{title}</span>
-        </h1>
-        {summary && <p className="hero-summary">{summary}</p>}
+    <>
+      {back && (
+        <BackLink back={back} className="crumb">
+          <Icon name="back" size={16} /> {back.label}
+        </BackLink>
+      )}
+      <header className="page-head">
+        <div style={{ minWidth: 0 }}>
+          <h1 ref={titleRef}>{title}</h1>
+          {description && <p className="page-desc">{description}</p>}
+        </div>
+        {(actions || primary) && (
+          <div className="page-actions">
+            {actions}
+            {primary && <span className="page-actions wide">{primary}</span>}
+          </div>
+        )}
+      </header>
+      <div className="topbar" data-visible={compact} aria-hidden={!compact}>
+        <div className="topbar-side">
+          {back && (
+            <BackLink back={back} className="btn btn-ghost btn-icon btn-sm">
+              <Icon name="back" />
+            </BackLink>
+          )}
+        </div>
+        <span className="topbar-title">{title}</span>
+        <div className="topbar-side" />
       </div>
-      {action && <div className="hero-action">{action}</div>}
-    </header>
+    </>
   );
 }
 
-/** Kop van een detail- of formulierscherm, met terugknop. */
-export function PageHeader({ title, back, actions }: { title: string; back: string | -1; actions?: ReactNode }) {
-  const navigate = useNavigate();
+export function EmptyState({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <header className="page-header">
-      <button
-        type="button"
-        className="icon-button"
-        onClick={() => (back === -1 ? navigate(-1) : navigate(back))}
-        aria-label="Terug"
-      >
-        <Icon name="back" />
-      </button>
-      <h1>{title}</h1>
-      {actions}
-    </header>
-  );
-}
-
-export function EmptyState({ icon, tone, children }: { icon: IconName; tone: Tone; children: ReactNode }) {
-  return (
-    <div className={`empty tone-${tone}`}>
-      <span className="empty-mark">
-        <Icon name={icon} size={34} />
+    <div className="empty">
+      <span className="empty-icon">
+        <Icon name={icon} size={20} />
       </span>
-      <p>{children}</p>
+      <strong>{title}</strong>
+      {children && <p>{children}</p>}
+      {action && <div style={{ marginTop: 10 }}>{action}</div>}
     </div>
   );
 }
 
-/** Iets zonder eigen kleur krijgt op basis van zijn naam altijd dezelfde pastelkleur. */
+/** Iets zonder eigen kleur krijgt op basis van zijn naam altijd dezelfde kleur. */
 export function toneForCategory(category: string | null): Tone {
   if (!category) return "butter";
   let hash = 0;

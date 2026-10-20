@@ -14,10 +14,13 @@ import {
 } from "../../shared/types";
 import { api, useApi } from "../api";
 import type { ScanResult } from "../barcode-detect";
-import { QuantityField, Segmented, TreeSelect } from "../components/Controls";
-import { PageHeader } from "../components/Page";
+import { Alert, QuantityField, Segmented, SubmitButton, TreeSelect } from "../components/Controls";
+import { Icon } from "../components/Icon";
+import { PageHead } from "../components/Page";
 import { ScanButtons } from "../components/ScanButtons";
 import { TagPicker } from "../components/TagPicker";
+import { useToast } from "../components/Toast";
+import { VendorField } from "../components/VendorField";
 import { formatDate, formatNumber, parseQuantity } from "../format";
 import { categoryTree, locationTree, useTaxonomy } from "../taxonomy";
 
@@ -29,6 +32,7 @@ type FormState = {
   unit: Unit;
   barcode: string;
   brand: string;
+  vendor: string;
   min_quantity: string;
   notes: string;
   tag_ids: string[];
@@ -36,7 +40,7 @@ type FormState = {
   initial_expires: string;
 };
 
-function toFormState(item?: ItemDetail): FormState {
+function toFormState(item: ItemDetail | undefined, taxonomy: Taxonomy): FormState {
   return {
     name: item?.name ?? "",
     type: item?.type ?? "consumable",
@@ -45,6 +49,7 @@ function toFormState(item?: ItemDetail): FormState {
     unit: item?.unit ?? "stuk",
     barcode: item?.barcode ?? "",
     brand: item?.brand ?? "",
+    vendor: taxonomy.vendors.find((v) => v.id === item?.vendor_id)?.name ?? "",
     min_quantity: item?.min_quantity !== null && item?.min_quantity !== undefined ? formatNumber(item.min_quantity) : "",
     notes: item?.notes ?? "",
     tag_ids: item?.tag_ids ?? [],
@@ -100,12 +105,14 @@ function ItemForm({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
   const [form, setForm] = useState<FormState>(() => {
-    const state = toFormState(existing);
+    const state = toFormState(existing, taxonomy);
     if (purchase) {
       // Iets met garantie is meestal een toestel of gereedschap: dat houd je bij als bezit.
       state.name = purchase.description;
       state.type = purchase.warranty_until ? "asset" : "consumable";
+      state.vendor = purchase.vendor_name ?? "";
     }
     if (initialBarcode) state.barcode = initialBarcode;
     return state;
@@ -182,6 +189,7 @@ function ItemForm({
       unit: form.unit,
       barcode: form.barcode,
       brand: form.brand,
+      vendor: form.vendor,
       min_quantity: minQuantity,
       notes: form.notes,
       tag_ids: form.tag_ids,
@@ -201,6 +209,7 @@ function ItemForm({
       const saved = existing
         ? await api.put<ItemDetail>(`/items/${existing.id}`, input)
         : await api.post<ItemDetail>("/items", input);
+      toast(existing ? "Item bijgewerkt" : "Item bewaard");
       navigate(`/voorraad/${saved.id}`, { replace: true });
     } catch (err) {
       setError((err as Error).message);
@@ -210,148 +219,171 @@ function ItemForm({
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHeader title={existing ? "Item bewerken" : "Nieuw item"} back={-1} />
+      <PageHead title={existing ? "Item bewerken" : "Nieuw item"} back={{ to: -1, label: existing ? existing.name : "Voorraad" }} />
 
       {purchase && (
-        <p className="read-status ok">
+        <Alert tone="ok">
           Wordt gekoppeld aan de aankoop "{purchase.description}" van {formatDate(purchase.purchased_on)}.
-        </p>
+        </Alert>
       )}
 
-      <section className="field">
-        <span className="label">Barcode</span>
-        <ScanButtons tone="sky" hint="Scan de barcode van het product" onResult={onScan} />
-        {lookup?.state === "busy" && <p className="read-status busy">Product opzoeken</p>}
-        {lookup?.state === "found" && <p className="read-status ok">Gevonden in Open Food Facts. Kijk het even na.</p>}
+      <section className="card form-section">
+        <div className="field">
+          <span className="label">Barcode</span>
+          <span className="hint">Scan het product: naam, merk en categorie komen vanzelf.</span>
+        </div>
+        <ScanButtons hint="Scan de barcode van het product" onResult={onScan} />
+        {lookup?.state === "busy" && <Alert tone="busy">Product opzoeken</Alert>}
+        {lookup?.state === "found" && <Alert tone="ok">Gevonden in Open Food Facts. Kijk het even na.</Alert>}
         {lookup?.state === "none" && !existing && (
-          <p className="read-status none">Dit product kennen we niet. Vul het zelf in; volgende keer herkent de app het.</p>
+          <Alert tone="none">Dit product kennen we niet. Vul het zelf in; volgende keer herkent de app het.</Alert>
         )}
         {lookup?.state === "known" && (
-          <p className="read-status partial">
-            Dit item heb je al. <Link to={`/voorraad/${lookup.itemId}`} className="link">Open het</Link> om de voorraad aan te passen.
-          </p>
+          <Alert tone="partial">
+            Dit item heb je al.{" "}
+            <Link to={`/voorraad/${lookup.itemId}`} className="link">
+              Open het
+            </Link>{" "}
+            om de voorraad aan te passen.
+          </Alert>
         )}
       </section>
 
-      <label className="field">
-        <span className="label">Naam *</span>
-        <input
-          required
-          maxLength={200}
-          className={autoClass("name")}
-          value={form.name}
-          onChange={(e) => set("name", e.target.value)}
-          placeholder="bv. Halfvolle melk"
-        />
-      </label>
-
-      <div className="field">
-        <span className="label">Soort</span>
-        <Segmented
-          label="Soort"
-          value={form.type}
-          onChange={(v) => set("type", v)}
-          options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: ITEM_TYPES[t].label }))}
-        />
-        <p className="muted small">{ITEM_TYPES[form.type].hint}</p>
-      </div>
-
-      <div className="field-row">
+      <section className="card form-section">
         <label className="field">
-          <span className="label">Categorie</span>
-          <TreeSelect
-            className={autoClass("category_id")}
-            nodes={categoryTree(taxonomy, "item")}
-            value={form.category_id}
-            onChange={(id) => set("category_id", id)}
-            empty="Geen categorie"
-          />
-        </label>
-        <label className="field">
-          <span className="label">Standaardplaats</span>
-          <TreeSelect
-            nodes={locationTree(taxonomy)}
-            value={form.default_location_id}
-            onChange={(id) => set("default_location_id", id)}
-            empty="Geen"
-          />
-        </label>
-      </div>
-
-      <div className="field-row">
-        <label className="field">
-          <span className="label">Merk</span>
-          <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="label">Barcode</span>
+          <span className="label">Naam</span>
           <input
-            inputMode="numeric"
-            maxLength={64}
-            value={form.barcode}
-            onChange={(e) => set("barcode", e.target.value)}
-            onBlur={() => form.barcode && form.barcode !== existing?.barcode && lookupBarcode(form.barcode)}
+            required
+            maxLength={200}
+            className={autoClass("name")}
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            placeholder="bv. Halfvolle melk"
           />
         </label>
-      </div>
 
-      <div className="field-row">
-        <label className="field">
-          <span className="label">Eenheid</span>
-          <select className={autoClass("unit")} value={form.unit} onChange={(e) => set("unit", e.target.value as Unit)}>
-            {(Object.keys(UNITS) as Unit[]).map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">Bijna op onder</span>
-          <input
-            inputMode="decimal"
-            value={form.min_quantity}
-            placeholder="geen"
-            aria-invalid={Number.isNaN(minQuantity)}
-            onChange={(e) => set("min_quantity", e.target.value)}
+        <div className="field">
+          <span className="label">Soort</span>
+          <Segmented
+            label="Soort"
+            value={form.type}
+            onChange={(v) => set("type", v)}
+            options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: <span>{ITEM_TYPES[t].label}</span> }))}
           />
-        </label>
-      </div>
+          <span className="hint">{ITEM_TYPES[form.type].hint}</span>
+        </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span className="label">Categorie</span>
+            <TreeSelect
+              className={autoClass("category_id")}
+              nodes={categoryTree(taxonomy, "item")}
+              value={form.category_id}
+              onChange={(id) => set("category_id", id)}
+              empty="Geen categorie"
+            />
+          </label>
+          <label className="field">
+            <span className="label">Standaardplaats</span>
+            <TreeSelect
+              nodes={locationTree(taxonomy)}
+              value={form.default_location_id}
+              onChange={(id) => set("default_location_id", id)}
+              empty="Geen"
+            />
+          </label>
+        </div>
+
+        <div className="field">
+          <span className="label">
+            Meestal gekocht bij <span className="optional">· verkoper</span>
+          </span>
+          <VendorField vendors={taxonomy.vendors} value={form.vendor} onChange={(v) => set("vendor", v)} />
+        </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span className="label">Merk</span>
+            <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="label">Barcode</span>
+            <input
+              inputMode="numeric"
+              maxLength={64}
+              className="mono"
+              value={form.barcode}
+              onChange={(e) => set("barcode", e.target.value)}
+              onBlur={() => form.barcode && form.barcode !== existing?.barcode && lookupBarcode(form.barcode)}
+            />
+          </label>
+        </div>
+
+        <div className="field-row">
+          <label className="field">
+            <span className="label">Eenheid</span>
+            <select className={autoClass("unit")} value={form.unit} onChange={(e) => set("unit", e.target.value as Unit)}>
+              {(Object.keys(UNITS) as Unit[]).map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">Bijna op onder</span>
+            <input
+              inputMode="decimal"
+              value={form.min_quantity}
+              placeholder="geen minimum"
+              aria-invalid={Number.isNaN(minQuantity)}
+              onChange={(e) => set("min_quantity", e.target.value)}
+            />
+          </label>
+        </div>
+      </section>
 
       {!existing && (
-        <fieldset className="field split-panel">
-          <legend className="label">Nu in huis</legend>
-          <QuantityField value={form.initial_quantity} onChange={(v) => set("initial_quantity", v)} label="Hoeveelheid nu in huis" />
+        <section className="card form-section">
+          <div className="field">
+            <span className="label">Nu in huis</span>
+            <QuantityField value={form.initial_quantity} onChange={(v) => set("initial_quantity", v)} label="Hoeveelheid nu in huis" />
+          </div>
           {form.type === "consumable" && (
             <label className="field">
               <span className="label">Vervalt op</span>
               <input type="date" value={form.initial_expires} onChange={(e) => set("initial_expires", e.target.value)} />
             </label>
           )}
-        </fieldset>
+        </section>
       )}
 
-      <div className="field">
-        <span className="label">Tags</span>
-        <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
-      </div>
+      <section className="card form-section">
+        <div className="field">
+          <span className="label">Tags</span>
+          <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
+        </div>
 
-      <label className="field">
-        <span className="label">Notities</span>
-        <textarea
-          rows={3}
-          maxLength={2000}
-          value={form.notes}
-          onChange={(e) => set("notes", e.target.value)}
-          placeholder={form.type === "asset" ? "Serienummer, waar de handleiding ligt, …" : ""}
-        />
-      </label>
+        <label className="field">
+          <span className="label">
+            <Icon name="note" size={15} /> Notitie
+          </span>
+          <textarea
+            rows={3}
+            maxLength={2000}
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder={form.type === "asset" ? "Serienummer, waar de handleiding ligt, …" : "bv. enkel de bio-versie"}
+          />
+        </label>
+      </section>
 
       {error && <p className="error">{error}</p>}
 
-      <button type="submit" className="button primary" disabled={saving}>
+      <SubmitButton busy={saving} className="btn btn-primary btn-lg">
         {saving ? "Opslaan…" : "Opslaan"}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

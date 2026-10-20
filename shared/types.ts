@@ -44,6 +44,19 @@ export type Location = {
   sort_order: number;
 };
 
+/** Winkel, webshop, vakman, iemand op 2dehands: waar iets vandaan komt. */
+export type Vendor = {
+  id: string;
+  name: string;
+  website: string | null;
+  phone: string | null;
+  notes: string | null;
+  /** Aantal aankopen bij deze verkoper. */
+  usage: number;
+};
+
+export type VendorInput = Pick<Vendor, "name" | "website" | "phone" | "notes">;
+
 export type Tag = {
   id: string;
   name: string;
@@ -60,6 +73,7 @@ export type Taxonomy = {
   categories: Category[];
   locations: Location[];
   tags: Tag[];
+  vendors: Vendor[];
 };
 
 // ---------- aankopen en uitgaven ----------
@@ -72,7 +86,7 @@ export type ExpenseShare = { member_id: string; share_cents: number };
 export type Purchase = {
   id: string;
   description: string;
-  store: string | null;
+  vendor_id: string | null;
   purchased_on: string;
   amount_cents: number | null;
   category_id: string | null;
@@ -86,6 +100,7 @@ export type Purchase = {
 };
 
 export type PurchaseListItem = Purchase & {
+  vendor_name: string | null;
   category_name: string | null;
   category_color: Tone | null;
   file_count: number;
@@ -102,6 +117,7 @@ export type PurchaseFile = {
 };
 
 export type PurchaseDetail = Purchase & {
+  vendor_name: string | null;
   category_name: string | null;
   category_color: Tone | null;
   files: PurchaseFile[];
@@ -114,7 +130,6 @@ export type PurchaseDetail = Purchase & {
 export type PurchaseInput = Pick<
   Purchase,
   | "description"
-  | "store"
   | "purchased_on"
   | "amount_cents"
   | "category_id"
@@ -123,6 +138,8 @@ export type PurchaseInput = Pick<
   | "warranty_until"
   | "notes"
 > & {
+  /** Naam van de verkoper; een nieuwe naam wordt meteen een nieuwe verkoper. */
+  vendor: string | null;
   /** Enkel bij split_mode "custom"; anders rekent de server de delen zelf uit. */
   shares?: ExpenseShare[];
   tag_ids: string[];
@@ -221,6 +238,8 @@ export type Item = {
   unit: Unit;
   barcode: string | null;
   brand: string | null;
+  /** Waar je het meestal koopt. */
+  vendor_id: string | null;
   min_quantity: number | null;
   notes: string | null;
   archived: 0 | 1;
@@ -259,6 +278,8 @@ export type StockMovement = {
   reason: MovementReason;
   purchase_id: string | null;
   purchase_description: string | null;
+  vendor_id: string | null;
+  vendor_name: string | null;
   expires_on: string | null;
   note: string | null;
   created_by: string;
@@ -274,6 +295,8 @@ export type ItemInput = Pick<
   Item,
   "name" | "type" | "category_id" | "default_location_id" | "unit" | "barcode" | "brand" | "min_quantity" | "notes"
 > & {
+  /** Naam van de verkoper waar je het meestal koopt. */
+  vendor: string | null;
   tag_ids: string[];
   /** Enkel bij een nieuw item: wat er nu al is. */
   initial?: { quantity: number; location_id: string | null; expires_on: string | null; purchase_id: string | null };
@@ -290,6 +313,8 @@ export type StockActionInput = {
   to_location_id?: string | null;
   expires_on?: string | null;
   purchase_id?: string | null;
+  /** Bij "add": waar het gekocht werd (naam). */
+  vendor?: string | null;
   note?: string | null;
 };
 

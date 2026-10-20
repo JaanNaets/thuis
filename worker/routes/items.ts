@@ -29,6 +29,7 @@ import {
   ValidationError,
 } from "../validate";
 import { setTagsStatements } from "./taxonomy";
+import { resolveVendor } from "./vendors";
 
 const BARCODE_TAKEN = "Er is al een item met deze barcode.";
 
@@ -66,6 +67,7 @@ function parseItem(body: unknown, isNew: boolean): ItemInput {
     unit,
     barcode: optionalString(obj, "barcode", 64),
     brand: optionalString(obj, "brand", 100),
+    vendor: optionalString(obj, "vendor", 100),
     min_quantity: optionalQuantity(obj, "min_quantity"),
     notes: optionalString(obj, "notes", 2000),
     tag_ids: idList(obj, "tag_ids"),
@@ -94,7 +96,8 @@ function parseStockAction(body: unknown): StockActionInput {
     to_location_id: optionalId(obj, "to_location_id"),
     expires_on: optionalDate(obj, "expires_on"),
     purchase_id: optionalId(obj, "purchase_id"),
-    note: optionalString(obj, "note", 200),
+    vendor: optionalString(obj, "vendor", 100),
+    note: optionalString(obj, "note", 500),
   };
 }
 
@@ -115,6 +118,7 @@ type Change = {
   reason: MovementReason;
   expiresOn?: string | null;
   purchaseId?: string | null;
+  vendorId?: string | null;
   note?: string | null;
   user: string;
 };
@@ -141,8 +145,9 @@ function changeStatements(db: D1Database, ch: Change): D1PreparedStatement[] {
     db.prepare("DELETE FROM stock_levels WHERE item_id = ? AND location_id = ? AND quantity <= 0").bind(ch.itemId, ch.locationId),
     db
       .prepare(
-        `INSERT INTO stock_movements (id, item_id, location_id, delta, reason, purchase_id, expires_on, note, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO stock_movements
+           (id, item_id, location_id, delta, reason, purchase_id, vendor_id, expires_on, note, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         crypto.randomUUID(),
@@ -151,6 +156,7 @@ function changeStatements(db: D1Database, ch: Change): D1PreparedStatement[] {
         ch.delta,
         ch.reason,
         ch.purchaseId ?? null,
+        ch.vendorId ?? null,
         ch.expiresOn ?? null,
         ch.note ?? null,
         ch.user,
@@ -164,10 +170,11 @@ async function loadDetail(db: D1Database, id: string): Promise<ItemDetail | null
     db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(id),
     db
       .prepare(
-        `SELECT m.*, l.name AS location_name, p.description AS purchase_description
+        `SELECT m.*, l.name AS location_name, p.description AS purchase_description, v.name AS vendor_name
          FROM stock_movements m
          LEFT JOIN locations l ON l.id = m.location_id
          LEFT JOIN purchases p ON p.id = m.purchase_id
+         LEFT JOIN vendors v ON v.id = m.vendor_id
          WHERE m.item_id = ?
          ORDER BY m.created_at DESC, m.rowid DESC
          LIMIT 50`,
@@ -241,12 +248,14 @@ items.post("/", async (c) => {
   const db = c.env.DB;
   const id = crypto.randomUUID();
   const user = c.get("user");
+  const vendorId = await resolveVendor(db, input.vendor);
 
   const statements = [
     db
       .prepare(
-        `INSERT INTO items (id, name, type, category_id, default_location_id, unit, barcode, brand, min_quantity, notes, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO items
+           (id, name, type, category_id, default_location_id, unit, barcode, brand, vendor_id, min_quantity, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -257,6 +266,7 @@ items.post("/", async (c) => {
         input.unit,
         input.barcode,
         input.brand,
+        vendorId,
         input.min_quantity,
         input.notes,
         user,
@@ -265,6 +275,10 @@ items.post("/", async (c) => {
   ];
   if (input.initial && input.initial.quantity > 0) {
     const { quantity, location_id, expires_on, purchase_id } = input.initial;
+    // Uit een aankoop: gekocht bij de verkoper van die aankoop.
+    const purchaseVendor = purchase_id
+      ? await db.prepare("SELECT vendor_id FROM purchases WHERE id = ?").bind(purchase_id).first<{ vendor_id: string | null }>()
+      : null;
     statements.push(
       ...changeStatements(db, {
         itemId: id,
@@ -273,6 +287,7 @@ items.post("/", async (c) => {
         reason: purchase_id ? "purchase" : "add",
         expiresOn: expires_on,
         purchaseId: purchase_id,
+        vendorId: purchaseVendor?.vendor_id ?? null,
         user,
       }),
     );
@@ -288,13 +303,14 @@ items.put("/:id", async (c) => {
   const db = c.env.DB;
   const exists = await db.prepare("SELECT 1 FROM items WHERE id = ?").bind(id).first();
   if (!exists) return c.json({ error: "Item niet gevonden" }, 404);
+  const vendorId = await resolveVendor(db, input.vendor);
 
   await guard(
     db.batch([
       db
         .prepare(
           `UPDATE items SET name = ?, type = ?, category_id = ?, default_location_id = ?, unit = ?, barcode = ?,
-             brand = ?, min_quantity = ?, notes = ?, updated_at = datetime('now')
+             brand = ?, vendor_id = ?, min_quantity = ?, notes = ?, updated_at = datetime('now')
            WHERE id = ?`,
         )
         .bind(
@@ -305,6 +321,7 @@ items.put("/:id", async (c) => {
           input.unit,
           input.barcode,
           input.brand,
+          vendorId,
           input.min_quantity,
           input.notes,
           id,
@@ -369,6 +386,7 @@ items.post("/:id/stock", async (c) => {
         reason: input.purchase_id ? "purchase" : "add",
         expiresOn: input.expires_on,
         purchaseId: input.purchase_id,
+        vendorId: await resolveVendor(db, input.vendor ?? null),
       });
       break;
     }

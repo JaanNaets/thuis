@@ -28,8 +28,8 @@ export function FileViewer({ file, onClose }: { file: PurchaseFile; onClose: () 
     <div className="viewer" role="dialog" aria-modal="true" aria-label={file.filename}>
       <header className="viewer-bar">
         <span className="viewer-title">{file.filename}</span>
-        <button type="button" className="icon-button on-dark" onClick={onClose} aria-label="Sluiten">
-          <Icon name="close" size={22} />
+        <button type="button" className="btn btn-icon on-dark" onClick={onClose} aria-label="Sluiten">
+          <Icon name="close" size={20} />
         </button>
       </header>
       <div className="viewer-body">

@@ -12,43 +12,47 @@ import {
 } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { QuantityField, TreeSelect } from "../components/Controls";
-import { Icon } from "../components/Icon";
-import { PageHeader } from "../components/Page";
+import { QuantityField, SubmitButton, TreeSelect } from "../components/Controls";
+import { Icon, type IconName } from "../components/Icon";
+import { Num, stagger } from "../components/Motion";
+import { PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
-import { formatDate, formatDateTime, formatNumber, formatQuantity, parseQuantity, warrantyStatus } from "../format";
+import { useToast } from "../components/Toast";
+import { VendorField } from "../components/VendorField";
+import { formatDate, formatDateTime, formatNumber, parseQuantity, warrantyStatus } from "../format";
 import { categoryTone, locationTree, nameForEmail, placeName, useTaxonomy } from "../taxonomy";
-import { expiryBadge } from "./InventoryList";
+import { expiryBadge, unitWord } from "./InventoryList";
+import { WARRANTY_BADGE } from "./PurchaseList";
 
-const ACTION_TITLES: Record<StockAction, string> = {
-  add: "Erbij",
-  consume: "Verbruikt",
-  discard: "Weggooien",
-  count: "Tellen",
-  move: "Verplaatsen",
+const ACTIONS: Record<StockAction, { title: string; icon: IconName }> = {
+  add: { title: "Erbij", icon: "plus" },
+  consume: { title: "Verbruikt", icon: "minus" },
+  count: { title: "Tellen", icon: "check" },
+  move: { title: "Verplaatsen", icon: "transfer" },
+  discard: { title: "Weggooien", icon: "trash" },
 };
-
-type SheetState = { action: StockAction; locationId?: string };
 
 export function ItemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  const toast = useToast();
   const { data: item, error, mutate } = useApi<Detail>(`/items/${id}`);
   const { data: taxonomy } = useTaxonomy();
-  const [sheet, setSheet] = useState<SheetState>();
+  const [sheet, setSheet] = useState<StockAction>();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
   if (error) return <p className="error page">{error}</p>;
   if (!item || !taxonomy) return null;
 
-  const qty = (q: number) => formatQuantity(q, item.unit, UNITS);
   const low = isLow(item.quantity, item.min_quantity);
   const expiry = expiryBadge(item.next_expiry);
   const tags = taxonomy.tags.filter((t) => item.tag_ids.includes(t.id));
+  const vendor = taxonomy.vendors.find((v) => v.id === item.vendor_id);
   const asset = item.type === "asset";
   const actions: StockAction[] = asset ? ["add", "count", "move", "discard"] : ["add", "consume", "count", "move", "discard"];
+  const title = (action: StockAction) => (action === "discard" && asset ? "Weg uit huis" : ACTIONS[action].title);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -69,7 +73,9 @@ export function ItemDetail() {
 
   async function toggleArchived() {
     run(async () => {
-      mutate(await api.put<Detail>(`/items/${item!.id}/archived`, { archived: item!.archived === 0 }));
+      const archive = item!.archived === 0;
+      mutate(await api.put<Detail>(`/items/${item!.id}/archived`, { archived: archive }));
+      toast(archive ? "Gearchiveerd" : "Terug uit het archief", "archive");
     });
   }
 
@@ -83,69 +89,75 @@ export function ItemDetail() {
     if (!ok) return;
     run(async () => {
       await api.delete(`/items/${item!.id}`);
+      toast("Item verwijderd", "trash");
       navigate("/voorraad", { replace: true });
     });
   }
 
   return (
     <article className="page">
-      <PageHeader
+      <PageHead
         title={item.name}
-        back="/voorraad"
+        back={{ to: "/voorraad", label: "Voorraad" }}
         actions={
-          <Link to={`/voorraad/${item.id}/bewerken`} className="icon-button" aria-label="Bewerken">
-            <Icon name="edit" />
+          <Link to={`/voorraad/${item.id}/bewerken`} className="btn btn-outline btn-sm">
+            <Icon name="edit" size={15} /> Bewerken
           </Link>
         }
       />
 
       <div className="detail-grid">
         <div className="stack">
-          <section className={`stock-card tone-${categoryTone(taxonomy, item.category_id)}`} aria-label="Voorraad">
-            {item.archived === 1 && <p className="badge expired">Gearchiveerd</p>}
-            <p className="stock-total">{qty(item.quantity)}</p>
-            <p className="stock-sub">
-              {low && <span className="badge low">{item.quantity === 0 ? "Op" : "Bijna op"}</span>}
-              {expiry && <span className={`badge ${expiry.tone}`}>{expiry.label}</span>}
-              {item.min_quantity !== null && <span>minimum {qty(item.min_quantity)}</span>}
-            </p>
+          <section className="card">
+            <div className="stock-head">
+              <p className="stock-total">
+                <Num value={item.quantity}>{formatNumber(item.quantity)}</Num>
+                <small>{unitWord(item.quantity, item.unit)}</small>
+              </p>
+              <p className="stock-sub">
+                {item.archived === 1 && <span className="badge badge-secondary">Gearchiveerd</span>}
+                {low && <span className="badge badge-warning">{item.quantity === 0 ? "Op" : "Bijna op"}</span>}
+                {expiry && <span className={`badge ${expiry.className}`}>{expiry.label}</span>}
+                {item.min_quantity !== null && (
+                  <span>
+                    minimum {formatNumber(item.min_quantity)} {unitWord(item.min_quantity, item.unit)}
+                  </span>
+                )}
+              </p>
+            </div>
 
             {item.levels.length > 0 && (
-              <ul className="levels">
+              <ul className="rows levels" style={{ borderTop: "1px solid var(--border)" }}>
                 {item.levels.map((level) => (
                   <li key={level.location_id}>
-                    <span className="level-place">
-                      <Icon name="pin" size={16} />
-                      <span>
-                        {placeName(taxonomy, level.location_id)}
-                        {level.next_expiry && <small> · vervalt {formatDate(level.next_expiry)}</small>}
+                    <div className="row">
+                      <span className="level-place">
+                        <Icon name="pin" size={16} />
+                        <span className="row-main">
+                          <span className="row-title" style={{ fontSize: 14 }}>
+                            {placeName(taxonomy, level.location_id)}
+                          </span>
+                          {level.next_expiry && <span className="row-meta">vervalt {formatDate(level.next_expiry)}</span>}
+                        </span>
                       </span>
-                    </span>
-                    {asset ? (
-                      <strong>{formatNumber(level.quantity)}</strong>
-                    ) : (
-                      <span className="stepper small">
-                        <button
-                          type="button"
-                          className="icon-button small"
-                          disabled={busy}
-                          onClick={() => quick("consume", level.location_id)}
-                          aria-label="Eén minder"
-                        >
-                          <Icon name="minus" size={18} />
-                        </button>
+                      {asset ? (
                         <strong>{formatNumber(level.quantity)}</strong>
-                        <button
-                          type="button"
-                          className="icon-button small"
-                          disabled={busy}
-                          onClick={() => quick("add", level.location_id)}
-                          aria-label="Eén meer"
-                        >
-                          <Icon name="plus" size={18} />
-                        </button>
-                      </span>
-                    )}
+                      ) : (
+                        <span className="stepper">
+                          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => quick("consume", level.location_id)} aria-label="Eén minder">
+                            <Icon name="minus" size={16} />
+                          </button>
+                          <span className="stepper-value">
+                            <strong>
+                              <Num value={level.quantity}>{formatNumber(level.quantity)}</Num>
+                            </strong>
+                          </span>
+                          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => quick("add", level.location_id)} aria-label="Eén meer">
+                            <Icon name="plus" size={16} />
+                          </button>
+                        </span>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -156,33 +168,48 @@ export function ItemDetail() {
                 <button
                   key={action}
                   type="button"
-                  className={`button ${action === "add" ? "primary" : ""}`}
+                  className={`btn btn-sm ${action === "add" ? "btn-primary" : "btn-outline"}`}
                   disabled={busy || (["consume", "move", "discard"].includes(action) && item.quantity === 0)}
-                  onClick={() => setSheet({ action })}
+                  onClick={() => setSheet(action)}
                 >
-                  {action === "discard" && asset ? "Weg uit huis" : ACTION_TITLES[action]}
+                  <Icon name={ACTIONS[action].icon} size={15} /> {title(action)}
                 </button>
               ))}
             </div>
-            {actionError && <p className="error">{actionError}</p>}
+            {actionError && <p className="error card-body">{actionError}</p>}
           </section>
 
-          <section className="info-card">
-            <dl className="info-lines">
+          <section className="card">
+            <dl className="dl" style={{ marginTop: -1 }}>
               <div>
                 <dt>Soort</dt>
                 <dd>{ITEM_TYPES[item.type].label}</dd>
               </div>
-              {item.category_name && (
+              {item.category_id && (
                 <div>
                   <dt>Categorie</dt>
-                  <dd>{taxonomy.categories.length ? categoryPath(taxonomy, item.category_id) : item.category_name}</dd>
+                  <dd>
+                    <span className={`dot tone-${categoryTone(taxonomy, item.category_id)}`} /> {categoryPath(taxonomy, item.category_id)}
+                  </dd>
                 </div>
               )}
               {item.default_location_id && (
                 <div>
                   <dt>Standaardplaats</dt>
                   <dd>{placeName(taxonomy, item.default_location_id)}</dd>
+                </div>
+              )}
+              {vendor && (
+                <div>
+                  <dt>Meestal gekocht bij</dt>
+                  <dd>
+                    {vendor.name}
+                    {vendor.website && (
+                      <a className="btn btn-ghost btn-icon btn-sm" href={vendor.website} target="_blank" rel="noreferrer" aria-label="Website">
+                        <Icon name="external" size={15} />
+                      </a>
+                    )}
+                  </dd>
                 </div>
               )}
               {item.brand && (
@@ -199,37 +226,46 @@ export function ItemDetail() {
               )}
             </dl>
             {tags.length > 0 && (
-              <p className="receipt-tags">
+              <p className="tag-line" style={{ paddingTop: 4 }}>
                 {tags.map((t) => (
-                  <span key={t.id} className={`tag-chip static tone-${t.color ?? "butter"}`}>
+                  <span key={t.id} className={`tag static tone-${t.color ?? "butter"}`}>
                     {t.name}
                   </span>
                 ))}
               </p>
             )}
-            {item.notes && <p className="receipt-notes">{item.notes}</p>}
+            {item.notes && (
+              <p className="note-block">
+                <Icon name="note" size={16} />
+                <span>{item.notes}</span>
+              </p>
+            )}
           </section>
         </div>
 
         <div className="stack">
           {item.purchases.length > 0 && (
-            <section>
-              <h2>Aankoop</h2>
-              <ul className="link-list">
+            <section className="card">
+              <header className="card-head">
+                <h2 className="card-title">Aankoop</h2>
+              </header>
+              <ul className="rows">
                 {item.purchases.map((p) => {
                   const warranty = warrantyStatus(p.warranty_until);
                   return (
                     <li key={p.id}>
-                      <Link to={`/aankopen/${p.id}`} className="tone-peach">
-                        <Icon name="receipt" size={18} />
-                        <span className="link-main">
-                          {p.description}
-                          <small>
-                            {formatDate(p.purchased_on)}
-                            {warranty.tone !== "none" && ` · ${warranty.label}`}
-                          </small>
+                      <Link to={`/aankopen/${p.id}`} className="row">
+                        <span className="row-media">
+                          <Icon name="receipt" size={16} />
                         </span>
-                        <Icon name="next" size={18} />
+                        <span className="row-main">
+                          <span className="row-title">{p.description}</span>
+                          <span className="row-meta">
+                            <span>{formatDate(p.purchased_on)}</span>
+                            {warranty.tone !== "none" && <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>}
+                          </span>
+                        </span>
+                        <Icon name="next" size={16} className="row-chevron" />
                       </Link>
                     </li>
                   );
@@ -238,53 +274,68 @@ export function ItemDetail() {
             </section>
           )}
 
-          <section>
-            <h2>Geschiedenis</h2>
+          <section className="card">
+            <header className="card-head">
+              <div>
+                <h2 className="card-title">Geschiedenis</h2>
+                <p className="card-desc">Elke wijziging, met wie en waar</p>
+              </div>
+            </header>
             {item.movements.length === 0 ? (
-              <p className="muted">Nog niets gebeurd.</p>
+              <p className="card-body muted small">Nog niets gebeurd.</p>
             ) : (
-              <ol className="history">
-                {item.movements.map((m) => (
-                  <li key={m.id}>
-                    <span className={`delta ${m.delta > 0 ? "up" : "down"}`}>
-                      {m.delta > 0 ? "+" : "−"}
-                      {formatNumber(Math.abs(m.delta))}
-                    </span>
-                    <span className="history-main">
-                      <strong>{MOVEMENT_REASONS[m.reason] ?? m.reason}</strong>
-                      <small>
-                        {[m.location_name, nameForEmail(taxonomy, m.created_by), formatDateTime(m.created_at)]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </small>
-                      {m.note && <small>{m.note}</small>}
-                    </span>
+              <ol className="rows history stagger">
+                {item.movements.map((m, i) => (
+                  <li key={m.id} style={stagger(i)}>
+                    <div className="row">
+                      <span className={`delta ${m.delta > 0 ? "up" : "down"}`}>
+                        {m.delta > 0 ? "+" : "−"}
+                        {formatNumber(Math.abs(m.delta))}
+                      </span>
+                      <span className="row-main">
+                        <span className="row-title" style={{ fontSize: 14 }}>
+                          {MOVEMENT_REASONS[m.reason] ?? m.reason}
+                          {m.vendor_name && <span className="muted"> bij {m.vendor_name}</span>}
+                        </span>
+                        <span className="row-meta">
+                          <span>
+                            {[m.location_name, nameForEmail(taxonomy, m.created_by), formatDateTime(m.created_at)].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        {m.note && (
+                          <span className="row-meta" style={{ color: "var(--foreground)" }}>
+                            <Icon name="note" size={13} /> {m.note}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ol>
             )}
           </section>
+
+          <div className="btn-row" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-ghost" style={{ flex: "none" }} disabled={busy} onClick={toggleArchived}>
+              <Icon name="archive" size={16} /> {item.archived ? "Terug uit archief" : "Archiveren"}
+            </button>
+            <button type="button" className="btn btn-danger-ghost" style={{ flex: "none" }} disabled={busy} onClick={remove}>
+              <Icon name="trash" size={16} /> Verwijderen
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="button-row end-actions">
-        <button type="button" className="button quiet" disabled={busy} onClick={toggleArchived}>
-          <Icon name="archive" /> {item.archived ? "Terug uit archief" : "Archiveren"}
-        </button>
-        <button type="button" className="button danger" disabled={busy} onClick={remove}>
-          <Icon name="trash" /> Verwijderen
-        </button>
-      </div>
-
-      <Sheet open={Boolean(sheet)} title={sheet ? ACTION_TITLES[sheet.action] : ""} onClose={() => setSheet(undefined)}>
+      <Sheet open={Boolean(sheet)} title={sheet ? `${title(sheet)} · ${item.name}` : ""} onClose={() => setSheet(undefined)}>
         {sheet && (
           <StockForm
             item={item}
             taxonomy={taxonomy}
-            action={sheet.action}
-            onDone={(updated) => {
+            action={sheet}
+            onDone={(updated, message) => {
               mutate(updated);
               setSheet(undefined);
+              toast(message);
             }}
           />
         )}
@@ -313,7 +364,7 @@ function StockForm({
   item: Detail;
   taxonomy: Taxonomy;
   action: StockAction;
-  onDone: (updated: Detail) => void;
+  onDone: (updated: Detail, message: string) => void;
 }) {
   const levels = item.levels;
   const only = levels.length === 1 ? levels[0].location_id : null;
@@ -331,9 +382,10 @@ function StockForm({
   );
   const levelQuantity = (id: string | null) => levels.find((l) => l.location_id === id)?.quantity ?? 0;
   const [quantity, setQuantity] = useState(() =>
-    action === "count" ? formatNumber(levelQuantity(initialLocation)) : action === "move" ? formatNumber(levelQuantity(initialLocation)) : "1",
+    action === "count" || action === "move" ? formatNumber(levelQuantity(initialLocation)) : "1",
   );
   const [expires, setExpires] = useState("");
+  const [vendor, setVendor] = useState(() => taxonomy.vendors.find((v) => v.id === item.vendor_id)?.name ?? "");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -355,12 +407,22 @@ function StockForm({
       location_id: locationId,
       to_location_id: action === "move" ? toLocationId : null,
       expires_on: action === "add" && expires ? expires : null,
+      vendor: action === "add" ? vendor : null,
       note: note || null,
     };
     setBusy(true);
     setError(undefined);
     try {
-      onDone(await api.post<Detail>(`/items/${item.id}/stock`, input));
+      const updated = await api.post<Detail>(`/items/${item.id}/stock`, input);
+      const word = unitWord(parsed, item.unit);
+      const message = {
+        add: `${formatNumber(parsed)} ${word} erbij`,
+        consume: `${formatNumber(parsed)} ${word} verbruikt`,
+        discard: `${formatNumber(parsed)} ${word} weg`,
+        count: `Geteld: ${formatNumber(parsed)} ${word}`,
+        move: `${formatNumber(parsed)} ${word} verplaatst`,
+      }[action];
+      onDone(updated, message);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -385,13 +447,7 @@ function StockForm({
           </label>
           <label className="field">
             <span className="label">Naar</span>
-            <TreeSelect
-              nodes={allPlaces}
-              value={toLocationId}
-              onChange={setToLocationId}
-              empty="Kies"
-              disabled={new Set(locationId ? [locationId] : [])}
-            />
+            <TreeSelect nodes={allPlaces} value={toLocationId} onChange={setToLocationId} empty="Kies" disabled={new Set(locationId ? [locationId] : [])} />
           </label>
         </div>
       ) : (
@@ -410,27 +466,35 @@ function StockForm({
       )}
 
       <div className="field">
-        <span className="label">{action === "count" ? `Hoeveel ${UNITS[item.unit]} zijn er nu?` : `Hoeveel (${UNITS[item.unit]})`}</span>
+        <span className="label">{action === "count" ? `Hoeveel ${UNITS[item.unit]} zijn er nu?` : `Hoeveel ${UNITS[item.unit]}`}</span>
         <QuantityField value={quantity} onChange={setQuantity} min={action === "count" ? 0 : 1} label="Hoeveelheid" />
       </div>
 
-      {action === "add" && item.type === "consumable" && (
-        <label className="field">
-          <span className="label">Vervalt op</span>
-          <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
-        </label>
+      {action === "add" && (
+        <div className="field-row">
+          <div className="field">
+            <span className="label">Gekocht bij</span>
+            <VendorField vendors={taxonomy.vendors} value={vendor} onChange={setVendor} placeholder="Verkoper" />
+          </div>
+          {item.type === "consumable" && (
+            <label className="field">
+              <span className="label">Vervalt op</span>
+              <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+            </label>
+          )}
+        </div>
       )}
 
       <label className="field">
-        <span className="label">Notitie</span>
-        <input maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+        <span className="label">
+          <Icon name="note" size={15} /> Notitie
+        </span>
+        <input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="optioneel" />
       </label>
 
       {error && <p className="error">{error}</p>}
       <div className="sheet-actions">
-        <button type="submit" className="button primary" disabled={busy}>
-          {busy ? "Opslaan…" : "Opslaan"}
-        </button>
+        <SubmitButton busy={busy}>Bewaren</SubmitButton>
       </div>
     </form>
   );
