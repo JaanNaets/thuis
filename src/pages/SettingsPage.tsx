@@ -2,7 +2,19 @@ import { useState, type CSSProperties, type FormEvent, type ReactNode } from "re
 import { useSearchParams } from "react-router";
 import { Link } from "../router";
 import { descendantIds, flattenTree } from "../../shared/tree";
-import type { Category, CategoryDomain, Location, Member, Tag, Taxonomy, Tone, Vendor } from "../../shared/types";
+import {
+  ACCESS_LEVELS,
+  type Access,
+  type Category,
+  type CategoryDomain,
+  type HouseholdAccess,
+  type Location,
+  type Member,
+  type Tag,
+  type Taxonomy,
+  type Tone,
+} from "../../shared/types";
+import { SPLIT_LABELS } from "../../shared/split";
 import { api } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { Avatar, CardHead, Segmented, SubmitButton, Switch, Tabs, ToneSwatches, TreeSelect } from "../components/Controls";
@@ -10,26 +22,27 @@ import { Icon, type IconName } from "../components/Icon";
 import { stagger } from "../components/Motion";
 import { PageHead, toneForCategory } from "../components/Page";
 import { Sheet } from "../components/Sheet";
+import { NewHousehold } from "../components/Sidebar";
+import { buildDefaultSplit, defaultSplitDraft, DefaultSplitField } from "../components/SplitEditor";
 import { useToast } from "../components/Toast";
 import { isKiosk } from "../device";
-import { refreshTaxonomy, useTaxonomy } from "../taxonomy";
+import { useSession } from "../session";
+import { activeMembers, memberById, refreshTaxonomy, useTaxonomy } from "../taxonomy";
 
 /** Wat er in een venster bewerkt wordt; zonder item = iets nieuws. */
 type Editing =
   | { kind: "member"; item?: Member }
   | { kind: "category"; domain: CategoryDomain; item?: Category }
   | { kind: "location"; item?: Location }
-  | { kind: "tag"; item?: Tag }
-  | { kind: "vendor"; item?: Vendor };
+  | { kind: "tag"; item?: Tag };
 
-const WHAT = { member: "lid", category: "categorie", location: "plaats", tag: "tag", vendor: "verkoper" } as const;
+const WHAT = { member: "lid", category: "categorie", location: "plaats", tag: "tag" } as const;
 
-type Section = "household" | "vendors" | "categories" | "locations" | "tags" | "device";
+type Section = "household" | "categories" | "locations" | "tags" | "device";
 
 /** De tab staat in het adres (/meer?tab=plaatsen), zodat je er vanuit de zijbalk naartoe kan. */
 const SLUGS: Record<Section, string> = {
   household: "huishouden",
-  vendors: "verkopers",
   categories: "categorieen",
   locations: "plaatsen",
   tags: "tags",
@@ -38,25 +51,29 @@ const SLUGS: Record<Section, string> = {
 
 export function SettingsPage() {
   const { data: taxonomy, error } = useTaxonomy();
+  const { full } = useSession();
   const [editing, setEditing] = useState<Editing>();
+  const [editingHousehold, setEditingHousehold] = useState(false);
   const [domain, setDomain] = useState<CategoryDomain>("item");
   const [searchParams, setSearchParams] = useSearchParams();
-  const section = (Object.keys(SLUGS) as Section[]).find((k) => SLUGS[k] === searchParams.get("tab")) ?? "household";
+  // Een gast (enkel projecten) beheert niets van het huishouden; enkel dit toestel.
+  const section = full ? ((Object.keys(SLUGS) as Section[]).find((k) => SLUGS[k] === searchParams.get("tab")) ?? "household") : "device";
   const setSection = (next: Section) => setSearchParams({ tab: SLUGS[next] }, { replace: true });
 
   return (
     <div className="page">
-      <PageHead title="Instellingen" description="Wie er in huis woont en hoe alles ingedeeld is" />
+      <PageHead title="Instellingen" description={full ? "Wie er in huis woont en hoe alles ingedeeld is" : "Je huishoudens en dit toestel"} />
+
+      <PhoneMenu />
       {error && <p className="error">{error}</p>}
 
-      {taxonomy && (
+      {taxonomy && full && (
         <Tabs
           label="Instellingen"
           value={section}
           onChange={setSection}
           tabs={[
             { value: "household", label: "Huishouden", count: taxonomy.members.length },
-            { value: "vendors", label: "Verkopers", count: taxonomy.vendors.length },
             { value: "categories", label: "Categorieën" },
             { value: "locations", label: "Plaatsen", count: taxonomy.locations.length },
             { value: "tags", label: "Tags", count: taxonomy.tags.length },
@@ -67,11 +84,25 @@ export function SettingsPage() {
 
       {taxonomy && (
         <div className="settings-grid" key={section}>
+          <Card show={section === "household"} icon="home" title={taxonomy.household.name} desc="Naam en hoe uitgaven gewoonlijk verdeeld worden">
+            <dl className="dl">
+              <div>
+                <dt>Gewone verdeling</dt>
+                <dd>{defaultSplitText(taxonomy)}</dd>
+              </div>
+            </dl>
+            <div className="card-body" style={{ paddingTop: 12 }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingHousehold(true)}>
+                <Icon name="edit" size={15} /> Bewerken
+              </button>
+            </div>
+          </Card>
+
           <Card
             show={section === "household"}
             icon="users"
-            title="Huishouden"
-            desc="Wie zich aanmeldt, komt hier vanzelf bij"
+            title="Leden"
+            desc="Voeg iemand toe met het e-mailadres waarmee die aanmeldt"
             onAdd={() => setEditing({ kind: "member" })}
             addLabel="Lid"
           >
@@ -89,47 +120,16 @@ export function SettingsPage() {
                         <span>{m.email ?? "meldt niet aan"}</span>
                       </span>
                     </span>
-                    {m.active === 0 && <span className="badge badge-secondary">inactief</span>}
+                    {m.access === "projects" ? (
+                      <span className="badge badge-secondary">gast</span>
+                    ) : (
+                      m.active === 0 && <span className="badge badge-secondary">woont hier niet</span>
+                    )}
                     <Icon name="next" size={16} className="row-chevron" />
                   </button>
                 </li>
               ))}
             </ul>
-          </Card>
-
-          <Card
-            show={section === "vendors"}
-            icon="store"
-            title="Verkopers"
-            desc="Winkels, webshops en mensen waar je iets kocht"
-            onAdd={() => setEditing({ kind: "vendor" })}
-            addLabel="Verkoper"
-          >
-            {taxonomy.vendors.length === 0 ? (
-              <p className="card-body hint">Verkopers verschijnen hier vanzelf zodra je ze bij een aankoop invult.</p>
-            ) : (
-              <ul className="rows stagger">
-                {taxonomy.vendors.map((v, i) => (
-                  <li key={v.id} style={stagger(i)}>
-                    <button type="button" className="row" onClick={() => setEditing({ kind: "vendor", item: v })}>
-                      <span className="row-media">
-                        <Icon name="store" size={16} />
-                      </span>
-                      <span className="row-main">
-                        <span className="row-title">{v.name}</span>
-                        {(v.website || v.phone || v.notes) && (
-                          <span className="row-meta">
-                            <span>{[v.website?.replace(/^https?:\/\/(www\.)?/, ""), v.phone, v.notes].filter(Boolean).join(" · ")}</span>
-                          </span>
-                        )}
-                      </span>
-                      {v.usage > 0 && <span className="badge badge-secondary">{v.usage}×</span>}
-                      <Icon name="next" size={16} className="row-chevron" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </Card>
 
           <Card show={section === "categories"} icon="folder" title="Categorieën" onAdd={() => setEditing({ kind: "category", domain })} addLabel="Categorie">
@@ -201,6 +201,9 @@ export function SettingsPage() {
 
       <Sheet open={Boolean(editing)} title={editing ? sheetTitle(editing) : ""} onClose={() => setEditing(undefined)}>
         {editing && taxonomy && <EditForm editing={editing} taxonomy={taxonomy} onDone={() => setEditing(undefined)} />}
+      </Sheet>
+      <Sheet open={editingHousehold} title="Huishouden" onClose={() => setEditingHousehold(false)}>
+        {editingHousehold && taxonomy && <HouseholdForm taxonomy={taxonomy} onDone={() => setEditingHousehold(false)} />}
       </Sheet>
     </div>
   );
@@ -287,15 +290,15 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
   const [name, setName] = useState(item?.name ?? "");
   const [email, setEmail] = useState(editing.kind === "member" ? (editing.item?.email ?? "") : "");
   const [active, setActive] = useState(editing.kind === "member" ? (editing.item?.active ?? 1) === 1 : true);
+  const [access, setAccess] = useState<Access>(editing.kind === "member" ? (editing.item?.access ?? "full") : "full");
+  // Je eigen e-mailadres en toegang kan je niet aanpassen: anders sluit je jezelf buiten.
+  const isMe = editing.kind === "member" && editing.item?.id === taxonomy.me.id;
   const [color, setColor] = useState<Tone | null>(item && "color" in item ? item.color : null);
   const [parentId, setParentId] = useState<string | null>(item && "parent_id" in item ? item.parent_id : null);
-  const [website, setWebsite] = useState(editing.kind === "vendor" ? (editing.item?.website ?? "") : "");
-  const [phone, setPhone] = useState(editing.kind === "vendor" ? (editing.item?.phone ?? "") : "");
-  const [notes, setNotes] = useState(editing.kind === "vendor" ? (editing.item?.notes ?? "") : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
-  const base = { member: "/members", category: "/categories", location: "/locations", tag: "/tags", vendor: "/vendors" }[editing.kind];
+  const base = { member: "/members", category: "/categories", location: "/locations", tag: "/tags" }[editing.kind];
   const tree =
     editing.kind === "category"
       ? flattenTree(taxonomy.categories.filter((c) => c.domain === editing.domain))
@@ -308,15 +311,13 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
   function body() {
     switch (editing.kind) {
       case "member":
-        return { name, email, color, active };
+        return { name, email, color, active: access === "full" && active, access };
       case "category":
         return { domain: editing.domain, name, color, parent_id: parentId };
       case "location":
         return { name, parent_id: parentId };
       case "tag":
         return { name, color };
-      case "vendor":
-        return { name, website: normalizeUrl(website), phone, notes };
     }
   }
 
@@ -343,7 +344,6 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
       category: "Wat erin zat, wordt 'zonder categorie'. Subcategorieën schuiven een niveau op.",
       location: "Dat lukt enkel als er niets meer ligt. Vakken eronder schuiven een niveau op.",
       tag: "De tag verdwijnt overal waar hij hangt.",
-      vendor: "Aankopen en voorraad van deze verkoper blijven bestaan, zonder verkoper.",
     }[editing.kind];
     const ok = await confirm({ title: `"${item.name}" verwijderen?`, body: consequence, confirmLabel: "Verwijderen", danger: true });
     if (!ok) return;
@@ -363,7 +363,7 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
     <form className="form" onSubmit={save}>
       <label className="field">
         <span className="label">Naam</span>
-        <input required maxLength={editing.kind === "vendor" ? 100 : 60} value={name} onChange={(e) => setName(e.target.value)} />
+        <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
 
       {editing.kind === "member" && (
@@ -372,41 +372,22 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
             <span className="label">
               E-mailadres <span className="optional">· waarmee die aanmeldt</span>
             </span>
-            <input type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optioneel" />
+            <input type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optioneel" disabled={isMe} />
+            {isMe && <span className="hint">Je eigen e-mailadres en toegang past een ander lid aan.</span>}
           </label>
-          <Switch checked={active} onChange={setActive} label="Woont hier" hint="Deelt mee in gelijk verdeelde uitgaven" />
-        </>
-      )}
-
-      {editing.kind === "vendor" && (
-        <>
-          <div className="field-row">
-            <label className="field">
-              <span className="label">Website</span>
-              <input inputMode="url" maxLength={200} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="coolblue.be" />
-            </label>
-            <label className="field">
-              <span className="label">Telefoon</span>
-              <input type="tel" maxLength={40} value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </label>
-          </div>
-          <label className="field">
-            <span className="label">
-              <Icon name="note" size={15} /> Notitie
-            </span>
-            <textarea
-              rows={2}
-              maxLength={2000}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Klantnummer, contactpersoon, openingsuren…"
-            />
-          </label>
-          {editing.item && editing.item.usage > 0 && (
-            <Link to={`/aankopen?verkoper=${editing.item.id}`} className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={onDone}>
-              <Icon name="receipt" size={15} /> {editing.item.usage} aankoop{editing.item.usage === 1 ? "" : "en"} bekijken
-            </Link>
+          {!isMe && (
+            <div className="field">
+              <span className="label">Toegang</span>
+              <Segmented
+                label="Toegang"
+                value={access}
+                onChange={setAccess}
+                options={(Object.keys(ACCESS_LEVELS) as Access[]).map((a) => ({ value: a, label: ACCESS_LEVELS[a].label }))}
+              />
+              <span className="hint">{ACCESS_LEVELS[access].hint}</span>
+            </div>
           )}
+          {access === "full" && <Switch checked={active} onChange={setActive} label="Woont hier" hint="Deelt mee in de uitgaven van het huishouden" />}
         </>
       )}
 
@@ -417,7 +398,7 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
         </label>
       )}
 
-      {editing.kind !== "location" && editing.kind !== "vendor" && !(editing.kind === "category" && parentId) && (
+      {editing.kind !== "location" && !(editing.kind === "category" && parentId) && (
         <div className="field">
           <span className="label">Kleur</span>
           <ToneSwatches value={color} onChange={setColor} />
@@ -437,9 +418,140 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
   );
 }
 
-/** "coolblue.be" → "https://coolblue.be", zodat de link werkt. */
-function normalizeUrl(url: string): string {
-  const trimmed = url.trim();
-  if (!trimmed) return "";
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+function defaultSplitText(t: Taxonomy): string {
+  const split = t.household.default_split;
+  if (!split || split.mode === "equal") return "Gelijk over wie hier woont";
+  const unit = split.mode === "percent" ? "%" : "×";
+  const parts = Object.entries(split.values).map(([id, v]) => `${memberById(t, id)?.name ?? "?"} ${String(v).replace(".", ",")}${unit}`);
+  return `${SPLIT_LABELS[split.mode]}: ${parts.join(" · ")}`;
+}
+
+/** Naam van het huishouden en de gewone verdeling (bv. 60/40 naar inkomen). */
+function HouseholdForm({ taxonomy, onDone }: { taxonomy: Taxonomy; onDone: () => void }) {
+  const toast = useToast();
+  const { reloadMe } = useSession();
+  const people = activeMembers(taxonomy);
+  const [name, setName] = useState(taxonomy.household.name);
+  const [split, setSplit] = useState(() => defaultSplitDraft(taxonomy.household.default_split));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const built = buildDefaultSplit(split, people);
+    if ("error" in built) return setError(built.error);
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.put("/household", { name, default_split: built.split });
+      await refreshTaxonomy();
+      reloadMe();
+      toast("Huishouden bijgewerkt");
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="form" onSubmit={save}>
+      <label className="field">
+        <span className="label">Naam</span>
+        <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      {people.length > 1 ? (
+        <DefaultSplitField people={people} value={split} onChange={setSplit} />
+      ) : (
+        <p className="hint">Met twee of meer bewoners kies je hier hoe uitgaven gewoonlijk verdeeld worden.</p>
+      )}
+      {error && <p className="error">{error}</p>}
+      <div className="sheet-actions">
+        <SubmitButton busy={busy}>Bewaren</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Op een gsm staan Projecten en Verkopers niet in de onderbalk en is er geen zijbalk om van huishouden te wisselen:
+ * dat staat hier bovenaan.
+ */
+function PhoneMenu() {
+  const { full, households, membership, switchHousehold } = useSession();
+  const [creating, setCreating] = useState(false);
+  const canCreate = households.some((h) => h.member.access === "full");
+  const links = full
+    ? [
+        { to: "/projecten", icon: "project" as const, title: "Projecten", meta: "Verbouwing, reis, feest: apart bijgehouden" },
+        { to: "/verkopers", icon: "store" as const, title: "Verkopers", meta: "Winkels, webshops, vakmensen en hun gegevens" },
+      ]
+    : [];
+
+  return (
+    <div className="only-phone phone-menu">
+      {links.length > 0 && (
+        <nav className="card" aria-label="Meer">
+          <ul className="rows">
+            {links.map((l) => (
+              <li key={l.to}>
+                <Link to={l.to} className="row">
+                  <span className="row-media">
+                    <Icon name={l.icon} size={17} />
+                  </span>
+                  <span className="row-main">
+                    <span className="row-title">{l.title}</span>
+                    <span className="row-meta">
+                      <span>{l.meta}</span>
+                    </span>
+                  </span>
+                  <Icon name="next" size={16} className="row-chevron" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+
+      {(households.length > 1 || canCreate) && (
+        <section className="card">
+          <CardHead icon="home" title="Huishoudens" />
+          <ul className="rows">
+            {households.map((h: HouseholdAccess) => (
+              <li key={h.id}>
+                <button type="button" className="row" onClick={() => h.id !== membership?.id && switchHousehold(h.id)} aria-current={h.id === membership?.id}>
+                  <span className="row-media">
+                    <Icon name="home" size={16} />
+                  </span>
+                  <span className="row-main">
+                    <span className="row-title">{h.name}</span>
+                    <span className="row-meta">
+                      <span>{h.member.access === "full" ? "alles" : "enkel projecten"}</span>
+                    </span>
+                  </span>
+                  {h.id === membership?.id && <Icon name="check" size={16} className="workspace-check" />}
+                </button>
+              </li>
+            ))}
+            {canCreate && (
+              <li>
+                <button type="button" className="row" onClick={() => setCreating(true)}>
+                  <span className="row-media">
+                    <Icon name="plus" size={16} />
+                  </span>
+                  <span className="row-main">
+                    <span className="row-title">Nieuw huishouden</span>
+                  </span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      <Sheet open={creating} title="Nieuw huishouden" onClose={() => setCreating(false)}>
+        {creating && <NewHousehold onDone={() => setCreating(false)} />}
+      </Sheet>
+    </div>
+  );
 }

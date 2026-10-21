@@ -1,35 +1,47 @@
 import { Hono } from "hono";
 import { requireAccess } from "./auth";
+import { withHousehold } from "./context";
+import { materializeRecurring } from "./recurring";
 import { expenses } from "./routes/expenses";
+import { account, household } from "./routes/households";
 import { items } from "./routes/items";
 import { loyaltyCards } from "./routes/loyalty-cards";
+import { projects } from "./routes/projects";
 import { files, purchases } from "./routes/purchases";
 import { receipts } from "./routes/receipts";
 import { stats } from "./routes/stats";
-import { categories, ensureMember, locations, members, tags, taxonomy } from "./routes/taxonomy";
+import { categories, locations, members, tags, taxonomy } from "./routes/taxonomy";
 import { vendors } from "./routes/vendors";
 import type { AppEnv } from "./types";
 import { ConflictError, ValidationError } from "./validate";
 
 const app = new Hono<AppEnv>().basePath("/api");
 
+// 1. Wie ben je? (Cloudflare Access)
 app.use("*", requireAccess);
 
-// Wie aanmeldt, is meteen lid van het huishouden (zie ensureMember).
-app.get("/me", async (c) => c.json({ email: c.get("user"), member: await ensureMember(c.env.DB, c.get("user")) }));
-app.route("/purchases", purchases);
-app.route("/files", files);
-app.route("/receipts", receipts);
-app.route("/loyalty-cards", loyaltyCards);
-app.route("/expenses", expenses);
-app.route("/items", items);
-app.route("/taxonomy", taxonomy);
-app.route("/members", members);
-app.route("/categories", categories);
-app.route("/locations", locations);
-app.route("/tags", tags);
-app.route("/vendors", vendors);
-app.route("/stats", stats);
+// 2. Zonder huishouden: je lidmaatschappen en een nieuw huishouden aanmaken.
+app.route("/", account);
+
+// 3. Al de rest hoort bij één huishouden, waar je lid van moet zijn (faalt gesloten, zie context.ts).
+const scoped = new Hono<AppEnv>();
+scoped.use("*", withHousehold);
+scoped.route("/household", household);
+scoped.route("/purchases", purchases);
+scoped.route("/files", files);
+scoped.route("/receipts", receipts);
+scoped.route("/loyalty-cards", loyaltyCards);
+scoped.route("/expenses", expenses);
+scoped.route("/projects", projects);
+scoped.route("/items", items);
+scoped.route("/taxonomy", taxonomy);
+scoped.route("/members", members);
+scoped.route("/categories", categories);
+scoped.route("/locations", locations);
+scoped.route("/tags", tags);
+scoped.route("/vendors", vendors);
+scoped.route("/stats", stats);
+app.route("/", scoped);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {
@@ -44,4 +56,10 @@ app.onError((err, c) => {
   return c.json({ error: "Er ging iets mis" }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Elke nacht de terugkerende kosten inboeken (zie wrangler.jsonc → triggers).
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(materializeRecurring(env.DB));
+  },
+} satisfies ExportedHandler<AppEnv["Bindings"]>;

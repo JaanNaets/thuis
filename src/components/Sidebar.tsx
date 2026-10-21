@@ -1,48 +1,64 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { descendantIds, flattenTree } from "../../shared/tree";
-import type { Location, Stats, Tone } from "../../shared/types";
+import type { HouseholdAccess, Location, Stats, Tone } from "../../shared/types";
+import { api } from "../api";
 import { isKiosk } from "../device";
 import { Link, NavLink } from "../router";
+import { useSession } from "../session";
 import { useTaxonomy } from "../taxonomy";
+import { SubmitButton } from "./Controls";
 import { Icon, type IconName } from "./Icon";
+import { Sheet } from "./Sheet";
+import { useToast } from "./Toast";
 
-export const MENU = [
-  { to: "/aankopen", label: "Aankopen", icon: "receipt" },
-  { to: "/uitgaven", label: "Uitgaven", icon: "wallet" },
-  { to: "/voorraad", label: "Voorraad", icon: "package" },
-  { to: "/kaarten", label: "Kaarten", icon: "card" },
-] as const satisfies readonly { to: string; label: string; icon: IconName }[];
+export type MenuItem = { to: string; label: string; icon: IconName; /** Ook in de onderbalk op een gsm. */ tab?: boolean };
+
+export const MENU: MenuItem[] = [
+  { to: "/aankopen", label: "Aankopen", icon: "receipt", tab: true },
+  { to: "/uitgaven", label: "Uitgaven", icon: "wallet", tab: true },
+  { to: "/projecten", label: "Projecten", icon: "project" },
+  { to: "/voorraad", label: "Voorraad", icon: "package", tab: true },
+  { to: "/kaarten", label: "Kaarten", icon: "card", tab: true },
+  { to: "/verkopers", label: "Verkopers", icon: "store" },
+];
+
+/** Een gast in een project ziet enkel zijn projecten. */
+export const GUEST_MENU: MenuItem[] = [{ to: "/projecten", label: "Projecten", icon: "project", tab: true }];
 
 export const SETTINGS = { to: "/meer", label: "Instellingen", short: "Meer", icon: "sliders" } as const;
 
 /** ⌘K op een Mac, Ctrl K elders. */
 export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
 
+function countFor(stats: Stats | undefined, to: string): { value: number; warn?: boolean } | undefined {
+  if (!stats) return undefined;
+  switch (to) {
+    case "/aankopen":
+      return { value: stats.purchases };
+    case "/voorraad":
+      return stats.low > 0 ? { value: stats.low, warn: true } : { value: stats.items };
+    case "/kaarten":
+      return { value: stats.cards };
+    case "/verkopers":
+      return { value: stats.vendors };
+    case "/projecten":
+      return { value: stats.projects };
+  }
+}
+
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): werkplek, zoeken, menu,
- * de plaatsen in huis als boom, en Instellingen onderaan.
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): het huishouden (om te wisselen), zoeken, menu,
+ * de projecten en de plaatsen in huis als boom, en Instellingen onderaan.
  */
-export function Sidebar({ stats, onSearch }: { stats?: Stats; onSearch: () => void }) {
+export function Sidebar({ menu, onSearch }: { menu: MenuItem[]; onSearch: () => void }) {
   const { pathname } = useLocation();
-  const active = MENU.findIndex((n) => pathname.startsWith(n.to));
-  const counts: Record<string, { value: number; warn?: boolean } | undefined> = stats
-    ? {
-        "/aankopen": { value: stats.purchases },
-        "/voorraad": stats.low > 0 ? { value: stats.low, warn: true } : { value: stats.items },
-        "/kaarten": { value: stats.cards },
-      }
-    : {};
+  const { stats, full } = useSession();
+  const active = menu.findIndex((n) => pathname.startsWith(n.to));
 
   return (
     <aside className="sidebar" aria-label="Hoofdmenu">
-      <Link to="/" className="workspace" title="Thuis">
-        <span className="brand-mark">
-          <Icon name="home" size={15} />
-        </span>
-        <span className="nav-text">Thuis</span>
-        {isKiosk && <span className="nav-text workspace-note">Kiosk</span>}
-      </Link>
+      <HouseholdSwitcher />
 
       <button type="button" className="sidebar-search" onClick={onSearch} title={`Zoeken (${SEARCH_SHORTCUT})`}>
         <Icon name="search" size={15} />
@@ -54,8 +70,8 @@ export function Sidebar({ stats, onSearch }: { stats?: Stats; onSearch: () => vo
         <p className="nav-section">Menu</p>
         <nav className="sidebar-nav">
           <span className="sidebar-indicator" style={{ "--i": Math.max(active, 0), opacity: active < 0 ? 0 : 1 } as CSSProperties} />
-          {MENU.map((item) => {
-            const count = counts[item.to];
+          {menu.map((item) => {
+            const count = countFor(stats, item.to);
             return (
               <NavLink key={item.to} to={item.to} title={item.label}>
                 <Icon name={item.icon} size={17} />
@@ -70,7 +86,8 @@ export function Sidebar({ stats, onSearch }: { stats?: Stats; onSearch: () => vo
           })}
         </nav>
 
-        <PlaceTree />
+        <ProjectList />
+        {full && <PlaceTree />}
       </div>
 
       <div className="sidebar-bottom">
@@ -80,6 +97,168 @@ export function Sidebar({ stats, onSearch }: { stats?: Stats; onSearch: () => vo
         </NavLink>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Het blok bovenaan: het huidige huishouden. Een klik toont de andere huishoudens waar je lid van bent
+ * (en een nieuw huishouden), zoals de werkplekken in de referentie.
+ */
+function HouseholdSwitcher() {
+  const { households, membership, switchHousehold } = useSession();
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const canCreate = households.some((h) => h.member.access === "full");
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  return (
+    <div className="workspace-wrap" ref={ref}>
+      <button type="button" className="workspace" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={membership?.name}>
+        <span className="brand-mark">
+          <Icon name="home" size={15} />
+        </span>
+        <span className="nav-text workspace-name">{membership?.name ?? "Thuis"}</span>
+        {isKiosk && <span className="nav-text workspace-note">Kiosk</span>}
+        <Icon name="chevrons" size={14} className="nav-text workspace-chevrons" />
+      </button>
+
+      <div className="workspace-menu" role="menu" data-open={open} inert={!open}>
+        <p className="workspace-menu-label">Huishoudens</p>
+        {households.map((h) => (
+          <HouseholdItem
+            key={h.id}
+            household={h}
+            current={h.id === membership?.id}
+            onPick={() => {
+              setOpen(false);
+              if (h.id !== membership?.id) switchHousehold(h.id);
+            }}
+          />
+        ))}
+        {canCreate && (
+          <button
+            type="button"
+            role="menuitem"
+            className="workspace-item add"
+            onClick={() => {
+              setOpen(false);
+              setCreating(true);
+            }}
+          >
+            <span className="workspace-item-icon">
+              <Icon name="plus" size={14} />
+            </span>
+            Nieuw huishouden
+          </button>
+        )}
+      </div>
+
+      <Sheet open={creating} title="Nieuw huishouden" onClose={() => setCreating(false)}>
+        {creating && <NewHousehold onDone={() => setCreating(false)} />}
+      </Sheet>
+    </div>
+  );
+}
+
+function HouseholdItem({ household, current, onPick }: { household: HouseholdAccess; current: boolean; onPick: () => void }) {
+  return (
+    <button type="button" role="menuitemradio" aria-checked={current} className="workspace-item" onClick={onPick}>
+      <span className="workspace-item-icon">
+        <Icon name="home" size={13} />
+      </span>
+      <span className="workspace-item-name">
+        {household.name}
+        {household.member.access === "projects" && <small>enkel projecten</small>}
+      </span>
+      {current && <Icon name="check" size={15} className="workspace-check" />}
+    </button>
+  );
+}
+
+export function NewHousehold({ onDone }: { onDone: () => void }) {
+  const { reloadMe, switchHousehold } = useSession();
+  const toast = useToast();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      const created = await api.post<HouseholdAccess>("/households", { name });
+      reloadMe();
+      onDone();
+      toast(`${created.name} aangemaakt`);
+      switchHousehold(created.id);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="form" onSubmit={save}>
+      <p className="hint">Een apart huishouden met eigen leden, voorraad, kaarten en uitgaven. Je krijgt de gewone startindeling.</p>
+      <label className="field">
+        <span className="label">Naam</span>
+        <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Huis aan zee" />
+      </label>
+      {error && <p className="error">{error}</p>}
+      <div className="sheet-actions">
+        <SubmitButton busy={busy}>Aanmaken</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+/** De lopende projecten, met een gekleurd icoontje, zoals de collecties in de referentie. */
+function ProjectList() {
+  const { data: taxonomy } = useTaxonomy();
+  const { full } = useSession();
+  const { pathname } = useLocation();
+  if (!taxonomy) return null;
+  const projects = taxonomy.projects.filter((p) => !p.archived);
+  if (projects.length === 0 && !full) return null;
+
+  return (
+    <div className="sidebar-places">
+      <p className="nav-section">Projecten</p>
+      <ul className="place-tree">
+        {projects.map((p, i) => (
+          <li key={p.id}>
+            <Link to={`/projecten/${p.id}`} className="place-link root" aria-current={pathname === `/projecten/${p.id}` ? "page" : undefined}>
+              <span className={`place-icon tone-${p.color ?? PLACE_TONES[i % PLACE_TONES.length]}`}>
+                <Icon name="project" size={15} />
+              </span>
+              <span className="place-name">{p.name}</span>
+            </Link>
+          </li>
+        ))}
+        {full && (
+          <li>
+            <Link to="/projecten/nieuw" className="place-add">
+              <Icon name="plus" size={14} />
+              <span>Project</span>
+            </Link>
+          </li>
+        )}
+      </ul>
+    </div>
   );
 }
 
@@ -148,7 +327,7 @@ function PlaceTree() {
   );
 }
 
-// Elke hoofdplaats een eigen kleur, in een vaste volgorde die mooi afwisselt.
+// Elke hoofdplaats (en elk project zonder eigen kleur) een eigen kleur, in een vaste volgorde die mooi afwisselt.
 const PLACE_TONES: Tone[] = ["peach", "sky", "sage", "lilac", "butter", "rose", "mint"];
 
 function PlaceLink({ place, current, tone }: { place: Location & { depth: number }; current: string | null; tone?: Tone }) {

@@ -12,7 +12,12 @@ export function prepareForReading(file: File): Promise<File> {
   return resize(file, 1280, 0.8);
 }
 
-async function resize(file: File, maxSide: number, quality: number): Promise<File> {
+/** Logo van een verkoper: hoogstens 256 px, als PNG zodat een doorzichtige achtergrond blijft. */
+export function prepareLogo(file: File): Promise<File> {
+  return resize(file, 256, 1, "image/png");
+}
+
+async function resize(file: File, maxSide: number, quality: number, type: "image/jpeg" | "image/png" = "image/jpeg"): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
 
   let bitmap: ImageBitmap;
@@ -24,7 +29,7 @@ async function resize(file: File, maxSide: number, quality: number): Promise<Fil
   }
 
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  if (scale === 1 && file.type === "image/jpeg" && file.size < 1_500_000) {
+  if (scale === 1 && file.type === type && file.size < 1_500_000) {
     bitmap.close();
     return file;
   }
@@ -35,9 +40,9 @@ async function resize(file: File, maxSide: number, quality: number): Promise<Fil
   canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
 
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
   if (!blob) return file;
 
-  const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
-  return new File([blob], name, { type: "image/jpeg" });
+  const name = file.name.replace(/\.[^.]+$/, "") + (type === "image/png" ? ".png" : ".jpg");
+  return new File([blob], name, { type });
 }

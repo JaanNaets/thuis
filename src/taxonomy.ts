@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { flattenTree, rootOf, type FlatNode } from "../shared/tree";
-import type { Category, CategoryDomain, Location, Member, Taxonomy, Tone } from "../shared/types";
+import type { Category, CategoryDomain, Location, Member, Pot, Taxonomy, Tone } from "../shared/types";
 import { api } from "./api";
+import { currentHousehold, onHouseholdChange } from "./household";
 import { toneForCategory } from "./components/Page";
 
 /**
@@ -17,22 +18,32 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+// Ander huishouden gekozen: de oude indeling meteen vergeten en de nieuwe ophalen.
+onHouseholdChange(() => {
+  snapshot = {};
+  inflight = undefined;
+  listeners.forEach((l) => l());
+  refreshTaxonomy();
+});
+
 export function refreshTaxonomy(): Promise<void> {
-  inflight ??= api
+  const household = currentHousehold();
+  const request = (inflight ??= api
     .get<Taxonomy>("/taxonomy")
     .then(
       (data) => {
-        snapshot = { data };
+        // Intussen van huishouden gewisseld? Dan is dit antwoord niet meer van tel.
+        if (currentHousehold() === household) snapshot = { data };
       },
       (err: Error) => {
-        snapshot = { ...snapshot, error: err.message };
+        if (currentHousehold() === household) snapshot = { ...snapshot, error: err.message };
       },
     )
     .finally(() => {
-      inflight = undefined;
+      if (inflight === request) inflight = undefined;
       listeners.forEach((l) => l());
-    });
-  return inflight;
+    }));
+  return request;
 }
 
 export function useTaxonomy() {
@@ -76,4 +87,22 @@ export function activeMembers(t: Taxonomy): Member[] {
 export function placeName(t: Taxonomy | undefined, id: string | null): string | null {
   if (!t || !id) return null;
   return flattenTree(t.locations).find((l) => l.id === id)?.path ?? null;
+}
+
+/** Wie meedoet in een project. */
+export function projectMembers(t: Taxonomy, projectId: string): Member[] {
+  const project = t.projects.find((p) => p.id === projectId);
+  return project ? t.members.filter((m) => project.member_ids.includes(m.id)) : [];
+}
+
+/**
+ * Wie mee kan doen in een uitgave en welke potten mogen betalen: in een project de deelnemers en de potten van dat project
+ * (plus die van het huishouden voor wie volledige toegang heeft); anders de bewoners en de potten van het huishouden.
+ * `used`: leden die er al in staan; die blijven erbij, ook als ze intussen niet meer meedoen.
+ */
+export function splitCandidates(t: Taxonomy, projectId: string | null, full: boolean, used: string[] = []): { people: Member[]; pots: Pot[] } {
+  const base = projectId ? projectMembers(t, projectId) : activeMembers(t);
+  const people = [...base, ...t.members.filter((m) => used.includes(m.id) && !base.includes(m))];
+  const pots = t.pots.filter((p) => !p.archived && (p.project_id === projectId || (p.project_id === null && (!projectId || full))));
+  return { people, pots };
 }

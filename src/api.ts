@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { REFRESH_EVENT } from "./device";
+import { withHousehold } from "./household";
 
 export class ApiError extends Error {
   constructor(
@@ -21,7 +22,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, init);
+    res = await fetch(apiUrl(path), init);
   } catch {
     if (!navigator.onLine) {
       throw new ApiError(0, "Je bent offline. Dit lukt pas weer met internet.");
@@ -35,6 +36,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Fout ${res.status}`);
   return data as T;
+}
+
+/** Volledige URL naar de API, met het gekozen huishouden erbij (ook voor <img src>). */
+export function apiUrl(path: string): string {
+  return `/api${withHousehold(path)}`;
 }
 
 export const api = {

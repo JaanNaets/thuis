@@ -1,13 +1,7 @@
-import { useCallback, useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useParams, useSearchParams } from "react-router";
 import { useNavigate } from "../router";
-import {
-  BARCODE_FORMATS,
-  isBarcodeFormat,
-  type BarcodeFormat,
-  type LoyaltyCard,
-  type LoyaltyCardInput,
-} from "../../shared/types";
+import { BARCODE_FORMATS, isBarcodeFormat, type BarcodeFormat, type LoyaltyCard, type LoyaltyCardInput } from "../../shared/types";
 import { api } from "../api";
 import { useCard } from "../cards";
 import { CARD_COLORS, DEFAULT_CARD_COLOR } from "../color";
@@ -18,6 +12,7 @@ import { Icon } from "../components/Icon";
 import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
 import { ScanButtons } from "../components/ScanButtons";
+import { useTaxonomy } from "../taxonomy";
 
 export function CardFormPage() {
   const { id } = useParams();
@@ -35,8 +30,13 @@ function EditCard({ id }: { id: string }) {
 function CardForm({ existing }: { existing?: LoyaltyCard }) {
   const navigate = useNavigate();
   const toast = useToast();
+  const [params] = useSearchParams();
+  const { data: taxonomy } = useTaxonomy();
+  // Vanaf een verkoper ("Kaart toevoegen"): die alvast gekozen, en de naam van de winkel.
+  const fromVendor = existing ? undefined : taxonomy?.vendors.find((v) => v.id === params.get("verkoper"));
   const [form, setForm] = useState<LoyaltyCardInput>({
     name: existing?.name ?? "",
+    vendor_id: existing?.vendor_id ?? params.get("verkoper"),
     card_number: existing?.card_number ?? "",
     format: existing?.format ?? "ean_13",
     color: existing?.color ?? CARD_COLORS[0],
@@ -46,8 +46,17 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const set = <K extends keyof LoyaltyCardInput>(key: K, value: LoyaltyCardInput[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const set = <K extends keyof LoyaltyCardInput>(key: K, value: LoyaltyCardInput[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  // De indeling kan later binnenkomen dan het formulier: dan pas de naam van de winkel invullen.
+  useEffect(() => {
+    if (fromVendor) setForm((f) => (f.name.trim() ? f : { ...f, name: fromVendor.name }));
+  }, [fromVendor]);
+
+  function setVendor(id: string | null) {
+    const vendor = taxonomy?.vendors.find((v) => v.id === id);
+    setForm((f) => ({ ...f, vendor_id: id, name: f.name.trim() ? f.name : (vendor?.name ?? "") }));
+  }
 
   const onScan = useCallback((result: ScanResult) => {
     setForm((f) => ({
@@ -55,11 +64,7 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
       card_number: result.rawValue,
       format: isBarcodeFormat(result.format) ? result.format : f.format,
     }));
-    setScanNote(
-      isBarcodeFormat(result.format)
-        ? undefined
-        : `Gescand formaat (${result.format}) wordt niet ondersteund; kies zelf een formaat.`,
-    );
+    setScanNote(isBarcodeFormat(result.format) ? undefined : `Gescand formaat (${result.format}) wordt niet ondersteund; kies zelf een formaat.`);
   }, []);
 
   async function onSubmit(e: FormEvent) {
@@ -67,9 +72,7 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
     setSaving(true);
     setError(undefined);
     try {
-      const saved = existing
-        ? await api.put<LoyaltyCard>(`/loyalty-cards/${existing.id}`, form)
-        : await api.post<LoyaltyCard>("/loyalty-cards", form);
+      const saved = existing ? await api.put<LoyaltyCard>(`/loyalty-cards/${existing.id}`, form) : await api.post<LoyaltyCard>("/loyalty-cards", form);
       toast(existing ? "Kaart bijgewerkt" : "Kaart bewaard");
       navigate(`/kaarten/${saved.id}`, { replace: true });
     } catch (err) {
@@ -96,6 +99,22 @@ function CardForm({ existing }: { existing?: LoyaltyCard }) {
           <span className="label">Naam</span>
           <input required maxLength={100} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="bv. Colruyt Xtra" />
         </label>
+
+        {taxonomy && taxonomy.vendors.length > 0 && (
+          <label className="field">
+            <span className="label">
+              Winkel <span className="optional">· de kaart verschijnt ook bij die verkoper</span>
+            </span>
+            <select value={form.vendor_id ?? ""} onChange={(e) => setVendor(e.target.value || null)}>
+              <option value="">Geen winkel</option>
+              {taxonomy.vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="field-row">
           <label className="field">

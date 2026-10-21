@@ -222,6 +222,21 @@ kbd {
   outline-offset: 2px;
 }
 
+/* Merktegeltje (zijbalk, "Nog geen toegang"). */
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--brand-gradient);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    0 1px 3px rgb(74 95 240 / 0.4);
+}
+
 /* ---------- beweging ---------- */
 
 @keyframes page-in {
@@ -397,13 +412,13 @@ kbd {
   padding: calc(env(safe-area-inset-top) + 20px) 16px calc(var(--tabbar) + env(safe-area-inset-bottom) + 96px);
 }
 
-/* Onderbalk: vijf gelijke tabs en een vlak dat meeschuift naar de actieve. */
+/* Onderbalk: gelijke tabs (vijf, of twee voor een gast) en een vlak dat meeschuift naar de actieve. */
 .tabbar {
   position: fixed;
   inset: auto 0 0;
   z-index: 40;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr));
   height: calc(var(--tabbar) + env(safe-area-inset-bottom));
   padding: 6px 8px env(safe-area-inset-bottom);
   background: rgb(255 255 255 / 0.86);
@@ -417,7 +432,7 @@ kbd {
   position: absolute;
   top: 6px;
   left: 8px;
-  width: calc((100% - 16px) / 5);
+  width: calc((100% - 16px) / var(--n, 5));
   height: calc(var(--tabbar) - 12px);
   padding: 0 6px;
   transform: translateX(calc(var(--i, 0) * 100%));
@@ -973,6 +988,27 @@ button.row:active,
   transition: background-color 0.2s;
 }
 
+button.row-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Een link in lopende tekst of een dl: geen kleur, een zacht lijntje eronder. */
+.link-quiet {
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s;
+}
+
+.link-quiet:hover {
+  text-decoration-color: var(--muted-foreground);
+}
+
 .row-media {
   position: relative;
   display: grid;
@@ -1106,6 +1142,14 @@ button.row:active,
 
 .table-entries {
   --cols: minmax(0, 1fr) minmax(0, 170px) 104px 120px;
+}
+
+.table-projects {
+  --cols: minmax(0, 1fr) minmax(0, 110px) minmax(0, 200px) 110px;
+}
+
+.table-vendors {
+  --cols: minmax(0, 1fr) minmax(0, 170px) 120px 110px;
 }
 
 /* ---------- badges, stipjes, avatars, meter ---------- */
@@ -1491,6 +1535,13 @@ button.row:active,
 
 @media (max-width: 380px) {
   .field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lange waarden (IBAN, ondernemingsnummer): pas naast elkaar als er plaats is. */
+@media (max-width: 559px) {
+  .field-row-wide {
     grid-template-columns: 1fr;
   }
 }
@@ -2398,23 +2449,324 @@ dialog.sheet[open]::backdrop {
 
 /* ---------- wie betaalde wat ---------- */
 
-.share-inputs {
+/* Verdelen (SplitEditor): wie betaalde, wie meedoet en wie hoeveel draagt. */
+.split-editor {
   display: grid;
-  gap: 8px;
-  animation: slide-down 0.3s var(--ease-out);
+  gap: 20px;
 }
 
-.share-input {
+.split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Stille tekstknop naast een label ("Meerdere betalers"). */
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.link-button:hover {
+  color: var(--accent-strong);
+}
+
+.split-rows {
   display: grid;
-  grid-template-columns: auto 1fr minmax(0, 120px);
+  margin-top: 2px;
+}
+
+.split-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
+  min-height: 46px;
+  padding: 4px 0;
+  border-top: 1px solid var(--divider);
   font-size: 14px;
+}
+
+.split-row:first-child {
+  border-top: 0;
+}
+
+.split-name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.25s;
+}
+
+.split-row[data-off="true"] .split-name {
+  color: var(--muted-foreground);
+}
+
+/* Tik op de avatar: doet mee of niet. Een blauw vinkje springt erbij. */
+.split-toggle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.split-toggle .avatar.sm {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  transition:
+    opacity 0.25s,
+    filter 0.25s;
+}
+
+.split-toggle[aria-pressed="false"] .avatar {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.split-check {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--primary-foreground);
+  box-shadow: 0 0 0 2px var(--background);
+  transition:
+    transform 0.35s var(--spring),
+    opacity 0.2s;
+}
+
+.split-toggle[aria-pressed="false"] .split-check {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.split-input {
+  position: relative;
+  width: 96px;
+  animation: fade-in 0.25s var(--ease-out);
+}
+
+.split-input input {
+  height: 34px;
+  padding-right: 26px;
+  text-align: right;
+}
+
+.split-input::after {
+  content: attr(data-unit);
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.split-share {
+  min-width: 76px;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.split-row:not([data-off="true"]) .split-share {
+  color: var(--foreground);
   font-weight: 500;
 }
 
-.share-input input {
+.split-pot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.split-status.ok {
+  color: var(--success);
+}
+
+.hint.error,
+.split-status.error {
+  color: var(--destructive);
+}
+
+/* Per lijn van het ticket: omschrijving, bedrag en wie het had. */
+.lines-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+  grid-template-areas:
+    "desc amount remove"
+    "people people people";
+  align-items: center;
+  gap: 6px 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+  animation: rise-in 0.35s var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 14) * 28ms);
+}
+
+.line:first-child {
+  border-top: 0;
+}
+
+.line-desc {
+  grid-area: desc;
+}
+
+.line-amount {
+  grid-area: amount;
   text-align: right;
+}
+
+.line-desc,
+.line-amount {
+  height: 34px !important;
+}
+
+.line > .btn {
+  grid-area: remove;
+}
+
+.line-people {
+  grid-area: people;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.line-person {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.line-person .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11.5px;
+  transition:
+    opacity 0.25s,
+    filter 0.25s,
+    transform 0.3s var(--spring);
+}
+
+.line-person[aria-pressed="false"] .avatar {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.line-person[aria-pressed="true"] .avatar {
+  transform: scale(1.08);
+}
+
+.line-everyone {
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.lines-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.lines-shares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lines-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 560px) {
+  .line {
+    grid-template-columns: minmax(0, 1fr) 92px auto auto;
+    grid-template-areas: "desc amount people remove";
+  }
+}
+
+/* Avatars die over elkaar schuiven (deelnemers, wie had een lijn). */
+.avatar-stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatar-stack .avatar + .avatar {
+  margin-left: -5px;
+}
+
+.avatar-stack .avatar {
+  box-shadow:
+    inset 0 0 0 1px var(--tone-line, var(--border)),
+    0 0 0 2px var(--background);
+}
+
+.avatar-more {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .balance {
@@ -2461,22 +2813,6 @@ dialog.sheet[open]::backdrop {
   background: var(--success-bg);
   color: var(--success);
   animation: pop-in 0.45s var(--spring);
-}
-
-.month-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 12px 0;
-}
-
-.month-switch h2 {
-  font-size: 14px;
-}
-
-.month-switch h2::first-letter {
-  text-transform: uppercase;
 }
 
 .month-total {
@@ -2536,6 +2872,114 @@ dialog.sheet[open]::backdrop {
   transform-origin: left;
   animation: grow-x 1s var(--ease-out) backwards;
   animation-delay: calc(var(--i, 0) * 70ms + 0.1s);
+}
+
+/* ---------- potten en projecten ---------- */
+
+/* Potten: wat erin zit, per lid wat die stortte min wat die verbruikte. */
+.pot {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+
+.pot-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+@media (hover: hover) {
+  .pot-head:hover {
+    background: #f9f9f9;
+  }
+}
+
+.pot-cash {
+  flex: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.negative {
+  color: var(--danger);
+}
+
+.pot-members {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 0 58px;
+  font-size: 13px;
+}
+
+.pot-members li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pot-members li > span:last-child {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.pot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 0 58px;
+}
+
+.pot-actions .hint {
+  margin-left: auto;
+}
+
+/* Budget van een project: een balk die volloopt, rood als je erover gaat. */
+.budget {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.budget-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.budget .bar {
+  display: block;
+  background: var(--accent);
+}
+
+.budget[data-over="true"] .bar {
+  background: var(--danger-solid);
+}
+
+.budget-text {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.budget[data-over="true"] .budget-text {
+  color: var(--danger);
 }
 
 /* ---------- voorraad ---------- */
@@ -2690,7 +3134,134 @@ dialog.sheet[open]::backdrop {
   color: var(--muted-foreground);
 }
 
+/* ---------- verkopers ---------- */
+
+/* Een logo staat op wit en wordt nooit bijgesneden. */
+.row-media.vendor-logo {
+  background: var(--background);
+}
+
+.row-media.vendor-logo img {
+  padding: 3px;
+  object-fit: contain;
+}
+
+.row-media.lg {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+}
+
+.vendor-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+}
+
+.vendor-summary .purchase-summary {
+  padding: 0;
+}
+
+.logo-field {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-pick {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px dashed var(--input);
+  border-radius: var(--radius-lg);
+  background: var(--subtle);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.logo-pick:hover {
+  border-color: var(--ring);
+  background: var(--muted);
+}
+
+.logo-pick:has(img) {
+  border-style: solid;
+  border-color: var(--border);
+  background: var(--background);
+}
+
+.logo-pick img {
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  object-fit: contain;
+}
+
+/* Klantenkaart in een rij: een klein kaartje in de kleur van de kaart. */
+.row-media.card-chip {
+  border: 0;
+  background: var(--muted);
+  color: rgb(255 255 255 / 0.92);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+
+/* Een link in een notitieblok (bv. de winkel bij een klantenkaart). */
+a.note-link {
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+a.note-link span {
+  flex: 1;
+  font-weight: 500;
+}
+
+a.note-link:hover {
+  background: var(--muted);
+}
+
 /* ---------- instellingen ---------- */
+
+/* Op een gsm bovenaan Meer: wat niet in de onderbalk staat, en wisselen van huishouden. */
+.phone-menu {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.phone-menu .workspace-check {
+  color: var(--accent);
+}
+
+/* Aangemeld, maar nog nergens lid van. */
+.no-access {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 100dvh;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 24px;
+  text-align: center;
+}
+
+.no-access h1 {
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.no-access p {
+  color: var(--muted-foreground);
+}
 
 .tree-row {
   padding-left: calc(16px + var(--depth, 0) * 20px);
@@ -3203,7 +3774,8 @@ dialog.palette[open]::backdrop {
   .tabbar,
   .fab,
   .topbar,
-  .crumb {
+  .crumb,
+  .only-phone {
     display: none;
   }
 
@@ -3552,11 +4124,16 @@ dialog.palette[open]::backdrop {
     justify-content: center;
     gap: 10px;
     flex: none;
+    width: 100%;
     height: 46px;
     margin-bottom: 25px;
     padding: 0 8px;
+    border: 0;
     border-radius: var(--radius-lg);
     background: var(--background);
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
     box-shadow:
       0 0 0 1px rgb(0 0 0 / 0.04),
       0 1px 3px rgb(0 0 0 / 0.05);
@@ -3583,18 +4160,121 @@ dialog.palette[open]::backdrop {
     background: #e2e2e2;
   }
 
-  .brand-mark {
+
+  .workspace-wrap {
+    position: relative;
+    flex: none;
+  }
+
+  .workspace-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-chevrons {
+    margin-left: auto;
+    color: var(--faint);
+  }
+
+  /* Keuzemenu van de werkplek: wisselen van huishouden of een nieuw aanmaken. Schuift en schaalt in. */
+  .workspace-menu {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    z-index: 60;
+    display: grid;
+    gap: 2px;
+    width: 240px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--background);
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: top left;
+    visibility: hidden;
+    transition:
+      opacity 0.2s,
+      transform 0.3s var(--ease-out),
+      visibility 0s 0.3s;
+  }
+
+  .workspace-menu[data-open="true"] {
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+    transition:
+      opacity 0.2s,
+      transform 0.35s var(--ease-out);
+  }
+
+  .workspace-menu-label {
+    padding: 6px 8px 4px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .workspace-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-soft);
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .workspace-item:hover {
+    background: var(--muted);
+  }
+
+  .workspace-item-icon {
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     flex: none;
-    border-radius: 8px;
-    background: var(--brand-gradient);
-    color: #fff;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.25),
-      0 1px 3px rgb(74 95 240 / 0.4);
+    border-radius: 7px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .workspace-item[aria-checked="true"] .workspace-item-icon {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+  }
+
+  .workspace-item-name {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .workspace-item-name small {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  .workspace-check {
+    color: var(--accent);
+  }
+
+  .workspace-item.add {
+    color: var(--muted-foreground);
   }
 
   .workspace-note {

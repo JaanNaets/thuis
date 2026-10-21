@@ -14,6 +14,7 @@ import {
   type StockActionInput,
   type StockLevel,
 } from "../../shared/types";
+import { assertOwned, requireFull } from "../context";
 import type { AppEnv } from "../types";
 import {
   asObject,
@@ -28,7 +29,7 @@ import {
   requiredString,
   ValidationError,
 } from "../validate";
-import { setTagsStatements } from "./taxonomy";
+import { assertTags, setTagsStatements } from "./taxonomy";
 import { resolveVendor } from "./vendors";
 
 const BARCODE_TAKEN = "Er is al een item met deze barcode.";
@@ -101,11 +102,16 @@ function parseStockAction(body: unknown): StockActionInput {
   };
 }
 
-/** De eerste plaats die opgegeven is, anders de bovenste plaats in de lijst. */
-async function resolveLocation(db: D1Database, ...preferred: (string | null | undefined)[]): Promise<string> {
-  for (const id of preferred) if (id) return id;
+/** De eerste plaats die opgegeven is, anders de bovenste plaats in de lijst (van dit huishouden). */
+async function resolveLocation(db: D1Database, household: string, ...preferred: (string | null | undefined)[]): Promise<string> {
+  for (const id of preferred) {
+    if (!id) continue;
+    await assertOwned(db, household, "locations", [id]);
+    return id;
+  }
   const first = await db
-    .prepare("SELECT id FROM locations ORDER BY parent_id IS NOT NULL, sort_order, name LIMIT 1")
+    .prepare("SELECT id FROM locations WHERE household_id = ? ORDER BY parent_id IS NOT NULL, sort_order, name LIMIT 1")
+    .bind(household)
     .first<{ id: string }>();
   if (!first) throw new ValidationError("Maak eerst een plaats aan (Meer → Plaatsen).");
   return first.id;
@@ -165,9 +171,9 @@ function changeStatements(db: D1Database, ch: Change): D1PreparedStatement[] {
   ];
 }
 
-async function loadDetail(db: D1Database, id: string): Promise<ItemDetail | null> {
+async function loadDetail(db: D1Database, household: string, id: string): Promise<ItemDetail | null> {
   const [item, movements, purchases] = await db.batch([
-    db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(id),
+    db.prepare(`${ITEM_SELECT} WHERE i.id = ? AND i.household_id = ?`).bind(id, household),
     db
       .prepare(
         `SELECT m.*, l.name AS location_name, p.description AS purchase_description, v.name AS vendor_name
@@ -215,13 +221,24 @@ async function lookupOpenFoodFacts(barcode: string): Promise<ProductSuggestion |
   }
 }
 
+/** Verwijzingen van een item moeten bij hetzelfde huishouden horen. */
+async function checkItemRefs(db: D1Database, household: string, input: ItemInput) {
+  await assertOwned(db, household, "categories", [input.category_id]);
+  await assertOwned(db, household, "locations", [input.default_location_id, input.initial?.location_id]);
+  await assertOwned(db, household, "purchases", [input.initial?.purchase_id]);
+  await assertTags(db, household, input.tag_ids);
+}
+
 export const items = new Hono<AppEnv>();
+
+// De voorraad is van het huishouden: gasten in een project zien die niet.
+items.use("*", requireFull);
 
 // De volledige lijst (een huishouden heeft er hooguit enkele honderden); filteren doet de app meteen zelf.
 items.get("/", async (c) => {
   const archived = c.req.query("archived") === "1" ? 1 : 0;
-  const { results } = await c.env.DB.prepare(`${ITEM_SELECT} WHERE i.archived = ? ORDER BY i.name COLLATE NOCASE LIMIT 2000`)
-    .bind(archived)
+  const { results } = await c.env.DB.prepare(`${ITEM_SELECT} WHERE i.household_id = ? AND i.archived = ? ORDER BY i.name COLLATE NOCASE LIMIT 2000`)
+    .bind(c.get("household"), archived)
     .all<ItemRow>();
   return c.json(results.map(toListItem));
 });
@@ -230,15 +247,22 @@ items.get("/", async (c) => {
 items.get("/lookup", async (c) => {
   const barcode = c.req.query("barcode")?.trim();
   if (!barcode) throw new ValidationError("Geef een barcode op");
-  const known = await c.env.DB.prepare("SELECT id FROM items WHERE barcode = ?").bind(barcode).first<{ id: string }>();
-  const result: BarcodeLookup = known
-    ? { item_id: known.id, suggestion: null }
-    : { item_id: null, suggestion: await lookupOpenFoodFacts(barcode) };
-  return c.json(result);
+  const hh = c.get("household");
+  const known = await c.env.DB.prepare("SELECT id FROM items WHERE household_id = ? AND barcode = ?").bind(hh, barcode).first<{ id: string }>();
+  if (known) return c.json({ item_id: known.id, suggestion: null } satisfies BarcodeLookup);
+  const suggestion = await lookupOpenFoodFacts(barcode);
+  // Open Food Facts geeft de vaste sleutel van een startcategorie; elk huishouden heeft daar een eigen id voor.
+  if (suggestion?.category_id) {
+    const category = await c.env.DB.prepare("SELECT id FROM categories WHERE household_id = ? AND key = ?")
+      .bind(hh, suggestion.category_id)
+      .first<{ id: string }>();
+    suggestion.category_id = category?.id ?? null;
+  }
+  return c.json({ item_id: null, suggestion } satisfies BarcodeLookup);
 });
 
 items.get("/:id", async (c) => {
-  const detail = await loadDetail(c.env.DB, c.req.param("id"));
+  const detail = await loadDetail(c.env.DB, c.get("household"), c.req.param("id"));
   if (!detail) return c.json({ error: "Item niet gevonden" }, 404);
   return c.json(detail);
 });
@@ -246,19 +270,22 @@ items.get("/:id", async (c) => {
 items.post("/", async (c) => {
   const input = parseItem(await c.req.json(), true);
   const db = c.env.DB;
+  const hh = c.get("household");
   const id = crypto.randomUUID();
   const user = c.get("user");
-  const vendorId = await resolveVendor(db, input.vendor);
+  await checkItemRefs(db, hh, input);
+  const vendorId = await resolveVendor(db, hh, input.vendor);
 
   const statements = [
     db
       .prepare(
         `INSERT INTO items
-           (id, name, type, category_id, default_location_id, unit, barcode, brand, vendor_id, min_quantity, notes, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, household_id, name, type, category_id, default_location_id, unit, barcode, brand, vendor_id, min_quantity, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
+        hh,
         input.name,
         input.type,
         input.category_id,
@@ -282,7 +309,7 @@ items.post("/", async (c) => {
     statements.push(
       ...changeStatements(db, {
         itemId: id,
-        locationId: await resolveLocation(db, location_id, input.default_location_id),
+        locationId: await resolveLocation(db, hh, location_id, input.default_location_id),
         delta: quantity,
         reason: purchase_id ? "purchase" : "add",
         expiresOn: expires_on,
@@ -294,16 +321,18 @@ items.post("/", async (c) => {
   }
 
   await guard(db.batch(statements), { unique: BARCODE_TAKEN });
-  return c.json(await loadDetail(db, id), 201);
+  return c.json(await loadDetail(db, hh, id), 201);
 });
 
 items.put("/:id", async (c) => {
   const id = c.req.param("id");
   const input = parseItem(await c.req.json(), false);
   const db = c.env.DB;
-  const exists = await db.prepare("SELECT 1 FROM items WHERE id = ?").bind(id).first();
+  const hh = c.get("household");
+  const exists = await db.prepare("SELECT 1 FROM items WHERE id = ? AND household_id = ?").bind(id, hh).first();
   if (!exists) return c.json({ error: "Item niet gevonden" }, 404);
-  const vendorId = await resolveVendor(db, input.vendor);
+  await checkItemRefs(db, hh, input);
+  const vendorId = await resolveVendor(db, hh, input.vendor);
 
   await guard(
     db.batch([
@@ -330,26 +359,27 @@ items.put("/:id", async (c) => {
     ]),
     { unique: BARCODE_TAKEN },
   );
-  return c.json(await loadDetail(db, id));
+  return c.json(await loadDetail(db, hh, id));
 });
 
 // Archiveren: weg uit de lijst (verkocht, kapot, weggegeven), maar de geschiedenis blijft.
 items.put("/:id/archived", async (c) => {
   const archived = optionalBoolean(asObject(await c.req.json()), "archived", true) ? 1 : 0;
-  const { meta } = await c.env.DB.prepare("UPDATE items SET archived = ?, updated_at = datetime('now') WHERE id = ?")
-    .bind(archived, c.req.param("id"))
+  const { meta } = await c.env.DB.prepare("UPDATE items SET archived = ?, updated_at = datetime('now') WHERE id = ? AND household_id = ?")
+    .bind(archived, c.req.param("id"), c.get("household"))
     .run();
   if (meta.changes === 0) return c.json({ error: "Item niet gevonden" }, 404);
-  return c.json(await loadDetail(c.env.DB, c.req.param("id")));
+  return c.json(await loadDetail(c.env.DB, c.get("household"), c.req.param("id")));
 });
 
 items.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  const [, deleted] = await c.env.DB.batch([
+  const exists = await c.env.DB.prepare("SELECT 1 FROM items WHERE id = ? AND household_id = ?").bind(id, c.get("household")).first();
+  if (!exists) return c.json({ error: "Item niet gevonden" }, 404);
+  await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM taggings WHERE entity_type = 'item' AND entity_id = ?").bind(id),
     c.env.DB.prepare("DELETE FROM items WHERE id = ?").bind(id),
   ]);
-  if (deleted.meta.changes === 0) return c.json({ error: "Item niet gevonden" }, 404);
   return c.body(null, 204);
 });
 
@@ -364,21 +394,24 @@ items.post("/:id/stock", async (c) => {
   const id = c.req.param("id");
   const input = parseStockAction(await c.req.json());
   const db = c.env.DB;
+  const hh = c.get("household");
   const user = c.get("user");
 
-  const item = await db.prepare("SELECT default_location_id FROM items WHERE id = ?").bind(id).first<{ default_location_id: string | null }>();
+  const item = await db
+    .prepare("SELECT default_location_id FROM items WHERE id = ? AND household_id = ?")
+    .bind(id, hh)
+    .first<{ default_location_id: string | null }>();
   if (!item) return c.json({ error: "Item niet gevonden" }, 404);
-  const { results: levels } = await db
-    .prepare("SELECT location_id, quantity, next_expiry FROM stock_levels WHERE item_id = ?")
-    .bind(id)
-    .all<StockLevel>();
+  await assertOwned(db, hh, "locations", [input.location_id, input.to_location_id]);
+  await assertOwned(db, hh, "purchases", [input.purchase_id]);
+  const { results: levels } = await db.prepare("SELECT location_id, quantity, next_expiry FROM stock_levels WHERE item_id = ?").bind(id).all<StockLevel>();
   const levelAt = (locationId: string | null | undefined) => levels.find((l) => l.location_id === locationId);
   const base = { itemId: id, user, note: input.note };
 
   let statements: D1PreparedStatement[] = [];
   switch (input.action) {
     case "add": {
-      const locationId = await resolveLocation(db, input.location_id, item.default_location_id, levels[0]?.location_id);
+      const locationId = await resolveLocation(db, hh, input.location_id, item.default_location_id, levels[0]?.location_id);
       statements = changeStatements(db, {
         ...base,
         locationId,
@@ -386,7 +419,7 @@ items.post("/:id/stock", async (c) => {
         reason: input.purchase_id ? "purchase" : "add",
         expiresOn: input.expires_on,
         purchaseId: input.purchase_id,
-        vendorId: await resolveVendor(db, input.vendor ?? null),
+        vendorId: await resolveVendor(db, hh, input.vendor ?? null),
       });
       break;
     }
@@ -403,12 +436,7 @@ items.post("/:id/stock", async (c) => {
       break;
     }
     case "count": {
-      const locationId = await resolveLocation(
-        db,
-        input.location_id,
-        levels.length === 1 ? levels[0].location_id : null,
-        item.default_location_id,
-      );
+      const locationId = await resolveLocation(db, hh, input.location_id, levels.length === 1 ? levels[0].location_id : null, item.default_location_id);
       const delta = roundQuantity(input.quantity - (levelAt(locationId)?.quantity ?? 0));
       if (delta !== 0) statements = changeStatements(db, { ...base, locationId, delta, reason: "adjust" });
       break;
@@ -433,5 +461,5 @@ items.post("/:id/stock", async (c) => {
   }
 
   if (statements.length > 0) await db.batch(statements);
-  return c.json(await loadDetail(db, id));
+  return c.json(await loadDetail(db, hh, id));
 });

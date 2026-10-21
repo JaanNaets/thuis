@@ -28,6 +28,9 @@
     }
   ],
 
+  // Elke nacht (3u17 UTC) de terugkerende kosten inboeken.
+  "triggers": { "crons": ["17 3 * * *"] },
+
   // Workers AI, enkel voor kastickets die de code niet zelf kan lezen.
   "ai": { "binding": "AI" },
 

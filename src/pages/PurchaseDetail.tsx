@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import { Link, useNavigate } from "../router";
-import { SPLIT_MODES, type PurchaseDetail as Detail, type PurchaseFile } from "../../shared/types";
-import { api, useApi } from "../api";
+import { SPLIT_LABELS } from "../../shared/split";
+import type { PurchaseDetail as Detail, PurchaseFile } from "../../shared/types";
+import { api, apiUrl, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { Avatar, CardHead } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
@@ -13,17 +14,12 @@ import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
 import { formatBytes, formatCents, formatDate, warrantyStatus } from "../format";
 import { prepareUpload } from "../image";
+import { useSession } from "../session";
 import { memberById, nameForEmail, useTaxonomy } from "../taxonomy";
 import { WARRANTY_BADGE } from "./PurchaseList";
 
 // HEIC kan enkel Safari tonen; die tonen we als bestand in plaats van als afbeelding.
 const PREVIEWABLE = ["image/jpeg", "image/png", "image/webp"];
-
-const SPLIT_LABELS: Record<(typeof SPLIT_MODES)[number], string> = {
-  equal: "gelijk verdeeld",
-  personal: "persoonlijk",
-  custom: "aangepast verdeeld",
-};
 
 export function PurchaseDetail() {
   const { id } = useParams();
@@ -32,6 +28,7 @@ export function PurchaseDetail() {
   const toast = useToast();
   const { data: p, error, reload } = useApi<Detail>(`/purchases/${id}`);
   const { data: taxonomy } = useTaxonomy();
+  const { full } = useSession();
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [viewing, setViewing] = useState<PurchaseFile>();
   const [busy, setBusy] = useState(false);
@@ -41,11 +38,13 @@ export function PurchaseDetail() {
   if (!p) return null;
 
   const warranty = warrantyStatus(p.warranty_until);
-  const payer = memberById(taxonomy, p.paid_by);
   const tags = taxonomy?.tags.filter((t) => p.tag_ids.includes(t.id)) ?? [];
   const vendor = taxonomy?.vendors.find((v) => v.id === p.vendor_id);
-  // Bij een verdeling over meerdere mensen tonen we wie hoeveel draagt.
-  const shares = p.shares.length > 1 ? p.shares : [];
+  const potName = (id: string | null) => taxonomy?.pots.find((pot) => pot.id === id)?.name ?? "Pot";
+  // Wie wat draagt: tonen zodra er meer dan één persoon in zit, of iemand anders betaalde dan wie het draagt.
+  const onlyPayerPays = p.shares.length === 1 && p.payments.length === 1 && p.payments[0].member_id === p.shares[0].member_id;
+  const shares = onlyPayerPays ? [] : p.shares;
+  const back = p.project_id ? { to: `/projecten/${p.project_id}`, label: p.project_name ?? "Project" } : { to: "/aankopen", label: "Aankopen" };
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -90,7 +89,7 @@ export function PurchaseDetail() {
     run(async () => {
       await api.delete(`/purchases/${p!.id}`);
       toast("Aankoop verwijderd", "trash");
-      navigate("/aankopen", { replace: true });
+      navigate(back.to, { replace: true });
     });
   }
 
@@ -98,7 +97,7 @@ export function PurchaseDetail() {
     <article className="page">
       <PageHead
         title={p.description}
-        back={{ to: "/aankopen", label: "Aankopen" }}
+        back={back}
         actions={
           <Link to={`/aankopen/${p.id}/bewerken`} className="btn btn-outline btn-sm">
             <Icon name="edit" size={15} /> Bewerken
@@ -118,7 +117,13 @@ export function PurchaseDetail() {
                 <div>
                   <dt>Verkoper</dt>
                   <dd>
-                    {p.vendor_name}
+                    {full && p.vendor_id ? (
+                      <Link to={`/verkopers/${p.vendor_id}`} className="link-quiet">
+                        {p.vendor_name}
+                      </Link>
+                    ) : (
+                      p.vendor_name
+                    )}
                     {vendor?.website && (
                       <a className="btn btn-ghost btn-icon btn-sm" href={vendor.website} target="_blank" rel="noreferrer" aria-label="Website">
                         <Icon name="external" size={15} />
@@ -140,22 +145,49 @@ export function PurchaseDetail() {
                   </dd>
                 </div>
               )}
-              <div>
-                <dt>Betaald door</dt>
-                <dd>
-                  {payer ? (
-                    <>
-                      <Avatar member={payer} size="sm" /> {payer.name}
-                      {p.split_mode && <span className="muted">· {SPLIT_LABELS[p.split_mode]}</span>}
-                    </>
-                  ) : (
-                    "Gezamenlijke rekening"
-                  )}
-                </dd>
-              </div>
+              {p.project_id && (
+                <div>
+                  <dt>Project</dt>
+                  <dd>
+                    <Link to={`/projecten/${p.project_id}`} className="link-quiet">
+                      {p.project_name}
+                    </Link>
+                  </dd>
+                </div>
+              )}
+              {p.payments.length > 0 && (
+                <div>
+                  <dt>Betaald door</dt>
+                  <dd>
+                    {p.payments.length > 1 ? (
+                      `${p.payments.length} betalers`
+                    ) : p.payments[0].member_id ? (
+                      <>
+                        <Avatar member={memberById(taxonomy, p.payments[0].member_id)} size="sm" /> {memberById(taxonomy, p.payments[0].member_id)?.name}
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="piggy" size={15} /> {potName(p.payments[0].pot_id)}
+                      </>
+                    )}
+                    {p.split_mode && <span className="muted">· {SPLIT_LABELS[p.split_mode].toLowerCase()}</span>}
+                  </dd>
+                </div>
+              )}
+              {p.payments.length > 1 &&
+                p.payments.map((pay) => (
+                  <div key={pay.member_id ?? pay.pot_id} className="sub">
+                    <dt>{pay.member_id ? memberById(taxonomy, pay.member_id)?.name : potName(pay.pot_id)} betaalde</dt>
+                    <dd>{formatCents(pay.amount_cents)}</dd>
+                  </div>
+                ))}
               {shares.map((s) => (
                 <div key={s.member_id} className="sub">
-                  <dt>Deel {memberById(taxonomy, s.member_id)?.name ?? "?"}</dt>
+                  <dt>
+                    Deel {memberById(taxonomy, s.member_id)?.name ?? "?"}
+                    {p.split_mode === "percent" && s.split_value !== null && ` · ${String(s.split_value).replace(".", ",")}%`}
+                    {p.split_mode === "shares" && s.split_value !== null && ` · ${String(s.split_value).replace(".", ",")}×`}
+                  </dt>
                   <dd>{formatCents(s.share_cents)}</dd>
                 </div>
               ))}
@@ -197,7 +229,7 @@ export function PurchaseDetail() {
                 <li key={f.id} style={stagger(i)}>
                   <button type="button" className="gallery-open" onClick={() => setViewing(f)}>
                     {PREVIEWABLE.includes(f.content_type) ? (
-                      <img src={`/api/files/${f.id}`} alt={f.filename} loading="lazy" />
+                      <img src={apiUrl(`/files/${f.id}`)} alt={f.filename} loading="lazy" />
                     ) : (
                       <span className="file-tile">
                         <Icon name="file" size={24} />
@@ -232,34 +264,63 @@ export function PurchaseDetail() {
             </div>
           </section>
 
-          <section className="card">
-            <CardHead icon="package" title="In voorraad" description="Een toestel of iets dat je bijhoudt, met dit bewijsstuk en de garantie erbij." />
-            {p.items.length > 0 && (
+          {p.lines.length > 0 && (
+            <section className="card">
+              <CardHead icon="listLines" title="Per lijn" description="Wie wat had op het ticket" />
               <ul className="rows">
-                {p.items.map((item) => (
-                  <li key={item.id}>
-                    <Link to={`/voorraad/${item.id}`} className="row" style={{ minHeight: 52 }}>
-                      <span className="row-media">
-                        <Icon name="package" size={16} />
-                      </span>
+                {p.lines.map((line, i) => (
+                  <li key={i}>
+                    <div className="row" style={{ minHeight: 48 }}>
                       <span className="row-main">
-                        <span className="row-title">{item.name}</span>
+                        <span className="row-title" style={{ fontWeight: 450 }}>
+                          {line.description}
+                        </span>
                       </span>
-                      <Icon name="next" size={16} className="row-chevron" />
-                    </Link>
+                      <span className="avatar-stack">
+                        {line.member_ids.length === 0 ? (
+                          <span className="muted small">iedereen</span>
+                        ) : (
+                          line.member_ids.map((id) => <Avatar key={id} member={memberById(taxonomy, id)} size="sm" />)
+                        )}
+                      </span>
+                      <span className="row-end">{formatCents(line.amount_cents)}</span>
+                    </div>
                   </li>
                 ))}
               </ul>
-            )}
-            <div className="card-body" style={{ paddingTop: p.items.length ? 14 : 0 }}>
-              <Link to={`/voorraad/nieuw?aankoop=${p.id}`} className="btn btn-outline btn-block">
-                <Icon name="package" size={16} /> {p.items.length > 0 ? "Nog iets in voorraad zetten" : "In voorraad zetten"}
-              </Link>
-            </div>
-          </section>
+            </section>
+          )}
+
+          {full && (
+            <section className="card">
+              <CardHead icon="package" title="In voorraad" description="Een toestel of iets dat je bijhoudt, met dit bewijsstuk en de garantie erbij." />
+              {p.items.length > 0 && (
+                <ul className="rows">
+                  {p.items.map((item) => (
+                    <li key={item.id}>
+                      <Link to={`/voorraad/${item.id}`} className="row" style={{ minHeight: 52 }}>
+                        <span className="row-media">
+                          <Icon name="package" size={16} />
+                        </span>
+                        <span className="row-main">
+                          <span className="row-title">{item.name}</span>
+                        </span>
+                        <Icon name="next" size={16} className="row-chevron" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="card-body" style={{ paddingTop: p.items.length ? 14 : 0 }}>
+                <Link to={`/voorraad/nieuw?aankoop=${p.id}`} className="btn btn-outline btn-block">
+                  <Icon name="package" size={16} /> {p.items.length > 0 ? "Nog iets in voorraad zetten" : "In voorraad zetten"}
+                </Link>
+              </div>
+            </section>
+          )}
 
           <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={deletePurchase} style={{ justifySelf: "start" }}>
-            <Icon name="trash" size={16} /> Aankoop verwijderen
+            <Icon name="trash" size={16} /> Verwijderen
           </button>
         </div>
       </div>

@@ -4,17 +4,7 @@
 
 // De standaardcategorieën voor aankopen. In de database kunnen er meer staan (zie migrations/0003);
 // deze namen gebruikt de code om winkels in te delen.
-export const CATEGORIES = [
-  "Boodschappen",
-  "Elektronica",
-  "Huishoudtoestellen",
-  "Meubels",
-  "Kleding",
-  "Gereedschap",
-  "Tuin",
-  "Auto & fiets",
-  "Andere",
-] as const;
+export const CATEGORIES = ["Boodschappen", "Elektronica", "Huishoudtoestellen", "Meubels", "Kleding", "Gereedschap", "Tuin", "Auto & fiets", "Andere"] as const;
 
 export type Category = (typeof CATEGORIES)[number];
 
@@ -100,18 +90,56 @@ export function parseAmount(raw: string): number | null {
 }
 
 const MONTHS: Record<string, number> = {
-  jan: 1, januari: 1, january: 1, janvier: 1,
-  feb: 2, februari: 2, february: 2, fevrier: 2, février: 2,
-  maa: 3, mrt: 3, maart: 3, mar: 3, march: 3, mars: 3,
-  apr: 4, april: 4, avril: 4,
-  mei: 5, may: 5, mai: 5,
-  jun: 6, juni: 6, june: 6, juin: 6,
-  jul: 7, juli: 7, july: 7, juillet: 7,
-  aug: 8, augustus: 8, august: 8, aout: 8, août: 8,
-  sep: 9, sept: 9, september: 9, septembre: 9,
-  okt: 10, oct: 10, oktober: 10, october: 10, octobre: 10,
-  nov: 11, november: 11, novembre: 11,
-  dec: 12, december: 12, decembre: 12, décembre: 12,
+  jan: 1,
+  januari: 1,
+  january: 1,
+  janvier: 1,
+  feb: 2,
+  februari: 2,
+  february: 2,
+  fevrier: 2,
+  février: 2,
+  maa: 3,
+  mrt: 3,
+  maart: 3,
+  mar: 3,
+  march: 3,
+  mars: 3,
+  apr: 4,
+  april: 4,
+  avril: 4,
+  mei: 5,
+  may: 5,
+  mai: 5,
+  jun: 6,
+  juni: 6,
+  june: 6,
+  juin: 6,
+  jul: 7,
+  juli: 7,
+  july: 7,
+  juillet: 7,
+  aug: 8,
+  augustus: 8,
+  august: 8,
+  aout: 8,
+  août: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  septembre: 9,
+  okt: 10,
+  oct: 10,
+  oktober: 10,
+  october: 10,
+  octobre: 10,
+  nov: 11,
+  november: 11,
+  novembre: 11,
+  dec: 12,
+  december: 12,
+  decembre: 12,
+  décembre: 12,
 };
 
 function isoDate(y: number, m: number, d: number): string | null {
@@ -236,21 +264,16 @@ export function parseReceiptText(text: string, today = new Date()): ReceiptGuess
  * Maakt van een onbetrouwbaar antwoord (bv. van de AI) een geldige gok, of null per veld.
  * `categories`: de namen die mogen (hoofdletters maken niet uit).
  */
-export function normalizeGuess(
-  raw: unknown,
-  today = new Date(),
-  categories: readonly string[] = CATEGORIES,
-): ReceiptGuess {
+export function normalizeGuess(raw: unknown, today = new Date(), categories: readonly string[] = CATEGORIES): ReceiptGuess {
   const o = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-  const str = (v: unknown, max: number) =>
-    typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, max) : null;
+  const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, max) : null);
 
   const rawStore = str(o.store, 80);
   const known = rawStore ? findStore(rawStore) : null;
   const store = known?.name ?? (rawStore && rawStore === rawStore.toUpperCase() ? titleCase(rawStore) : rawStore);
 
   const rawDate = str(o.date ?? o.purchased_on, 40);
-  const date = plausibleDate(rawDate, today) ?? (rawDate ? findDates(rawDate, today)[0] ?? null : null);
+  const date = plausibleDate(rawDate, today) ?? (rawDate ? (findDates(rawDate, today)[0] ?? null) : null);
 
   let cents: number | null = null;
   const total = o.total ?? o.amount;
@@ -283,4 +306,41 @@ export function mergeGuess(primary: ReceiptGuess, fallback: ReceiptGuess): Recei
 
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
+// ---------- lijnen (om per lijn te verdelen) ----------
+
+export type ReceiptLine = { description: string; amount_cents: number };
+
+/** Regels die geen product zijn: betaling, btw, wisselgeld, kopteksten. */
+const NOT_A_PRODUCT =
+  /\b(btw|tva|vat|bancontact|maestro|visa|mastercard|payconiq|contant|cash|wisselgeld|terug|ontvangen|kaart|klant|kassa|ticket|bon|tel|www|datum|uur|transactie|terminal|merchant|punten|gespaard)\b/i;
+const END_OF_LINES = /\b(sub\s*-?\s*totaal|subtotal|totaal|total|te betalen|à payer|a payer)\b/i;
+/** Een bedrag op het einde van de regel, eventueel met een btw-letter of €. */
+const LINE_RE = /^(.*?[a-zA-ZÀ-ÿ].*?)\s+(-?\s?€?\s?\d{1,4}(?:[.\s]\d{3})*[.,]\d{2})\s*(?:[A-D]|€|eur)?$/i;
+
+/**
+ * Leest de productlijnen van een kasticket (tekst uit een PDF of uit de AI). Stopt bij het (sub)totaal.
+ * Een korting (negatief bedrag) blijft een eigen lijn, zodat je die aan iemand kan toewijzen.
+ */
+export function parseReceiptLines(text: string): ReceiptLine[] {
+  const lines: ReceiptLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/\s+/g, " ").trim();
+    if (!line) continue;
+    if (END_OF_LINES.test(line) && lines.length > 0) break;
+    if (NOT_A_PRODUCT.test(line)) continue;
+    const match = LINE_RE.exec(line);
+    if (!match) continue;
+    const amount = parseAmount(match[2].replace(/\s/g, ""));
+    if (amount === null || amount === 0) continue;
+    const description = match[1]
+      .replace(/^\d+\s*[x×]\s*/i, "")
+      .replace(/\s+\d+[.,]?\d*\s*[x×]$/i, "")
+      .trim();
+    if (description.length < 2) continue;
+    lines.push({ description: description.slice(0, 200), amount_cents: amount });
+    if (lines.length >= 80) break;
+  }
+  return lines;
 }

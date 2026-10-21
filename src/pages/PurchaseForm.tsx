@@ -1,21 +1,22 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { useNavigate } from "../router";
 import type { ReceiptGuess, ReceiptReadResult } from "../../shared/receipt";
-import { splitEqual } from "../../shared/split";
-import type { Purchase, PurchaseDetail, PurchaseInput, SplitMode, Taxonomy } from "../../shared/types";
-import { api, useApi } from "../api";
-import { Alert, Avatar, Segmented, SubmitButton, TreeSelect, type AlertTone } from "../components/Controls";
+import type { Purchase, PurchaseDetail, PurchaseInput, Taxonomy } from "../../shared/types";
+import { api, apiUrl, useApi } from "../api";
+import { Alert, SubmitButton, TreeSelect, type AlertTone } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
 import { Icon } from "../components/Icon";
 import { PageHead } from "../components/Page";
+import { buildSplit, initialSplitState, SplitEditor, type SplitState } from "../components/SplitEditor";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
-import { addYears, centsToInput, formatCents, parseEuro, today } from "../format";
+import { addYears, centsToInput, parseEuro, today } from "../format";
 import { prepareUpload } from "../image";
 import { readReceipt } from "../receipt";
-import { activeMembers, categoryTree, useTaxonomy } from "../taxonomy";
+import { useSession } from "../session";
+import { categoryTree, splitCandidates, useTaxonomy } from "../taxonomy";
 
 // Wettelijke garantie in België is 2 jaar; daarom de standaard.
 const WARRANTY_OPTIONS = [
@@ -27,9 +28,6 @@ const WARRANTY_OPTIONS = [
   { value: "custom", label: "Andere datum…" },
 ];
 
-// "" = gezamenlijke rekening (in de database: paid_by NULL).
-const JOINT = "";
-
 type FormState = {
   description: string;
   vendor: string;
@@ -39,10 +37,7 @@ type FormState = {
   warranty: string;
   warranty_custom: string;
   notes: string;
-  paid_by: string;
-  split_mode: SplitMode;
-  /** Bij "aangepast": bedrag per lid, zoals getypt. */
-  shares: Record<string, string>;
+  project_id: string | null;
   tag_ids: string[];
 };
 
@@ -55,9 +50,7 @@ function guessToFields(g: ReceiptGuess, taxonomy: Taxonomy | undefined): Partial
   if (g.store) fields.vendor = g.store;
   if (g.amount_cents !== null) fields.amount = centsToInput(g.amount_cents);
   if (g.purchased_on) fields.purchased_on = g.purchased_on;
-  const category = taxonomy?.categories.find(
-    (c) => c.domain === "expense" && c.name.toLowerCase() === g.category?.toLowerCase(),
-  );
+  const category = taxonomy?.categories.find((c) => c.domain === "expense" && c.name.toLowerCase() === g.category?.toLowerCase());
   if (category) fields.category_id = category.id;
   return fields;
 }
@@ -88,7 +81,7 @@ function initialWarranty(p: Purchase): Pick<FormState, "warranty" | "warranty_cu
   return { warranty: "custom", warranty_custom: p.warranty_until };
 }
 
-function toFormState(p: PurchaseDetail | undefined, meId: string): FormState {
+function toFormState(p: PurchaseDetail | undefined, projectId: string | null): FormState {
   if (!p) {
     return {
       description: "",
@@ -96,12 +89,11 @@ function toFormState(p: PurchaseDetail | undefined, meId: string): FormState {
       purchased_on: today(),
       amount: "",
       category_id: null,
-      warranty: "2",
+      // In een project (bv. een reis) is garantie zelden van tel.
+      warranty: projectId ? "none" : "2",
       warranty_custom: "",
       notes: "",
-      paid_by: meId,
-      split_mode: "equal",
-      shares: {},
+      project_id: projectId,
       tag_ids: [],
     };
   }
@@ -113,9 +105,7 @@ function toFormState(p: PurchaseDetail | undefined, meId: string): FormState {
     category_id: p.category_id,
     ...initialWarranty(p),
     notes: p.notes ?? "",
-    paid_by: p.paid_by ?? JOINT,
-    split_mode: p.split_mode ?? "equal",
-    shares: Object.fromEntries(p.shares.map((s) => [s.member_id, centsToInput(s.share_cents)])),
+    project_id: p.project_id,
     tag_ids: p.tag_ids,
   };
 }
@@ -136,10 +126,40 @@ function EditPurchase({ id, taxonomy }: { id: string; taxonomy: Taxonomy }) {
   return <PurchaseForm existing={data} taxonomy={taxonomy} />;
 }
 
+/** Wie al in de uitgave staat, blijft erbij, ook als die intussen niet meer meedoet. */
+function usedBy(existing?: PurchaseDetail): string[] {
+  return existing ? [...existing.payments.flatMap((p) => (p.member_id ? [p.member_id] : [])), ...existing.shares.map((s) => s.member_id)] : [];
+}
+
 function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxonomy: Taxonomy }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const [form, setForm] = useState<FormState>(() => toFormState(existing, taxonomy.me.id));
+  const { full } = useSession();
+  const [params] = useSearchParams();
+  const activeProjects = taxonomy.projects.filter((p) => !p.archived || p.id === existing?.project_id);
+  // Een gast zet uitgaven altijd in een project; staat er maar één open, dan dat.
+  const startProject =
+    params.get("project") && taxonomy.projects.some((p) => p.id === params.get("project"))
+      ? params.get("project")
+      : !full && activeProjects.length === 1
+        ? activeProjects[0].id
+        : null;
+  // Vanaf een verkoper ("Nieuwe aankoop"): die alvast ingevuld, met de categorie die je er meestal koopt.
+  const startVendor = existing ? undefined : taxonomy.vendors.find((v) => v.id === params.get("verkoper"));
+  const [form, setForm] = useState<FormState>(() => ({
+    ...toFormState(existing, startProject),
+    ...(startVendor && { vendor: startVendor.name, category_id: startVendor.category_id }),
+  }));
+  const defaultsFor = (projectId: string | null) =>
+    projectId ? (taxonomy.projects.find((p) => p.id === projectId)?.default_split ?? taxonomy.household.default_split) : taxonomy.household.default_split;
+  const [split, setSplit] = useState<SplitState>(() =>
+    initialSplitState({
+      meId: taxonomy.me.id,
+      people: splitCandidates(taxonomy, form.project_id, full, usedBy(existing)).people,
+      defaults: defaultsFor(form.project_id),
+      existing,
+    }),
+  );
   const [files, setFiles] = useState<File[]>([]);
   // Onthoudt de aankoop na de eerste save, zodat een mislukte upload opnieuw proberen geen dubbele aankoop maakt.
   const [savedId, setSavedId] = useState(existing?.id);
@@ -150,16 +170,29 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
   const [autoFilled, setAutoFilled] = useState<Set<keyof FormState>>(new Set());
   const touched = useRef(new Set<keyof FormState>());
 
-  const members = activeMembers(taxonomy);
-  // Wie betaalde, staat altijd in de lijst, ook als die intussen op inactief staat.
-  const payers = [...members, ...taxonomy.members.filter((m) => m.id === form.paid_by && m.active === 0)];
-  const canSplit = members.length > 1 && form.paid_by !== JOINT;
+  const { people, pots } = splitCandidates(taxonomy, form.project_id, full, usedBy(existing));
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     touched.current.add(key);
     setAutoFilled((prev) => (prev.has(key) ? new Set([...prev].filter((k) => k !== key)) : prev));
     setForm((f) => ({ ...f, [key]: value }));
   };
+
+  /** Ander project: andere deelnemers, dus de verdeling begint opnieuw volgens de standaard van dat project. */
+  function setProject(projectId: string | null) {
+    set("project_id", projectId);
+    setSplit(initialSplitState({ meId: taxonomy.me.id, people: splitCandidates(taxonomy, projectId, full).people, defaults: defaultsFor(projectId) }));
+  }
+
+  /** Een verkoper waar je meestal hetzelfde koopt: die categorie alvast invullen (zacht gemarkeerd). */
+  function setVendor(name: string) {
+    set("vendor", name);
+    const vendor = taxonomy.vendors.find((v) => v.name.toLowerCase() === name.trim().toLowerCase());
+    if (vendor?.category_id && !touched.current.has("category_id") && !form.category_id) {
+      setForm((f) => ({ ...f, category_id: vendor.category_id }));
+      setAutoFilled((prev) => new Set([...prev, "category_id"]));
+    }
+  }
 
   const autoClass = (key: keyof FormState) => (autoFilled.has(key) ? "auto" : undefined);
 
@@ -186,8 +219,14 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
   const amountCents = parseEuro(form.amount);
   const validAmount = amountCents !== null && !Number.isNaN(amountCents) ? amountCents : null;
 
-  const customShares = members.map((m) => ({ member_id: m.id, share_cents: parseEuro(form.shares[m.id] ?? "") ?? 0 }));
-  const customLeft = (validAmount ?? 0) - customShares.reduce((sum, s) => sum + (Number.isNaN(s.share_cents) ? 0 : s.share_cents), 0);
+  /** Het ticket om de lijnen uit te lezen: het gekozen bestand, of (bij bewerken) het eerste bewaarde bewijsstuk. */
+  async function receiptFile(): Promise<File | null> {
+    if (files[0]) return files[0];
+    const stored = existing?.files.find((f) => f.content_type.startsWith("image/") || f.content_type === "application/pdf");
+    if (!stored) return null;
+    const blob = await (await fetch(apiUrl(`/files/${stored.id}`))).blob();
+    return new File([blob], stored.filename, { type: stored.content_type });
+  }
 
   function warrantyUntil(): string | null {
     if (form.warranty === "none") return null;
@@ -201,9 +240,9 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
       setError("Het bedrag is niet geldig.");
       return;
     }
-    const custom = canSplit && form.split_mode === "custom";
-    if (custom && (customLeft !== 0 || customShares.some((s) => Number.isNaN(s.share_cents)))) {
-      setError("De delen zijn samen niet gelijk aan het bedrag.");
+    const built = buildSplit(split, amountCents);
+    if ("error" in built) {
+      setError(built.error);
       return;
     }
 
@@ -213,10 +252,9 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
       purchased_on: form.purchased_on,
       amount_cents: amountCents,
       category_id: form.category_id,
-      paid_by: form.paid_by || null,
-      // Alleen in het huishouden: alles is voor jezelf, dus "gelijk" (= één deel) volstaat.
-      split_mode: form.paid_by ? (canSplit ? form.split_mode : "equal") : null,
-      shares: custom ? customShares : undefined,
+      project_id: form.project_id,
+      payments: built.payments,
+      split: built.split,
       warranty_until: warrantyUntil(),
       notes: form.notes,
       tag_ids: form.tag_ids,
@@ -225,9 +263,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
     setSaving(true);
     setError(undefined);
     try {
-      const saved = savedId
-        ? await api.put<Purchase>(`/purchases/${savedId}`, input)
-        : await api.post<Purchase>("/purchases", input);
+      const saved = savedId ? await api.put<Purchase>(`/purchases/${savedId}`, input) : await api.post<Purchase>("/purchases", input);
       setSavedId(saved.id);
 
       if (files.length > 0) {
@@ -236,7 +272,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
         await api.post(`/purchases/${saved.id}/files`, body);
       }
 
-      toast(existing ? "Aankoop bijgewerkt" : "Aankoop bewaard");
+      toast(existing ? "Uitgave bijgewerkt" : "Uitgave bewaard");
       navigate(`/aankopen/${saved.id}`, { replace: true });
     } catch (err) {
       setError((err as Error).message);
@@ -244,17 +280,11 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
     }
   }
 
-  const payer = taxonomy.members.find((m) => m.id === form.paid_by);
-  const equalPreview =
-    canSplit && form.split_mode === "equal" && validAmount
-      ? splitEqual(validAmount, members.map((m) => m.id), form.paid_by)
-      : null;
-
   return (
     <form className="form page" onSubmit={onSubmit}>
       <PageHead
-        title={existing ? "Aankoop bewerken" : "Nieuwe aankoop"}
-        back={{ to: -1, label: existing ? existing.description : "Aankopen" }}
+        title={existing ? "Uitgave bewerken" : form.project_id ? "Nieuwe uitgave" : "Nieuwe aankoop"}
+        back={{ to: -1, label: existing ? existing.description : (taxonomy.projects.find((p) => p.id === form.project_id)?.name ?? "Aankopen") }}
       />
 
       {!existing && (
@@ -285,12 +315,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
           <span className="label">
             Verkoper <span className="optional">· winkel, webshop of persoon</span>
           </span>
-          <VendorField
-            vendors={taxonomy.vendors}
-            className={autoClass("vendor")}
-            value={form.vendor}
-            onChange={(v) => set("vendor", v)}
-          />
+          <VendorField vendors={taxonomy.vendors} className={autoClass("vendor")} value={form.vendor} onChange={setVendor} />
         </div>
 
         <div className="field-row">
@@ -307,13 +332,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
           </label>
           <label className="field">
             <span className="label">Datum</span>
-            <input
-              type="date"
-              required
-              className={autoClass("purchased_on")}
-              value={form.purchased_on}
-              onChange={(e) => set("purchased_on", e.target.value)}
-            />
+            <input type="date" required className={autoClass("purchased_on")} value={form.purchased_on} onChange={(e) => set("purchased_on", e.target.value)} />
           </label>
         </div>
 
@@ -327,80 +346,26 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
             empty="Geen categorie"
           />
         </label>
+
+        {(activeProjects.length > 0 || !full) && (
+          <label className="field">
+            <span className="label">
+              Project <span className="optional">· verbouwing, reis, …</span>
+            </span>
+            <select value={form.project_id ?? ""} onChange={(e) => setProject(e.target.value || null)} required={!full}>
+              {full ? <option value="">Geen project</option> : <option value="">Kies een project</option>}
+              {activeProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
 
       <section className="card form-section">
-        <div className="field">
-          <span className="label">Betaald door</span>
-          <Segmented
-            label="Betaald door"
-            value={form.paid_by}
-            onChange={(v) => set("paid_by", v)}
-            options={[
-              ...payers.map((m) => ({
-                value: m.id,
-                label: (
-                  <>
-                    <Avatar member={m} size="sm" />
-                    <span>{m.id === taxonomy.me.id ? "Ik" : m.name}</span>
-                  </>
-                ),
-              })),
-              { value: JOINT, label: <span>Gezamenlijk</span> },
-            ]}
-          />
-          {form.paid_by === JOINT && <span className="hint">Van de gezamenlijke rekening: telt niet mee in wie wat betaalde.</span>}
-          {members.length < 2 && form.paid_by !== JOINT && (
-            <span className="hint">Voeg je partner toe bij Instellingen → Huishouden om uitgaven te verdelen.</span>
-          )}
-        </div>
-
-        {canSplit && (
-          <div className="field">
-            <span className="label">Voor wie</span>
-            <Segmented
-              label="Verdeling"
-              value={form.split_mode}
-              onChange={(v) => set("split_mode", v)}
-              options={[
-                { value: "equal", label: <span>Iedereen</span> },
-                { value: "personal", label: <span>Enkel {payer?.id === taxonomy.me.id ? "mij" : (payer?.name ?? "betaler")}</span> },
-                { value: "custom", label: <span>Aangepast</span> },
-              ]}
-            />
-            {equalPreview && (
-              <span className="hint">
-                {equalPreview
-                  .map((s) => `${taxonomy.members.find((m) => m.id === s.member_id)?.name} ${formatCents(s.share_cents)}`)
-                  .join(" · ")}
-              </span>
-            )}
-            {form.split_mode === "custom" && (
-              <div className="share-inputs">
-                {members.map((m) => (
-                  <label key={m.id} className="share-input">
-                    <Avatar member={m} size="sm" />
-                    <span>{m.name}</span>
-                    <input
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      value={form.shares[m.id] ?? ""}
-                      aria-invalid={Number.isNaN(parseEuro(form.shares[m.id] ?? ""))}
-                      onChange={(e) => set("shares", { ...form.shares, [m.id]: e.target.value })}
-                    />
-                  </label>
-                ))}
-                <span className={`hint ${customLeft === 0 ? "" : "error"}`}>
-                  {customLeft === 0
-                    ? "Klopt: samen het volledige bedrag."
-                    : customLeft > 0
-                      ? `Nog ${formatCents(customLeft)} te verdelen`
-                      : `${formatCents(-customLeft)} te veel verdeeld`}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        <SplitEditor amount={validAmount} people={people} pots={pots} meId={taxonomy.me.id} value={split} onChange={setSplit} receipt={receiptFile} />
       </section>
 
       <section className="card form-section">
@@ -423,10 +388,12 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
           )}
         </div>
 
-        <div className="field">
-          <span className="label">Tags</span>
-          <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
-        </div>
+        {full && (
+          <div className="field">
+            <span className="label">Tags</span>
+            <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
+          </div>
+        )}
 
         <label className="field">
           <span className="label">

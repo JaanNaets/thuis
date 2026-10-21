@@ -205,7 +205,9 @@ export function ItemDetail() {
                 <div>
                   <dt>Meestal gekocht bij</dt>
                   <dd>
-                    {vendor.name}
+                    <Link to={`/verkopers/${vendor.id}`} className="link-quiet">
+                      {vendor.name}
+                    </Link>
                     {vendor.website && (
                       <a className="btn btn-ghost btn-icon btn-sm" href={vendor.website} target="_blank" rel="noreferrer" aria-label="Website">
                         <Icon name="external" size={15} />

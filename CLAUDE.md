@@ -19,6 +19,10 @@ commits en uitleg.
   rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
 
 - Bedragen in cent, datums als `YYYY-MM-DD`. Opmaak via `src/format.ts`.
+- Alles hoort bij een huishouden. Elke route onder het huishouden gebruikt `c.get("household")` en filtert daarop
+  (zie `worker/context.ts`); wat van buiten komt (ids van categorieën, leden, potten) controleer je met `assertOwned`.
+  Een gast (`access = 'projects'`) mag enkel bij zijn projecten: `requireFull` of `canUseProject`. Bij twijfel: weigeren.
+- Verkopers bewaren nooit een wachtwoord, enkel het klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.
 - Gedeelde types en logica in `shared/`, met tests in `test/` (`npm test`).

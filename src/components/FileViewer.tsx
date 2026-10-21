@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
 import type { PurchaseFile } from "../../shared/types";
+import { apiUrl } from "../api";
 import { Icon } from "./Icon";
 
 // pdf.js is groot; enkel laden wanneer iemand effectief een PDF opent.
@@ -12,7 +13,7 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
  * kan je daar vaak niet meer uit terugkeren.
  */
 export function FileViewer({ file, onClose }: { file: PurchaseFile; onClose: () => void }) {
-  const url = `/api/files/${file.id}`;
+  const url = apiUrl(`/files/${file.id}`);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

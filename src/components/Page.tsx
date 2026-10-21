@@ -51,7 +51,8 @@ export function PageHead({
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
-  const { me } = useSession();
+  const { membership, email } = useSession();
+  const me = membership?.member;
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -87,8 +88,8 @@ export function PageHead({
           {me && (
             <>
               <span className="panel-sep" />
-              <Link to="/meer" className="panel-avatar" title={`${me.member.name} · ${me.email}`} aria-label="Instellingen">
-                <Avatar member={me.member} />
+              <Link to="/meer" className="panel-avatar" title={`${me.name} · ${email}`} aria-label="Instellingen">
+                <Avatar member={me} />
               </Link>
             </>
           )}

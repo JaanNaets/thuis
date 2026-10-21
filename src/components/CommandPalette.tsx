@@ -3,9 +3,10 @@ import { flattenTree } from "../../shared/tree";
 import type { ItemListItem, LoyaltyCard, PurchaseListItem } from "../../shared/types";
 import { api } from "../api";
 import { useNavigate } from "../router";
+import { useSession } from "../session";
 import { useTaxonomy } from "../taxonomy";
 import { Icon, type IconName } from "./Icon";
-import { MENU, SETTINGS } from "./Sidebar";
+import { GUEST_MENU, MENU, SETTINGS } from "./Sidebar";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
 
@@ -15,6 +16,15 @@ const ACTIONS: Entry[] = [
   { key: "new-purchase", group: "Nieuw", label: "Nieuwe aankoop", icon: "receipt", to: "/aankopen/nieuw" },
   { key: "new-item", group: "Nieuw", label: "Iets in voorraad zetten", icon: "package", to: "/voorraad/nieuw" },
   { key: "new-card", group: "Nieuw", label: "Nieuwe klantenkaart", icon: "card", to: "/kaarten/nieuw" },
+  { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "project", to: "/projecten/nieuw" },
+  { key: "new-vendor", group: "Nieuw", label: "Nieuwe verkoper", icon: "store", to: "/verkopers/nieuw" },
+  { key: "new-recurring", group: "Nieuw", label: "Terugkerende kost", icon: "repeat", to: "/uitgaven/terugkerend/nieuw" },
+];
+
+/** Een gast ziet enkel zijn projecten. */
+const GUEST_ACTIONS: Entry[] = [
+  ...GUEST_MENU.map((m) => ({ key: m.to, group: "Ga naar", label: m.label, icon: m.icon, to: m.to })),
+  { key: SETTINGS.to, group: "Ga naar", label: SETTINGS.label, icon: SETTINGS.icon, to: SETTINGS.to },
 ];
 
 /** Zonder zoekterm: enkel de vaste acties. Met zoekterm: hoogstens zoveel per groep. */
@@ -36,6 +46,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { data: taxonomy } = useTaxonomy();
+  const { full } = useSession();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [data, setData] = useState<{ items: ItemListItem[]; purchases: PurchaseListItem[]; cards: LoyaltyCard[] }>();
@@ -48,21 +59,36 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setQuery("");
       setActive(0);
       dialog.showModal();
-      // Telkens vers ophalen: het palet is klein, de lijsten ook.
-      Promise.all([api.get<ItemListItem[]>("/items"), api.get<PurchaseListItem[]>("/purchases"), api.get<LoyaltyCard[]>("/loyalty-cards")]).then(
+      // Telkens vers ophalen: het palet is klein, de lijsten ook. Een gast ziet enkel de aankopen van zijn projecten.
+      Promise.all([
+        full ? api.get<ItemListItem[]>("/items") : [],
+        api.get<PurchaseListItem[]>("/purchases"),
+        full ? api.get<LoyaltyCard[]>("/loyalty-cards") : [],
+      ]).then(
         ([items, purchases, cards]) => setData({ items, purchases, cards }),
         () => {},
       );
     }
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+  }, [open, full]);
 
   const results = useMemo(() => {
     const q = normalize(query.trim());
-    if (!q) return ACTIONS;
+    const actions = full ? ACTIONS : GUEST_ACTIONS;
+    if (!q) return actions;
     const match = (...texts: (string | null | undefined)[]) => texts.some((t) => t && normalize(t).includes(q));
     const groups: Entry[][] = [
-      ACTIONS.filter((a) => match(a.label)),
+      actions.filter((a) => match(a.label)),
+      (taxonomy?.projects ?? [])
+        .filter((p) => match(p.name, p.description))
+        .map((p) => ({
+          key: `j${p.id}`,
+          group: "Projecten",
+          label: p.name,
+          hint: p.archived ? "gearchiveerd" : undefined,
+          icon: "project",
+          to: `/projecten/${p.id}`,
+        })),
       (data?.items ?? [])
         .filter((i) => match(i.name, i.brand, i.category_name))
         .map((i) => ({ key: `i${i.id}`, group: "Voorraad", label: i.name, hint: i.category_name ?? undefined, icon: "package", to: `/voorraad/${i.id}` })),
@@ -70,15 +96,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         .filter((p) => match(p.description, p.vendor_name, p.notes))
         .map((p) => ({ key: `p${p.id}`, group: "Aankopen", label: p.description, hint: p.vendor_name ?? undefined, icon: "receipt", to: `/aankopen/${p.id}` })),
       (data?.cards ?? []).filter((c) => match(c.name)).map((c) => ({ key: `c${c.id}`, group: "Kaarten", label: c.name, icon: "card", to: `/kaarten/${c.id}` })),
-      (taxonomy?.vendors ?? [])
-        .filter((v) => match(v.name))
-        .map((v) => ({ key: `v${v.id}`, group: "Verkopers", label: v.name, hint: "aankopen", icon: "store", to: `/aankopen?verkoper=${v.id}` })),
-      flattenTree(taxonomy?.locations ?? [])
+      (full ? (taxonomy?.vendors ?? []) : [])
+        .filter((v) => match(v.name, v.customer_number))
+        .map((v) => ({ key: `v${v.id}`, group: "Verkopers", label: v.name, hint: v.customer_number ?? undefined, icon: "store", to: `/verkopers/${v.id}` })),
+      flattenTree(full ? (taxonomy?.locations ?? []) : [])
         .filter((l) => match(l.path))
         .map((l) => ({ key: `l${l.id}`, group: "Plaatsen", label: l.path, hint: "voorraad", icon: "pin", to: `/voorraad?plaats=${l.id}` })),
     ];
     return groups.flatMap((g) => g.slice(0, PER_GROUP));
-  }, [query, data, taxonomy]);
+  }, [query, data, taxonomy, full]);
 
   const current = Math.min(active, results.length - 1);
 

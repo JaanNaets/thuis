@@ -10,6 +10,7 @@ import { Icon } from "../components/Icon";
 import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
 import { useOnline } from "../device";
+import { useTaxonomy } from "../taxonomy";
 
 export function CardDetail() {
   const { id } = useParams();
@@ -18,6 +19,8 @@ export function CardDetail() {
   const toast = useToast();
   const online = useOnline();
   const { card, error } = useCard(id);
+  // Offline is de indeling er misschien niet; dan gewoon geen winkel tonen.
+  const { data: taxonomy } = useTaxonomy();
 
   // Scherm aanhouden terwijl je aan de kassa staat.
   useEffect(() => {
@@ -35,6 +38,7 @@ export function CardDetail() {
   if (!card) return null;
 
   const bg = card.color ?? DEFAULT_CARD_COLOR;
+  const vendor = taxonomy?.vendors.find((v) => v.id === card.vendor_id);
 
   async function remove() {
     if (!card) return;
@@ -65,6 +69,13 @@ export function CardDetail() {
         <p className="card-number">{card.card_number}</p>
       </div>
 
+      {vendor && (
+        <Link to={`/verkopers/${vendor.id}`} className="note-block note-link" style={{ margin: "16px 0 0" }}>
+          <Icon name="store" size={16} />
+          <span>{vendor.name}</span>
+          <Icon name="next" size={14} className="muted" />
+        </Link>
+      )}
       {card.notes && (
         <p className="note-block" style={{ margin: "16px 0 0" }}>
           <Icon name="note" size={16} />

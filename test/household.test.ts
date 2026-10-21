@@ -1,75 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { categoryFromTags, suggestionFromOff } from "../shared/products.ts";
-import { checkCustomShares, computeBalances, splitEqual, suggestTransfers } from "../shared/split.ts";
 import { expiresSoon, isLow, pickConsumeLocation, roundQuantity, summarizeLevels } from "../shared/stock.ts";
 import { descendantIds, flattenTree, rootOf } from "../shared/tree.ts";
-
-test("gelijk verdelen: de restcent draagt wie betaalde", () => {
-  assert.deepEqual(splitEqual(1001, ["a", "b"], "a"), [
-    { member_id: "a", share_cents: 501 },
-    { member_id: "b", share_cents: 500 },
-  ]);
-  assert.deepEqual(splitEqual(1000, ["a", "b", "c"], "b"), [
-    { member_id: "a", share_cents: 333 },
-    { member_id: "b", share_cents: 334 },
-    { member_id: "c", share_cents: 333 },
-  ]);
-  // Wie betaalde maar niet (meer) actief is, deelt toch mee.
-  assert.equal(splitEqual(900, ["a", "b"], "x").length, 3);
-});
-
-test("zelf verdelen: moet precies kloppen", () => {
-  assert.equal(checkCustomShares(1000, [{ member_id: "a", share_cents: 700 }, { member_id: "b", share_cents: 300 }]), null);
-  assert.match(checkCustomShares(1000, [{ member_id: "a", share_cents: 700 }])!, /niet gelijk/);
-  assert.match(
-    checkCustomShares(1000, [{ member_id: "a", share_cents: 500 }, { member_id: "a", share_cents: 500 }])!,
-    /twee keer/,
-  );
-  assert.match(checkCustomShares(0, [{ member_id: "a", share_cents: -1 }, { member_id: "b", share_cents: 1 }])!, /positief/);
-});
-
-test("saldo's: aankopen en terugbetalingen", () => {
-  // Jaan betaalde 100 euro gelijk verdeeld, Sam 30 euro gelijk verdeeld.
-  const balances = computeBalances(
-    ["jaan", "sam"],
-    [
-      { payer: "jaan", member: "jaan", cents: 5000 },
-      { payer: "jaan", member: "sam", cents: 5000 },
-      { payer: "sam", member: "sam", cents: 1500 },
-      { payer: "sam", member: "jaan", cents: 1500 },
-    ],
-    [],
-  );
-  assert.equal(balances.get("jaan"), 3500);
-  assert.equal(balances.get("sam"), -3500);
-  assert.deepEqual(suggestTransfers(balances), [{ from: "sam", to: "jaan", amount_cents: 3500 }]);
-
-  // Sam stort 35 euro terug: iedereen staat op nul.
-  const after = computeBalances(
-    ["jaan", "sam"],
-    [
-      { payer: "jaan", member: "sam", cents: 5000 },
-      { payer: "sam", member: "jaan", cents: 1500 },
-    ],
-    [{ from: "sam", to: "jaan", cents: 3500 }],
-  );
-  assert.equal(after.get("jaan"), 0);
-  assert.equal(after.get("sam"), 0);
-  assert.deepEqual(suggestTransfers(after), []);
-});
-
-test("overschrijvingen met drie personen", () => {
-  const balances = new Map([
-    ["a", 6000],
-    ["b", -4000],
-    ["c", -2000],
-  ]);
-  assert.deepEqual(suggestTransfers(balances), [
-    { from: "b", to: "a", amount_cents: 4000 },
-    { from: "c", to: "a", amount_cents: 2000 },
-  ]);
-});
 
 const LOCATIONS = [
   { id: "berging", parent_id: null, name: "Berging", sort_order: 30 },

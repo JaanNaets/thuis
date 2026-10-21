@@ -80,10 +80,7 @@ test("onvolledig ticket: dan is de AI aan de beurt", () => {
 });
 
 test("AI-antwoord wordt nagekeken en genormaliseerd", () => {
-  const g = normalizeGuess(
-    { store: "MEDIA MARKT GENT", date: "2026-10-12", total: 379.99, category: "Elektronica", description: "Koptelefoon Sony" },
-    TODAY,
-  );
+  const g = normalizeGuess({ store: "MEDIA MARKT GENT", date: "2026-10-12", total: 379.99, category: "Elektronica", description: "Koptelefoon Sony" }, TODAY);
   assert.deepEqual(g, {
     store: "MediaMarkt",
     purchased_on: "2026-10-12",
@@ -98,4 +95,23 @@ test("AI-antwoord wordt nagekeken en genormaliseerd", () => {
   assert.equal(normalizeGuess({ store: "BAKKERIJ PEETERS", total: "12,40" }, TODAY).store, "Bakkerij Peeters");
   assert.equal(normalizeGuess({ total: "12,40" }, TODAY).amount_cents, 1240);
   assert.equal(normalizeGuess("geen json", TODAY).store, null);
+});
+
+test("lijnen van een kasticket, tot aan het totaal", async () => {
+  const { parseReceiptLines } = await import("../shared/receipt.ts");
+  const text = `COLRUYT HALLE
+Edingensesteenweg 196
+Halfvolle melk 1L        1,09 A
+2 x Bananen              2,38
+Bier Jupiler 24x25cl    17,49 C
+Korting Jupiler         -2,00
+SUBTOTAAL               18,96
+Bancontact              18,96
+BTW 6%                   0,20`;
+  assert.deepEqual(parseReceiptLines(text), [
+    { description: "Halfvolle melk 1L", amount_cents: 109 },
+    { description: "Bananen", amount_cents: 238 },
+    { description: "Bier Jupiler 24x25cl", amount_cents: 1749 },
+    { description: "Korting Jupiler", amount_cents: -200 },
+  ]);
 });

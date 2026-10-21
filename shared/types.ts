@@ -1,5 +1,8 @@
 // Types die zowel de Worker (API) als de React-app gebruiken.
 
+import type { DefaultSplit, PaymentInput, SplitInput, SplitLine, SplitMode } from "./split";
+import type { VendorKind } from "./vendor";
+
 // ---------- algemeen ----------
 
 /** De pastelkleuren van de app. Categorieën, tags en leden krijgen er een van. */
@@ -10,23 +13,49 @@ export function isTone(value: unknown): value is Tone {
   return typeof value === "string" && (TONES as readonly string[]).includes(value);
 }
 
-export type Me = { email: string; member: Member };
-
 /** Tellers voor de navigatie. */
-export type Stats = { purchases: number; items: number; low: number; expiring: number; cards: number };
+export type Stats = { purchases: number; items: number; low: number; expiring: number; cards: number; vendors: number; projects: number };
+
+// ---------- huishoudens en toegang ----------
+
+/**
+ * Toegang van een lid:
+ * - full: alles in dit huishouden;
+ * - projects: enkel de projecten waarin die zit (bv. vrienden op skireis).
+ */
+export const ACCESS_LEVELS = {
+  full: { label: "Alles", hint: "Ziet en beheert alles in dit huishouden" },
+  projects: { label: "Enkel projecten", hint: "Ziet enkel de projecten waarin die zit" },
+} as const;
+export type Access = keyof typeof ACCESS_LEVELS;
+
+export type Household = {
+  id: string;
+  name: string;
+  default_split: DefaultSplit | null;
+};
+
+/** Een huishouden waar jij lid van bent, met jouw lidmaatschap. */
+export type HouseholdAccess = Household & { member: Member };
+
+export type Me = { email: string; households: HouseholdAccess[] };
 
 // ---------- huishouden en indeling ----------
 
 export type Member = {
   id: string;
+  household_id: string;
   name: string;
+  /** Waarmee die aanmeldt; leeg = meldt niet aan. */
   email: string | null;
   color: Tone | null;
+  /** Woont hier: deelt mee in de uitgaven van het huishouden. */
   active: 0 | 1;
+  access: Access;
   created_at: string;
 };
 
-export type MemberInput = Pick<Member, "name" | "email" | "color" | "active">;
+export type MemberInput = Pick<Member, "name" | "email" | "color" | "active" | "access">;
 
 export const CATEGORY_DOMAINS = ["expense", "item"] as const;
 export type CategoryDomain = (typeof CATEGORY_DOMAINS)[number];
@@ -51,14 +80,86 @@ export type Location = {
 export type Vendor = {
   id: string;
   name: string;
+  kind: VendorKind | null;
+  /** Wat je er meestal koopt (uitgavencategorie); een nieuwe aankoop krijgt die alvast. */
+  category_id: string | null;
   website: string | null;
   phone: string | null;
+  email: string | null;
   notes: string | null;
+  /** Je account daar. Nooit een wachtwoord. */
+  customer_number: string | null;
+  account_member_id: string | null;
+  account_login: string | null;
+  /** Ondernemingsnummer (genormaliseerd, zie shared/vendor.ts) en IBAN zonder spaties. */
+  company_number: string | null;
+  iban: string | null;
+  /** Verandert bij elk nieuw logo; null = geen logo. */
+  logo_version: number | null;
   /** Aantal aankopen bij deze verkoper. */
   usage: number;
 };
 
-export type VendorInput = Pick<Vendor, "name" | "website" | "phone" | "notes">;
+export type VendorInput = Omit<Vendor, "id" | "usage" | "logo_version">;
+
+export type VendorListItem = Vendor & {
+  category_name: string | null;
+  total_cents: number;
+  last_purchase_on: string | null;
+  card_count: number;
+};
+
+/** Een vestiging: Colruyt Halle, Colruyt Lembeek, ... */
+export type VendorBranch = {
+  id: string;
+  vendor_id: string;
+  name: string;
+  street: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  opening_hours: string | null;
+  notes: string | null;
+  sort_order: number;
+};
+
+export type VendorBranchInput = Omit<VendorBranch, "id" | "vendor_id" | "sort_order">;
+
+export type VendorContact = {
+  id: string;
+  vendor_id: string;
+  branch_id: string | null;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  sort_order: number;
+};
+
+export type VendorContactInput = Omit<VendorContact, "id" | "vendor_id" | "sort_order">;
+
+export type VendorDetail = Vendor & {
+  category_name: string | null;
+  category_color: Tone | null;
+  purchase_count: number;
+  total_cents: number;
+  /** Uitgegeven per jaar, nieuwste eerst. */
+  totals: { year: string; total_cents: number; count: number }[];
+  branches: VendorBranch[];
+  contacts: VendorContact[];
+  cards: LoyaltyCard[];
+  /** De recentste aankopen (hoogstens 50). */
+  purchases: PurchaseListItem[];
+  /** Aankopen waarvan de garantie nog loopt. */
+  warranties: PurchaseListItem[];
+  /** Items die je hier meestal koopt. */
+  items: { id: string; name: string; quantity: number; unit: Unit; category_name: string | null; category_color: Tone | null }[];
+  /** Wat er recent van hier in de voorraad kwam. */
+  movements: { id: string; item_id: string; item_name: string; delta: number; unit: Unit; created_at: string; location_name: string | null }[];
+};
 
 export type Tag = {
   id: string;
@@ -68,34 +169,81 @@ export type Tag = {
   usage: number;
 };
 
-/** Alles wat formulieren nodig hebben om iets in te delen, in één aanvraag. */
+/** Alles wat formulieren nodig hebben om iets in te delen, in één aanvraag (voor het gekozen huishouden). */
 export type Taxonomy = {
-  /** Wie nu aangemeld is. */
+  /** Wie nu aangemeld is (het lid in dit huishouden). */
   me: Member;
+  household: Household;
   members: Member[];
   categories: Category[];
   locations: Location[];
   tags: Tag[];
   vendors: Vendor[];
+  /** Projecten die jij mag zien. */
+  projects: Project[];
+  pots: Pot[];
 };
+
+// ---------- projecten en potten ----------
+
+export type Project = {
+  id: string;
+  household_id: string;
+  name: string;
+  description: string | null;
+  color: Tone | null;
+  start_on: string | null;
+  end_on: string | null;
+  budget_cents: number | null;
+  /** 1 = eigen saldo; 0 = telt mee in het saldo van het huishouden. */
+  separate_balance: 0 | 1;
+  default_split: DefaultSplit | null;
+  archived: 0 | 1;
+  created_by: string;
+  created_at: string;
+  /** Deelnemers. */
+  member_ids: string[];
+};
+
+export type ProjectInput = Pick<
+  Project,
+  "name" | "description" | "color" | "start_on" | "end_on" | "budget_cents" | "separate_balance" | "default_split" | "member_ids"
+>;
+
+export type ProjectListItem = Project & { total_cents: number; expense_count: number; last_expense_on: string | null };
+
+/** Een pot: gezamenlijke rekening, spaarpot of reiskas. */
+export type Pot = {
+  id: string;
+  household_id: string;
+  project_id: string | null;
+  name: string;
+  color: Tone | null;
+  opening_cents: number;
+  archived: 0 | 1;
+};
+
+export type PotInput = Pick<Pot, "name" | "color" | "opening_cents" | "project_id">;
 
 // ---------- aankopen en uitgaven ----------
 
-export const SPLIT_MODES = ["equal", "personal", "custom"] as const;
-export type SplitMode = (typeof SPLIT_MODES)[number];
+export type { DefaultSplit, PaymentInput, SplitInput, SplitLine, SplitMode };
 
 export type ExpenseShare = { member_id: string; share_cents: number };
 
 export type Purchase = {
   id: string;
+  household_id: string;
+  project_id: string | null;
   description: string;
   vendor_id: string | null;
   purchased_on: string;
   amount_cents: number | null;
   category_id: string | null;
-  /** NULL = betaald van de gezamenlijke rekening; telt niet mee in wie-betaalde-wat. */
-  paid_by: string | null;
+  /** Hoe het bedrag verdeeld is; leeg = niet verdeeld (bv. enkel uit een pot betaald, van vroeger). */
   split_mode: SplitMode | null;
+  /** Ingeboekt door een terugkerende kost. */
+  recurring_id: string | null;
   warranty_until: string | null;
   notes: string | null;
   created_by: string;
@@ -106,8 +254,10 @@ export type PurchaseListItem = Purchase & {
   vendor_name: string | null;
   category_name: string | null;
   category_color: Tone | null;
+  project_name: string | null;
   file_count: number;
   thumbnail_file_id: string | null;
+  payments: PaymentInput[];
 };
 
 export type PurchaseFile = {
@@ -119,49 +269,93 @@ export type PurchaseFile = {
   created_at: string;
 };
 
-export type PurchaseDetail = Purchase & {
-  vendor_name: string | null;
-  category_name: string | null;
-  category_color: Tone | null;
+export type PurchaseDetail = PurchaseListItem & {
   files: PurchaseFile[];
-  shares: ExpenseShare[];
+  shares: (ExpenseShare & { split_value: number | null })[];
+  lines: SplitLine[];
   tag_ids: string[];
   /** Voorraad die met deze aankoop binnenkwam. */
   items: { id: string; name: string }[];
 };
 
-export type PurchaseInput = Pick<
-  Purchase,
-  | "description"
-  | "purchased_on"
-  | "amount_cents"
-  | "category_id"
-  | "paid_by"
-  | "split_mode"
-  | "warranty_until"
-  | "notes"
-> & {
+export type PurchaseInput = Pick<Purchase, "description" | "purchased_on" | "amount_cents" | "category_id" | "project_id" | "warranty_until" | "notes"> & {
   /** Naam van de verkoper; een nieuwe naam wordt meteen een nieuwe verkoper. */
   vendor: string | null;
-  /** Enkel bij split_mode "custom"; anders rekent de server de delen zelf uit. */
-  shares?: ExpenseShare[];
+  /** Wie betaalde. Leeg mag enkel als er geen bedrag is. */
+  payments: PaymentInput[];
+  /** Hoe het verdeeld wordt; leeg = niet verdelen. */
+  split: SplitInput | null;
   tag_ids: string[];
 };
 
-export type Settlement = {
+/** Soorten geldbewegingen. */
+export const TRANSFER_KINDS = {
+  repayment: { label: "Terugbetaling" },
+  loan: { label: "Lening" },
+  deposit: { label: "Storting" },
+  withdrawal: { label: "Afhaling" },
+} as const;
+export type TransferKind = keyof typeof TRANSFER_KINDS;
+
+/** Geld van iemand (of een pot) naar iemand anders (of een pot). */
+export type MoneyTransfer = {
   id: string;
-  from_member_id: string;
-  to_member_id: string;
+  household_id: string;
+  project_id: string | null;
+  kind: TransferKind;
+  from_member_id: string | null;
+  from_pot_id: string | null;
+  to_member_id: string | null;
+  to_pot_id: string | null;
   amount_cents: number;
-  settled_on: string;
+  transferred_on: string;
   note: string | null;
   created_by: string;
   created_at: string;
 };
 
-export type SettlementInput = Pick<Settlement, "from_member_id" | "to_member_id" | "amount_cents" | "settled_on" | "note">;
+export type MoneyTransferInput = Pick<
+  MoneyTransfer,
+  "project_id" | "kind" | "from_member_id" | "from_pot_id" | "to_member_id" | "to_pot_id" | "amount_cents" | "transferred_on" | "note"
+>;
 
+/** Een voorgestelde overschrijving om iedereen op nul te zetten. */
 export type Transfer = { from: string; to: string; amount_cents: number };
+
+export const FREQUENCIES = {
+  weekly: { label: "Elke week", short: "wekelijks" },
+  monthly: { label: "Elke maand", short: "maandelijks" },
+  quarterly: { label: "Elk kwartaal", short: "per kwartaal" },
+  yearly: { label: "Elk jaar", short: "jaarlijks" },
+} as const;
+export type Frequency = keyof typeof FREQUENCIES;
+
+export type RecurringExpense = {
+  id: string;
+  household_id: string;
+  project_id: string | null;
+  description: string;
+  amount_cents: number;
+  category_id: string | null;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  frequency: Frequency;
+  /** Eerste keer; elke volgende keer wordt hiervan berekend. */
+  start_on: string;
+  /** Volgende keer dat de uitgave vanzelf ingeboekt wordt. */
+  next_on: string;
+  end_on: string | null;
+  payments: PaymentInput[];
+  split: SplitInput;
+  notes: string | null;
+  active: 0 | 1;
+  created_at: string;
+};
+
+export type RecurringInput = Pick<
+  RecurringExpense,
+  "project_id" | "description" | "amount_cents" | "category_id" | "frequency" | "start_on" | "end_on" | "payments" | "split" | "notes" | "active"
+> & { vendor: string | null };
 
 export type ExpenseEntry =
   | {
@@ -170,25 +364,28 @@ export type ExpenseEntry =
       date: string;
       description: string;
       amount_cents: number | null;
-      paid_by: string | null;
+      payments: PaymentInput[];
       split_mode: SplitMode | null;
       category_name: string | null;
       category_color: Tone | null;
+      project_name: string | null;
+      recurring_id: string | null;
     }
-  | {
-      kind: "settlement";
-      id: string;
-      date: string;
-      from_member_id: string;
-      to_member_id: string;
-      amount_cents: number;
-      note: string | null;
-    };
+  | ({ kind: "transfer"; date: string } & Omit<MoneyTransfer, "kind" | "transferred_on"> & { transfer_kind: TransferKind });
 
+export type PotSummary = Pot & {
+  cash_cents: number;
+  /** Per lid: gestort − afgehaald − verbruikt. Negatief = moet nog bijstorten. */
+  members: { member_id: string; balance_cents: number }[];
+};
+
+/** Saldo's en een maandoverzicht, voor het huishouden of voor één project met een eigen saldo. */
 export type ExpenseSummary = {
+  project_id: string | null;
   /** Positief: krijgt nog geld. Negatief: moet nog betalen. Samen altijd 0. */
   balances: { member_id: string; balance_cents: number }[];
   transfers: Transfer[];
+  pots: PotSummary[];
   month: {
     month: string; // YYYY-MM
     total_cents: number;
@@ -196,6 +393,18 @@ export type ExpenseSummary = {
     by_member: { member_id: string; share_cents: number }[];
   };
   entries: ExpenseEntry[];
+  recurring: RecurringExpense[];
+};
+
+/** Een project met alles wat de projectpagina toont. */
+export type ProjectDetail = ProjectListItem & {
+  members: Member[];
+  by_category: { category_id: string | null; name: string; color: Tone | null; total_cents: number }[];
+  /** Enkel bij een eigen saldo. */
+  summary: Omit<ExpenseSummary, "month" | "recurring" | "entries"> | null;
+  /** Uitgaven en geldbewegingen van het project, nieuwste eerst. */
+  entries: ExpenseEntry[];
+  recurring: RecurringExpense[];
 };
 
 // ---------- voorraad ----------
@@ -294,10 +503,7 @@ export type ItemDetail = ItemListItem & {
   purchases: { id: string; description: string; purchased_on: string; warranty_until: string | null }[];
 };
 
-export type ItemInput = Pick<
-  Item,
-  "name" | "type" | "category_id" | "default_location_id" | "unit" | "barcode" | "brand" | "min_quantity" | "notes"
-> & {
+export type ItemInput = Pick<Item, "name" | "type" | "category_id" | "default_location_id" | "unit" | "barcode" | "brand" | "min_quantity" | "notes"> & {
   /** Naam van de verkoper waar je het meestal koopt. */
   vendor: string | null;
   tag_ids: string[];
@@ -340,11 +546,13 @@ export type LoyaltyCard = {
   format: BarcodeFormat;
   color: string | null;
   notes: string | null;
+  /** De winkel waar de kaart bij hoort. */
+  vendor_id: string | null;
   created_by: string;
   created_at: string;
 };
 
-export type LoyaltyCardInput = Pick<LoyaltyCard, "name" | "card_number" | "format" | "color" | "notes">;
+export type LoyaltyCardInput = Pick<LoyaltyCard, "name" | "card_number" | "format" | "color" | "notes" | "vendor_id">;
 
 // Namen volgens de Barcode Detection API (wat de scanner teruggeeft),
 // met het bijhorende symbool in bwip-js (waarmee we de barcode tekenen).

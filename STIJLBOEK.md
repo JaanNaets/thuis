@@ -104,7 +104,9 @@ de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of gro
 ### Gsm (smaller dan 768px)
 
 - Witte achtergrond, inhoud met 16px marge.
-- **Onderbalk** met vijf tabs (Aankopen, Uitgaven, Voorraad, Kaarten, Meer). Een grijs vlak schuift naar de actieve tab.
+- **Onderbalk** met vijf tabs (Aankopen, Uitgaven, Voorraad, Kaarten, Meer); een gast heeft er twee (Projecten, Meer).
+  Een grijs vlak schuift naar de actieve tab. Wat niet in de onderbalk past (Projecten, Verkopers) en het wisselen
+  van huishouden staat bovenaan **Meer** (`PhoneMenu` in `SettingsPage.tsx`).
 - **Zwevende + knop** rechtsonder voor de hoofdactie van het scherm.
 - **Kleine titelbalk** bovenaan die verschijnt zodra de grote titel uit beeld scrollt (zit in `PageHead`).
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
@@ -134,9 +136,11 @@ de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of gro
 
 - **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (8px marge, rand `--border`, afronding 16px). Het paneel scrollt zelf; de zijbalk blijft staan.
-- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: werkplek in een wit blok, een dun lijntje, het zoekveld
-  (opent het [zoekpalet](#zoekpalet-commandpalette)), sectie "Menu" met tellers, sectie "Plaatsen" (de
-  plaatsenboom), onderaan Instellingen. Het actieve item is een grijze pil (`--nav-active`) die meeglijdt.
+- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: werkplek in een wit blok (het huishouden; een klik opent een
+  menu om te wisselen of een nieuw huishouden te maken), een dun lijntje, het zoekveld (opent het
+  [zoekpalet](#zoekpalet-commandpalette)), sectie "Menu" met tellers, sectie "Projecten" (lopende projecten met een
+  gekleurd icoon), sectie "Plaatsen" (de plaatsenboom), onderaan Instellingen. Het actieve item is een grijze pil
+  (`--nav-active`) die meeglijdt.
 - **Paneelbalk** (58px, plakt bovenaan): kruimelpad met `›` links ("Thuis › Voorraad" of "Voorraad › Penne"),
   rechts de hoofdactie, een verticaal lijntje en wie aangemeld is (afgerond vierkantje, linkt naar Instellingen).
 - **Kopregel** (56px, lijn eronder over de hele breedte): kleine titel + badge + grijze uitleg links, acties op
@@ -280,7 +284,8 @@ Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de k
 </div>
 ```
 
-- Kolommen staan in `styles.css` als `--cols` per tabel (`.table-purchases`, `.table-stock`, `.table-entries`).
+- Kolommen staan in `styles.css` als `--cols` per tabel (`.table-purchases`, `.table-stock`, `.table-entries`,
+  `.table-projects`, `.table-vendors`).
   Een nieuwe tabel krijgt een eigen klasse met `--cols`; de eerste kolom is altijd `minmax(0, 1fr)`.
 - Hooguit 4 kolommen tussen 768 en 1100px; extra kolommen krijgen `xl` (verschijnen pas vanaf 1100px).
 - Wat op gsm in de grijze regel staat, heeft `narrow-only`; wat enkel in de tabel onder de titel moet, `wide-only`.
@@ -317,7 +322,8 @@ Meer dan 4 opties: gebruik een `select`.
 ### Zoekpalet: `CommandPalette`
 
 Opent met **⌘K / Ctrl K** of het zoekveld in de zijbalk (`useSession().openSearch()` vanuit een scherm). Zoekt
-zonder op hoofdletters of accenten te letten in schermen, aankopen, voorraad, kaarten, verkopers en plaatsen.
+zonder op hoofdletters of accenten te letten in schermen, projecten, aankopen, voorraad, kaarten, verkopers en
+plaatsen (een gast: enkel zijn projecten en hun aankopen).
 Pijltjes kiezen (een grijs vlak glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden?
 Voeg het toe als groep in `CommandPalette.tsx`.
 
@@ -358,6 +364,73 @@ Een plaats openen = `/voorraad?plaats=<id>`. Onderaan "+ Plaats toevoegen" (naar
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
 - Kant-en-klare velden: `VendorField`, `TreeSelect` (categorie, plaats), `TagPicker`, `QuantityField`, `Switch`,
   `ToneSwatches`, `FilePicker`, `ScanButtons`.
+
+### Verdelen: `SplitEditor` en `DefaultSplitField` (`SplitEditor.tsx`)
+
+Elke uitgave (aankoop, terugkerende kost) zegt **wie betaalde** en **hoe het verdeeld wordt**. Altijd met deze
+component, nooit met eigen velden.
+
+```tsx
+const [split, setSplit] = useState(() => initialSplitState({ meId, people, defaults, existing }));
+<section className="card form-section">
+  <SplitEditor amount={cents} people={people} pots={pots} meId={meId} value={split} onChange={setSplit} />
+</section>
+// bij bewaren:
+const built = buildSplit(split, cents); // { payments, split } of { error }
+```
+
+- `people` en `pots` komen uit `splitCandidates(taxonomy, projectId, full, used)` (`taxonomy.ts`): in een project de
+  deelnemers en de kas van dat project, anders de bewoners en de potten van het huishouden.
+- Betaald door: segmenten (≤ 4 keuzes) of een keuzelijst; "Meerdere betalers" geeft per betaler een bedrag.
+- Verdeling: Gelijk · Procent · Delen · Bedrag, en "Per lijn van het ticket" (`allowLines={false}` bij een vaste kost).
+  Tik op een avatar om iemand mee te laten doen of niet (blauw vinkje). Rechts staat meteen wie hoeveel draagt.
+- Onderaan één statusregel: groen "Klopt", of rood wat er nog niet klopt. Bewaren kan pas als het klopt.
+- De gewone verdeling van een huishouden of project (bv. 60/40) kies je met `DefaultSplitField`
+  (`defaultSplitDraft` → `buildDefaultSplit`). Een nieuwe uitgave begint ermee.
+
+### Saldo's en geld: `Ledger.tsx`
+
+Uitgaven en projecten tonen geld met dezelfde onderdelen:
+
+| Component | Wat |
+| --- | --- |
+| `BalancesCard` | Wie moet wie (voorgestelde overschrijvingen), met "Terugbetaald" en "Lening" |
+| `PotsCard` | Potten of de kas van een project: wat erin zit, per lid wat die nog moet bijstorten, Storten/Afhalen |
+| `MoneySheet` | Eén onderblad voor elke geldbeweging: terugbetaling, lening, storting, afhaling |
+| `EntryRow` | Een uitgave of geldbeweging in een `table-entries` (`inProject` verbergt de projectnaam) |
+| `RecurringCard` | Vaste kosten (huur, abonnementen) die zichzelf inboeken |
+| `MonthTotal`, `CategoryBars` | Groot totaal dat optelt en balken per categorie |
+
+- "Jij/jou" in plaats van je eigen naam: `useWords(taxonomy)` → "Sam moet jou nog", "Jij moet Sam nog".
+- Een negatief saldo van een pot is rood (`.negative`); verder geen kleur op bedragen.
+
+### Verkopers: `VendorLogo`
+
+Het logo van een verkoper in het vierkantje van een rij (`row-media`, op wit en nooit bijgesneden), of anders het
+icoon van de soort (winkel, webshop, vakman, dienst, particulier). `className="lg"` voor 52px bovenaan de fiche.
+Een verkopersfiche bewaart **nooit een wachtwoord**: enkel klantnummer, op wiens naam en waarmee je aanmeldt.
+
+### Kleine bouwstenen
+
+| Klasse of component | Gebruik |
+| --- | --- |
+| `AvatarStack` (`ProjectList.tsx`) | Deelnemers naast elkaar, overlappend, "+3" bij veel mensen |
+| `.link-quiet` | Link in een `dl` of tekst: geen kleur, een zacht lijntje eronder |
+| `.link-button` | Stille blauwe tekstknop rechts naast een label ("Meerdere betalers") |
+| `a.note-link` | Een notitieblok dat linkt (de winkel bij een klantenkaart) |
+| `.budget` | Balk die volloopt tot het budget; rood erover (`data-over`) |
+| `.only-phone` | Enkel op een gsm (bv. `PhoneMenu`) |
+| `.field-row-wide` | Twee lange velden (IBAN, ondernemingsnummer) die pas vanaf 560px naast elkaar staan |
+
+### Huishoudens en toegang
+
+- Alles hoort bij het gekozen huishouden. De API krijgt dat mee via `apiUrl()`/`api` (`?hh=`), ook voor `<img>`:
+  gebruik dus altijd `apiUrl("/…")` voor een afbeelding of bestand uit de API.
+- `useSession()` geeft `full`: `true` = volledige toegang, `false` = **gast** (enkel de projecten waarin die zit).
+  Een scherm toont enkel wat een gast mag: geen voorraad, kaarten, verkopers, instellingen van het huishouden,
+  en in een project geen knoppen om het project of de deelnemers te beheren. De API weigert het hoe dan ook;
+  de app verbergt het zodat een gast nooit tegen een fout aanloopt.
+- Een nieuw scherm dat een gast mag openen, staat in `GUEST_PATHS` (`App.tsx`).
 
 ### Badges, tags, stipjes, avatars
 
@@ -468,7 +541,16 @@ Regels:
 voorraad + `dl`-lijst met eigenschappen, tags, notitie), rechts kaarten met `CardHead` (bestanden, geschiedenis,
 koppelingen) → onderaan rechts stille knoppen (archiveren, `btn-danger-ghost` verwijderen).
 
-**Uitgaven**: `split` met in de zijkolom wie-moet-wie en de maand, rechts de lijst van de maand.
+**Uitgaven**: `split` met in de zijkolom wie-moet-wie, de potten en de maand; rechts de lijst van de maand en de
+terugkerende kosten.
+
+**Project**: `split` met in de zijkolom het totaal (+ budget), wie meedoet (gasten toevoegen in een `Sheet`) en,
+bij een eigen saldo, wie-moet-wie en de kas; rechts per categorie, de uitgaven en de vaste kosten; onderaan
+archiveren (verwijderen enkel als het project leeg is).
+
+**Verkoper**: `split` met in de zijkolom logo en totaal, contactgegevens, je account, bedrijf en contactpersonen;
+rechts klantenkaarten, per jaar, lopende garanties, aankopen, voorraad en vestigingen. Contacten en vestigingen
+bewerk je in een `Sheet`.
 
 **Formulier**: zie [Formulier](#formulier). Na bewaren: toast + naar het detailscherm.
 
@@ -540,6 +622,7 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Toast na elke actie die iets bewaart of verwijdert (behalve −/+ in een lijst); `useConfirm` voor wat niet terug kan.
 - [ ] Animaties enkel uit de tabel in [Beweging](#5-beweging), met `backwards`.
 - [ ] Getest op 390px breed (gsm) en 1280px (tablet), en op 820px (tablet rechtop, smalle zijbalk).
+- [ ] Werkt voor een gast (`full` is `false`) of is voor een gast verborgen; afbeeldingen uit de API via `apiUrl`.
 - [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).

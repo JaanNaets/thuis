@@ -4,7 +4,9 @@ import {
   isComplete,
   mergeGuess,
   normalizeGuess,
+  parseReceiptLines,
   parseReceiptText,
+  type ReceiptLine,
   type ReceiptGuess,
   type ReceiptReadResult,
 } from "../../shared/receipt";
@@ -44,9 +46,10 @@ function receiptSchema(categories: string[]) {
   };
 }
 
-async function expenseCategoryNames(db: D1Database): Promise<string[]> {
+async function expenseCategoryNames(db: D1Database, household: string): Promise<string[]> {
   const { results } = await db
-    .prepare("SELECT name FROM categories WHERE domain = 'expense' AND parent_id IS NULL ORDER BY sort_order")
+    .prepare("SELECT name FROM categories WHERE household_id = ? AND domain = 'expense' AND parent_id IS NULL ORDER BY sort_order")
+    .bind(household)
     .all<{ name: string }>();
   return results.map((r) => r.name);
 }
@@ -66,13 +69,12 @@ receipts.post("/read", async (c) => {
   const text = form.get("text");
   const image = form.get("image");
 
-  let guess: ReceiptGuess =
-    typeof text === "string" && text.trim() ? parseReceiptText(text.slice(0, 50_000)) : emptyGuess();
+  let guess: ReceiptGuess = typeof text === "string" && text.trim() ? parseReceiptText(text.slice(0, 50_000)) : emptyGuess();
   let source: ReceiptReadResult["source"] = Object.values(guess).some((v) => v !== null) ? "code" : null;
   let message: string | undefined;
 
   if (!isComplete(guess) && image instanceof File) {
-    const ai = await readWithAi(c.env, image);
+    const ai = await readWithAi(c.env, c.get("household"), image);
     if ("guess" in ai) {
       // Wat de code wél vond, is exact; de AI vult enkel aan.
       guess = mergeGuess(guess, ai.guess);
@@ -84,7 +86,7 @@ receipts.post("/read", async (c) => {
 
   // Categorie van vorige aankopen in dezelfde winkel: die kent het huishouden het best.
   if (guess.store) {
-    const previous = await categoryFromHistory(c.env.DB, guess.store);
+    const previous = await categoryFromHistory(c.env.DB, c.get("household"), guess.store);
     if (previous) guess.category = previous;
   }
 
@@ -92,21 +94,105 @@ receipts.post("/read", async (c) => {
   return c.json(result);
 });
 
-async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess } | { error: string }> {
-  if (!AI_IMAGE_TYPES.includes(image.type)) return { error: "Dit fotoformaat kan niet automatisch gelezen worden." };
-  if (image.size > MAX_IMAGE_BYTES) return { error: "De foto is te groot om automatisch te lezen." };
-
+/** Telt een AI-oproep; false als de daglimiet bereikt is. */
+async function useAiBudget(env: Env): Promise<boolean> {
   const usage = await env.DB.prepare(
     `INSERT INTO ai_usage (day, calls) VALUES (date('now'), 1)
      ON CONFLICT (day) DO UPDATE SET calls = calls + 1
      RETURNING calls`,
   ).first<{ calls: number }>();
-  if (!usage || usage.calls > AI_DAILY_LIMIT) {
+  return Boolean(usage && usage.calls <= AI_DAILY_LIMIT);
+}
+
+/**
+ * De lijnen van een ticket, om per lijn te verdelen. Zelfde volgorde als bij het lezen:
+ * eerst code op de tekst (PDF), pas daarna de AI op een foto.
+ */
+receipts.post("/lines", async (c) => {
+  const form = await c.req.formData();
+  const text = form.get("text");
+  const image = form.get("image");
+  if (typeof text === "string" && text.trim()) {
+    const lines = parseReceiptLines(text.slice(0, 50_000));
+    if (lines.length > 0) return c.json({ lines, source: "code" });
+  }
+  if (!(image instanceof File)) return c.json({ lines: [], source: null, message: "Geen lijnen gevonden in dit bestand." });
+  if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES) {
+    return c.json({ lines: [], source: null, message: "Deze foto kan niet automatisch gelezen worden." });
+  }
+  if (!(await useAiBudget(c.env))) {
+    return c.json({ lines: [], source: null, message: "De daglimiet voor automatisch lezen is bereikt. Vul de lijnen zelf in." });
+  }
+  try {
+    const dataUrl = `data:${image.type};base64,${toBase64(await image.arrayBuffer())}`;
+    const result = await c.env.AI.run(MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `Je leest de productlijnen van een kasticket. Geef per lijn de omschrijving en het bedrag in euro zoals op het ticket.
+Een korting is een negatief bedrag. Stop bij het (sub)totaal. Geen betaling, btw of wisselgeld. Raad nooit.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Lees de lijnen van dit ticket." },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "lines",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              lines: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: { description: { type: "string" }, amount: { type: "number" } },
+                  required: ["description", "amount"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["lines"],
+            additionalProperties: false,
+          },
+        },
+      },
+      chat_template_kwargs: { enable_thinking: false },
+      temperature: 0,
+      max_tokens: 1500,
+    });
+    const content = result.choices?.[0]?.message?.content;
+    const parsed = (typeof content === "string" ? safeJson(content) : content) as { lines?: unknown } | null;
+    // Wat de AI zegt, nakijken: enkel tekst met een geldig bedrag.
+    const lines: ReceiptLine[] = (Array.isArray(parsed?.lines) ? parsed.lines : [])
+      .map((l) => l as { description?: unknown; amount?: unknown })
+      .filter((l) => typeof l.description === "string" && l.description.trim() && typeof l.amount === "number" && Number.isFinite(l.amount))
+      .slice(0, 80)
+      .map((l) => ({ description: String(l.description).trim().slice(0, 200), amount_cents: Math.round((l.amount as number) * 100) }))
+      .filter((l) => l.amount_cents !== 0 && Math.abs(l.amount_cents) < 10_000_000);
+    return c.json({ lines, source: "ai", message: lines.length ? undefined : "Geen lijnen gevonden op deze foto." });
+  } catch (err) {
+    console.error("AI kon de lijnen niet lezen", err);
+    return c.json({ lines: [], source: null, message: "Automatisch lezen lukte niet. Vul de lijnen zelf in." });
+  }
+});
+
+async function readWithAi(env: Env, household: string, image: File): Promise<{ guess: ReceiptGuess } | { error: string }> {
+  if (!AI_IMAGE_TYPES.includes(image.type)) return { error: "Dit fotoformaat kan niet automatisch gelezen worden." };
+  if (image.size > MAX_IMAGE_BYTES) return { error: "De foto is te groot om automatisch te lezen." };
+
+  if (!(await useAiBudget(env))) {
     return { error: "De daglimiet voor automatisch lezen is bereikt. Vul het ticket zelf in." };
   }
 
   try {
-    const categories = await expenseCategoryNames(env.DB);
+    const categories = await expenseCategoryNames(env.DB, household);
     const dataUrl = `data:${image.type};base64,${toBase64(await image.arrayBuffer())}`;
     const result = await env.AI.run(MODEL, {
       messages: [
@@ -135,16 +221,16 @@ async function readWithAi(env: Env, image: File): Promise<{ guess: ReceiptGuess 
 }
 
 /** Naam van de categorie die jullie het vaakst kozen bij deze winkel. */
-async function categoryFromHistory(db: D1Database, store: string): Promise<string | null> {
+async function categoryFromHistory(db: D1Database, household: string, store: string): Promise<string | null> {
   const row = await db
     .prepare(
       `SELECT c.name FROM purchases p
        JOIN categories c ON c.id = p.category_id
        JOIN vendors v ON v.id = p.vendor_id
-       WHERE v.name = ? COLLATE NOCASE
+       WHERE p.household_id = ? AND v.name = ? COLLATE NOCASE
        GROUP BY c.id ORDER BY COUNT(*) DESC LIMIT 1`,
     )
-    .bind(store)
+    .bind(household, store)
     .first<{ name: string }>();
   return row?.name ?? null;
 }

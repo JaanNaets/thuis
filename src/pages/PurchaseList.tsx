@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Link } from "../router";
 import type { PurchaseListItem } from "../../shared/types";
-import { useApi } from "../api";
+import { apiUrl, useApi } from "../api";
 import { FilterToggle, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { SkeletonRows, stagger } from "../components/Motion";
@@ -120,7 +120,7 @@ export function PurchaseList() {
                     <span className="cell-main">
                       <span className={`row-media ${p.thumbnail_file_id ? "" : `tone-${tone}`}`}>
                         {p.thumbnail_file_id ? (
-                          <img src={`/api/files/${p.thumbnail_file_id}`} alt="" loading="lazy" />
+                          <img src={apiUrl(`/files/${p.thumbnail_file_id}`)} alt="" loading="lazy" />
                         ) : (
                           <Icon name={p.file_count > 0 ? "file" : "receipt"} size={17} />
                         )}
