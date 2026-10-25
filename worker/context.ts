@@ -171,13 +171,13 @@ export function toItemType(row: TypeRow): ItemType {
   return { ...row, fields };
 }
 
-/** De soorten die in een project te gebruiken zijn: die van het project zelf en erboven. */
+/** De lijsten die in een project te gebruiken zijn: die van het project zelf en erboven. */
 export async function typesFor(db: D1Database, chain: string[]): Promise<ItemType[]> {
   const { results } = await db
     .prepare(`SELECT * FROM item_types WHERE project_id IN (${chain.map(() => "?").join(", ")}) ORDER BY sort_order, created_at`)
     .bind(...chain)
     .all<TypeRow>();
-  // Eerst de soorten van het project zelf, dan die erboven.
+  // Eerst de lijsten van het project zelf, dan die erboven.
   return results.map(toItemType).sort((a, b) => chain.indexOf(a.project_id) - chain.indexOf(b.project_id));
 }
 

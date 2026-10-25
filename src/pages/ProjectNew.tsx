@@ -21,7 +21,7 @@ const NAME_PLACEHOLDERS: Record<TemplateKey, string> = {
 };
 
 /**
- * Een nieuw project, bovenaan of als subproject (?parent=). Een sjabloon zet soorten met velden klaar;
+ * Een nieuw project, bovenaan of als subproject (?parent=). Een sjabloon zet lijsten met velden klaar;
  * daarna kan je alles aanpassen.
  */
 export function ProjectNew() {
@@ -82,7 +82,7 @@ export function ProjectNew() {
               );
             })}
           </div>
-          <span className="hint">Een sjabloon zet soorten met velden klaar. Je kan daarna alles aanpassen, toevoegen of weghalen.</span>
+          <span className="hint">Een sjabloon zet lijsten met velden klaar. Je kan daarna alles aanpassen, toevoegen of weghalen.</span>
         </div>
       </section>
 

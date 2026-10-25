@@ -160,7 +160,7 @@ const WIDE: FieldType[] = ["text", "longtext", "multi", "year_range", "bool", "s
 const PLACEHOLDERS: Partial<Record<FieldType, string>> = { year: "bv. 2019", money: "€ 0,00", number: "0" };
 
 /**
- * De velden van een soort in een formulier. `access`: per veld wat je mag (enkel zien = uitgeschakeld).
+ * De velden van een lijst in een formulier. `access`: per veld wat je mag (enkel zien = uitgeschakeld).
  * `auto`: velden die de app invulde (etiket), zacht blauw tot je ze aanpast. `people`: wie je kan kiezen.
  */
 export function FieldInputs({
@@ -355,7 +355,7 @@ export function FieldInputs({
   );
 }
 
-/** Een item van een andere soort kiezen (de verkoper van een wijn, de plaats van een fles). */
+/** Een item uit een andere lijst kiezen (de verkoper van een wijn, de plaats van een fles). */
 function ItemSelect({ def, value, onChange, disabled }: { def: FieldDef; value: string; onChange: (v: string) => void; disabled: boolean }) {
   const { data, error } = useApi<ItemRef[]>(`/items?type=${def.ref_type}`);
   const options = data ?? [];
@@ -647,7 +647,7 @@ export function fieldSuggestions(defs: FieldDef[], items: { data: Attributes }[]
   return out;
 }
 
-// ---------- de velden van een soort samenstellen ----------
+// ---------- de velden van een lijst samenstellen ----------
 
 export type FieldDraft = FieldDef & { isNew?: boolean; optionsText: string; open?: boolean };
 
@@ -667,7 +667,7 @@ export function buildFields(drafts: FieldDraft[]): { fields: FieldDef[] } | { er
       .map((o) => o.trim())
       .filter(Boolean);
     if (d.type === "select" && options.length === 0) return { error: `Geef de keuzes voor ${label}, gescheiden door komma's.` };
-    if (d.type === "item" && !d.ref_type) return { error: `Kies naar welke soort ${label} verwijst.` };
+    if (d.type === "item" && !d.ref_type) return { error: `Kies naar welke lijst ${label} verwijst.` };
     const key = d.isNew ? fieldKey(label, taken) : d.key;
     taken.push(key);
     fields.push({
@@ -688,8 +688,8 @@ export function buildFields(drafts: FieldDraft[]): { fields: FieldDef[] } | { er
 }
 
 /**
- * De velden van een soort: naam en soort op één regel; onder ⋯ de keuzes, eenheid, verwijzing, formaat, uitleg,
- * kolom, filter, verplicht en de volgorde. `types`: de soorten waarnaar een verwijzing kan wijzen.
+ * De velden van een lijst: naam en soort veld op één regel; onder ⋯ de keuzes, eenheid, verwijzing, formaat, uitleg,
+ * kolom, filter, verplicht en de volgorde. `types`: de lijsten waarnaar een verwijzing kan wijzen.
  */
 export function FieldsEditor({
   value,
@@ -702,7 +702,7 @@ export function FieldsEditor({
   onChange: (v: FieldDraft[]) => void;
   types: ItemType[];
   selfLabel: string;
-  /** De soort zelf (bij bewerken); bij een nieuwe soort verwijst "self" naar zichzelf. */
+  /** De lijst zelf (bij bewerken); bij een nieuwe lijst verwijst "self" naar zichzelf. */
   selfId?: string;
 }) {
   const counter = useRef(0);
@@ -780,8 +780,8 @@ export function FieldsEditor({
                     <label className="field">
                       <span className="label">Verwijst naar</span>
                       <select value={f.ref_type ?? ""} onChange={(e) => update(i, { ref_type: e.target.value || undefined })}>
-                        <option value="">Kies een soort</option>
-                        <option value={selfId ?? "self"}>{selfLabel} (deze soort)</option>
+                        <option value="">Kies een lijst</option>
+                        <option value={selfId ?? "self"}>{selfLabel} (deze lijst)</option>
                         {types.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.plural}
@@ -836,7 +836,7 @@ export function FieldsEditor({
 // ---------- foto's ----------
 
 /**
- * Foto van een etiket (of typeplaatje): de app leest naam en velden van de soort.
+ * Foto van een etiket (of typeplaatje): de app leest naam en velden van de lijst.
  * `onResult` krijgt ook de foto, om bij het item te bewaren.
  */
 export function LabelScanner({ projectId, typeId, onResult }: { projectId: string; typeId: string; onResult: (scan: LabelScan, photo: File) => void }) {

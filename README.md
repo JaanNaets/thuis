@@ -4,8 +4,8 @@ Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: 
 
 - **Projecten** en subprojecten: "Huishouden" is gewoon een project, met daaronder bv. "Wijnkelder" en "Fietsen".
 - **Mensen met een rol** per project: wat ze mogen zien en wijzigen, tot op het niveau van één veld.
-- **Soorten**: een klein formulier met eigen velden (Wijn met jaargang en druiven, Klantenkaart met een barcode).
-- **Items** van een soort, met tags, een foto, bestanden en een logboek.
+- **Lijsten** met eigen velden (Wijnen met jaargang en druiven, Klantenkaarten met een barcode).
+- **Items** in een lijst, met tags, een foto, bestanden en een logboek.
 
 Regels voor een bepaalde use case (kosten verdelen, voorraad, klantenkaarten offline, kastickets lezen) komen er
 bovenop, als sjabloon of als eigen onderdeel.
@@ -194,14 +194,14 @@ In kioskmodus:
 
 De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
 zit: één tik en je bent er. Met **Volgorde** sleep je de projecten in de volgorde die jij wil (dat is per persoon);
-subprojecten orden je daar ook, als je het project instelt. De volgorde van de soorten (en dus van de tabs in een
-project) sleep je bij **Instellen → Soorten**, die van de velden in het formulier van een soort.
+subprojecten orden je daar ook, als je het project instelt. De volgorde van de lijsten (en dus van de tabs in een
+project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
 
 ### Projecten en subprojecten
 
 Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
 subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
-Koersfietsen, Gedeelde uitgaven, Verzameling) dat de soorten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
+Koersfietsen, Gedeelde uitgaven, Verzameling) dat de lijsten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
 
 ### Mensen en rollen
 
@@ -213,7 +213,7 @@ Elk project heeft rollen. Er zijn er drie om mee te beginnen:
 | Lid | Items toevoegen, wijzigen en verwijderen |
 | Lezer | Enkel bekijken |
 
-Een rol maak of pas je aan bij **Instellen → Rollen**: per soort en zelfs per veld kies je **Niet zien**, **Zien**
+Een rol maak of pas je aan bij **Instellen → Rollen**: per lijst en zelfs per veld kies je **Niet zien**, **Zien**
 of **Wijzigen** (bv. een proever die de wijnen ziet maar de aankoopprijs niet). Een rol geldt ook in de
 subprojecten, tenzij je iemand daar een andere rol geeft.
 
@@ -221,17 +221,17 @@ Iemand toevoegen doe je bij **Instellen → Mensen**: met een e-mailadres (die p
 adres moet dan ook in de Access-policy staan), of zonder, voor iemand die nooit aanmeldt maar wel ergens bij
 hoort (bv. als eigenaar van een fiets). Er blijft altijd minstens één beheerder over.
 
-### Soorten en velden
+### Lijsten en velden
 
-Een soort is een klein formulier: een naam ("Wijn", meervoud "Wijnen") en velden. Een veld kan zijn: tekst, lange
+Een lijst heeft een naam ("Wijnen"), een naam voor één item ("Wijn", voor de knop "Wijn toevoegen") en velden. Een veld kan zijn: tekst, lange
 tekst, getal, bedrag, datum, jaar, periode van jaren (bv. drinkklaar 2026–2032), keuze, meerkeuze, ja/nee, score,
 barcode of QR-code, persoon, verwijzing naar een ander item (de wijn → het wijnhuis) of eigenaars (wie welk
-deel heeft). Een veld kan een kolom in de lijst zijn, een filter, of verplicht. De soorten van een project gelden
+deel heeft). Een veld kan een kolom in de lijst zijn, een filter, of verplicht. De lijsten van een project gelden
 ook in zijn subprojecten.
 
 ### Items
 
-Items voeg je toe in een project, of importeer je als lijst (Google Sheets als CSV, Excel, of geplakte cellen):
+Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):
 je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
 een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
 
@@ -250,7 +250,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Soorten: naam en velden (`fields`, als JSON). |
+| `item_types` | Lijsten: naam, naam van één item en velden (`fields`, als JSON). |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
 | `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |

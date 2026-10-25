@@ -13,7 +13,7 @@ import { Link } from "../router";
 import { useSession } from "../session";
 
 /**
- * Je overzicht: per project een kaart met zijn lijsten (de soorten) en hoeveel erin zit, zodat je met één tik bij
+ * Je overzicht: per project een kaart met zijn lijsten en hoeveel erin zit, zodat je met één tik bij
  * je wijnen of klantenkaarten bent. Met "Volgorde" zet je de projecten zoals jij ze wil.
  */
 export function Home() {
@@ -113,7 +113,7 @@ export function Home() {
   );
 }
 
-/** Eén project op het overzicht: de kop opent het project, elke lijst opent die soort. */
+/** Eén project op het overzicht: de kop opent het project, elke rij opent een lijst. */
 function ProjectCard({ project: p, above, types, index }: { project: ProjectNode; above?: string; types?: OverviewType[]; index: number }) {
   return (
     <section className="card dash-card" style={stagger(index)}>
@@ -134,7 +134,7 @@ function ProjectCard({ project: p, above, types, index }: { project: ProjectNode
         <ul className="rows">
           {types.map((t) => (
             <li key={t.id}>
-              <Link to={`/projecten/${p.id}?soort=${t.id}`} className="row">
+              <Link to={`/projecten/${p.id}?lijst=${t.id}`} className="row">
                 <span className="cell-main">
                   <span className="row-media">
                     <Icon name={(t.icon ?? "folder") as IconName} size={16} />

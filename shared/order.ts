@@ -1,4 +1,4 @@
-// Volgorde van lijsten: projecten, soorten, velden.
+// Volgorde: projecten, lijsten, velden.
 
 /** Een element verplaatsen in een lijst, van plaats `from` naar plaats `to` (de rest schuift op). */
 export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {

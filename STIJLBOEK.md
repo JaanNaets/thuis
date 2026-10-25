@@ -14,8 +14,8 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | --- | --- |
 | Kleuren, maten, schaduwen, curves | `src/styles.css`, bovenaan in `:root` |
 | Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`) |
-| Velden, soorten en items | `src/components/Fields.tsx`, `ItemsView.tsx` en `shared/fields.ts` |
-| Rechten | `shared/access.ts` (wat een rol mag, per soort en per veld) |
+| Lijsten, velden en items | `src/components/Fields.tsx`, `ItemsView.tsx` en `shared/fields.ts` |
+| Rechten | `shared/access.ts` (wat een rol mag, per lijst en per veld) |
 | Navigatie met overgangen | `src/router.tsx` (`Link`, `NavLink`, `useNavigate`) en `src/routes.tsx` |
 | Iconen | `src/components/Icon.tsx` |
 | Opmaak van bedragen, datums, hoeveelheden | `src/format.ts` |
@@ -121,7 +121,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 │ └────────────┘  ├────────────────────────────────────────────────────────┤ │
 │ [⌕ Zoeken ⌘K]   │ Wijnkelder  uitleg                         [Instellen] │ │  ← kopregel 56px
 │ ▮ Overzicht  2  ├────────────────────────────────────────────────────────┤ │
-│ Projecten       │ Wijnen 12 · Wijnhuizen 3                               │ │  ← tabs per soort
+│ Projecten       │ Wijnen 12 · Wijnhuizen 3                               │ │  ← tabs per lijst
 │ ● Huishouden ⌃  ├───────────────────────────────┬────────────────────────┤ │
 │ │ Wijnkelder    │ zijkolom (320px)              │ ┌ kaart ─────────────┐ │ │
 │ │ Fietsen       │ Subprojecten                  │ │ zoeken, filters    │ │ │
@@ -279,7 +279,7 @@ Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de k
 </div>
 ```
 
-- De lijst van een soort (`ItemsView`) is `.table-items`: de kolommen komen van de velden met `column` (de naam en
+- Een lijst (`ItemsView`) is `.table-items`: de kolommen komen van de velden met `column` (de naam en
   hooguit twee velden; naast de zijkolom is er niet meer plaats). Getallen (bedrag, getal, score, jaar) zijn 110px
   breed en rechts uitgelijnd (`col-end`), tekst `minmax(0, 160px)`. Daarom staat `--cols` op de tabel zelf.
 - Een andere tabel met vaste kolommen krijgt een eigen klasse met `--cols` in `styles.css`; de eerste kolom is
@@ -291,13 +291,13 @@ Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de k
 ### Tabs met tellers: `Tabs`
 
 ```tsx
-<Tabs label="Soorten" value={type.id} onChange={(t) => setParams({ soort: t }, { replace: true })}
+<Tabs label="Lijsten" value={type.id} onChange={(t) => setParams({ lijst: t }, { replace: true })}
   tabs={types.map((t) => ({ value: t.id, label: t.plural, count: counts[t.id] ?? 0 }))} />
 ```
 
 Een grijze pil met een wit vlak dat naar de actieve tab glijdt; tellers rollen bij een wijziging. Voor
-verschillende **weergaves binnen één scherm** (de soorten van een project, de onderwerpen bij Instellen). Niet voor
-navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?soort=`, `?tab=`), zodat je ernaar kan linken.
+verschillende **weergaves binnen één scherm** (de lijsten van een project, de onderwerpen bij Instellen). Niet voor
+navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?tab=`), zodat je ernaar kan linken.
 
 ### Filters: `FilterSelect` en `FilterToggle`
 
@@ -357,43 +357,44 @@ Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--de
 - Label boven het veld. Optioneel? `<span className="optional">· uitleg</span>` achter het label. Uitleg onder
   een veld in `.hint`.
 - Verplichte velden krijgen `required`, geen sterretje.
-- **Een soort heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
+- **Een lijst heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
   lange tekst als eigen kaart.
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
-- Kant-en-klare velden: `FieldInputs` (alle velden van een soort), `TagPicker`, `Switch`, `ToneSwatches`,
+- Kant-en-klare velden: `FieldInputs` (alle velden van een lijst), `TagPicker`, `Switch`, `ToneSwatches`,
   `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`.
 
-### Soorten en velden: `Fields.tsx`
+### Lijsten en velden: `Fields.tsx`
 
-Alles wat je bijhoudt, is een **item** van een **soort**: een klein formulier met eigen velden (Wijn met jaargang en
-druiven, Klantenkaart met een barcode). De soorten van een project gelden ook in zijn subprojecten. De veldsoorten
+Alles wat je bijhoudt, is een **item** in een **lijst**: een lijst heeft eigen velden (Wijnen met jaargang en
+druiven, Klantenkaarten met een barcode). De lijsten van een project gelden ook in zijn subprojecten. In de code heet
+een lijst `item_type` (`ItemType`, `type_id`); in alles wat de gebruiker leest, is het een **lijst**. De veldsoorten
 staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar een type, een controle
 (`cleanValue`), een opmaak (`formatFieldValue`) en hier een invoer.
 
 | Component of hulpje | Wat |
 | --- | --- |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een soort: naam en soort op één regel, onder ⋯ keuzes, eenheid, verwijzing, codeformaat, kolom, filter, verplicht en uitleg |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst: naam en soort veld op één regel, onder ⋯ keuzes, eenheid, verwijzing, codeformaat, kolom, filter, verplicht en uitleg |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link (op een kiosk als tekst) |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
-| `ItemSelect` | Een verwijzing naar een item van een andere soort (de wijn → het wijnhuis) |
+| `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis) |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen |
-| `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of soort (`ICONS` in `shared/templates.ts`) |
+| `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`) |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
-  soorten met hun velden. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon.
-- Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een lijst
-  importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per soort; wat we niet herkennen gaat bij de
+  lijsten met hun velden. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon.
+- Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
+  importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm.
 
 ### Volgorde: `useSortable` (`Sortable.tsx`)
 
-Alles wat de gebruiker zelf ordent (projecten, soorten, velden), sleep je aan een **greep** (`grip`, links in de rij).
+Alles wat de gebruiker zelf ordent (projecten, lijsten, velden), sleep je aan een **greep** (`grip`, links in de rij).
 Op het toetsenbord werkt dezelfde greep met ↑ ↓ Home End. Bouw nooit "Hoger/Lager"-knoppen.
 
 ```tsx
@@ -418,12 +419,12 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 - Een lijst die je niet mag ordenen, toont geen greep (`.drag-spacer` houdt de uitlijning).
 - Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
 - Wat de volgorde betekent: de projecten bovenaan je overzicht zijn **jouw** volgorde (per persoon); subprojecten
-  en soorten zijn die van het project (enkel met `manage`), en de soorten bepalen ook de volgorde van de tabs.
+  en lijsten zijn die van het project (enkel met `manage`), en de lijsten bepalen ook de volgorde van de tabs.
 
-### De lijst van een soort: `ItemsView`
+### Een lijst tonen: `ItemsView`
 
-`<ItemsView project={detail} type={type} />` is de lijst van één soort in een project: zoeken, filters uit de velden,
-Tag, Archief, een iconknop om te importeren en de tabel `.table-items`. Gebruik ze overal waar items van een soort
+`<ItemsView project={detail} type={type} />` is één lijst in een project: zoeken, filters uit de velden,
+Tag, Archief, een iconknop om te importeren en de tabel `.table-items`. Gebruik ze overal waar items van een lijst
 staan; bouw geen eigen lijst.
 
 ### Rechten in de app
@@ -433,14 +434,14 @@ aanloopt. Wat de app daarvoor krijgt:
 
 | Waar | Wat |
 | --- | --- |
-| `project.rights` (in `ProjectDetail` en `useSession().projects`) | `manage` (instellen, soorten, rollen), `members` (mensen), `create`, `delete`, en `items` (standaard Niet zien / Zien / Wijzigen) |
-| `type.access`, `type.field_access`, `type.can_create`, `type.can_delete` | Per soort en per veld wat jij mag (`ItemTypeView`) |
+| `project.rights` (in `ProjectDetail` en `useSession().projects`) | `manage` (instellen, lijsten, rollen), `members` (mensen), `create`, `delete`, en `items` (standaard Niet zien / Zien / Wijzigen) |
+| `type.access`, `type.field_access`, `type.can_create`, `type.can_delete` | Per lijst en per veld wat jij mag (`ItemTypeView`) |
 | `item.access`, `item.field_access`, `item.can_delete` | Hetzelfde op de fiche (`ItemDetail`) |
 
 - Een knop die iets toevoegt: enkel bij `can_create`. Bewerken: enkel bij `access === "edit"`. Een veld met
   `field_access` `view` staat alleen-lezen in het formulier; `none` staat er niet.
-- Een rol stel je in met `RoleForm`: schakelaars voor het project, een standaard, en per soort en per veld een
-  `Segmented` met "Standaard" erbij (open per soort met "Per veld", `.role-type`, `.role-fields`).
+- Een rol stel je in met `RoleForm`: schakelaars voor het project, een standaard, en per lijst en per veld een
+  `Segmented` met "Standaard" erbij (open per lijst met "Per veld", `.role-type`, `.role-fields`).
 - Afbeeldingen en bestanden uit de API altijd via `apiUrl("/…")`.
 
 ### Kleine bouwstenen
@@ -557,28 +558,28 @@ Regels:
 
 ---
 
-## 6. Patronen per soort scherm
+## 6. Patronen per scherm
 
 **Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" en `actions` "Volgorde" → per project (in de volgorde
 van de boom) een `dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen
-elke lijst (`?soort=`) met het aantal → gearchiveerde projecten apart. "Volgorde" wisselt naar de boom met grepen
+elke lijst (`?lijst=`) met het aantal → gearchiveerde projecten apart. "Volgorde" wisselt naar de boom met grepen
 (`useSortable`); "Klaar" terug. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
-`manage` of `members`) en `primary` "<Soort> toevoegen" → `Tabs` per soort (enkel als er meer dan één is) →
+`manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →
 `split split-main-first`: rechts `ItemsView`, in de zijkolom Subprojecten en Wie (met de rol, en "via …" als het
-lidmaatschap van een project erboven komt) → `fab`. Zonder soorten: een lege staat met "Soort maken".
+lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
 `dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het
 logboek (nieuwste eerst, toevoegen in een `Sheet`) en bestanden → onderaan stille knoppen (archiveren,
 `btn-danger-ghost` verwijderen).
 
-**Formulier**: zie [Formulier](#formulier). Een item: eventueel de soort kiezen, `LabelScanner`, `FieldInputs`,
+**Formulier**: zie [Formulier](#formulier). Een item: eventueel de lijst kiezen, `LabelScanner`, `FieldInputs`,
 tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 
-**Instellen** (`/projecten/:id/instellingen`): `Tabs` Algemeen · Soorten · Rollen · Mensen · Tags (in het adres:
-`?tab=mensen`), één kaart per tab. Een soort en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
+**Instellen** (`/projecten/:id/instellingen`): `Tabs` Algemeen · Lijsten · Rollen · Mensen · Tags (in het adres:
+`?tab=mensen`), één kaart per tab. Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
 **Ik** (`/ik`): je naam en kleur; je e-mailadres komt van je aanmelding.
@@ -606,11 +607,12 @@ een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 ## 9. Tekst
 
 - Nederlands zoals in Vlaanderen gesproken, met **je/jij**. "Kastickets", "gsm", "verkoper".
-- Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Wijn toevoegen", "Lijst importeren", "Instellen".
+- Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Wijn toevoegen", "Lijst maken", "Instellen".
 - Titels zonder punt. Uitleg in één zin.
 - Fouten zeggen wat er is en wat je kan doen: "Er moet altijd iemand overblijven die het project kan instellen."
-- Lege staat: wat er hier komt + hoe je begint. "Nog geen wijnen. Voeg er een toe, of importeer een lijst."
-- Wat de gebruiker maakt, heet zoals hij het noemt: de naam van de soort ("Wijn toevoegen"), niet "item".
+- Lege staat: wat er hier komt + hoe je begint. "Nog geen wijnen. Voeg er een toe, of importeer ze uit een tabel."
+- Wat de gebruiker maakt, heet zoals hij het noemt: de naam van één item van de lijst ("Wijn toevoegen"), niet "item". Het
+  algemene woord voor een formulier met eigen velden is **lijst**, nooit "soort", "type" of "categorie".
 - Datums als "20 okt 2026", bedragen als "€ 1.234,56", hoeveelheden met het juiste meervoud ("1 fles", "3 flessen").
 - Geen jargon ("API", "sync", "entity"), geen uitroeptekens, geen emoji.
 
@@ -643,7 +645,7 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Eén hoofdactie (`btn-primary`), met een `fab` op gsm als het een overzichtsscherm is.
 - [ ] Navigatie via `src/router.tsx`; een nieuw scherm staat in `routes.tsx` (en in het zoekpalet als je het moet kunnen vinden).
 - [ ] Gevulde iconen voor dingen, lijniconen voor richtingen en handelingen.
-- [ ] Een nieuwe soort of sjabloon heeft een notitieveld (lange tekst).
+- [ ] Een nieuwe lijst of sjabloon heeft een notitieveld (lange tekst).
 - [ ] Lege staat, laadstaat (skeleton) en foutmelding zijn er.
 - [ ] Toast na elke actie die iets bewaart of verwijdert (behalve −/+ in een lijst); `useConfirm` voor wat niet terug kan.
 - [ ] Animaties enkel uit de tabel in [Beweging](#5-beweging), met `backwards`.

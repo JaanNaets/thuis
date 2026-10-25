@@ -40,8 +40,8 @@ function parseProjectInput(body: unknown) {
 }
 
 /**
- * Velden van een soort nakijken, met verwijzingen naar soorten die in dit project bestaan (van het project zelf of
- * erboven). "self" verwijst naar de soort zelf (een plaats die in een andere plaats ligt).
+ * Velden van een lijst nakijken, met verwijzingen naar lijsten die in dit project bestaan (van het project zelf of
+ * erboven). "self" verwijst naar de lijst zelf (een plaats die in een andere plaats ligt).
  */
 function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string): FieldDef[] {
   let fields: FieldDef[];
@@ -55,7 +55,7 @@ function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string): F
   }
   const ids = new Set([...available.map((t) => t.id), selfId]);
   for (const f of fields) {
-    if (f.type === "item" && !ids.has(f.ref_type!)) throw new ValidationError(`"${f.label}" verwijst naar een soort die hier niet bestaat`);
+    if (f.type === "item" && !ids.has(f.ref_type!)) throw new ValidationError(`"${f.label}" verwijst naar een lijst die hier niet bestaat`);
   }
   return fields;
 }
@@ -132,7 +132,7 @@ async function insertTemplateTypes(db: D1Database, projectId: string, templateKe
   if (!isTemplateKey(templateKey)) return [];
   const template = PROJECT_TEMPLATES[templateKey];
   const ids = Object.fromEntries(template.types.map((t) => [t.key, crypto.randomUUID()]));
-  // Verwijzingen naar soorten erboven, op naam ("verkoper" → de Verkopers van het huishouden).
+  // Verwijzingen naar lijsten erboven, op naam ("verkoper" → de Verkopers van het huishouden).
   const above = chain.length ? await typesFor(db, chain) : [];
   const byName = Object.fromEntries(above.map((t) => [t.name.toLowerCase(), t.id]));
   return template.types.map((t, i) =>
@@ -155,7 +155,7 @@ async function insertTemplateTypes(db: D1Database, projectId: string, templateKe
 
 /**
  * Een nieuw project. Bovenaan mag iedereen er een maken (je wordt er beheerder van); een subproject enkel wie het
- * project erboven mag instellen. Een sjabloon zet soorten klaar.
+ * project erboven mag instellen. Een sjabloon zet lijsten klaar.
  */
 projects.post("/", async (c) => {
   const input = parseProjectInput(await c.req.json());
@@ -203,11 +203,11 @@ projects.put("/:id/children/order", async (c) => {
   return c.json({ ok: true });
 });
 
-/** De volgorde van de eigen soorten (de tabs van het project). */
+/** De volgorde van de eigen lijsten (de tabs van het project). */
 projects.put("/:id/types/order", async (c) => {
   const db = c.env.DB;
   const access = await requireProject(db, c.get("person").id, c.req.param("id"));
-  need(access, "manage", "Enkel wie het project instelt, kan de soorten ordenen.");
+  need(access, "manage", "Enkel wie het project instelt, kan de lijsten ordenen.");
   const ids = parseOrder(await c.req.json());
   await db.batch(
     ids.map((id, i) => db.prepare("UPDATE item_types SET sort_order = ? WHERE id = ? AND project_id = ?").bind((i + 1) * 10, id, access.project.id)),
@@ -345,13 +345,13 @@ projects.delete("/:id", async (c) => {
   return c.body(null, 204);
 });
 
-// ---------- soorten ----------
+// ---------- lijsten ----------
 
 projects.post("/:id/types", async (c) => {
   const input = parseTypeInput(await c.req.json());
   const db = c.env.DB;
   const access = await requireProject(db, c.get("person").id, c.req.param("id"));
-  need(access, "manage", "Enkel wie het project instelt, kan soorten maken.");
+  need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const id = crypto.randomUUID();
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id);
   await db
@@ -365,7 +365,7 @@ projects.post("/:id/types", async (c) => {
 });
 
 /**
- * Alle soorten die in dit project en zijn subprojecten gebruikt kunnen worden: om in een rol per soort en per veld
+ * Alle lijsten die in dit project en zijn subprojecten gebruikt kunnen worden: om in een rol per lijst en per veld
  * te kiezen wat iemand mag. Enkel voor wie het project instelt.
  */
 projects.get("/:id/all-types", async (c) => {
@@ -388,9 +388,9 @@ export const types = new Hono<AppEnv>();
 
 async function requireType(db: D1Database, personId: string, typeId: string) {
   const row = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(typeId).first<Omit<ItemType, "fields"> & { fields: string }>();
-  if (!row) throw new NotFoundError("Die soort bestaat niet (meer).");
+  if (!row) throw new NotFoundError("Die lijst bestaat niet (meer).");
   const access = await projectAccess(db, personId, row.project_id);
-  if (!access) throw new NotFoundError("Die soort bestaat niet (meer).");
+  if (!access) throw new NotFoundError("Die lijst bestaat niet (meer).");
   return { type: toItemType(row), access };
 }
 
@@ -398,7 +398,7 @@ types.put("/:id", async (c) => {
   const input = parseTypeInput(await c.req.json());
   const db = c.env.DB;
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
-  need(access, "manage", "Enkel wie het project instelt, kan soorten aanpassen.");
+  need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id);
   await db
     .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ? WHERE id = ?")
@@ -412,13 +412,13 @@ types.delete("/:id", async (c) => {
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage");
   const used = await db.prepare("SELECT COUNT(*) AS n FROM items WHERE type_id = ?").bind(type.id).first<{ n: number }>();
-  if (used && used.n > 0) throw new ConflictError(`Er zijn nog ${used.n} items van deze soort. Verwijder of verplaats ze eerst.`);
+  if (used && used.n > 0) throw new ConflictError(`Er staan nog ${used.n} items in deze lijst. Verwijder of verplaats ze eerst.`);
   const { results } = await db
     .prepare("SELECT name, fields FROM item_types WHERE id != ? AND fields LIKE ?")
     .bind(type.id, `%${type.id}%`)
     .all<{ name: string; fields: string }>();
   const referring = results.filter((r) => (JSON.parse(r.fields) as FieldDef[]).some((f) => f.ref_type === type.id)).map((r) => r.name);
-  if (referring.length) throw new ConflictError(`${referring.join(", ")} verwijst nog naar deze soort. Haal dat veld eerst weg.`);
+  if (referring.length) throw new ConflictError(`${referring.join(", ")} verwijst nog naar deze lijst. Haal dat veld eerst weg.`);
   await db.prepare("DELETE FROM item_types WHERE id = ?").bind(type.id).run();
   return c.body(null, 204);
 });

@@ -27,7 +27,7 @@ function valueTexts(def: FieldDef, value: FieldValue | undefined, names: Names):
 const NUMERIC = ["money", "number", "score", "year"];
 
 /**
- * De items van één soort in een project: zoeken, filters uit de velden (en tags), en een tabel met de velden die
+ * De items van één lijst in een project: zoeken, filters uit de velden (en tags), en een tabel met de velden die
  * als kolom staan. Een periode met filter wordt "nu" (bv. een wijn die nu drinkklaar is).
  */
 export function ItemsView({ project, type }: { project: ProjectDetail; type: ItemTypeView }) {
@@ -97,10 +97,10 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         </label>
         {type.can_create && !project.project.archived && (
           <Link
-            to={`/projecten/${project.project.id}/importeren?soort=${type.id}`}
+            to={`/projecten/${project.project.id}/importeren?lijst=${type.id}`}
             className="btn btn-outline btn-icon"
-            aria-label={`Lijst importeren als ${type.plural.toLowerCase()}`}
-            title="Lijst importeren"
+            aria-label={`Importeren in ${type.plural}`}
+            title="Importeren uit een tabel"
           >
             <Icon name="table" />
           </Link>
@@ -143,7 +143,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             type.can_create &&
             !filtered &&
             !archived && (
-              <Link to={`/projecten/${project.project.id}/nieuw?soort=${type.id}`} className="btn btn-outline btn-sm">
+              <Link to={`/projecten/${project.project.id}/nieuw?lijst=${type.id}`} className="btn btn-outline btn-sm">
                 <Icon name="plus" size={16} /> {type.name} toevoegen
               </Link>
             )
@@ -154,7 +154,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             : archived
               ? "Wat je archiveert, komt hier."
               : type.can_create
-                ? "Voeg er een toe, of importeer een lijst."
+                ? "Voeg er een toe, of importeer ze uit een tabel."
                 : undefined}
         </EmptyState>
       )}

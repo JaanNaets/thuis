@@ -47,7 +47,7 @@ export type ProjectNode = Project & {
 
 export type Me = { person: Person; projects: ProjectNode[] };
 
-/** Je overzicht: per project de soorten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
+/** Je overzicht: per project de lijsten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
 export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number };
 export type Overview = { projects: { id: string; types: OverviewType[] }[] };
 
@@ -82,7 +82,7 @@ export type MemberInput = {
   role_id: string;
 };
 
-// ---------- soorten, tags en items ----------
+// ---------- lijsten, tags en items ----------
 
 export type ItemType = {
   id: string;
@@ -95,7 +95,7 @@ export type ItemType = {
   sort_order: number;
 };
 
-/** Een soort zoals jij ze ziet: enkel de velden die je mag zien, en wat je per veld mag. */
+/** Een lijst zoals jij ze ziet: enkel de velden die je mag zien, en wat je per veld mag. */
 export type ItemTypeView = ItemType & { access: Access; field_access: Record<string, Access>; can_create: boolean; can_delete: boolean };
 
 export type ItemTypeInput = { name: string; plural: string; name_label: string | null; icon: IconKey | null; fields: FieldDef[] };
@@ -107,13 +107,13 @@ export type ProjectDetail = {
   /** De projecten erboven die je mag zien (van boven naar onder). */
   path: { id: string; name: string }[];
   children: (ProjectNode & { item_count: number })[];
-  /** Soorten van dit project en erboven, die je mag zien. */
+  /** Lijsten van dit project en erboven, die je mag zien. */
   types: ItemTypeView[];
   tags: Tag[];
   /** Rollen van dit project en erboven. */
   roles: Role[];
   members: Member[];
-  /** Aantal items per soort in dit project. */
+  /** Aantal items per lijst in dit project. */
   counts: Record<string, number>;
 };
 
@@ -164,7 +164,7 @@ export type ItemInput = { type_id: string; name: string; data: Record<string, un
 
 export type ImportResult = { created: number; skipped: { row: number; error: string }[] };
 
-/** Wat de app van een etiket of foto las, in de velden van de soort. */
+/** Wat de app van een etiket of foto las, in de velden van de lijst. */
 export type LabelScan = { name: string | null; data: Attributes; message?: string };
 
 export type SearchResult = {

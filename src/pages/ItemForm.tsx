@@ -13,7 +13,7 @@ import { useSession } from "../session";
 /** Velden die de app van een foto kan lezen (zie de API). */
 const READABLE = ["text", "number", "money", "date", "year", "year_range", "select", "multi", "bool"];
 
-/** /projecten/:id/nieuw?soort= (nieuw) of /items/:itemId/bewerken. */
+/** /projecten/:id/nieuw?lijst= (nieuw) of /items/:itemId/bewerken. */
 export function ItemFormPage() {
   const { id, itemId } = useParams();
   return itemId ? <EditItem itemId={itemId} /> : <WithProject projectId={id!} />;
@@ -30,12 +30,12 @@ function EditItem({ itemId }: { itemId: string }) {
 function WithProject({ projectId, item }: { projectId: string; item?: ItemDetail }) {
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${projectId}`);
   const [params] = useSearchParams();
-  // Kwam je via "Wijn toevoegen", dan ligt de soort vast; anders kies je ze bovenaan (en dat blijft zo).
-  const [choose] = useState(() => !item && !params.get("soort"));
+  // Kwam je via "Wijn toevoegen", dan ligt de lijst vast; anders kies je ze bovenaan (en dat blijft zo).
+  const [choose] = useState(() => !item && !params.get("lijst"));
   if (error) return <p className="error page">{error}</p>;
   if (!p) return null;
   const creatable = p.types.filter((t) => t.can_create);
-  const type = item ? p.types.find((t) => t.id === item.type_id) : (creatable.find((t) => t.id === params.get("soort")) ?? creatable[0]);
+  const type = item ? p.types.find((t) => t.id === item.type_id) : (creatable.find((t) => t.id === params.get("lijst")) ?? creatable[0]);
   if (!type) return <p className="error page">{item ? "Dit item mag je niet bewerken." : "Je kan hier niets toevoegen."}</p>;
   return <ItemForm key={type.id} project={p} type={type} item={item} creatable={choose ? creatable : []} />;
 }
@@ -110,19 +110,19 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
 
       {creatable.length > 1 && creatable.length <= 4 && (
         <Segmented
-          label="Soort"
+          label="Lijst"
           value={type.id}
-          onChange={(t) => setParams({ soort: t }, { replace: true })}
-          options={creatable.map((t) => ({ value: t.id, label: t.name }))}
+          onChange={(t) => setParams({ lijst: t }, { replace: true })}
+          options={creatable.map((t) => ({ value: t.id, label: t.plural }))}
         />
       )}
       {creatable.length > 4 && (
         <label className="field">
-          <span className="label">Soort</span>
-          <select value={type.id} onChange={(e) => setParams({ soort: e.target.value }, { replace: true })}>
+          <span className="label">Lijst</span>
+          <select value={type.id} onChange={(e) => setParams({ lijst: e.target.value }, { replace: true })}>
             {creatable.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name}
+                {t.plural}
               </option>
             ))}
           </select>

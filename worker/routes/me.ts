@@ -38,8 +38,8 @@ me.put("/order", async (c) => {
 });
 
 /**
- * Je overzicht: per project de soorten van dat project zelf, en die van erboven waar hier items in zitten, met
- * het aantal. Een soort die je niet mag zien, staat er niet (ook niet als aantal).
+ * Je overzicht: per project de lijsten van dat project zelf, en die van erboven waar hier items in zitten, met
+ * het aantal. Een lijst die je niet mag zien, staat er niet (ook niet als aantal).
  */
 me.get("/overview", async (c) => {
   const db = c.env.DB;
@@ -70,7 +70,7 @@ me.get("/overview", async (c) => {
       id: n.id,
       types: types.results
         .filter((t) => (t.project_id === n.id || count.has(`${n.id}/${t.id}`)) && typeAccess(n.rights, t.id) !== "none")
-        // Eerst de eigen soorten, dan die van erboven (elk in hun volgorde).
+        // Eerst de eigen lijsten, dan die van erboven (elk in hun volgorde).
         .sort((a, b) => Number(b.project_id === n.id) - Number(a.project_id === n.id))
         .map((t) => ({ id: t.id, name: t.name, plural: t.plural, icon: t.icon, count: count.get(`${n.id}/${t.id}`) ?? 0 })),
     })),

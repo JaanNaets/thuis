@@ -74,8 +74,8 @@ async function namesFor(db: D1Database, personId: string, chain: string[], types
 }
 
 /**
- * Een item met wat jij ermee mag. Wie de soort niet mag zien (of het project niet), krijgt "niet gevonden".
- * `want`: "edit" = de soort wijzigen (naam, tags, foto, bestanden, logboek).
+ * Een item met wat jij ermee mag. Wie de lijst niet mag zien (of het project niet), krijgt "niet gevonden".
+ * `want`: "edit" = de items van de lijst wijzigen (naam, tags, foto, bestanden, logboek).
  */
 async function requireItem(c: Context<AppEnv>, id: string, want: "view" | "edit" = "view") {
   const db = c.env.DB;
@@ -205,7 +205,7 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
 
 // ---------- items van een project ----------
 
-/** De items van een project (?type= één soort, ?archived=1 het archief), met de namen waarnaar ze verwijzen. */
+/** De items van een project (?type= één lijst, ?archived=1 het archief), met de namen waarnaar ze verwijzen. */
 projectItems.get("/:id/items", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
@@ -232,7 +232,7 @@ projectItems.post("/:id/items", async (c) => {
   const me = c.get("person").id;
   const access = await requireProject(db, me, c.req.param("id"));
   const type = (await typesFor(db, access.chain)).find((t) => t.id === input.type_id);
-  if (!type) throw new ValidationError("Die soort bestaat hier niet.");
+  if (!type) throw new ValidationError("Die lijst bestaat hier niet.");
   if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
   const data = await prepareData(db, me, access, type, input.data, {});
   await assertTags(db, access.chain, input.tag_ids);
@@ -248,10 +248,10 @@ projectItems.post("/:id/items", async (c) => {
 
 // ---------- één item ----------
 
-/** Keuzes voor een verwijzing: alle items van een soort (?type=) die je mag zien, in al je projecten. */
+/** Keuzes voor een verwijzing: alle items van een lijst (?type=) die je mag zien, in al je projecten. */
 items.get("/", async (c) => {
   const typeId = c.req.query("type");
-  if (!typeId) throw new ValidationError("Kies een soort");
+  if (!typeId) throw new ValidationError("Kies een lijst");
   const db = c.env.DB;
   const nodes = (await accessibleProjects(db, c.get("person").id)).filter((n) => typeAccess(n.rights, typeId) !== "none");
   if (!nodes.length) return c.json([]);
@@ -268,7 +268,7 @@ items.get("/", async (c) => {
 items.get("/:id", async (c) => c.json(await loadDetail(c, c.req.param("id"))));
 
 /**
- * Bewaren: wie de soort mag wijzigen, past naam en tags aan; per veld enkel wat je mag wijzigen. Wie enkel enkele
+ * Bewaren: wie de lijst mag wijzigen, past naam en tags aan; per veld enkel wat je mag wijzigen. Wie enkel enkele
  * velden mag wijzigen (bv. de score), past enkel die aan.
  */
 items.put("/:id", async (c) => {
@@ -279,7 +279,7 @@ items.put("/:id", async (c) => {
   const editsType = canEditType(access.rights, type.id);
   if (!editsType && !type.fields.some((f) => fieldAccess(access.rights, type.id, f.key) === "edit"))
     throw new ForbiddenError("Dit item mag je enkel bekijken.");
-  if (input.type_id !== type.id) throw new ValidationError("De soort van een item verandert niet.");
+  if (input.type_id !== type.id) throw new ValidationError("Een item verhuist niet naar een andere lijst.");
   const data = await prepareData(db, me, access, type, input.data, parseData(row.data));
   const statements = [
     db
@@ -443,7 +443,7 @@ items.delete("/:id/log/:logId", async (c) => {
 const MAX_IMPORT_ROWS = 3000;
 
 /**
- * Een lijst (bv. uit een Google Sheet) als items van één soort. De app leest de kolommen; hier wordt alles
+ * Een tabel (bv. uit een Google Sheet) als items in één lijst. De app leest de kolommen; hier wordt alles
  * nagekeken. Tags op naam (nieuwe worden gemaakt), en wat er al staat (zelfde naam en waarden) wordt overgeslagen.
  */
 projectItems.post("/:id/items/import", async (c) => {
@@ -452,7 +452,7 @@ projectItems.post("/:id/items/import", async (c) => {
   const me = c.get("person").id;
   const access = await requireProject(db, me, c.req.param("id"));
   const type = (await typesFor(db, access.chain)).find((t) => t.id === requiredId(obj, "type_id"));
-  if (!type) throw new ValidationError("Die soort bestaat hier niet.");
+  if (!type) throw new ValidationError("Die lijst bestaat hier niet.");
   if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
   if (!Array.isArray(obj.rows) || obj.rows.length === 0) throw new ValidationError("Er staan geen rijen in deze lijst");
   if (obj.rows.length > MAX_IMPORT_ROWS) throw new ValidationError(`Hooguit ${MAX_IMPORT_ROWS} rijen per keer`);
@@ -542,14 +542,14 @@ function describeField(f: FieldDef): string {
   return `- ${f.key}: ${f.label}${extra}${f.hint ? `. ${f.hint}` : ""}`;
 }
 
-/** Een foto van een etiket of typeplaatje lezen in de velden van een soort (die je mag invullen). */
+/** Een foto van een etiket of typeplaatje lezen in de velden van een lijst (die je mag invullen). */
 projectItems.post("/:id/items/scan", async (c) => {
   const form = await c.req.formData();
   const db = c.env.DB;
   const access = await requireProject(db, c.get("person").id, c.req.param("id"));
   const typeId = form.get("type_id");
   const type = (await typesFor(db, access.chain)).find((t) => t.id === typeId);
-  if (!type || !canEditType(access.rights, type.id)) throw new ValidationError("Die soort bestaat hier niet.");
+  if (!type || !canEditType(access.rights, type.id)) throw new ValidationError("Die lijst bestaat hier niet.");
   const image = form.get("image");
   const empty: LabelScan = { name: null, data: {} };
   if (!(image instanceof File)) return c.json({ error: "Geen foto ontvangen" }, 400);

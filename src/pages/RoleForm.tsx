@@ -15,7 +15,7 @@ type FullType = ItemType & { project_name: string };
 const LEVELS = (Object.keys(ACCESS_LEVELS) as Access[]).map((a) => ({ value: a, label: ACCESS_LEVELS[a].label }));
 const WITH_DEFAULT = [{ value: "default" as const, label: "Standaard" }, ...LEVELS];
 
-/** Een rol: wat je met het project mag, de standaard voor alles, en uitzonderingen per soort en per veld. */
+/** Een rol: wat je met het project mag, de standaard voor alles, en uitzonderingen per lijst en per veld. */
 export function RoleFormPage() {
   const { id, roleId } = useParams();
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
@@ -100,13 +100,13 @@ function RoleForm({ project: p, types, existing }: { project: ProjectDetail; typ
         <div className="field">
           <span className="label">Items, standaard</span>
           <Segmented label="Items, standaard" value={rights.items} onChange={(items) => setRights((r) => ({ ...r, items }))} options={LEVELS} />
-          <span className="hint">Geldt voor elke soort en elk veld, behalve de uitzonderingen hieronder.</span>
+          <span className="hint">Geldt voor elke lijst en elk veld, behalve de uitzonderingen hieronder.</span>
         </div>
       </section>
 
       {types.length > 0 && (
         <section className="card">
-          <CardHead icon="folder" title="Per soort en per veld" description="Niet zien: de items van die soort (of dat veld) blijven verborgen." />
+          <CardHead icon="folder" title="Per lijst en per veld" description="Niet zien: de items van die lijst (of dat veld) blijven verborgen." />
           <ul className="rows role-types">
             {types.map((t) => {
               const entry = rights.types[t.id];

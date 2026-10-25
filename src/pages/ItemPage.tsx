@@ -48,7 +48,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
   const tags = p.tags.filter((t) => item.tag_ids.includes(t.id));
   const codes = type.fields.filter((f) => f.type === "code" && item.data[f.key]);
   const texts = type.fields.filter((f) => f.type === "longtext" && item.data[f.key]);
-  const back = `/projecten/${p.project.id}?soort=${type.id}`;
+  const back = `/projecten/${p.project.id}?lijst=${type.id}`;
 
   async function upload() {
     setUploading(true);

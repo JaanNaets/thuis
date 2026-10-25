@@ -14,17 +14,17 @@ import { useNavigate } from "../router";
 
 type FullType = ItemType & { project_name: string };
 
-/** Een soort samenstellen: naam, meervoud, icoon en velden. */
+/** Een lijst samenstellen: naam, hoe één item heet, icoon en velden. */
 export function TypeFormPage() {
   const { id, typeId } = useParams();
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
-  // Alle soorten met al hun velden (de projectfiche toont enkel wat jij mag zien).
+  // Alle lijsten met al hun velden (de projectfiche toont enkel wat jij mag zien).
   const { data: all, error: allError } = useApi<FullType[]>(`/projects/${id}/all-types`);
   if (error || allError) return <p className="error page">{error ?? allError}</p>;
   if (!p || !all) return null;
   const existing = typeId ? all.find((t) => t.id === typeId) : undefined;
-  if (typeId && !existing) return <p className="error page">Die soort bestaat niet (meer).</p>;
-  // Verwijzen kan naar soorten van dit project en erboven.
+  if (typeId && !existing) return <p className="error page">Die lijst bestaat niet (meer).</p>;
+  // Verwijzen kan naar lijsten van dit project en erboven.
   const chain = new Set([p.project.id, ...p.path.map((x) => x.id)]);
   const refTypes = all.filter((t) => chain.has(t.project_id) && t.id !== typeId);
   return <TypeForm project={p} existing={existing} refTypes={refTypes} />;
@@ -41,7 +41,7 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
   const [fields, setFields] = useState<FieldDraft[]>(() => fieldsDraft(existing?.fields ?? []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const back = `/projecten/${p.project.id}/instellingen?tab=soorten`;
+  const back = `/projecten/${p.project.id}/instellingen?tab=lijsten`;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -65,14 +65,14 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
     if (!existing) return;
     const ok = await confirm({
       title: `${existing.plural} verwijderen?`,
-      body: "Kan enkel als er geen items van deze soort meer zijn.",
+      body: "Kan enkel als er geen items meer in deze lijst staan.",
       confirmLabel: "Verwijderen",
       danger: true,
     });
     if (!ok) return;
     try {
       await api.delete(`/types/${existing.id}`);
-      toast("Soort verwijderd", "trash");
+      toast("Lijst verwijderd", "trash");
       navigate(back, { replace: true });
     } catch (err) {
       toast((err as Error).message, "alert");
@@ -81,17 +81,17 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title={existing ? existing.plural : "Nieuwe soort"} description={p.project.name} back={{ to: -1, label: "Soorten" }} />
+      <PageHead title={existing ? existing.plural : "Nieuwe lijst"} description={p.project.name} back={{ to: -1, label: "Lijsten" }} />
 
       <section className="card form-section">
         <div className="field-row">
           <label className="field">
-            <span className="label">Naam</span>
-            <input required maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Wijn" />
+            <span className="label">Naam van de lijst</span>
+            <input maxLength={40} value={plural} onChange={(e) => setPlural(e.target.value)} placeholder="bv. Wijnen" />
           </label>
           <label className="field">
-            <span className="label">Meervoud</span>
-            <input maxLength={40} value={plural} onChange={(e) => setPlural(e.target.value)} placeholder="bv. Wijnen" />
+            <span className="label">Eén item heet</span>
+            <input required maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Wijn" />
           </label>
         </div>
         <label className="field">
@@ -108,7 +108,7 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
       </section>
 
       <section className="card form-section">
-        <FieldsEditor value={fields} onChange={setFields} types={refTypes} selfLabel={name || "Deze soort"} selfId={existing?.id} />
+        <FieldsEditor value={fields} onChange={setFields} types={refTypes} selfLabel={plural || name || "Deze lijst"} selfId={existing?.id} />
       </section>
 
       {error && <p className="error">{error}</p>}
@@ -117,7 +117,7 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
       </SubmitButton>
       {existing && (
         <button type="button" className="btn btn-danger-ghost" style={{ justifySelf: "start" }} onClick={remove}>
-          <Icon name="trash" size={16} /> Soort verwijderen
+          <Icon name="trash" size={16} /> Lijst verwijderen
         </button>
       )}
     </form>

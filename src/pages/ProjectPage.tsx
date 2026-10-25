@@ -10,8 +10,8 @@ import { Link } from "../router";
 import { useSession } from "../session";
 
 /**
- * Een project: per soort een tab met de lijst; in de zijkolom de subprojecten en wie erin zit.
- * De hoofdactie voegt iets toe van de soort die openstaat.
+ * Een project: per lijst een tab; in de zijkolom de subprojecten en wie erin zit.
+ * De hoofdactie voegt iets toe aan de lijst die openstaat.
  */
 export function ProjectPage() {
   const { id } = useParams();
@@ -24,15 +24,15 @@ export function ProjectPage() {
 
   const { project, counts } = p;
   const rights = project.rights;
-  // Tabs: de soorten van dit project, en soorten van erboven waar hier al iets in zit (zonder eigen soorten: alle).
+  // Tabs: de lijsten van dit project, en lijsten van erboven waar hier al iets in zit (zonder eigen lijsten: alle).
   const own = p.types.filter((t) => t.project_id === project.id || counts[t.id]);
   const types = own.length ? own : p.types;
-  const wanted = params.get("soort");
+  const wanted = params.get("lijst");
   const type = p.types.find((t) => t.id === wanted) ?? types.find((t) => counts[t.id]) ?? types[0];
   const parent = p.path[p.path.length - 1];
   const settings = rights.manage || rights.members;
   const roleName = (roleId: string) => p.roles.find((r) => r.id === roleId)?.name ?? "";
-  const newItem = type && `/projecten/${project.id}/nieuw?soort=${type.id}`;
+  const newItem = type && `/projecten/${project.id}/nieuw?lijst=${type.id}`;
   const canAdd = Boolean(type?.can_create && !project.archived);
 
   return (
@@ -61,9 +61,9 @@ export function ProjectPage() {
 
       {types.length > 1 && type && (
         <Tabs
-          label="Soorten"
+          label="Lijsten"
           value={type.id}
-          onChange={(t) => setParams({ soort: t }, { replace: true })}
+          onChange={(t) => setParams({ lijst: t }, { replace: true })}
           tabs={(types.includes(type) ? types : [...types, type]).map((t) => ({ value: t.id, label: t.plural, count: counts[t.id] ?? 0 }))}
         />
       )}
@@ -74,7 +74,7 @@ export function ProjectPage() {
             <CardHead
               icon="project"
               title="Subprojecten"
-              description={p.children.length === 0 ? "Een deel van dit project, met eigen soorten en mensen" : undefined}
+              description={p.children.length === 0 ? "Een deel van dit project, met eigen lijsten en mensen" : undefined}
               action={
                 rights.manage &&
                 !project.archived && (
@@ -151,15 +151,15 @@ export function ProjectPage() {
               title="Nog niets om bij te houden"
               action={
                 rights.manage && (
-                  <Link to={`/projecten/${project.id}/soorten/nieuw`} className="btn btn-outline btn-sm">
-                    <Icon name="plus" size={16} /> Soort maken
+                  <Link to={`/projecten/${project.id}/lijsten/nieuw`} className="btn btn-outline btn-sm">
+                    <Icon name="plus" size={16} /> Lijst maken
                   </Link>
                 )
               }
             >
               {rights.manage
-                ? "Maak een soort: een formulier met de velden die je wil bijhouden (bv. Wijn met jaargang en druiven)."
-                : "Wie dit project instelt, kan hier soorten maken."}
+                ? "Maak een lijst met de velden die je wil bijhouden (bv. Wijnen met jaargang en druiven)."
+                : "Wie dit project instelt, kan hier lijsten maken."}
             </EmptyState>
           )}
         </div>

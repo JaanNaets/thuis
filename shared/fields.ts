@@ -1,4 +1,4 @@
-// Velden: de bouwstenen van een soort (een zelf samengesteld formulier zoals "Wijn" of "Klantenkaart").
+// Velden: de bouwstenen van een lijst (een zelf samengesteld formulier zoals "Wijn" of "Klantenkaart").
 //
 // - Een veld heeft een sleutel (blijft, ook als je het hernoemt), een naam en een soort: tekst, getal, datum,
 //   keuzelijst, barcode/QR, een persoon, een verwijzing naar een ander item, personen met een aandeel, …
@@ -55,7 +55,7 @@ export type FieldDef = {
   options?: string[];
   /** Eenheid achter een getal: "km", "cm". */
   unit?: string;
-  /** Verwijzing: naar items van deze soort. */
+  /** Verwijzing: naar items van deze lijst. */
   ref_type?: string;
   /** Barcode/QR: het formaat als je zelf een nummer typt. */
   format?: CodeFormat;
@@ -85,7 +85,7 @@ export type Attributes = Record<string, FieldValue>;
 const KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
 export const MAX_FIELDS = 40;
 
-/** "Kilometerstand" → "kilometerstand"; zonder accenten of tekens, uniek binnen de soort. */
+/** "Kilometerstand" → "kilometerstand"; zonder accenten of tekens, uniek binnen de lijst. */
 export function fieldKey(label: string, taken: string[]): string {
   const base =
     label
@@ -101,10 +101,10 @@ export function fieldKey(label: string, taken: string[]): string {
   return key;
 }
 
-/** De velden van een soort nakijken (wat de app of iemand anders stuurde). Gooit een fout met uitleg. */
+/** De velden van een lijst nakijken (wat de app of iemand anders stuurde). Gooit een fout met uitleg. */
 export function cleanFields(raw: unknown): FieldDef[] {
   if (raw === null || raw === undefined) return [];
-  if (!Array.isArray(raw) || raw.length > MAX_FIELDS) throw new Error(`Hoogstens ${MAX_FIELDS} velden per soort`);
+  if (!Array.isArray(raw) || raw.length > MAX_FIELDS) throw new Error(`Hoogstens ${MAX_FIELDS} velden per lijst`);
   const seen = new Set<string>();
   return raw.map((r) => {
     const f = (r ?? {}) as Record<string, unknown>;
@@ -130,7 +130,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (options && (type === "select" || type === "multi") && options.length) def.options = options;
     if (typeof f.unit === "string" && f.unit.trim() && type === "number") def.unit = f.unit.trim().slice(0, 12);
     if (type === "item") {
-      if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke soort "${label}" verwijst`);
+      if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke lijst "${label}" verwijst`);
       def.ref_type = f.ref_type.slice(0, 64);
     }
     if (type === "code" && isCodeFormat(f.format)) def.format = f.format;
@@ -213,7 +213,7 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
   }
 }
 
-/** Alle waarden van een item nakijken tegen de velden van zijn soort; onbekende velden vallen weg. */
+/** Alle waarden van een item nakijken tegen de velden van zijn lijst; onbekende velden vallen weg. */
 export function cleanAttributes(defs: FieldDef[], raw: unknown): Attributes {
   const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const out: Attributes = {};
@@ -235,7 +235,7 @@ export function referencedPeople(defs: FieldDef[], data: Attributes): string[] {
   return [...ids];
 }
 
-/** De items waarnaar waarden verwijzen, met de soort waarnaar het veld wijst. */
+/** De items waarnaar waarden verwijzen, met de lijst waarnaar het veld wijst. */
 export function referencedItems(defs: FieldDef[], data: Attributes): { id: string; ref_type: string; key: string }[] {
   return defs
     .filter((d) => d.type === "item" && typeof data[d.key] === "string")

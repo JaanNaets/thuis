@@ -1,9 +1,9 @@
-// Sjablonen: een goed vertrekpunt voor een nieuw project. Ze zetten soorten met velden klaar; daarna kan je alles
+// Sjablonen: een goed vertrekpunt voor een nieuw project. Ze zetten lijsten met velden klaar; daarna kan je alles
 // aanpassen. Er is niets speciaals aan: een project uit een sjabloon is een gewoon project.
 
 import type { FieldDef } from "./fields";
 
-/** Iconen voor projecten en soorten (namen uit src/components/Icon.tsx). */
+/** Iconen voor projecten en lijsten (namen uit src/components/Icon.tsx). */
 export const ICONS = [
   "home",
   "project",
@@ -31,7 +31,7 @@ export function isIconKey(value: unknown): value is IconKey {
   return typeof value === "string" && (ICONS as readonly string[]).includes(value);
 }
 
-/** Een veld in een sjabloon: een verwijzing wijst naar een andere soort via haar sleutel (`ref`). */
+/** Een veld in een sjabloon: een verwijzing wijst naar een andere lijst via haar sleutel (`ref`). */
 export type TemplateField = Omit<FieldDef, "ref_type"> & { ref?: string };
 
 export type TypeTemplate = {
@@ -102,7 +102,7 @@ const EXPENSE: TypeTemplate = {
 export const PROJECT_TEMPLATES = {
   empty: {
     label: "Leeg project",
-    description: "Begin van nul en stel zelf je soorten en velden samen",
+    description: "Begin van nul en stel zelf je lijsten en velden samen",
     icon: "project",
     types: [],
   },
@@ -231,8 +231,8 @@ export function isTemplateKey(value: unknown): value is TemplateKey {
 }
 
 /**
- * De velden van een soort uit een sjabloon, met echte verwijzingen: eerst naar een soort uit hetzelfde sjabloon,
- * anders naar een soort met dezelfde naam erboven (een wijnkelder onder Huishouden verwijst naar zijn Verkopers).
+ * De velden van een lijst uit een sjabloon, met echte verwijzingen: eerst naar een lijst uit hetzelfde sjabloon,
+ * anders naar een lijst met dezelfde naam erboven (een wijnkelder onder Huishouden verwijst naar zijn Verkopers).
  * Een verwijzing die nergens heen kan, valt weg.
  */
 export function resolveTemplateFields(fields: readonly TemplateField[], typeIdByKey: Record<string, string>, typeIdByName: Record<string, string>): FieldDef[] {

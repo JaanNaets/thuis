@@ -2,10 +2,10 @@
 //
 // - Een rol hoort bij een project en geldt ook in de subprojecten. Wie in een subproject een eigen rol heeft,
 //   krijgt daar die rol (de dichtste wint).
-// - Wat je met het project zelf mag: instellen (naam, subprojecten, soorten en velden, tags, rollen), mensen
+// - Wat je met het project zelf mag: instellen (naam, subprojecten, lijsten en velden, tags, rollen), mensen
 //   beheren, items toevoegen en items verwijderen.
-// - Per soort en per veld: niet zien, zien of wijzigen. Zonder uitzondering geldt de standaard (`items`).
-//   Wie een soort niet mag zien, ziet de items van die soort niet.
+// - Per lijst en per veld: niet zien, zien of wijzigen. Zonder uitzondering geldt de standaard (`items`).
+//   Wie een lijst niet mag zien, ziet de items van die lijst niet.
 
 import type { FieldDef, Attributes } from "./fields";
 
@@ -27,14 +27,14 @@ export type Rights = {
   members: boolean;
   create: boolean;
   delete: boolean;
-  /** Standaard voor elke soort en elk veld. */
+  /** Standaard voor elke lijst en elk veld. */
   items: Access;
-  /** Uitzonderingen per soort (id), en daarin per veld (sleutel). */
+  /** Uitzonderingen per lijst (id), en daarin per veld (sleutel). */
   types: Record<string, TypeRights>;
 };
 
 export const PROJECT_RIGHTS = {
-  manage: { label: "Project instellen", hint: "Naam, subprojecten, soorten en velden, tags en rollen" },
+  manage: { label: "Project instellen", hint: "Naam, subprojecten, lijsten en velden, tags en rollen" },
   members: { label: "Mensen beheren", hint: "Iemand toevoegen, een rol geven of weghalen" },
   create: { label: "Items toevoegen" },
   delete: { label: "Items verwijderen" },
@@ -50,12 +50,12 @@ export const DEFAULT_ROLES: { key: string; name: string; rights: Rights }[] = [
   { key: "viewer", name: "Lezer", rights: { manage: false, members: false, create: false, delete: false, items: "view", types: {} } },
 ];
 
-/** Wat je met de items van een soort mag (de naam, tags, foto, bestanden, logboek). */
+/** Wat je met de items van een lijst mag (de naam, tags, foto, bestanden, logboek). */
 export function typeAccess(rights: Rights, typeId: string): Access {
   return rights.types[typeId]?.access ?? rights.items;
 }
 
-/** Wat je met één veld mag. Wie de soort niet ziet, ziet ook geen enkel veld. */
+/** Wat je met één veld mag. Wie de lijst niet ziet, ziet ook geen enkel veld. */
 export function fieldAccess(rights: Rights, typeId: string, key: string): Access {
   const base = typeAccess(rights, typeId);
   if (base === "none") return "none";

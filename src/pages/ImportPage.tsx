@@ -10,7 +10,7 @@ import { useToast } from "../components/Toast";
 import { formatNumber } from "../format";
 import { useNavigate } from "../router";
 
-/** Een lijst (Google Sheet als CSV, Excel, geplakte cellen) als items van een soort. */
+/** Een tabel (Google Sheet als CSV, Excel, geplakte cellen) als items in een lijst. */
 export function ImportPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
@@ -18,12 +18,12 @@ export function ImportPage() {
   if (error) return <p className="error page">{error}</p>;
   if (!p) return null;
   const creatable = p.types.filter((t) => t.can_create);
-  const type = creatable.find((t) => t.id === params.get("soort")) ?? creatable[0];
+  const type = creatable.find((t) => t.id === params.get("lijst")) ?? creatable[0];
   if (!type) return <p className="error page">Je kan hier niets toevoegen.</p>;
   return <ImportForm key={type.id} project={p} type={type} creatable={creatable} />;
 }
 
-/** De kolommen die je koos, per soort bewaard (in dit toestel): een volgende lijst van dezelfde sheet gaat vanzelf. */
+/** De kolommen die je koos, per lijst bewaard (in dit toestel): een volgende tabel uit dezelfde sheet gaat vanzelf. */
 const mappingKey = (typeId: string) => `thuis:import:${typeId}`;
 
 function rememberedMapping(typeId: string): Record<string, ColumnTarget> {
@@ -46,7 +46,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
   const [, setParams] = useSearchParams();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  // Personen en verwijzingen komen niet uit een lijst; enkel velden die je mag wijzigen.
+  // Personen en verwijzingen komen niet uit een tabel; enkel velden die je mag wijzigen.
   const fields = type.fields.filter((f) => !["person", "item", "share"].includes(f.type) && type.field_access[f.key] === "edit");
   const [pasted, setPasted] = useState("");
   const [sheet, setSheet] = useState<Sheet>();
@@ -102,7 +102,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
       const res = await api.post<ImportResult>(`/projects/${p.project.id}/items/import`, { type_id: type.id, rows: converted.rows });
       toast(`${formatNumber(res.created)} ${res.created === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()} toegevoegd`);
       if (res.skipped.length === 0) {
-        navigate(`/projecten/${p.project.id}?soort=${type.id}`, { replace: true });
+        navigate(`/projecten/${p.project.id}?lijst=${type.id}`, { replace: true });
         return;
       }
       setResult(res);
@@ -115,13 +115,13 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title="Lijst importeren" description={p.project.name} back={{ to: -1, label: p.project.name }} />
+      <PageHead title="Importeren" description={p.project.name} back={{ to: -1, label: p.project.name }} />
 
       <section className="card form-section">
         {creatable.length > 1 && (
           <label className="field">
-            <span className="label">Als</span>
-            <select value={type.id} onChange={(e) => setParams({ soort: e.target.value }, { replace: true })}>
+            <span className="label">In de lijst</span>
+            <select value={type.id} onChange={(e) => setParams({ lijst: e.target.value }, { replace: true })}>
               {creatable.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.plural}
@@ -131,7 +131,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
           </label>
         )}
         <div className="field">
-          <span className="label">Je lijst</span>
+          <span className="label">Je tabel</span>
           <span className="hint">
             Uit Google Sheets: Bestand → Downloaden → CSV. Of selecteer de cellen (met de kopregel), kopieer ze en plak ze hieronder. Uit Excel: opslaan als
             CSV.
@@ -272,7 +272,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
         </SubmitButton>
       )}
       {result && (
-        <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`/projecten/${p.project.id}?soort=${type.id}`, { replace: true })}>
+        <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`/projecten/${p.project.id}?lijst=${type.id}`, { replace: true })}>
           Naar {p.project.name}
         </button>
       )}

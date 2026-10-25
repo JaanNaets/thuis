@@ -22,13 +22,14 @@ commits en uitleg.
 - Alles is een **project** (een boom: `parent_id`), ook "Huishouden": achter de schermen is geen enkel project
   speciaal. Een persoon (`people`) krijgt per project een **rol** (`memberships`); die geldt ook in de subprojecten,
   tenzij er dichter een eigen lidmaatschap is. Wat een rol mag, staat in `shared/access.ts`: `manage`, `members`,
-  `create`, `delete`, en per soort en per veld Niet zien / Zien / Wijzigen.
+  `create`, `delete`, en per lijst en per veld Niet zien / Zien / Wijzigen. Een lijst heet in de code `item_type`;
+  in alles wat de gebruiker leest is het een **lijst** (nooit "soort").
 - Elke route die iets van een project raakt, haalt eerst de toegang op met `requireProject` (of `projectAccess`) uit
   `worker/context.ts`, en een item met `requireItem` (`worker/routes/items.ts`). Geen lidmaatschap = 404 "niet
   gevonden"; ontbreekt een recht, dan `need(access, …)` of een `ForbiddenError`. Bij twijfel: weigeren.
 - Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
   (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
-  terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van soorten, tags, rollen, personen) controleer je
+  terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van lijsten, tags, rollen, personen) controleer je
   tegen de keten van het project (`access.chain`).
 - Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
   `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).

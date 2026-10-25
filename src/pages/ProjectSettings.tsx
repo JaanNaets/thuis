@@ -15,9 +15,9 @@ import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 import { ProjectFieldsCard } from "./ProjectNew";
 
-type Tab = "algemeen" | "soorten" | "rollen" | "mensen" | "tags";
+type Tab = "algemeen" | "lijsten" | "rollen" | "mensen" | "tags";
 
-/** Een project instellen: wat het is, welke soorten, welke rollen, wie erin zit, en de tags. */
+/** Een project instellen: wat het is, welke lijsten, welke rollen, wie erin zit, en de tags. */
 export function ProjectSettings() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
@@ -30,7 +30,7 @@ export function ProjectSettings() {
     ...(rights.manage
       ? [
           { value: "algemeen" as const, label: "Algemeen" },
-          { value: "soorten" as const, label: "Soorten" },
+          { value: "lijsten" as const, label: "Lijsten" },
           { value: "rollen" as const, label: "Rollen" },
         ]
       : []),
@@ -45,7 +45,7 @@ export function ProjectSettings() {
       <Tabs label="Onderwerp" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />
       <div className="settings-grid">
         {tab === "algemeen" && <GeneralTab project={p} onSaved={reload} />}
-        {tab === "soorten" && <TypesTab project={p} onChanged={reload} />}
+        {tab === "lijsten" && <TypesTab project={p} onChanged={reload} />}
         {tab === "rollen" && <RolesTab project={p} />}
         {tab === "mensen" && <PeopleTab project={p} onChanged={reload} />}
         {tab === "tags" && <TagsTab project={p} onChanged={reload} />}
@@ -135,7 +135,7 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
   );
 }
 
-// ---------- soorten ----------
+// ---------- lijsten ----------
 
 function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged: () => void }) {
   const id = p.project.id;
@@ -143,7 +143,7 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
   const projectName = (pid: string) => p.path.find((x) => x.id === pid)?.name ?? "erboven";
   const own = p.types.filter((t) => t.project_id === id);
   const inherited = p.types.filter((t) => t.project_id !== id);
-  // De volgorde van de eigen soorten is ook die van de tabs in het project.
+  // De volgorde van de eigen lijsten is ook die van de tabs in het project.
   const key = own.map((t) => t.id).join(",");
   const [order, setOrder] = useState(() => own.map((t) => t.id));
   useEffect(() => setOrder(key ? key.split(",") : []), [key]);
@@ -162,11 +162,11 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
     <section className="card">
       <CardHead
         icon="folder"
-        title="Soorten"
-        description="Elke soort is een formulier met eigen velden. Ze gelden ook in de subprojecten."
+        title="Lijsten"
+        description="Elke lijst heeft eigen velden. Ze gelden ook in de subprojecten."
         action={
-          <Link to={`/projecten/${id}/soorten/nieuw`} className="btn btn-outline btn-sm">
-            <Icon name="plus" size={15} /> Soort
+          <Link to={`/projecten/${id}/lijsten/nieuw`} className="btn btn-outline btn-sm">
+            <Icon name="plus" size={15} /> Lijst
           </Link>
         }
       />
@@ -182,7 +182,7 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
                     <Icon name="grip" size={16} />
                   </button>
                 )}
-                <Link to={`/projecten/${id}/soorten/${t.id}`} className="row-link">
+                <Link to={`/projecten/${id}/lijsten/${t.id}`} className="row-link">
                   <span className="cell-main">
                     <span className="row-media tone-sky">
                       <Icon name={(t.icon ?? "folder") as IconName} size={16} />
@@ -219,7 +219,7 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
           </li>
         ))}
       </ul>
-      {p.types.length === 0 && <p className="card-body muted small">Nog geen soorten. Maak er een, bv. "Wijn" met jaargang en druiven.</p>}
+      {p.types.length === 0 && <p className="card-body muted small">Nog geen lijsten. Maak er een, bv. Wijnen met jaargang en druiven.</p>}
       {sortable.status}
     </section>
   );
@@ -235,7 +235,7 @@ function RolesTab({ project: p }: { project: ProjectDetail }) {
       <CardHead
         icon="users"
         title="Rollen"
-        description="Wat iemand mag: het project instellen, mensen beheren, toevoegen, verwijderen, en per soort en veld niet zien, zien of wijzigen."
+        description="Wat iemand mag: het project instellen, mensen beheren, toevoegen, verwijderen, en per lijst en veld niet zien, zien of wijzigen."
         action={
           <Link to={`/projecten/${id}/rollen/nieuw`} className="btn btn-outline btn-sm">
             <Icon name="plus" size={15} /> Rol
@@ -546,7 +546,7 @@ function TagsTab({ project: p, onChanged }: { project: ProjectDetail; onChanged:
       <CardHead
         icon="tag"
         title="Tags"
-        description="Vrije labels op items, over soorten heen. Ze gelden ook in de subprojecten."
+        description="Vrije labels op items, over lijsten heen. Ze gelden ook in de subprojecten."
         action={
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
             <Icon name="plus" size={15} /> Tag
