@@ -12,7 +12,7 @@ import { useNavigate } from "../router";
 import { useSession } from "../session";
 
 /** Velden die de app van een foto kan lezen (zie de API). */
-const READABLE = ["text", "number", "money", "date", "year", "year_range", "select", "multi", "bool"];
+const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
 
 /** /projecten/:id/nieuw?lijst= (nieuw) of /items/:itemId/bewerken. */
 export function ItemFormPage() {

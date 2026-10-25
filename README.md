@@ -4,7 +4,8 @@ Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: 
 
 - **Projecten** en subprojecten: "Huishouden" is gewoon een project, met daaronder bv. "Wijnkelder" en "Fietsen".
 - **Mensen met een rol** per project: wat ze mogen zien en wijzigen, tot op het niveau van één veld.
-- **Lijsten** met eigen velden (Wijnen met jaargang en druiven, Klantenkaarten met een barcode).
+- **Lijsten** met eigen velden (Wijnen met jaargang en druiven, Klantenkaarten met een barcode), ook velden die de
+  app zelf uitrekent (de waarde van je kelder, wanneer het volgende onderhoud is).
 - **Items** in een lijst, met tags, een foto, bestanden en een logboek.
 
 Regels voor een bepaalde use case (kosten verdelen, voorraad, klantenkaarten offline, kastickets lezen) komen er
@@ -17,7 +18,7 @@ Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kiosk
 ```
 src/         React-app (wat je op het scherm ziet)
 worker/      API op Cloudflare Workers (Hono)
-shared/      Types en logica die app en API allebei gebruiken (velden, rechten, sjablonen)
+shared/      Types en logica die app en API allebei gebruiken (velden, berekeningen, rechten, sjablonen)
 migrations/  Databaseschema (D1), één SQL-bestand per wijziging
 sw/          Service worker: de app opent ook zonder internet
 STIJLBOEK.md Hoe de app eruitziet en aanvoelt: lees dit voor je iets bouwt
@@ -216,6 +217,18 @@ Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar me
 Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
 subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
 Koersfietsen, Gedeelde uitgaven, Verzameling) dat de lijsten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
+Losse lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken, ...) voeg je toe bij **Instellen →
+Lijsten → Uit sjabloon**.
+
+### Sjablonen delen
+
+Heb je een project goed ingericht, dan kan je het delen: **Instellen → Algemeen → Delen als sjabloon** bewaart een
+bestand (`.thuis.json`) met de lijsten, velden, berekeningen en regels van het project en zijn subprojecten. Er staan
+**geen** items, mensen, rollen, tags of verdelingen in. Eén lijst delen kan ook, onderaan het formulier van die lijst.
+
+Wie het bestand krijgt, kiest bij **Nieuw project → Uit een bestand**, of voegt de lijsten toe aan een bestaand
+project bij **Instellen → Lijsten → Uit sjabloon → Uit een bestand**. Verwijst een lijst naar een andere (de wijnen
+naar de verkopers) en bestaat die erboven al, dan wordt die gebruikt. De app en de API kijken alles na wat binnenkomt.
 
 ### Mensen en rollen
 
@@ -237,11 +250,35 @@ hoort (bv. als eigenaar van een fiets). Er blijft altijd minstens één beheerde
 
 ### Lijsten en velden
 
-Een lijst heeft een naam ("Wijnen"), een naam voor één item ("Wijn", voor de knop "Wijn toevoegen") en velden. Een veld kan zijn: tekst, lange
-tekst, getal, bedrag, datum, jaar, periode van jaren (bv. drinkklaar 2026–2032), keuze, meerkeuze, ja/nee, score,
-barcode of QR-code, persoon, verwijzing naar een ander item (de wijn → het wijnhuis) of eigenaars (wie welk
-deel heeft). Een veld kan een kolom in de lijst zijn, een filter, of verplicht. De lijsten van een project gelden
-ook in zijn subprojecten.
+Een lijst heeft een naam ("Wijnen"), een naam voor één item ("Wijn", voor de knop "Wijn toevoegen") en velden. Een
+veld kan zijn:
+
+| Groep | Veldsoorten |
+| --- | --- |
+| Tekst | tekst, lange tekst, webadres, e-mail, telefoon, adres (opent een kaart), barcode of QR-code |
+| Getallen en geld | getal (met eenheid), bedrag, score op 5 |
+| Datum en tijd | datum, periode van datums (een reis), uur, duur ("1 u 30 min"), jaar, periode van jaren (drinkklaar 2026–2032), herhaling ("elke 6 maanden") |
+| Keuzes en lijstjes | keuzelijst, meerdere waarden, ja/nee, takenlijst (afvinken op de fiche) |
+| Mensen en verwijzingen | persoon, personen, eigenaars (wie welk deel heeft), verwijzing en verwijzingen naar andere items |
+| Berekenen | een berekening (zie hieronder) |
+
+Een veld kan een kolom in de lijst zijn, een filter, of verplicht. Bij het kiezen van een veldsoort staat telkens
+wat ze doet. De lijsten van een project gelden ook in zijn subprojecten.
+
+### Berekeningen
+
+Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn zeven soorten, elk met een voorbeeld in de app:
+
+- **Rekensom**: Aantal × Prijs, of Totaal × 1,21 (op een andere berekening verder bouwen mag).
+- **Vergelijking**: ja als Aantal ≤ Bijna op onder (zo zie en filter je wat je moet kopen).
+- **Dagen tot** een datum ("over 12 dagen"), **tijd sinds** een datum of jaar ("10 jaar"), en **datum plus**
+  een vaste tijd of een herhaling (laatst onderhouden + elk jaar = volgende keer).
+- **Uit een gelinkt item**: een veld van het item waarnaar een verwijzing wijst (het land van het wijnhuis).
+- **Samenvatten**: hoeveel, de som, het gemiddelde, het kleinste of het grootste van gelinkte items, of van de
+  items die naar dit item verwijzen (wat je bij een verkoper uitgaf, en wanneer het laatst).
+
+Een berekening telt enkel wat jij mag zien: mag je een veld waarvan ze afhangt niet zien, dan blijft ze leeg. De
+uitleg (i) naast een berekening zegt wat ze uitrekent.
 
 ### Items
 
@@ -264,7 +301,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Lijsten: naam, naam van één item, velden (`fields`) en regels (`rules`, zie `shared/rules.ts`), als JSON. |
+| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`) en regels (`rules`, zie `shared/rules.ts`), als JSON. |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
 | `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |

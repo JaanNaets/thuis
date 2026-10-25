@@ -37,6 +37,12 @@ commits en uitleg.
   (`shared/rules.ts`: welke velden welke rol hebben, nagekeken met `cleanRules`), als sjabloon
   (`shared/templates.ts`) of veldsoort (`shared/fields.ts`). Een regel telt enkel wat de gebruiker mag zien (de lijst
   én de velden van de regel), en vult bij bewaren enkel in wat leeg is (`applyRuleDefaults`).
+- Een **berekening** (veldsoort `calc`, `shared/calc.ts`) wordt nooit bewaard: de API kijkt ze na met `checkCalcs`
+  en rekent ze uit bij het lezen (`withCalcs` in `worker/compute.ts`), enkel op wat de lezer mag zien. Opzoeken en
+  samenvatten halen andere items op en kijken per item project, lijst en veld na.
+- **Sjablonen delen** (`shared/template-file.ts`): een bestand zonder items, mensen, rollen of standaardverdelingen.
+  Wat binnenkomt, gaat door `parseTemplateFile`; verwijzingen wijzen enkel naar lijsten uit het sjabloon (in hetzelfde
+  project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

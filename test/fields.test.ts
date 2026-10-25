@@ -17,25 +17,43 @@ import {
   sharesText,
   type FieldDef,
 } from "../shared/fields.ts";
-import { PROJECT_TEMPLATES, resolveTemplateFields } from "../shared/templates.ts";
+import { LIST_TEMPLATES, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate, type TypeTemplate } from "../shared/templates.ts";
 import { descendantIds, flattenTree } from "../shared/tree.ts";
 
-const WINE: FieldDef[] = resolveTemplateFields(PROJECT_TEMPLATES.wine.types[0].fields, {}, {});
+/** De lijsten van een sjabloon, met id "id-<sleutel>"; `byName`: lijsten erboven. */
+function resolve(types: readonly TypeTemplate[], byName: Record<string, string> = {}) {
+  const ids = Object.fromEntries(types.map((t) => [t.key, `id-${t.key}`]));
+  return resolveTemplateLists(
+    types.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })),
+    byName,
+  );
+}
+
+const WINE: FieldDef[] = resolve(PROJECT_TEMPLATES.wine.types)["id-wijn"];
 const field = (key: string) => WINE.find((f) => f.key === key)!;
 
-test("sjablonen: elke lijst heeft geldige velden en verwijzingen", () => {
+test("sjablonen: elke lijst heeft geldige velden, verwijzingen en berekeningen", () => {
   for (const t of Object.values(PROJECT_TEMPLATES)) {
-    const ids = Object.fromEntries(t.types.map((ty) => [ty.key, `id-${ty.key}`]));
+    const out = resolve(t.types);
     for (const ty of t.types) {
-      const fields = resolveTemplateFields(ty.fields, ids, {});
-      assert.deepEqual(cleanFields(fields), fields, `${t.label} › ${ty.name}`);
-      assert.equal(fields.length, ty.fields.length, `${ty.name}: elke verwijzing gevonden`);
+      const fields = out[`id-${ty.key}`];
+      assert.deepEqual(
+        cleanFields(fields),
+        fields.map(({ result: _r, ...f }) => f),
+        `${t.label} › ${ty.name}`,
+      );
+      assert.equal(fields.length, ty.fields.length, `${t.label} › ${ty.name}: alles gevonden`);
     }
   }
+  for (const ty of LIST_TEMPLATES) assert.equal(resolve([ty])[`id-${ty.key}`].length, ty.fields.length, ty.name);
   // Een wijnkelder onder een huishouden verwijst naar de verkopers erboven; zonder verkopers valt het veld weg.
-  const ref = [{ key: "bij", label: "Gekocht bij", type: "item" as const, ref: "verkoper" }];
-  assert.deepEqual(resolveTemplateFields(ref, {}, { verkoper: "v1" }), [{ key: "bij", label: "Gekocht bij", type: "item", ref_type: "v1" }]);
-  assert.deepEqual(resolveTemplateFields(ref, {}, {}), []);
+  const ref: TypeTemplate = { key: "x", name: "X", plural: "X", icon: "folder", fields: [{ key: "bij", label: "Gekocht bij", type: "item", ref: "verkoper" }] };
+  assert.deepEqual(resolve([ref], { verkoper: "v1" })["id-x"], [{ key: "bij", label: "Gekocht bij", type: "item", ref_type: "v1" }]);
+  assert.deepEqual(resolve([ref])["id-x"], []);
+  // Een verkoper zonder uitgaven: de samenvattingen over uitgaven vallen weg, de rest blijft.
+  const vendor = resolve([typeTemplate("verkoper")!])["id-verkoper"];
+  assert.ok(!vendor.some((f) => f.type === "calc"));
+  assert.ok(vendor.some((f) => f.key === "website"));
 });
 
 test("velden nakijken", () => {

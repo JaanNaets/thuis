@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
-import type { CodeValue } from "../../shared/fields";
+import type { ChecklistEntry, CodeValue } from "../../shared/fields";
 import type { ItemDetail, ItemFile, LogEntry, ProjectDetail } from "../../shared/types";
 import { api, apiUrl, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { CardHead, SubmitButton } from "../components/Controls";
-import { AttributeRows, CodeView, ItemPhoto, namesFrom } from "../components/Fields";
+import { AttributeRows, ChecklistView, CodeView, ItemPhoto, namesFrom } from "../components/Fields";
 import { FilePicker } from "../components/FilePicker";
 import { FileViewer } from "../components/FileViewer";
 import { Icon } from "../components/Icon";
@@ -48,7 +48,20 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
   const tags = p.tags.filter((t) => item.tag_ids.includes(t.id));
   const codes = type.fields.filter((f) => f.type === "code" && item.data[f.key]);
   const texts = type.fields.filter((f) => f.type === "longtext" && item.data[f.key]);
+  const checklists = type.fields.filter((f) => f.type === "checklist" && item.data[f.key]);
   const back = `/projecten/${p.project.id}?lijst=${type.id}`;
+
+  // Een taak afvinken bewaart meteen (het item met dat ene veld anders). Lukt het niet, dan gaat het vinkje terug.
+  async function saveChecklist(key: string, next: ChecklistEntry[]) {
+    try {
+      mutate(
+        await api.put<ItemDetail>(`/items/${item.id}`, { type_id: item.type_id, name: item.name, data: { ...item.data, [key]: next }, tag_ids: item.tag_ids }),
+      );
+    } catch (err) {
+      toast((err as Error).message, "alert");
+      throw err;
+    }
+  }
 
   async function upload() {
     setUploading(true);
@@ -119,7 +132,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
               }}
             />
             <dl className="dl">
-              <AttributeRows defs={type.fields} data={item.data} names={names} refs={item.refs} />
+              <AttributeRows defs={type.fields} data={item.data} names={names} refs={item.refs} lists={p.types} />
             </dl>
             {tags.length > 0 && (
               <p className="tag-line" style={{ paddingTop: 4 }}>
@@ -141,6 +154,18 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
         </aside>
 
         <div className="split-main">
+          {checklists.map((f) => {
+            const list = item.data[f.key] as ChecklistEntry[];
+            return (
+              <section key={f.key} className="card">
+                <CardHead icon="listLines" title={f.label} description={`${list.filter((e) => e.done).length} van ${list.length} klaar`} />
+                <div className="card-body">
+                  <ChecklistView value={list} onToggle={item.field_access[f.key] === "edit" ? (next) => saveChecklist(f.key, next) : undefined} />
+                </div>
+              </section>
+            );
+          })}
+
           {codes.map((f) => (
             <section key={f.key} className="card">
               <CardHead icon="scan" title={f.label} description="Laat scannen aan de kassa of de balie" />

@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
+import type { TemplateFile } from "../../shared/template-file";
 import { PROJECT_TEMPLATES, type IconKey, type TemplateKey } from "../../shared/templates";
 import type { NewProjectInput, Tone } from "../../shared/types";
 import { api } from "../api";
@@ -7,6 +8,7 @@ import { SubmitButton, ToneSwatches } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
+import { readTemplateFile, templateText } from "../components/TemplateShare";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
@@ -21,8 +23,8 @@ const NAME_PLACEHOLDERS: Record<TemplateKey, string> = {
 };
 
 /**
- * Een nieuw project, bovenaan of als subproject (?parent=). Een sjabloon zet lijsten met velden klaar;
- * daarna kan je alles aanpassen.
+ * Een nieuw project, bovenaan of als subproject (?parent=). Een sjabloon zet lijsten met velden klaar (ook een
+ * sjabloon dat iemand deelde, als bestand); daarna kan je alles aanpassen.
  */
 export function ProjectNew() {
   const [params] = useSearchParams();
@@ -30,9 +32,11 @@ export function ProjectNew() {
   const toast = useToast();
   const { projects, reloadMe } = useSession();
   const parent = projects.find((p) => p.id === params.get("parent"));
-  const [template, setTemplate] = useState<TemplateKey>(parent ? "empty" : "household");
+  const [template, setTemplate] = useState<TemplateKey | "file">(parent ? "empty" : "household");
+  const [file, setFile] = useState<TemplateFile>();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState<IconKey | null>(PROJECT_TEMPLATES[template].icon);
+  const [icon, setIcon] = useState<IconKey | null>(PROJECT_TEMPLATES[parent ? "empty" : "household"].icon);
   const [color, setColor] = useState<Tone | null>("sky");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,13 +47,39 @@ export function ProjectNew() {
     setIcon(PROJECT_TEMPLATES[key].icon);
   }
 
+  // Een gedeeld sjabloon: naam, icoon, kleur en beschrijving komen eruit (je kan ze nog aanpassen).
+  async function readFile(f: File | undefined) {
+    if (!f) return;
+    try {
+      const t = await readTemplateFile(f);
+      setFile(t);
+      setTemplate("file");
+      setName(t.project.name);
+      setIcon(t.project.icon ?? "project");
+      if (t.project.color) setColor(t.project.color);
+      setDescription(t.project.description ?? "");
+      setError(undefined);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const input: NewProjectInput = { name, description: description || null, icon, color, parent_id: parent?.id ?? null, template };
+    if (template === "file" && !file) return setError("Kies eerst een sjabloonbestand.");
+    const input: NewProjectInput = {
+      name,
+      description: description || null,
+      icon,
+      color,
+      parent_id: parent?.id ?? null,
+      template: template === "file" ? null : template,
+    };
     setBusy(true);
     setError(undefined);
     try {
-      const { id } = await api.post<{ id: string }>("/projects", input);
+      const { id } =
+        template === "file" ? await api.post<{ id: string }>("/projects/import", { ...input, file }) : await api.post<{ id: string }>("/projects", input);
       reloadMe();
       toast(`${name} aangemaakt`);
       navigate(`/projecten/${id}`, { replace: true });
@@ -81,8 +111,45 @@ export function ProjectNew() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={template === "file"}
+              className="template-option"
+              onClick={() => (file ? setTemplate("file") : fileRef.current?.click())}
+            >
+              <span className="icon-tile">
+                <Icon name="upload" size={15} />
+              </span>
+              <span className="template-text">
+                <span className="template-title">Uit een bestand</span>
+                <span className="template-desc">{file ? file.project.name : "Een sjabloon dat iemand met je deelde (.thuis.json)"}</span>
+              </span>
+            </button>
           </div>
-          <span className="hint">Een sjabloon zet lijsten met velden klaar. Je kan daarna alles aanpassen, toevoegen of weghalen.</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(e) => {
+              readFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          {template === "file" && file ? (
+            <div className="template-file">
+              <span className="template-text">
+                <span className="template-title">{file.project.name}</span>
+                <span className="template-desc">{templateText(file)}</span>
+              </span>
+              <button type="button" className="link-button" onClick={() => fileRef.current?.click()}>
+                Ander bestand
+              </button>
+            </div>
+          ) : (
+            <span className="hint">Een sjabloon zet lijsten met velden klaar. Je kan daarna alles aanpassen, toevoegen of weghalen.</span>
+          )}
         </div>
       </section>
 
@@ -95,7 +162,7 @@ export function ProjectNew() {
         onColor={setColor}
         description={description}
         onDescription={setDescription}
-        placeholder={NAME_PLACEHOLDERS[template]}
+        placeholder={template === "file" ? file?.project.name : NAME_PLACEHOLDERS[template]}
       />
 
       {parent && <p className="hint">Wie in {parent.name} zit, zit ook in dit subproject, met dezelfde rol. Je kan dat per persoon aanpassen.</p>}

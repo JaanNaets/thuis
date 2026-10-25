@@ -46,8 +46,9 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
   const [, setParams] = useSearchParams();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  // Personen en verwijzingen komen niet uit een tabel; enkel velden die je mag wijzigen.
-  const fields = type.fields.filter((f) => !["person", "item", "share"].includes(f.type) && type.field_access[f.key] === "edit");
+  // Personen, verwijzingen en berekeningen komen niet uit een tabel (daar zijn id's voor nodig, of de app rekent ze
+  // uit); enkel velden die je mag wijzigen.
+  const fields = type.fields.filter((f) => !["person", "people", "item", "items", "share", "calc"].includes(f.type) && type.field_access[f.key] === "edit");
   const [pasted, setPasted] = useState("");
   const [sheet, setSheet] = useState<Sheet>();
   const [fileName, setFileName] = useState<string>();

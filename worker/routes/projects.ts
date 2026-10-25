@@ -12,8 +12,18 @@ import {
   type Rights,
 } from "../../shared/access";
 import { cleanFields, type Attributes, type FieldDef } from "../../shared/fields";
+import { checkCalcs } from "../../shared/calc";
 import { balances, cleanRules, movementOf, ruleFieldKeys, settleUp, type Rule } from "../../shared/rules";
-import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateFields, typeTemplate } from "../../shared/templates";
+import {
+  buildTemplateFile,
+  flatten,
+  parseTemplateFile,
+  planTemplate,
+  type ExportProject,
+  type TemplateFile,
+  type TemplateProject,
+} from "../../shared/template-file";
+import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate, type TemplatePlan } from "../../shared/templates";
 import { descendantIds } from "../../shared/tree";
 import { isTone, type Balance, type ItemType, type Member, type Person, type ProjectDetail, type ProjectNode, type Role, type Tag } from "../../shared/types";
 import {
@@ -67,11 +77,20 @@ function parseProjectInput(body: unknown) {
  * Velden van een lijst nakijken, met verwijzingen naar lijsten die in dit project bestaan (van het project zelf of
  * erboven). "self" verwijst naar de lijst zelf (een plaats die in een andere plaats ligt).
  */
-function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string): FieldDef[] {
+function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available): FieldDef[] {
   let fields: FieldDef[];
   try {
     const list = Array.isArray(raw)
-      ? raw.map((f) => (f && typeof f === "object" && (f as FieldDef).ref_type === "self" ? { ...f, ref_type: selfId } : f))
+      ? raw.map((f) => {
+          if (!f || typeof f !== "object") return f;
+          const def = f as FieldDef;
+          const calc = def.calc as { list?: string } | undefined;
+          return {
+            ...def,
+            ...(def.ref_type === "self" ? { ref_type: selfId } : {}),
+            ...(calc && typeof calc === "object" && calc.list === "self" ? { calc: { ...calc, list: selfId } } : {}),
+          };
+        })
       : raw;
     fields = cleanFields(list);
   } catch (err) {
@@ -79,9 +98,33 @@ function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string): F
   }
   const ids = new Set([...available.map((t) => t.id), selfId]);
   for (const f of fields) {
-    if (f.type === "item" && !ids.has(f.ref_type!)) throw new ValidationError(`"${f.label}" verwijst naar een lijst die hier niet bestaat`);
+    if ((f.type === "item" || f.type === "items") && !ids.has(f.ref_type!))
+      throw new ValidationError(`"${f.label}" verwijst naar een lijst die hier niet bestaat`);
   }
-  return fields;
+  try {
+    return checkCalcs(
+      fields,
+      calcLists.filter((t) => t.id !== selfId),
+      selfId,
+    );
+  } catch (err) {
+    throw new ValidationError((err as Error).message);
+  }
+}
+
+/**
+ * De lijsten waarmee een berekening kan werken: van dit project, erboven (zoals bij verwijzingen) en eronder (om
+ * te tellen wat naar een lijst verwijst, bv. de wijnen in een subproject bij een verkoper erboven).
+ */
+async function calcListsFor(db: D1Database, access: ProjectAccess): Promise<ItemType[]> {
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE down(id) AS (SELECT ?1 UNION SELECT p.id FROM projects p JOIN down ON p.parent_id = down.id)
+       SELECT * FROM item_types WHERE project_id IN (SELECT id FROM down) OR project_id IN (SELECT value FROM json_each(?2))`,
+    )
+    .bind(access.project.id, JSON.stringify(access.chain))
+    .all<TypeRow>();
+  return results.map(toItemType);
 }
 
 function parseTypeInput(body: unknown) {
@@ -177,28 +220,68 @@ async function assertRoleAllowed(db: D1Database, roleId: string, access: Project
     throw new ForbiddenError("Een rol die het project instelt, kan enkel wie zelf het project instelt.");
 }
 
+/** Lijsten erboven op naam, de dichtste eerst ("verkoper" → de Verkopers van het huishouden). */
+const byNameOf = (above: ItemType[]) => Object.fromEntries([...above].reverse().map((t) => [t.name.toLowerCase(), t.id]));
+
+/**
+ * Lijsten uit een sjabloon aanmaken (zie `planTemplate`): met echte verwijzingen, en enkel de berekeningen en regels
+ * die dan nog kloppen. `above`: de lijsten die er al zijn en waarmee ze mogen werken (erboven, en bij een bestaand
+ * project ook eronder).
+ */
+function templateStatements(db: D1Database, nodes: { projectId: string; plans: TemplatePlan[] }[], byName: Record<string, string>, above: ItemType[]) {
+  const plans = nodes.flatMap((n) => n.plans.map((plan) => ({ ...plan, projectId: n.projectId })));
+  const fields = resolveTemplateLists(plans, byName, above);
+  return plans.map(({ id, list, projectId }) => {
+    let rules: Rule[] = [];
+    try {
+      rules = cleanRules(list.rules ?? [], fields[id]);
+    } catch {
+      // Een regel waarvan de velden er niet (meer) zijn, valt weg.
+    }
+    return db
+      .prepare(
+        `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+      )
+      .bind(id, projectId, list.name, list.plural, list.name_label ?? null, list.icon, JSON.stringify(fields[id]), JSON.stringify(rules));
+  });
+}
+
+/** Een ingebouwd sjabloon in een nieuw project. `chain`: de projecten erboven. */
 async function insertTemplateTypes(db: D1Database, projectId: string, templateKey: unknown, chain: string[]): Promise<D1PreparedStatement[]> {
   if (!isTemplateKey(templateKey)) return [];
   const template = PROJECT_TEMPLATES[templateKey];
-  const ids = Object.fromEntries(template.types.map((t) => [t.key, crypto.randomUUID()]));
-  // Verwijzingen naar lijsten erboven, op naam ("verkoper" → de Verkopers van het huishouden).
   const above = chain.length ? await typesFor(db, chain) : [];
-  const byName = Object.fromEntries(above.map((t) => [t.name.toLowerCase(), t.id]));
-  return template.types.map((t, i) =>
-    db
-      .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(
-        ids[t.key],
-        projectId,
-        t.name,
-        t.plural,
-        "name_label" in t ? (t.name_label ?? null) : null,
-        t.icon,
-        JSON.stringify(resolveTemplateFields(t.fields, ids, byName)),
-        JSON.stringify("rules" in t ? (t.rules ?? []) : []),
-        i * 10,
-      ),
+  const byName = byNameOf(above);
+  const top: TemplateProject = { name: template.label, description: null, icon: null, color: null, lists: [...template.types], children: [] };
+  return templateStatements(
+    db,
+    planTemplate(top, [projectId], byName, () => crypto.randomUUID()),
+    byName,
+    above,
   );
+}
+
+/** Een sjabloon uit een verzoek: nagekeken, en niet te groot. */
+function readTemplate(raw: unknown): TemplateFile {
+  if (JSON.stringify(raw ?? null).length > 400_000) throw new ValidationError("Dit sjabloon is te groot.");
+  try {
+    return parseTemplateFile(raw);
+  } catch (err) {
+    throw new ValidationError((err as Error).message);
+  }
+}
+
+/** Het project en zijn subprojecten (niet gearchiveerd), elk na zijn ouder, in hun volgorde. */
+async function exportTree(db: D1Database, rootId: string): Promise<ExportProject[]> {
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE down(id, depth) AS (SELECT ?1, 0 UNION SELECT p.id, down.depth + 1 FROM projects p JOIN down ON p.parent_id = down.id WHERE p.archived = 0)
+       SELECT p.id, p.parent_id, p.name, p.description, p.icon, p.color FROM projects p JOIN down ON down.id = p.id ORDER BY down.depth, p.sort_order, p.created_at`,
+    )
+    .bind(rootId)
+    .all<ExportProject>();
+  return results;
 }
 
 // ---------- projecten ----------
@@ -241,6 +324,86 @@ projects.post("/", async (c) => {
   statements.push(...(await insertTemplateTypes(db, id, input.template, chain)));
   await db.batch(statements);
   return c.json({ id }, 201);
+});
+
+/**
+ * Een nieuw project uit een gedeeld sjabloon (een bestand), met zijn subprojecten en lijsten; zonder items of mensen.
+ * Zoals een gewoon nieuw project: bovenaan word je beheerder, een subproject enkel als je het project erboven instelt.
+ * Naam, icoon, kleur en beschrijving mag je meegeven (anders die uit het sjabloon).
+ */
+projects.post("/import", async (c) => {
+  const body = asObject(await c.req.json());
+  const file = readTemplate(body.file);
+  const overrides = parseProjectInput({ ...file.project, ...body, template: null });
+  const db = c.env.DB;
+  const me = c.get("person");
+  let chain: string[] = [];
+  if (overrides.parent_id) {
+    const parent = await requireProject(db, me.id, overrides.parent_id);
+    need(parent, "manage", "Enkel wie het project instelt, kan er een subproject in maken.");
+    chain = parent.chain;
+  }
+  const nodes = flatten(file.project);
+  const ids = nodes.map(() => crypto.randomUUID());
+  const statements: D1PreparedStatement[] = nodes.map(({ project, parent }, i) => {
+    const top = i === 0;
+    const parentId = top ? overrides.parent_id : ids[parent!];
+    return db
+      .prepare(
+        `INSERT INTO projects (id, parent_id, name, description, icon, color, sort_order, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, (SELECT ifnull(max(sort_order), 0) + 10 FROM projects WHERE parent_id IS ?2), ?7)`,
+      )
+      .bind(
+        ids[i],
+        parentId,
+        top ? overrides.name : project.name,
+        top ? overrides.description : project.description,
+        top ? overrides.icon : project.icon,
+        top ? overrides.color : project.color,
+        me.id,
+      );
+  });
+  if (!overrides.parent_id) {
+    const roleIds = DEFAULT_ROLES.map(() => crypto.randomUUID());
+    DEFAULT_ROLES.forEach((r, i) =>
+      statements.push(
+        db
+          .prepare("INSERT INTO roles (id, project_id, name, rights, sort_order) VALUES (?, ?, ?, ?, ?)")
+          .bind(roleIds[i], ids[0], r.name, JSON.stringify(r.rights), i * 10),
+      ),
+    );
+    statements.push(insertMembership(db, ids[0], me.id, roleIds[0]));
+  }
+  const above = chain.length ? await typesFor(db, chain) : [];
+  const byName = byNameOf(above);
+  statements.push(
+    ...templateStatements(
+      db,
+      planTemplate(file.project, ids, byName, () => crypto.randomUUID()),
+      byName,
+      above,
+    ),
+  );
+  await db.batch(statements);
+  return c.json({ id: ids[0] }, 201);
+});
+
+/**
+ * Een project als sjabloon om te delen: zijn lijsten en velden en die van zijn subprojecten, zonder items, mensen,
+ * rollen of tags. Een lijst erboven waarnaar verwezen wordt, komt mee. Enkel wie het project instelt.
+ */
+projects.get("/:id/template", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan het als sjabloon delen.");
+  const tree = await exportTree(db, access.project.id);
+  const lists = await calcListsFor(db, access);
+  return c.json(
+    buildTemplateFile(
+      tree,
+      lists.sort((a, b) => a.sort_order - b.sort_order),
+    ),
+  );
 });
 
 /** De volgorde van de subprojecten. Die geldt voor iedereen, dus enkel wie het project instelt. */
@@ -490,7 +653,7 @@ projects.post("/:id/types", async (c) => {
   const access = await requireProject(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const id = crypto.randomUUID();
-  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id);
+  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id, await calcListsFor(db, access));
   const rules = await cleanTypeRules(db, input.rules, fields, access.chain);
   await db
     .prepare(
@@ -509,28 +672,34 @@ projects.post("/:id/types/template", async (c) => {
   need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const template = typeTemplate(asObject(await c.req.json()).key);
   if (!template) throw new ValidationError("Die lijst bestaat niet als sjabloon.");
-  const above = await typesFor(db, access.chain);
-  const byName = Object.fromEntries(above.map((t) => [t.name.toLowerCase(), t.id]));
-  const id = crypto.randomUUID();
-  const fields = resolveTemplateFields(template.fields, { [template.key]: id }, byName);
-  await db
-    .prepare(
-      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
-    )
-    .bind(
-      id,
-      access.project.id,
-      template.name,
-      template.plural,
-      template.name_label ?? null,
-      template.icon,
-      JSON.stringify(fields),
-      JSON.stringify(template.rules ?? []),
-    )
-    .run();
-  return c.json({ id }, 201);
+  const top: TemplateProject = { name: template.plural, description: null, icon: null, color: null, lists: [template], children: [] };
+  const [{ plans }] = await addTemplateLists(db, access, top);
+  return c.json({ id: plans[0].id }, 201);
 });
+
+/**
+ * De lijsten van een gedeeld sjabloon (een bestand) toevoegen aan dit project. Subprojecten uit het sjabloon komen
+ * niet mee (daarvoor maak je een nieuw project uit het bestand). Een gekoppelde lijst die hier al bestaat (op naam),
+ * wordt gebruikt in plaats van een nieuwe.
+ */
+projects.post("/:id/types/import", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
+  const file = readTemplate(asObject(await c.req.json()).file);
+  const [{ plans }] = await addTemplateLists(db, access, { ...file.project, children: [] });
+  return c.json({ ids: plans.map((p) => p.id) }, 201);
+});
+
+/** De lijsten van een sjabloon (zonder subprojecten) in een bestaand project zetten. */
+async function addTemplateLists(db: D1Database, access: ProjectAccess, top: TemplateProject) {
+  // Verwijzen kan naar het project zelf en erboven; samenvatten ook over de lijsten eronder.
+  const above = await typesFor(db, access.chain);
+  const byName = byNameOf(above);
+  const nodes = planTemplate(top, [access.project.id], byName, () => crypto.randomUUID());
+  await db.batch(templateStatements(db, nodes, byName, await calcListsFor(db, access)));
+  return nodes;
+}
 
 /**
  * Alle lijsten die in dit project en zijn subprojecten gebruikt kunnen worden: om in een rol per lijst en per veld
@@ -562,12 +731,21 @@ async function requireType(db: D1Database, personId: string, typeId: string) {
   return { type: toItemType(row), access };
 }
 
+/** Eén lijst als sjabloon om te delen (met de lijsten waarnaar ze verwijst). Enkel wie het project instelt. */
+types.get("/:id/template", async (c) => {
+  const db = c.env.DB;
+  const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan een lijst delen.");
+  const tree = await exportTree(db, access.project.id);
+  return c.json(buildTemplateFile(tree.slice(0, 1), await typesFor(db, access.chain), type));
+});
+
 types.put("/:id", async (c) => {
   const input = parseTypeInput(await c.req.json());
   const db = c.env.DB;
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
-  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id);
+  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id, await calcListsFor(db, access));
   // Zonder regels in de vraag blijven de huidige (als ze nog bij de velden passen).
   const rules = await cleanTypeRules(db, input.rules === undefined ? type.rules : input.rules, fields, access.chain);
   await db

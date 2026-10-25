@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { rightsSummary } from "../../shared/access";
-import type { IconKey } from "../../shared/templates";
+import type { TemplateFile } from "../../shared/template-file";
+import { listTemplates, type IconKey } from "../../shared/templates";
 import { TONES, type Member, type Person, type ProjectDetail, type ProjectInput, type Tag, type Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -11,6 +12,7 @@ import { PageHead } from "../components/Page";
 import { ProjectOrder } from "../components/ProjectOrder";
 import { Sheet } from "../components/Sheet";
 import { useSortable } from "../components/Sortable";
+import { ShareTemplate, TemplateFilePicker, templateText } from "../components/TemplateShare";
 import { useToast } from "../components/Toast";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
@@ -134,6 +136,16 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
           <ProjectOrder nodes={children} parent={pr} onChanged={onSaved} />
         </section>
       )}
+      <section className="card">
+        <CardHead
+          icon="copy"
+          title="Delen als sjabloon"
+          description="Een bestand met de lijsten en velden van dit project en zijn subprojecten, zonder items, mensen of rollen. Iemand anders maakt er een nieuw project mee."
+        />
+        <div className="card-body">
+          <ShareTemplate path={`/projects/${pr.id}/template`} />
+        </div>
+      </section>
       <div className="btn-row" style={{ justifySelf: "start" }}>
         <button type="button" className="btn btn-ghost" onClick={archive}>
           <Icon name="archive" size={16} /> {pr.archived ? "Weer actief maken" : "Archiveren"}
@@ -170,6 +182,7 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
     }
   }
   const sortable = useSortable(order, save, (tid) => own.find((t) => t.id === tid)?.plural ?? "");
+  const [picking, setPicking] = useState(false);
   return (
     <section className="card">
       <CardHead
@@ -177,9 +190,14 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
         title="Lijsten"
         description="Elke lijst heeft eigen velden. Ze gelden ook in de subprojecten."
         action={
-          <Link to={`/projecten/${id}/lijsten/nieuw`} className="btn btn-outline btn-sm">
-            <Icon name="plus" size={15} /> Lijst
-          </Link>
+          <div className="btn-row">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPicking(true)}>
+              <Icon name="copy" size={15} /> Uit sjabloon
+            </button>
+            <Link to={`/projecten/${id}/lijsten/nieuw`} className="btn btn-outline btn-sm">
+              <Icon name="plus" size={15} /> Lijst
+            </Link>
+          </div>
         }
       />
       <ul className="rows">
@@ -233,7 +251,107 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
       </ul>
       {p.types.length === 0 && <p className="card-body muted small">Nog geen lijsten. Maak er een, bv. Wijnen met jaargang en druiven.</p>}
       {sortable.status}
+      <Sheet open={picking} title="Lijst uit een sjabloon" onClose={() => setPicking(false)}>
+        <ListTemplatePicker
+          project={p}
+          onAdded={(message) => {
+            setPicking(false);
+            toast(message);
+            onChanged();
+          }}
+        />
+      </Sheet>
     </section>
+  );
+}
+
+/** Een ingebouwde lijst kiezen (Onderhoud, Recepten, ...) of de lijsten uit een gedeeld sjabloon toevoegen. */
+function ListTemplatePicker({ project: p, onAdded }: { project: ProjectDetail; onAdded: (message: string) => void }) {
+  const [file, setFile] = useState<TemplateFile>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const names = new Set(p.types.map((t) => t.name.toLowerCase()));
+
+  async function add(body: object, path: string, message: string) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.post(`/projects/${p.project.id}/${path}`, body);
+      onAdded(message);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  if (file)
+    return (
+      <div className="form">
+        <div className="template-file">
+          <span className="icon-tile">
+            <Icon name={(file.project.icon ?? "folder") as IconName} size={15} />
+          </span>
+          <span className="template-text">
+            <span className="template-title">{file.project.name}</span>
+            <span className="template-desc">{templateText({ ...file, project: { ...file.project, children: [] } })}</span>
+          </span>
+        </div>
+        {file.project.children.length > 0 && (
+          <p className="hint">De subprojecten uit dit sjabloon komen hier niet mee; daarvoor maak je een nieuw project uit het bestand.</p>
+        )}
+        {error && <p className="error">{error}</p>}
+        <div className="sheet-actions">
+          <button type="button" className="btn btn-ghost" onClick={() => setFile(undefined)}>
+            Terug
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || file.project.lists.length === 0}
+            onClick={() => add({ file }, "types/import", file.project.lists.length === 1 ? `${file.project.lists[0].plural} toegevoegd` : "Lijsten toegevoegd")}
+          >
+            Toevoegen
+          </button>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="form">
+      <div className="field">
+        <TemplateFilePicker onRead={setFile}>
+          <Icon name="upload" size={16} /> Uit een bestand…
+        </TemplateFilePicker>
+        <span className="hint">Een sjabloon dat iemand met je deelde (een .thuis.json-bestand). Of kies hieronder een lijst.</span>
+      </div>
+      <ul className="rows template-list">
+        {listTemplates().map((t) => (
+          <li key={t.key}>
+            <button type="button" className="row" disabled={busy} onClick={() => add({ key: t.key }, "types/template", `${t.plural} toegevoegd`)}>
+              <span className="cell-main">
+                <span className="row-media tone-sky">
+                  <Icon name={t.icon as IconName} size={16} />
+                </span>
+                <span className="row-main">
+                  <span className="row-title">{t.plural}</span>
+                  <span className="row-meta">
+                    <span>
+                      {t.fields
+                        .slice(0, 4)
+                        .map((f) => f.label)
+                        .join(", ")}
+                      {t.fields.length > 4 ? ", …" : ""}
+                    </span>
+                  </span>
+                </span>
+              </span>
+              {names.has(t.name.toLowerCase()) ? <span className="badge">Staat er al</span> : <Icon name="plus" size={16} className="row-chevron" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
+    </div>
   );
 }
 

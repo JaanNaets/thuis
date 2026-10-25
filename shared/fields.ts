@@ -1,28 +1,78 @@
 // Velden: de bouwstenen van een lijst (een zelf samengesteld formulier zoals "Wijn" of "Klantenkaart").
 //
 // - Een veld heeft een sleutel (blijft, ook als je het hernoemt), een naam en een soort: tekst, getal, datum,
-//   keuzelijst, barcode/QR, een persoon, een verwijzing naar een ander item, personen met een aandeel, …
+//   keuzelijst, barcode/QR, een persoon, een verwijzing naar een ander item, personen met een aandeel, een
+//   berekening (zie shared/calc.ts), …
 // - De waarden van een item staan als JSON bij het item, per sleutel. Wat van buiten komt, gaat altijd door
 //   `cleanAttributes`: onbekende velden vallen weg, elke waarde wordt nagekeken.
 
-export const FIELD_TYPES = {
-  text: { label: "Tekst" },
-  longtext: { label: "Lange tekst" },
-  number: { label: "Getal" },
-  money: { label: "Bedrag" },
-  date: { label: "Datum" },
-  year: { label: "Jaar" },
-  year_range: { label: "Van–tot (jaren)" },
-  select: { label: "Keuzelijst" },
-  multi: { label: "Meerdere waarden" },
-  bool: { label: "Ja of nee" },
-  score: { label: "Score op 5" },
-  code: { label: "Barcode of QR-code" },
-  person: { label: "Persoon" },
-  item: { label: "Verwijzing naar een item" },
-  share: { label: "Personen met aandeel" },
+/** Groepen in de keuzelijst van veldsoorten. */
+import type { CalcDef, CalcResult } from "./calc.ts";
+
+export const FIELD_GROUPS = {
+  text: "Tekst",
+  number: "Getallen en geld",
+  time: "Datum en tijd",
+  choice: "Keuzes en lijstjes",
+  link: "Mensen en verwijzingen",
+  calc: "Berekenen",
 } as const;
+export type FieldGroup = keyof typeof FIELD_GROUPS;
+
+/** Alle veldsoorten, met waar ze bij horen en één zin uitleg (als tooltip bij het kiezen). */
+export const FIELD_TYPES = {
+  text: { label: "Tekst", group: "text", hint: "Een korte tekst, zoals een merk of een kamer." },
+  longtext: { label: "Lange tekst", group: "text", hint: "Notities over meerdere regels. Op de fiche krijgt ze een eigen kaart." },
+  url: { label: "Webadres", group: "text", hint: "Een link naar een website. Op de fiche tik je erop om ze te openen." },
+  email: { label: "E-mail", group: "text", hint: "Een e-mailadres. Op de fiche tik je erop om een mail te sturen." },
+  phone: { label: "Telefoon", group: "text", hint: "Een telefoonnummer. Op de fiche tik je erop om te bellen." },
+  address: { label: "Adres", group: "text", hint: "Een adres. Op de fiche tik je erop om het op een kaart te openen." },
+  code: { label: "Barcode of QR-code", group: "text", hint: "Scan of typ een code; de fiche toont ze groot om aan de kassa te laten scannen." },
+  number: { label: "Getal", group: "number", hint: "Een aantal of maat, met een eenheid als je wil (km, cm, kg, %)." },
+  money: { label: "Bedrag", group: "number", hint: "Een bedrag in euro." },
+  score: { label: "Score op 5", group: "number", hint: "Sterren van 0 tot 5, ook halve." },
+  date: { label: "Datum", group: "time", hint: "Een dag, zoals een aankoopdatum of een verjaardag." },
+  date_range: { label: "Periode", group: "time", hint: "Van een datum tot een datum, zoals een reis of een huurcontract. Je kan filteren op wat nu loopt." },
+  time: { label: "Uur", group: "time", hint: "Een tijdstip, zoals 18:30." },
+  duration: { label: "Duur", group: "time", hint: "Hoe lang iets duurt, zoals 1 u 30 min of 45 min." },
+  year: { label: "Jaar", group: "time", hint: "Een jaartal, zoals een jaargang of een bouwjaar." },
+  year_range: {
+    label: "Van–tot (jaren)",
+    group: "time",
+    hint: "Van een jaar tot een jaar, zoals wanneer een wijn drinkklaar is. Je kan filteren op wat nu geldt.",
+  },
+  interval: {
+    label: "Herhaling",
+    group: "time",
+    hint: "Om de hoeveel tijd iets terugkomt, zoals elke 6 maanden. Met een berekening Datum plus weet je wanneer het weer moet.",
+  },
+  select: { label: "Keuzelijst", group: "choice", hint: "Eén keuze uit een vaste lijst, zoals Rood, Wit of Rosé." },
+  multi: { label: "Meerdere waarden", group: "choice", hint: "Een paar woorden of labels, gescheiden door komma's, met voorstellen." },
+  bool: { label: "Ja of nee", group: "choice", hint: "Een schakelaar: ja of nee." },
+  checklist: { label: "Takenlijst", group: "choice", hint: "Een lijstje om af te vinken, zoals een paklijst of wat er nog moet gebeuren." },
+  person: { label: "Persoon", group: "link", hint: "Iemand uit het project, zoals wie betaalde." },
+  people: { label: "Personen", group: "link", hint: "Meerdere mensen uit het project, zoals wie meegaat." },
+  share: { label: "Personen met aandeel", group: "link", hint: "Wie welk deel heeft, samen 100%: van wie iets is of hoe een uitgave verdeeld wordt." },
+  item: { label: "Verwijzing", group: "link", hint: "Eén item uit een andere lijst (of dezelfde), zoals de verkoper van een aankoop." },
+  items: { label: "Verwijzingen", group: "link", hint: "Meerdere items uit een andere lijst, zoals de ingrediënten van een recept." },
+  calc: {
+    label: "Berekening",
+    group: "calc",
+    hint: "De app rekent de waarde zelf uit: met andere velden, met datums, of met items die gelinkt zijn.",
+  },
+} as const satisfies Record<string, { label: string; group: FieldGroup; hint: string }>;
 export type FieldType = keyof typeof FIELD_TYPES;
+
+/** Om de hoeveel tijd (Herhaling). */
+export const INTERVAL_UNITS = {
+  day: { one: "dag", many: "dagen" },
+  week: { one: "week", many: "weken" },
+  month: { one: "maand", many: "maanden" },
+  year: { one: "jaar", many: "jaar" },
+} as const;
+export type IntervalUnit = keyof typeof INTERVAL_UNITS;
+export type Interval = { n: number; unit: IntervalUnit };
+export type ChecklistEntry = { text: string; done: boolean };
 
 /** Namen volgens de Barcode Detection API (wat de scanner teruggeeft), met het symbool in bwip-js (om te tekenen). */
 export const CODE_FORMATS = {
@@ -67,6 +117,9 @@ export type FieldDef = {
   required?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
+  /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
+  calc?: CalcDef;
+  result?: CalcResult;
 };
 
 /** Een persoon met zijn aandeel in procent (samen 100). */
@@ -74,10 +127,22 @@ export type Share = { person_id: string; share: number };
 export type CodeValue = { text: string; format: CodeFormat };
 
 /**
- * text, longtext, select, date, person (id), item (id): tekst · number, year, money (cent), score: getal ·
- * year_range: [van, tot] · multi: lijst · bool · code: { text, format } · share: [{ person_id, share }].
+ * text, longtext, url, email, phone, address, select, date, time ("18:30"), person (id), item (id): tekst ·
+ * number, year, money (cent), score, duration (minuten): getal · year_range: [van, tot] · date_range: [van, tot]
+ * (datums) · multi, people, items: lijst · bool · code: { text, format } · share: [{ person_id, share }] ·
+ * interval: { n, unit } · checklist: [{ text, done }]. Een berekening wordt niet bewaard, enkel getoond.
  */
-export type FieldValue = string | number | boolean | string[] | [number | null, number | null] | CodeValue | Share[];
+export type FieldValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | [number | null, number | null]
+  | [string | null, string | null]
+  | CodeValue
+  | Share[]
+  | Interval
+  | ChecklistEntry[];
 export type Attributes = Record<string, FieldValue>;
 
 // ---------- velden nakijken ----------
@@ -128,22 +193,28 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (type === "select" && (!options || options.length === 0)) throw new Error(`Geef "${label}" minstens één keuze`);
     const def: FieldDef = { key, label, type };
     if (options && (type === "select" || type === "multi") && options.length) def.options = options;
-    if (typeof f.unit === "string" && f.unit.trim() && type === "number") def.unit = f.unit.trim().slice(0, 12);
-    if (type === "item") {
+    if (typeof f.unit === "string" && f.unit.trim() && (type === "number" || type === "calc")) def.unit = f.unit.trim().slice(0, 12);
+    if (type === "item" || type === "items") {
       if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke lijst "${label}" verwijst`);
       def.ref_type = f.ref_type.slice(0, 64);
+    }
+    if (type === "calc") {
+      // Enkel de vorm; wat erin staat, kijkt shared/calc.ts na (die kent ook de andere lijsten).
+      if (!f.calc || typeof f.calc !== "object" || Array.isArray(f.calc) || JSON.stringify(f.calc).length > 2000)
+        throw new Error(`Kies wat "${label}" uitrekent`);
+      def.calc = f.calc as CalcDef;
     }
     if (type === "code" && isCodeFormat(f.format)) def.format = f.format;
     if (f.column === true) def.column = true;
     if (f.filter === true && FILTERABLE.includes(type)) def.filter = true;
-    if (f.required === true) def.required = true;
+    if (f.required === true && type !== "calc") def.required = true;
     if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
     return def;
   });
 }
 
 /** Velden waarop je boven de lijst kan filteren. */
-export const FILTERABLE: FieldType[] = ["text", "select", "multi", "year", "year_range", "bool", "person", "item"];
+export const FILTERABLE: FieldType[] = ["text", "select", "multi", "year", "year_range", "date_range", "bool", "person", "people", "item", "items", "calc"];
 
 const thisYear = () => new Date().getFullYear();
 const isYear = (n: number) => Number.isInteger(n) && n >= 1800 && n <= thisYear() + 80;
@@ -210,8 +281,63 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
         return null;
       }
     }
+    case "url": {
+      if (typeof value !== "string") return null;
+      let url = value.trim();
+      // "colruyt.be" mag ook: dat wordt https://colruyt.be.
+      if (!/^https?:\/\//i.test(url) && /^[^\s/]+\.[^\s]{2,}$/.test(url)) url = `https://${url}`;
+      return /^https?:\/\/[^\s]+\.[^\s]+$/i.test(url) && url.length <= 500 ? url : null;
+    }
+    case "email": {
+      const email = typeof value === "string" ? value.trim() : "";
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 200 ? email : null;
+    }
+    case "phone": {
+      const phone = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+      return /^[+\d][\d\s()./-]{4,38}$/.test(phone) && (phone.match(/\d/g) ?? []).length >= 6 ? phone : null;
+    }
+    case "address":
+      return typeof value === "string" && value.trim() ? value.trim().slice(0, 300) : null;
+    case "time": {
+      const m = typeof value === "string" ? value.trim().match(/^(\d{1,2}):(\d{2})$/) : null;
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+      return `${m[1].padStart(2, "0")}:${m[2]}`;
+    }
+    case "duration":
+      return typeof value === "number" && Number.isFinite(value) && value > 0 && value < 1_000_000 ? Math.round(value) : null;
+    case "date_range": {
+      if (!Array.isArray(value) || value.length !== 2) return null;
+      const [from, to] = value.map((v) => (typeof v === "string" && isDate(v) ? v : null));
+      if (from === null && to === null) return null;
+      return from !== null && to !== null && to < from ? [to, from] : [from, to];
+    }
+    case "interval": {
+      const v = (value ?? {}) as Partial<Interval>;
+      if (typeof v !== "object" || !Object.hasOwn(INTERVAL_UNITS, v.unit ?? "")) return null;
+      return typeof v.n === "number" && Number.isInteger(v.n) && v.n >= 1 && v.n <= 1000 ? { n: v.n, unit: v.unit as IntervalUnit } : null;
+    }
+    case "people":
+    case "items": {
+      if (!Array.isArray(value)) return null;
+      const ids = [...new Set(value.filter((v): v is string => typeof v === "string" && ID_RE.test(v)))].slice(0, def.type === "people" ? 50 : 100);
+      return ids.length ? ids : null;
+    }
+    case "checklist": {
+      if (!Array.isArray(value)) return null;
+      const list = value
+        .map((v) => (v && typeof v === "object" ? (v as Partial<ChecklistEntry>) : {}))
+        .filter((v) => typeof v.text === "string" && v.text.trim())
+        .map((v) => ({ text: v.text!.trim().slice(0, 200), done: v.done === true }))
+        .slice(0, 100);
+      return list.length ? list : null;
+    }
+    case "calc":
+      // Een berekening wordt niet bewaard: de app rekent ze telkens uit.
+      return null;
   }
 }
+
+const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 
 /** Alle waarden van een item nakijken tegen de velden van zijn lijst; onbekende velden vallen weg. */
 export function cleanAttributes(defs: FieldDef[], raw: unknown): Attributes {
@@ -230,6 +356,7 @@ export function referencedPeople(defs: FieldDef[], data: Attributes): string[] {
   for (const def of defs) {
     const v = data[def.key];
     if (def.type === "person" && typeof v === "string") ids.add(v);
+    if (def.type === "people" && Array.isArray(v)) for (const id of v as string[]) ids.add(id);
     if (def.type === "share" && Array.isArray(v)) for (const s of v as Share[]) ids.add(s.person_id);
   }
   return [...ids];
@@ -237,9 +364,12 @@ export function referencedPeople(defs: FieldDef[], data: Attributes): string[] {
 
 /** De items waarnaar waarden verwijzen, met de lijst waarnaar het veld wijst. */
 export function referencedItems(defs: FieldDef[], data: Attributes): { id: string; ref_type: string; key: string }[] {
-  return defs
-    .filter((d) => d.type === "item" && typeof data[d.key] === "string")
-    .map((d) => ({ id: data[d.key] as string, ref_type: d.ref_type!, key: d.key }));
+  return defs.flatMap((d) => {
+    const v = data[d.key];
+    if (d.type === "item" && typeof v === "string") return [{ id: v, ref_type: d.ref_type!, key: d.key }];
+    if (d.type === "items" && Array.isArray(v)) return (v as string[]).map((id) => ({ id, ref_type: d.ref_type!, key: d.key }));
+    return [];
+  });
 }
 
 /** Velden die verplicht zijn maar leeg. */
@@ -272,11 +402,40 @@ export function parseFieldText(def: FieldDef, text: string): FieldValue | null |
     case "multi":
     case "code":
       return cleanValue(def, s) ?? undefined;
-    case "date": {
-      const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-      const iso = m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : s;
-      return cleanValue(def, iso) ?? undefined;
+    case "date":
+      return cleanValue(def, dateText(s)) ?? undefined;
+    case "url":
+    case "email":
+    case "phone":
+    case "address":
+      return cleanValue(def, s) ?? undefined;
+    case "time":
+      return cleanValue(def, timeText(s)) ?? undefined;
+    case "duration":
+      return cleanValue(def, parseDuration(s)) ?? undefined;
+    case "date_range": {
+      // "12/03/2026 - 20/03/2026", "12/03/2026 tot 20/03/2026", "vanaf 12/03/2026", "tot 20/03/2026".
+      const parts = s.split(/\s+(?:-|–|tot|t\/m)\s+|\s*–\s*/i).map((x) => x.replace(/^(vanaf|van|tot)\s+/i, ""));
+      const dates = parts.map((x) => (isDate(dateText(x)) ? dateText(x) : null));
+      if (dates.some((d, i) => d === null && parts[i].trim())) return undefined;
+      const value: [string | null, string | null] = /^tot\s/i.test(s)
+        ? [null, dates[0]]
+        : [dates[0] ?? null, dates[1] ?? (/^vanaf\s/i.test(s) ? null : dates[0])];
+      return cleanValue(def, value) ?? undefined;
     }
+    case "interval":
+      return cleanValue(def, parseInterval(s)) ?? undefined;
+    case "checklist":
+      // Eén taak per regel (of gescheiden door ;). "[x] Paspoort" is al afgevinkt.
+      return (
+        cleanValue(
+          def,
+          s.split(/\n|;/).map((line) => {
+            const done = /^\s*\[[xX✓]\]\s*/.test(line);
+            return { text: line.replace(/^\s*\[[ xX✓]?\]\s*/, ""), done };
+          }),
+        ) ?? undefined
+      );
     case "number":
       return (
         cleanValue(
@@ -317,8 +476,83 @@ export function parseFieldText(def: FieldDef, text: string): FieldValue | null |
     case "person":
     case "item":
     case "share":
+    case "people":
+    case "items":
+    case "calc":
       return undefined;
   }
+}
+
+/** "3/4/2026", "03-04-2026" of "2026-04-03" → "2026-04-03". */
+function dateText(s: string): string {
+  const m = s.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : s.trim();
+}
+
+/** "18:30", "18u30", "18.30", "18h", "18 uur" → "18:30". */
+function timeText(s: string): string {
+  const m = s.trim().match(/^(\d{1,2})(?:\s*(?::|u|h|\.|uur)\s*(\d{2})?)?\s*(?:u|h|uur)?$/i);
+  return m ? `${m[1]}:${m[2] ?? "00"}` : s;
+}
+
+/** Een duur lezen in minuten: "1:30", "1u30", "1 u 30 min", "1,5 uur", "90 min", "90", "2 dagen". */
+export function parseDuration(text: string): number {
+  const s = text.trim().toLowerCase().replace(",", ".");
+  const clock = s.match(/^(\d+):(\d{2})$/);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]);
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(Number(s));
+  const units: [RegExp, number][] = [
+    [/(\d+(?:\.\d+)?)\s*(?:dagen|dag|d)\b/, 1440],
+    [/(\d+(?:\.\d+)?)\s*(?:uren|uur|u|h)(?![a-z])/, 60],
+    [/(\d+(?:\.\d+)?)\s*(?:minuten|minuut|min|m)\b/, 1],
+  ];
+  let total = 0;
+  let found = false;
+  let rest = s;
+  for (const [re, factor] of units) {
+    const m = rest.match(re);
+    if (!m) continue;
+    total += Number(m[1]) * factor;
+    found = true;
+    rest = rest.replace(m[0], " ");
+  }
+  // "1u30": wat na de uren komt zonder eenheid, zijn minuten.
+  const after = rest.trim().match(/^(\d{1,2})$/);
+  if (found && after) total += Number(after[1]);
+  return found ? Math.round(total) : NaN;
+}
+
+/** 90 → "1 u 30 min", 45 → "45 min", 120 → "2 u", 3000 → "2 d 2 u". */
+export function formatDuration(minutes: number): string {
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  const m = minutes % 60;
+  return [d && `${d} d`, h && `${h} u`, m && `${m} min`].filter(Boolean).join(" ") || "0 min";
+}
+
+/** "elke 3 maanden", "maandelijks", "2 weken", "jaarlijks", "elk jaar" → { n, unit }. */
+export function parseInterval(text: string): Interval | null {
+  const s = text.trim().toLowerCase();
+  const words: Record<string, Interval> = {
+    dagelijks: { n: 1, unit: "day" },
+    wekelijks: { n: 1, unit: "week" },
+    maandelijks: { n: 1, unit: "month" },
+    jaarlijks: { n: 1, unit: "year" },
+    driemaandelijks: { n: 3, unit: "month" },
+    halfjaarlijks: { n: 6, unit: "month" },
+  };
+  if (words[s]) return words[s];
+  const m = s.match(/^(?:elke|elk|om de|iedere|ieder)?\s*(\d+)?\s*(dagen|dag|weken|week|maanden|maand|jaren|jaar)$/);
+  if (!m) return null;
+  const unit: IntervalUnit = m[2].startsWith("dag") ? "day" : m[2].startsWith("we") ? "week" : m[2].startsWith("maand") ? "month" : "year";
+  return { n: m[1] ? Number(m[1]) : 1, unit };
+}
+
+/** { n: 3, unit: "month" } → "elke 3 maanden"; n = 1 → "elke maand", "elk jaar". */
+export function formatInterval(v: Interval): string {
+  const u = INTERVAL_UNITS[v.unit];
+  if (v.n === 1) return `${v.unit === "year" ? "elk" : "elke"} ${u.one}`;
+  return `elke ${v.n} ${u.many}`;
 }
 
 /** Namen bij id's, om personen en verwijzingen te tonen. */
@@ -355,18 +589,57 @@ export function formatFieldValue(def: FieldDef, value: FieldValue | undefined, n
       return typeof value === "string" ? names.item(value) : "";
     case "share":
       return Array.isArray(value) ? sharesText(value as Share[], names.person) : "";
+    case "people":
+      return Array.isArray(value) ? (value as string[]).map(names.person).join(", ") : "";
+    case "items":
+      return Array.isArray(value) ? (value as string[]).map(names.item).join(", ") : "";
+    case "url":
+      return typeof value === "string" ? value.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "") : "";
+    case "duration":
+      return typeof value === "number" ? formatDuration(value) : "";
+    case "date_range": {
+      if (!Array.isArray(value)) return "";
+      const [from, to] = (value as [string | null, string | null]).map((d) => (d ? d.split("-").reverse().join("/") : null));
+      if (from && to) return from === to ? from : `${from} – ${to}`;
+      return from ? `vanaf ${from}` : to ? `tot ${to}` : "";
+    }
+    case "interval":
+      return value && typeof value === "object" && "unit" in value ? formatInterval(value as Interval) : "";
+    case "checklist": {
+      if (!Array.isArray(value)) return "";
+      const list = value as ChecklistEntry[];
+      return `${list.filter((e) => e.done).length} van ${list.length} klaar`;
+    }
+    case "calc":
+      // Dagen tot een datum: "over 12 dagen", "vandaag", "3 dagen geleden".
+      if (def.calc?.kind === "days_until" && typeof value === "number") return daysText(value);
+      // De uitkomst tonen zoals een veld van die soort (een getal met eenheid, een bedrag, een datum, ja/nee).
+      if (!def.result || def.result === "calc") return String(value);
+      return formatFieldValue({ ...def, type: def.result }, value, names);
     default:
       return String(value);
   }
 }
 
-/** Valt het jaar binnen een periode (van–tot)? Voor de filter "nu" (bv. een wijn die nu drinkklaar is). */
-export function rangeStatus(value: FieldValue | undefined, year = thisYear()): "now" | "later" | "past" | null {
+/** 0 → "vandaag", 1 → "morgen", 12 → "over 12 dagen", -3 → "3 dagen geleden". */
+export function daysText(days: number): string {
+  if (days === 0) return "vandaag";
+  if (days === 1) return "morgen";
+  if (days === -1) return "gisteren";
+  return days > 0 ? `over ${days} dagen` : `${-days} dagen geleden`;
+}
+
+/**
+ * Valt nu binnen een periode? Jaren (van–tot, bv. een wijn die nu drinkklaar is) of datums (bv. een reis, een
+ * huurcontract). Voor de filter "nu".
+ */
+export function rangeStatus(value: FieldValue | undefined, year = thisYear(), today = new Date().toISOString().slice(0, 10)): "now" | "later" | "past" | null {
   if (!Array.isArray(value) || value.length !== 2) return null;
-  const [from, to] = value as [number | null, number | null];
+  const [from, to] = value as [number | string | null, number | string | null];
   if (from === null && to === null) return null;
-  if (from !== null && year < from) return "later";
-  if (to !== null && year > to) return "past";
+  const now = typeof (from ?? to) === "string" ? today : year;
+  if (from !== null && now < from) return "later";
+  if (to !== null && now > to) return "past";
   return "now";
 }
 

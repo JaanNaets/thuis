@@ -188,6 +188,30 @@ const LINES = {
     </>
   ),
   loader: <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
+  /** Bewaren als bestand (Lucide download). */
+  download: (
+    <>
+      <path d="M12 15V3" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    </>
+  ),
+  /** Delen via de gsm (Lucide share). */
+  share: (
+    <>
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <path d="m16 6-4-4-4 4" />
+      <path d="M12 2v13" />
+    </>
+  ),
+  /** Uitleg (Lucide info), voor een tooltip. */
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M12 16.5v-5" />
+      <path d="M12 7.5h.01" />
+    </>
+  ),
   /** Greep om te slepen (Lucide grip-vertical). */
   grip: (
     <>

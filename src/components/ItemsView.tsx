@@ -1,5 +1,14 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { formatFieldValue, rangeStatus, type Attributes, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
+import {
+  formatFieldValue,
+  rangeStatus,
+  type Attributes,
+  type ChecklistEntry,
+  type FieldDef,
+  type FieldType,
+  type FieldValue,
+  type Names,
+} from "../../shared/fields";
 import type { ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
 import { apiUrl, useApi } from "../api";
 import { Link } from "../router";
@@ -17,14 +26,20 @@ export function fold(s: string): string {
     .toLowerCase();
 }
 
-/** Wat een waarde is als tekst (om op te zoeken en te filteren). */
+/** Wat een waarde is als tekst (om op te zoeken en te filteren); bij meerdere waarden elk apart. */
 function valueTexts(def: FieldDef, value: FieldValue | undefined, names: Names): string[] {
   if (value === undefined) return [];
   if (def.type === "multi" && Array.isArray(value)) return value as string[];
+  if (def.type === "people" && Array.isArray(value)) return (value as string[]).map(names.person);
+  if (def.type === "items" && Array.isArray(value)) return (value as string[]).map(names.item);
+  if (def.type === "checklist" && Array.isArray(value)) return [formatFieldValue(def, value), ...(value as ChecklistEntry[]).map((e) => e.text)];
   return [formatFieldValue(def, value, names)];
 }
 
-const NUMERIC = ["money", "number", "score", "year"];
+const NUMERIC: FieldType[] = ["money", "number", "score", "year", "duration"];
+/** Getallen staan rechts in een kolom (ook de uitkomst van een berekening). */
+const isNumeric = (def: FieldDef) => NUMERIC.includes(def.type) || (def.type === "calc" && NUMERIC.includes(def.result!));
+const isRange = (def: FieldDef) => def.type === "year_range" || def.type === "date_range";
 
 /**
  * De items van één lijst in een project: zoeken, filters uit de velden (en tags), en een tabel met de velden die
@@ -41,8 +56,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
   const fields = type.fields;
   const columns = fields.filter((f) => f.column).slice(0, 2);
-  const filterFields = fields.filter((f) => f.filter && f.type !== "year_range");
-  const rangeFields = fields.filter((f) => f.filter && f.type === "year_range");
+  const filterFields = fields.filter((f) => f.filter && !isRange(f));
+  const rangeFields = fields.filter((f) => f.filter && isRange(f));
   const items = data?.items ?? [];
   const year = new Date().getFullYear();
 
@@ -51,7 +66,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     for (const def of filterFields) {
       const values = new Set<string>();
       for (const item of items) valueTexts(def, item.data[def.key], names).forEach((v) => v && values.add(v));
-      out[def.key] = [...values].sort((a, b) => (def.type === "year" ? b.localeCompare(a) : a.localeCompare(b, "nl")));
+      out[def.key] = [...values].sort((a, b) => (def.type === "year" ? b.localeCompare(a) : a.localeCompare(b, "nl", { numeric: true })));
     }
     return out;
   }, [items, filterFields, names]);
@@ -79,7 +94,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   }, [items, query, filters, now, tag, fields, filterFields, rangeFields, names, project.tags, year]);
 
   const filtered = Boolean(query.trim() || tag || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
-  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (NUMERIC.includes(c.type) ? "110px" : "minmax(0, 160px)"))].join(" ");
+  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)"))].join(" ");
   const icon = (type.icon ?? "folder") as IconName;
 
   return (
@@ -164,7 +179,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
           <div className="table-head" aria-hidden="true">
             <span>{type.name_label ?? type.name}</span>
             {columns.map((c, k) => (
-              <span key={c.key} className={NUMERIC.includes(c.type) || k === columns.length - 1 ? "end" : undefined}>
+              <span key={c.key} className={isNumeric(c) || k === columns.length - 1 ? "end" : undefined}>
                 {c.label}
               </span>
             ))}
@@ -233,12 +248,12 @@ function ItemRow({
       </span>
       {columns.map((c) => {
         const v = item.data[c.key];
-        const end = NUMERIC.includes(c.type) ? "col col-end" : "col";
+        const end = isNumeric(c) ? "col col-end" : "col";
         return (
           <span key={c.key} className={end}>
             {v === undefined ? (
               <span className="muted">—</span>
-            ) : c.type === "score" ? (
+            ) : c.type === "score" || (c.type === "calc" && c.result === "score") ? (
               <ScoreStars value={v as number} />
             ) : (
               <span>{formatFieldValue(c, v, names)}</span>

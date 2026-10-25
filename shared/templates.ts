@@ -1,8 +1,12 @@
 // Sjablonen: een goed vertrekpunt voor een nieuw project. Ze zetten lijsten met velden klaar; daarna kan je alles
 // aanpassen. Er is niets speciaals aan: een project uit een sjabloon is een gewoon project.
+//
+// Een sjabloon kan ook een bestand zijn (zie shared/template-file.ts): een project dat iemand deelt, met dezelfde
+// vorm als de ingebouwde sjablonen hieronder.
 
-import type { FieldDef } from "./fields";
-import type { Rule } from "./rules";
+import { previewCalcs, type CalcList } from "./calc.ts";
+import type { FieldDef } from "./fields.ts";
+import type { Rule } from "./rules.ts";
 
 /** Iconen voor projecten en lijsten (namen uit src/components/Icon.tsx). */
 export const ICONS = [
@@ -26,6 +30,7 @@ export const ICONS = [
   "image",
   "clock",
   "sparkles",
+  "repeat",
 ] as const;
 export type IconKey = (typeof ICONS)[number];
 
@@ -33,8 +38,11 @@ export function isIconKey(value: unknown): value is IconKey {
   return typeof value === "string" && (ICONS as readonly string[]).includes(value);
 }
 
-/** Een veld in een sjabloon: een verwijzing wijst naar een andere lijst via haar sleutel (`ref`). */
-export type TemplateField = Omit<FieldDef, "ref_type"> & { ref?: string };
+/**
+ * Een veld in een sjabloon: een verwijzing wijst naar een andere lijst via haar sleutel (`ref`); een samenvatting
+ * van wat hiernaar verwijst ook (`calc.list` is dan een sleutel).
+ */
+export type TemplateField = Omit<FieldDef, "ref_type" | "result"> & { ref?: string };
 
 export type TypeTemplate = {
   key: string;
@@ -45,6 +53,11 @@ export type TypeTemplate = {
   fields: TemplateField[];
   /** Wat de app met de velden doet (zie shared/rules.ts). */
   rules?: Rule[];
+  /**
+   * Kwam mee in een gedeeld sjabloon omdat een andere lijst ernaar verwijst (bv. de Verkopers bij een Wijnkelder).
+   * Staat er bij het importeren erboven al een lijst met dezelfde naam, dan wordt die gebruikt in plaats van een nieuwe.
+   */
+  linked?: boolean;
 };
 
 export type ProjectTemplate = {
@@ -71,11 +84,25 @@ const VENDOR: TypeTemplate = {
   plural: "Verkopers",
   icon: "store",
   fields: [
-    { key: "website", label: "Website", type: "text", column: true },
-    { key: "telefoon", label: "Telefoon", type: "text" },
-    { key: "email", label: "E-mail", type: "text" },
-    { key: "adres", label: "Adres", type: "longtext" },
+    { key: "website", label: "Website", type: "url", column: true },
+    { key: "telefoon", label: "Telefoon", type: "phone" },
+    { key: "email", label: "E-mail", type: "email" },
+    { key: "adres", label: "Adres", type: "address" },
     { key: "klantnummer", label: "Klantnummer", type: "text", hint: "Nooit een wachtwoord" },
+    // Wat je er uitgaf (als er een lijst Uitgaven is; anders valt dit weg).
+    {
+      key: "uitgegeven",
+      label: "Uitgegeven",
+      type: "calc",
+      column: true,
+      calc: { kind: "rollup", from: "backlinks", list: "uitgave", via: "verkoper", agg: "sum", field: "bedrag" },
+    },
+    {
+      key: "laatst",
+      label: "Laatste aankoop",
+      type: "calc",
+      calc: { kind: "rollup", from: "backlinks", list: "uitgave", via: "verkoper", agg: "max", field: "datum" },
+    },
     NOTE,
   ],
 };
@@ -145,6 +172,7 @@ export const PROJECT_TEMPLATES = {
           { key: "gekocht_op", label: "Gekocht op", type: "date" },
           { key: "prijs", label: "Prijs", type: "money" },
           { key: "garantie_tot", label: "Garantie tot", type: "date" },
+          { key: "garantie", label: "Garantie nog", type: "calc", calc: { kind: "days_until", field: "garantie_tot" } },
           OWNER,
           { key: "goed_om_te_weten", label: "Goed om te weten", type: "longtext" },
         ],
@@ -158,6 +186,14 @@ export const PROJECT_TEMPLATES = {
           { key: "aantal", label: "Aantal", type: "number", column: true },
           { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "fles", "pak", "doos", "zak", "pot", "blik", "kg", "l"] },
           { key: "bijna_op", label: "Bijna op onder", type: "number" },
+          {
+            key: "kopen",
+            label: "Kopen",
+            type: "calc",
+            filter: true,
+            hint: "Ja als het aantal op of onder Bijna op onder is",
+            calc: { kind: "compare", op: "<=", a: { field: "aantal" }, b: { field: "bijna_op" } },
+          },
           { key: "plaats", label: "Plaats", type: "item", ref: "plaats", column: true, filter: true },
           { key: "barcode", label: "Barcode", type: "code", format: "ean_13" },
           NOTE,
@@ -203,6 +239,8 @@ export const PROJECT_TEMPLATES = {
           { key: "drinken", label: "Drinken", type: "year_range", filter: true },
           { key: "prijs", label: "Aankoopprijs per fles", type: "money" },
           { key: "aantal", label: "Aantal", type: "number", column: true },
+          { key: "waarde", label: "Waarde", type: "calc", calc: { kind: "math", op: "*", a: { field: "aantal" }, b: { field: "prijs" } } },
+          { key: "leeftijd", label: "Leeftijd", type: "calc", calc: { kind: "since", field: "jaargang", unit: "year" } },
           { key: "score", label: "Score", type: "score" },
           OWNER,
           { key: "proefnotities", label: "Proefnotities", type: "longtext" },
@@ -249,33 +287,173 @@ export const PROJECT_TEMPLATES = {
 } as const satisfies Record<string, ProjectTemplate>;
 export type TemplateKey = keyof typeof PROJECT_TEMPLATES;
 
+/** Losse lijsten om aan een bestaand project toe te voegen (naast de lijsten uit de projectsjablonen). */
+export const LIST_TEMPLATES: TypeTemplate[] = [
+  {
+    key: "onderhoud",
+    name: "Onderhoud",
+    plural: "Onderhoud",
+    name_label: "Wat",
+    icon: "clock",
+    fields: [
+      { key: "elke", label: "Om de", type: "interval", required: true, hint: "bv. elk jaar, elke 3 maanden" },
+      { key: "laatst", label: "Laatst gedaan", type: "date", required: true },
+      { key: "volgende", label: "Volgende keer", type: "calc", column: true, calc: { kind: "date_add", field: "laatst", add: { field: "elke" } } },
+      { key: "nog", label: "Nog", type: "calc", column: true, calc: { kind: "days_until", field: "volgende" } },
+      { key: "wie", label: "Wie doet het", type: "people", filter: true },
+      { key: "duur", label: "Duurt", type: "duration" },
+      { key: "stappen", label: "Stappen", type: "checklist" },
+      NOTE,
+    ],
+  },
+  {
+    key: "abonnement",
+    name: "Abonnement",
+    plural: "Abonnementen",
+    icon: "repeat",
+    fields: [
+      { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true },
+      { key: "elke", label: "Om de", type: "interval", required: true },
+      { key: "betaald", label: "Laatst betaald", type: "date" },
+      { key: "volgende", label: "Volgende betaling", type: "calc", column: true, calc: { kind: "date_add", field: "betaald", add: { field: "elke" } } },
+      { key: "opzeggen", label: "Opzeggen voor", type: "date" },
+      { key: "website", label: "Website", type: "url" },
+      { key: "klantnummer", label: "Klantnummer", type: "text", hint: "Nooit een wachtwoord" },
+      { key: "wie", label: "Op naam van", type: "person", filter: true },
+      NOTE,
+    ],
+  },
+  {
+    key: "recept",
+    name: "Recept",
+    plural: "Recepten",
+    icon: "note",
+    fields: [
+      { key: "bron", label: "Bron", type: "url" },
+      { key: "personen", label: "Voor", type: "number", unit: "personen" },
+      { key: "duur", label: "Bereiding", type: "duration", column: true },
+      { key: "soort", label: "Soort", type: "select", options: ["Voorgerecht", "Hoofdgerecht", "Dessert", "Soep", "Bijgerecht", "Ontbijt"], filter: true },
+      { key: "score", label: "Score", type: "score", column: true },
+      { key: "ingredienten", label: "Ingrediënten", type: "checklist" },
+      { key: "bereiding", label: "Bereiding", type: "longtext" },
+    ],
+  },
+  {
+    key: "reis",
+    name: "Reis",
+    plural: "Reizen",
+    name_label: "Bestemming",
+    icon: "pin",
+    fields: [
+      { key: "periode", label: "Periode", type: "date_range", column: true, filter: true },
+      { key: "wie", label: "Wie gaat mee", type: "people", filter: true },
+      { key: "vertrek", label: "Vertrek", type: "time" },
+      { key: "budget", label: "Budget", type: "money" },
+      { key: "logies", label: "Logies", type: "address" },
+      { key: "paklijst", label: "Paklijst", type: "checklist" },
+      NOTE,
+    ],
+  },
+  {
+    key: "contact",
+    name: "Contact",
+    plural: "Contacten",
+    icon: "users",
+    fields: [
+      { key: "telefoon", label: "Telefoon", type: "phone", column: true },
+      { key: "email", label: "E-mail", type: "email" },
+      { key: "adres", label: "Adres", type: "address" },
+      { key: "verjaardag", label: "Verjaardag", type: "date" },
+      { key: "leeftijd", label: "Leeftijd", type: "calc", calc: { kind: "since", field: "verjaardag", unit: "year" } },
+      { key: "soort", label: "Soort", type: "select", options: ["Familie", "Vrienden", "Buren", "Vakman", "Dokter", "Andere"], filter: true },
+      NOTE,
+    ],
+  },
+  {
+    key: "taak",
+    name: "Taak",
+    plural: "Taken",
+    icon: "star",
+    fields: [
+      { key: "tegen", label: "Tegen", type: "date", column: true },
+      { key: "nog", label: "Nog", type: "calc", calc: { kind: "days_until", field: "tegen" } },
+      { key: "wie", label: "Wie", type: "people", filter: true },
+      { key: "klaar", label: "Klaar", type: "bool", filter: true },
+      { key: "stappen", label: "Stappen", type: "checklist" },
+      NOTE,
+    ],
+  },
+];
+
+/** Alle lijsten die je los kan toevoegen: de losse en die uit de projectsjablonen (elk één keer). */
+export function listTemplates(): TypeTemplate[] {
+  const all = [...LIST_TEMPLATES, ...Object.values(PROJECT_TEMPLATES).flatMap((t) => t.types as readonly TypeTemplate[])];
+  return all.filter((t, i) => all.findIndex((x) => x.key === t.key) === i);
+}
+
 /** Eén lijst uit een sjabloon, op haar sleutel (om ze later aan een project toe te voegen). */
 export function typeTemplate(key: unknown): TypeTemplate | undefined {
-  for (const template of Object.values(PROJECT_TEMPLATES)) {
-    const found = (template.types as readonly TypeTemplate[]).find((t) => t.key === key);
-    if (found) return found;
-  }
-  return undefined;
+  return listTemplates().find((t) => t.key === key);
 }
 
 export function isTemplateKey(value: unknown): value is TemplateKey {
   return typeof value === "string" && Object.hasOwn(PROJECT_TEMPLATES, value);
 }
 
+/** Een lijst uit een sjabloon die aangemaakt wordt: haar nieuwe id en de lijsten waarnaar ze mag wijzen. */
+export type TemplatePlan = {
+  id: string;
+  list: TypeTemplate;
+  /** Sleutel → id van de lijsten in haar project en erboven (verwijzingen gaan enkel naar boven, zoals in de app). */
+  refs: Record<string, string>;
+  /** Sleutel → id van de lijsten erboven en eronder (samenvatten van wat hiernaar verwijst). */
+  calcs: Record<string, string>;
+};
+
 /**
- * De velden van een lijst uit een sjabloon, met echte verwijzingen: eerst naar een lijst uit hetzelfde sjabloon,
- * anders naar een lijst met dezelfde naam erboven (een wijnkelder onder Huishouden verwijst naar zijn Verkopers).
- * Een verwijzing die nergens heen kan, valt weg.
+ * De velden van lijsten uit een sjabloon, met echte verwijzingen: eerst naar een lijst uit hetzelfde sjabloon,
+ * anders naar een lijst met dezelfde naam erboven (`byName`; een wijnkelder onder Huishouden verwijst naar zijn
+ * Verkopers). Een verwijzing die nergens heen kan, valt weg, en een berekening die dan niet meer klopt ook.
+ * `existing`: de lijsten die er al zijn (erboven). Geeft per id de velden.
  */
-export function resolveTemplateFields(fields: readonly TemplateField[], typeIdByKey: Record<string, string>, typeIdByName: Record<string, string>): FieldDef[] {
-  const out: FieldDef[] = [];
-  for (const { ref, ...field } of fields) {
-    if (field.type !== "item") {
-      out.push({ ...field });
-      continue;
+export function resolveTemplateLists(plans: TemplatePlan[], byName: Record<string, string>, existing: CalcList[] = []): Record<string, FieldDef[]> {
+  const resolved: CalcList[] = plans.map(({ id, list, refs, calcs }) => {
+    const target = (scope: Record<string, string>, ref?: string) => (ref && (scope[ref] || byName[ref.toLowerCase()])) || undefined;
+    return {
+      id,
+      name: list.name,
+      plural: list.plural,
+      fields: list.fields.flatMap(({ ref, ...field }): FieldDef[] => {
+        if (field.type === "item" || field.type === "items") {
+          const to = target(refs, ref);
+          return to ? [{ ...field, ref_type: to }] : [];
+        }
+        if (field.type === "calc" && field.calc?.kind === "rollup" && field.calc.from === "backlinks") {
+          const to = target(calcs, field.calc.list);
+          return to ? [{ ...field, calc: { ...field.calc, list: to } }] : [];
+        }
+        return [{ ...field }];
+      }),
+    };
+  });
+  // Berekeningen kunnen op die van een andere lijst steunen: een paar rondes, tot elke lijst de uitkomsten kent.
+  let current = resolved;
+  for (let round = 0; round < 3; round++) {
+    current = resolved.map((l) => ({ ...l, fields: previewCalcs(l.fields, [...current.filter((x) => x.id !== l.id), ...existing], l.id).fields }));
+  }
+  // Wat dan nog niet klopt, valt weg (en wat erop verder bouwde ook).
+  const out: Record<string, FieldDef[]> = {};
+  for (const l of resolved) {
+    let fields = l.fields;
+    for (let i = 0; i <= fields.length; i++) {
+      const { fields: checked, errors } = previewCalcs(fields, [...current.filter((x) => x.id !== l.id), ...existing], l.id);
+      if (!Object.keys(errors).length) {
+        fields = checked;
+        break;
+      }
+      fields = fields.filter((f) => !errors[f.key]);
     }
-    const target = (ref && typeIdByKey[ref]) || (ref && typeIdByName[ref.toLowerCase()]);
-    if (target) out.push({ ...field, ref_type: target });
+    out[l.id] = fields;
   }
   return out;
 }

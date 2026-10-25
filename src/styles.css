@@ -82,13 +82,27 @@
 }
 
 /* Kleuren van categorieën, tags, plaatsen en leden: enkel voor stipjes, iconen, avatars en kleine vlakken. */
-.tone-peach { --tone: #f5883a; }
-.tone-butter { --tone: #e9b23a; }
-.tone-sage { --tone: #3fbf74; }
-.tone-mint { --tone: #26b5a5; }
-.tone-sky { --tone: #2f9be8; }
-.tone-lilac { --tone: #a26ae6; }
-.tone-rose { --tone: #ef5a7a; }
+.tone-peach {
+  --tone: #f5883a;
+}
+.tone-butter {
+  --tone: #e9b23a;
+}
+.tone-sage {
+  --tone: #3fbf74;
+}
+.tone-mint {
+  --tone: #26b5a5;
+}
+.tone-sky {
+  --tone: #2f9be8;
+}
+.tone-lilac {
+  --tone: #a26ae6;
+}
+.tone-rose {
+  --tone: #ef5a7a;
+}
 
 [class*="tone-"] {
   --tone-soft: color-mix(in oklab, var(--tone) 9%, white);
@@ -435,7 +449,9 @@ kbd {
   height: calc(var(--tabbar) - 12px);
   padding: 0 6px;
   transform: translateX(calc(var(--i, 0) * 100%));
-  transition: transform 0.45s var(--ease-out), opacity 0.2s;
+  transition:
+    transform 0.45s var(--ease-out),
+    opacity 0.2s;
   pointer-events: none;
 }
 
@@ -506,7 +522,9 @@ kbd {
   color: var(--primary-foreground);
   box-shadow: var(--shadow-lg);
   animation: pop-in 0.5s 0.15s var(--spring) backwards;
-  transition: transform 0.2s var(--ease-out), background-color 0.2s;
+  transition:
+    transform 0.2s var(--ease-out),
+    background-color 0.2s;
 }
 
 .fab:active {
@@ -1545,6 +1563,70 @@ button.row-link {
   color: var(--muted-foreground);
 }
 
+/* Uitleg bij een label of keuze: een kleine (i); de tekst verschijnt in een donker ballonnetje (zie Tip.tsx). */
+.tip {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.tip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -4px -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  cursor: help;
+}
+
+.label .tip-button svg {
+  color: inherit;
+}
+
+.tip-button:hover,
+.tip-button[aria-expanded="true"] {
+  color: var(--foreground);
+}
+
+.tip-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.tip-bubble {
+  position: fixed;
+  z-index: 250;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: tip-in 140ms var(--ease-out);
+}
+
+.tip-bubble[hidden] {
+  display: none;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
 .input,
 input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])),
 select,
@@ -1744,7 +1826,9 @@ input[type="checkbox"] {
   border-radius: 50%;
   background: #fff;
   box-shadow: var(--shadow-sm);
-  transition: transform 0.4s var(--spring), width 0.2s;
+  transition:
+    transform 0.4s var(--spring),
+    width 0.2s;
 }
 
 .switch:active::after {
@@ -1798,7 +1882,10 @@ input[type="checkbox"] {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s, transform 0.15s var(--ease-out);
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    transform 0.15s var(--ease-out);
 }
 
 .tag:active {
@@ -1816,7 +1903,9 @@ input[type="checkbox"] {
   width: 0;
   margin-right: -6px;
   overflow: hidden;
-  transition: width 0.3s var(--ease-out), margin 0.3s var(--ease-out);
+  transition:
+    width 0.3s var(--ease-out),
+    margin 0.3s var(--ease-out);
 }
 
 .tag[aria-pressed="true"] .check {
@@ -1876,7 +1965,9 @@ input[type="checkbox"] {
   background: var(--tone);
   color: #fff;
   cursor: pointer;
-  transition: box-shadow 0.25s var(--ease-out), transform 0.2s var(--spring);
+  transition:
+    box-shadow 0.25s var(--ease-out),
+    transform 0.2s var(--spring);
 }
 
 .tone-swatch:active {
@@ -1884,7 +1975,9 @@ input[type="checkbox"] {
 }
 
 .tone-swatch[aria-checked="true"] {
-  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--tone);
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--tone);
 }
 
 .tone-swatch svg {
@@ -2124,7 +2217,9 @@ dialog.sheet[open]::backdrop {
   color: inherit;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 0.2s, background-color 0.2s;
+  transition:
+    opacity 0.2s,
+    background-color 0.2s;
 }
 
 .toast-close:hover {
@@ -3706,6 +3801,26 @@ dialog.palette[open]::backdrop {
   }
 }
 
+/* Een ingelezen sjabloonbestand: wat erin zit, zoals een gekozen sjabloon. */
+.template-file {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.template-file .template-text {
+  flex: 1;
+}
+
+.template-file .icon-tile {
+  margin-top: 1px;
+}
+
 /* Velden van een project: naam en soort op één regel, de rest klapt open. */
 .fields-editor {
   display: grid;
@@ -3739,6 +3854,147 @@ dialog.palette[open]::backdrop {
   border-radius: var(--radius-md);
   background: var(--subtle);
   animation: fade-in 0.25s var(--ease-out) backwards;
+}
+
+/* Een berekening in het formulier: alleen-lezen, met een stippellijn (de app vult ze in). */
+.calc-output {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px dashed var(--input);
+  border-radius: var(--radius-md);
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Herhaling: "elke [3] [maanden]". */
+.interval-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.interval-input input {
+  flex: none;
+  width: 72px;
+}
+
+.interval-input select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Personen aanvinken: tags met een avatar. */
+.person-chip {
+  padding-left: 4px;
+}
+
+.person-chip[aria-pressed="true"] {
+  padding-left: 8px;
+}
+
+.person-chip:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Gekozen verwijzingen (Verwijzingen): kleine tags met een kruisje, de keuzelijst eronder. */
+.ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ref-chip {
+  padding-right: 2px;
+}
+
+.ref-chip button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.ref-chip button:hover {
+  background: var(--muted-strong);
+  color: var(--foreground);
+}
+
+/* Takenlijst: vinkje, tekst, weghalen; afgevinkt wordt grijs en doorstreept. */
+.checklist {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.checklist-row[data-done="true"] input[type="text"],
+.checklist-row[data-done="true"] label span {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.checklist-view .checklist-row {
+  display: block;
+  border-top: 1px solid var(--divider);
+}
+
+.checklist-view .checklist-row:first-child {
+  border-top: 0;
+}
+
+.checklist-view label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.checklist-view input:disabled + span {
+  cursor: default;
+}
+
+/* Wat een berekening uitrekent (in de velden van een lijst). */
+.calc-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.calc-formula {
+  display: grid;
+  gap: 8px;
+}
+
+.calc-operand {
+  display: grid;
+  gap: 6px;
+}
+
+@media (min-width: 560px) {
+  .calc-formula {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+  }
 }
 
 /* Waarden van de eigen velden: korte velden per twee, lange over de hele breedte. */
@@ -4198,7 +4454,6 @@ dialog.palette[open]::backdrop {
   min-height: 52px;
   padding: 6px 10px;
 }
-
 
 /* ---------- regels: wie moet wie ---------- */
 

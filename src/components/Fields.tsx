@@ -1,20 +1,28 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import type { Access } from "../../shared/access";
+import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
+  cleanValue,
   CODE_FORMATS,
+  FIELD_GROUPS,
   FIELD_TYPES,
   FILTERABLE,
   fieldKey,
+  formatDuration,
   formatFieldValue,
+  INTERVAL_UNITS,
   isCodeFormat,
   normalizeShares,
   parseFieldText,
   type Attributes,
+  type ChecklistEntry,
   type CodeFormat,
   type CodeValue,
   type FieldDef,
   type FieldType,
   type FieldValue,
+  type Interval,
+  type IntervalUnit,
   type Names,
   type Share,
 } from "../../shared/fields";
@@ -26,9 +34,11 @@ import { centsToInput } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { CalcEditor } from "./CalcEditor";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { useSortable } from "./Sortable";
+import { Tip } from "./Tip";
 
 // De barcodecode is groot (±1 MB); enkel laden wanneer er een code getoond wordt.
 const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode })));
@@ -46,8 +56,10 @@ export function namesFrom(people: Person[], refs: ItemRef[]): Names {
 
 export type SharesDraft = { mode: "none" | "equal" | "percent"; people: string[]; values: Record<string, string> };
 
+type IntervalDraft = { n: string; unit: IntervalUnit };
+
 /** Wat in een veld staat terwijl je typt. */
-type DraftValue = string | [string, string] | number | boolean | null | CodeValue | SharesDraft;
+type DraftValue = string | [string, string] | number | boolean | null | CodeValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft;
 export type AttributeDraft = Record<string, DraftValue>;
 
 export function sharesDraft(shares: Share[] | undefined): SharesDraft {
@@ -106,6 +118,27 @@ export function attributesDraft(defs: FieldDef[], attributes: Attributes): Attri
       case "share":
         draft[def.key] = sharesDraft(Array.isArray(v) ? (v as Share[]) : undefined);
         break;
+      case "date_range": {
+        const [from, to] = Array.isArray(v) ? (v as [string | null, string | null]) : [null, null];
+        draft[def.key] = [from ?? "", to ?? ""];
+        break;
+      }
+      case "duration":
+        draft[def.key] = typeof v === "number" ? formatDuration(v) : "";
+        break;
+      case "interval":
+        draft[def.key] = v && typeof v === "object" && "unit" in v ? { n: String((v as Interval).n), unit: (v as Interval).unit } : { n: "", unit: "month" };
+        break;
+      case "people":
+      case "items":
+        draft[def.key] = Array.isArray(v) ? (v as string[]) : [];
+        break;
+      case "checklist":
+        draft[def.key] = Array.isArray(v) ? (v as ChecklistEntry[]) : [];
+        break;
+      case "calc":
+        // Wordt uitgerekend, niet ingevuld.
+        break;
       default:
         draft[def.key] = v === undefined || v === null ? "" : String(v);
     }
@@ -130,8 +163,28 @@ function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldValue | nu
     case "person":
     case "item":
       return typeof raw === "string" && raw ? raw : null;
+    case "calc":
+      return null;
+    case "people":
+    case "items":
+      return Array.isArray(raw) && raw.length ? (raw as string[]) : null;
+    case "checklist": {
+      const list = (Array.isArray(raw) ? (raw as ChecklistEntry[]) : []).filter((e) => e.text.trim()).map((e) => ({ text: e.text.trim(), done: e.done }));
+      return list.length ? list : null;
+    }
+    case "interval": {
+      const v = raw as IntervalDraft;
+      if (!v.n?.trim()) return null;
+      const n = Number(v.n.trim());
+      return Number.isInteger(n) && n >= 1 && n <= 1000 ? { n, unit: v.unit } : undefined;
+    }
+    case "date_range": {
+      const [from, to] = raw as [string, string];
+      if (!from && !to) return null;
+      return cleanValue(def, [from || null, to || null]) ?? undefined;
+    }
     case "year_range": {
-      const [from, to] = Array.isArray(raw) ? raw : ["", ""];
+      const [from, to] = Array.isArray(raw) ? (raw as [string, string]) : ["", ""];
       if (!from.trim() && !to.trim()) return null;
       const year = (s: string) => (s.trim() ? (parseFieldText({ ...def, type: "year" }, s) as number | undefined) : null);
       const a = year(from);
@@ -156,8 +209,35 @@ export function buildAttributes(defs: FieldDef[], draft: AttributeDraft): { data
 }
 
 /** Velden die kort zijn, staan per twee naast elkaar. */
-const WIDE: FieldType[] = ["text", "longtext", "multi", "year_range", "bool", "share", "code", "item"];
-const PLACEHOLDERS: Partial<Record<FieldType, string>> = { year: "bv. 2019", money: "€ 0,00", number: "0" };
+const WIDE: FieldType[] = ["text", "longtext", "address", "multi", "year_range", "date_range", "bool", "share", "code", "item", "items", "people", "checklist"];
+const PLACEHOLDERS: Partial<Record<FieldType, string>> = {
+  year: "bv. 2019",
+  money: "€ 0,00",
+  number: "0",
+  url: "bv. colruyt.be",
+  email: "naam@voorbeeld.be",
+  phone: "bv. 0470 12 34 56",
+  address: "Straat 1, 2000 Antwerpen",
+  duration: "bv. 1 u 30 min",
+};
+const INPUT_MODES: Partial<Record<FieldType, "numeric" | "decimal" | "url" | "email" | "tel">> = {
+  year: "numeric",
+  number: "decimal",
+  money: "decimal",
+  url: "url",
+  email: "email",
+  phone: "tel",
+};
+
+/** Wat de berekeningen in het formulier tonen: de waarden die al kloppen, met de uitkomsten erbij. */
+function previewData(defs: FieldDef[], draft: AttributeDraft): Attributes {
+  const data: Attributes = {};
+  for (const def of defs) {
+    const v = draftValue(def, draft[def.key]);
+    if (v !== null && v !== undefined) data[def.key] = v;
+  }
+  return computeLocal(defs, data);
+}
 
 /**
  * De velden van een lijst in een formulier. `access`: per veld wat je mag (enkel zien = uitgeschakeld).
@@ -183,6 +263,7 @@ export function FieldInputs({
   suggestions?: Record<string, string[]>;
 }) {
   const set = (key: string, v: DraftValue) => onChange({ ...value, [key]: v }, key);
+  const computed = useMemo(() => (defs.some((d) => d.type === "calc") ? previewData(defs, value) : {}), [defs, value]);
   return (
     <div className="attr-fields">
       {defs.map((def) => {
@@ -201,12 +282,129 @@ export function FieldInputs({
         const hint = def.hint && <span className="hint">{def.hint}</span>;
 
         switch (def.type) {
+          case "calc": {
+            // Opzoeken en samenvatten rekent de app pas na het bewaren uit (op de fiche).
+            if (!def.result || isLinkCalc(def)) return null;
+            const v = computed[def.key];
+            return (
+              <div key={def.key} className="field">
+                <span className="label">
+                  {def.label}
+                  <Tip text={def.hint || `Rekent de app uit: ${describeCalc(def, defs)}.`} label={`Hoe ${def.label} berekend wordt`} />
+                </span>
+                <output className="calc-output" aria-live="polite">
+                  {v === undefined ? <span className="muted">—</span> : def.result === "score" ? <ScoreStars value={v as number} /> : formatFieldValue(def, v)}
+                </output>
+              </div>
+            );
+          }
           case "bool":
             return (
               <div key={def.key} className={`field ${wide}`}>
                 <Switch checked={raw === true} onChange={(on) => !disabled && set(def.key, on)} label={def.label} hint={def.hint} />
               </div>
             );
+          case "people":
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <PeoplePicker
+                  label={def.label}
+                  people={people}
+                  meId={meId}
+                  value={Array.isArray(raw) ? (raw as string[]) : []}
+                  onChange={(v) => set(def.key, v)}
+                  disabled={disabled}
+                />
+                {hint}
+              </div>
+            );
+          case "items":
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <ItemsSelect def={def} value={Array.isArray(raw) ? (raw as string[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
+                {hint}
+              </div>
+            );
+          case "checklist":
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <ChecklistInput
+                  label={def.label}
+                  value={Array.isArray(raw) ? (raw as ChecklistEntry[]) : []}
+                  onChange={(v) => set(def.key, v)}
+                  disabled={disabled}
+                />
+                {hint}
+              </div>
+            );
+          case "interval": {
+            const v = (raw ?? { n: "", unit: "month" }) as IntervalDraft;
+            const many = v.n.trim() !== "1";
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <div className="interval-input">
+                  <span className="muted">elke</span>
+                  <input
+                    inputMode="numeric"
+                    className={cls}
+                    disabled={disabled}
+                    aria-label={`${def.label}: hoeveel`}
+                    placeholder="1"
+                    value={v.n}
+                    aria-invalid={invalid}
+                    onChange={(e) => set(def.key, { ...v, n: e.target.value })}
+                  />
+                  <select
+                    className={cls}
+                    disabled={disabled}
+                    aria-label={`${def.label}: eenheid`}
+                    value={v.unit}
+                    onChange={(e) => set(def.key, { ...v, unit: e.target.value as IntervalUnit })}
+                  >
+                    {Object.entries(INTERVAL_UNITS).map(([u, w]) => (
+                      <option key={u} value={u}>
+                        {many ? w.many : w.one}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {hint}
+              </div>
+            );
+          }
+          case "date_range": {
+            const [from, to] = Array.isArray(raw) ? (raw as [string, string]) : ["", ""];
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <div className="field-row">
+                  <input
+                    type="date"
+                    className={cls}
+                    disabled={disabled}
+                    aria-label={`${def.label} van`}
+                    value={from}
+                    aria-invalid={invalid}
+                    onChange={(e) => set(def.key, [e.target.value, to])}
+                  />
+                  <input
+                    type="date"
+                    className={cls}
+                    disabled={disabled}
+                    aria-label={`${def.label} tot`}
+                    value={to}
+                    aria-invalid={invalid}
+                    onChange={(e) => set(def.key, [from, e.target.value])}
+                  />
+                </div>
+                {hint}
+              </div>
+            );
+          }
           case "score":
             return (
               <div key={def.key} className="field">
@@ -254,7 +452,7 @@ export function FieldInputs({
               </div>
             );
           case "year_range": {
-            const [from, to] = Array.isArray(raw) ? raw : ["", ""];
+            const [from, to] = Array.isArray(raw) ? (raw as [string, string]) : ["", ""];
             return (
               <div key={def.key} className={`field ${wide}`}>
                 {label}
@@ -326,8 +524,9 @@ export function FieldInputs({
                 <input
                   className={cls}
                   disabled={disabled}
-                  type={def.type === "date" ? "date" : "text"}
-                  inputMode={def.type === "year" ? "numeric" : def.type === "number" || def.type === "money" ? "decimal" : undefined}
+                  type={def.type === "date" ? "date" : def.type === "time" ? "time" : def.type === "phone" ? "tel" : "text"}
+                  inputMode={INPUT_MODES[def.type]}
+                  autoCapitalize={def.type === "url" || def.type === "email" ? "none" : undefined}
                   placeholder={PLACEHOLDERS[def.type]}
                   list={listId}
                   value={typeof raw === "string" ? raw : ""}
@@ -343,6 +542,13 @@ export function FieldInputs({
                 )}
                 {def.type === "multi" ? (
                   <span className="hint">Gescheiden door komma's{def.options?.length ? `, bv. ${def.options.slice(0, 2).join(", ")}` : ""}</span>
+                ) : def.type === "duration" &&
+                  typeof raw === "string" &&
+                  raw.trim() &&
+                  !invalid &&
+                  formatDuration(draftValue(def, raw) as number) !== raw.trim() ? (
+                  // Wat de app las: "90" wordt 1 u 30 min.
+                  <span className="hint">= {formatDuration(draftValue(def, raw) as number)}</span>
                 ) : (
                   hint
                 )}
@@ -372,6 +578,160 @@ function ItemSelect({ def, value, onChange, disabled }: { def: FieldDef; value: 
       </select>
       {error && <span className="hint error">{error}</span>}
     </>
+  );
+}
+
+/** Meerdere items uit een andere lijst (de ingrediënten van een recept): als chips, met een keuzelijst erbij. */
+function ItemsSelect({ def, value, onChange, disabled }: { def: FieldDef; value: string[]; onChange: (v: string[]) => void; disabled: boolean }) {
+  const { data, error } = useApi<ItemRef[]>(`/items?type=${def.ref_type}`);
+  const options = data ?? [];
+  const name = (id: string) => options.find((o) => o.id === id)?.name ?? (data ? "Verborgen" : "…");
+  const rest = options.filter((o) => !value.includes(o.id));
+  return (
+    <>
+      {value.length > 0 && (
+        <ul className="ref-chips">
+          {value.map((id) => (
+            <li key={id} className="tag static ref-chip">
+              <span>{name(id)}</span>
+              {!disabled && (
+                <button type="button" aria-label={`${name(id)} weghalen`} onClick={() => onChange(value.filter((x) => x !== id))}>
+                  <Icon name="close" size={13} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!disabled && (
+        <select
+          value=""
+          disabled={!data || rest.length === 0}
+          aria-label={`${def.label}: toevoegen`}
+          onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+        >
+          <option value="">{!data ? "Laden…" : rest.length ? "Toevoegen…" : options.length ? "Alles staat erbij" : "Nog niets om te kiezen"}</option>
+          {rest.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {error && <span className="hint error">{error}</span>}
+    </>
+  );
+}
+
+/** Personen uit het project aan- en uitvinken (wie meegaat, wie het moet doen). */
+function PeoplePicker({
+  label,
+  people,
+  meId,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  people: Person[];
+  meId: string;
+  value: string[];
+  onChange: (v: string[]) => void;
+  disabled: boolean;
+}) {
+  const unknown = value.filter((id) => !people.some((p) => p.id === id)).length;
+  return (
+    <div className="tag-picker" role="group" aria-label={label}>
+      {people.map((p) => {
+        const on = value.includes(p.id);
+        return (
+          <button
+            key={p.id}
+            type="button"
+            className="tag person-chip"
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={() => onChange(on ? value.filter((x) => x !== p.id) : [...value, p.id])}
+          >
+            <Icon name="check" size={14} className="check" />
+            <Avatar member={p} size="sm" />
+            {p.id === meId ? `${p.name} (ik)` : p.name}
+          </button>
+        );
+      })}
+      {unknown > 0 && <span className="hint">+ {unknown === 1 ? "1 ander" : `${unknown} anderen`}</span>}
+    </div>
+  );
+}
+
+/**
+ * Een takenlijst invullen: afvinken, tekst aanpassen, weghalen. Onderaan staat altijd een lege regel: wat je daar
+ * typt, wordt een nieuwe taak (ook als je meteen bewaart). Enter springt naar de volgende regel.
+ */
+function ChecklistInput({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: ChecklistEntry[];
+  onChange: (v: ChecklistEntry[]) => void;
+  disabled: boolean;
+}) {
+  const list = useRef<HTMLUListElement>(null);
+  const rows = disabled ? value : [...value, { text: "", done: false }];
+  const update = (i: number, patch: Partial<ChecklistEntry>) => {
+    const next = rows.map((e, k) => (k === i ? { ...e, ...patch } : e));
+    // Een lege regel in het midden blijft staan tot je bewaart; de lege regel onderaan telt niet mee.
+    onChange(next[next.length - 1]?.text || disabled ? next : next.slice(0, -1));
+  };
+  const focusRow = (i: number) => requestAnimationFrame(() => list.current?.querySelectorAll<HTMLInputElement>("input[type=text]")[i]?.focus());
+  return (
+    <ul className="checklist" ref={list}>
+      {rows.map((e, i) => {
+        const blank = !disabled && i === rows.length - 1;
+        return (
+          <li key={i} className="checklist-row" data-done={e.done}>
+            <input
+              type="checkbox"
+              checked={e.done}
+              disabled={disabled || blank}
+              aria-label={`${e.text || "Taak"}: klaar`}
+              onChange={(ev) => update(i, { done: ev.target.checked })}
+            />
+            <input
+              type="text"
+              value={e.text}
+              disabled={disabled}
+              maxLength={200}
+              placeholder={blank ? (value.length ? "Nog een taak" : "Eerste taak") : undefined}
+              aria-label={blank ? `${label}: nieuwe taak` : `Taak ${i + 1}`}
+              onChange={(ev) => update(i, { text: ev.target.value })}
+              onKeyDown={(ev) => {
+                if (ev.key !== "Enter") return;
+                ev.preventDefault();
+                if (e.text.trim()) focusRow(i + 1);
+              }}
+            />
+            {!disabled &&
+              (blank ? (
+                // Even breed als de knop erboven, zodat de regels gelijk lopen.
+                <span className="btn btn-ghost btn-icon btn-sm" style={{ visibility: "hidden" }} aria-hidden="true" />
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon btn-sm"
+                  aria-label={`${e.text || "Taak"} weghalen`}
+                  onClick={() => onChange(value.filter((_, k) => k !== i))}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              ))}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -571,35 +931,76 @@ export function SharesField({
 
 // ---------- waarden tonen ----------
 
-/** De ingevulde velden als regels in een `dl` (de lege vallen weg). Een verwijzing linkt naar dat item. */
-export function AttributeRows({ defs, data, names, refs }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ItemRef[] }) {
+/** Velden met een eigen kaart op de fiche (niet als regel). */
+const OWN_CARD: FieldType[] = ["longtext", "code", "checklist"];
+
+/**
+ * De ingevulde velden als regels in een `dl` (de lege vallen weg). Een verwijzing linkt naar dat item; een webadres,
+ * e-mail, telefoon of adres opent de site, een mail, de telefoon of een kaart. `lists`: de andere lijsten (voor de
+ * uitleg bij een berekening).
+ */
+export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ItemRef[]; lists?: CalcList[] }) {
   return (
     <>
       {defs
-        .filter((d) => data[d.key] !== undefined && d.type !== "longtext" && d.type !== "code")
-        .map((d) => {
-          const v = data[d.key];
-          const ref = d.type === "item" ? refs.find((r) => r.id === v) : undefined;
-          return (
-            <div key={d.key}>
-              <dt>{d.label}</dt>
-              <dd>
-                {d.type === "score" ? (
-                  <ScoreStars value={v as number} />
-                ) : ref ? (
-                  <Link to={`/items/${ref.id}`} className="link-quiet">
-                    {ref.name}
-                  </Link>
-                ) : d.type === "text" && typeof v === "string" && WEB_ADDRESS.test(v) ? (
-                  <WebLink url={v} />
-                ) : (
-                  formatFieldValue(d, v, names)
-                )}
-              </dd>
-            </div>
-          );
-        })}
+        .filter((d) => data[d.key] !== undefined && !OWN_CARD.includes(d.type))
+        .map((d) => (
+          <div key={d.key}>
+            <dt>
+              {d.label}
+              {d.type === "calc" && <Tip text={d.hint || `Rekent de app uit: ${describeCalc(d, defs, lists)}.`} label={`Hoe ${d.label} berekend wordt`} />}
+            </dt>
+            <dd>
+              <FieldValueView def={d} value={data[d.key]} names={names} refs={refs} />
+            </dd>
+          </div>
+        ))}
     </>
+  );
+}
+
+function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; value: FieldValue; names: Names; refs: ItemRef[] }) {
+  const refLink = (id: string) => {
+    const ref = refs.find((r) => r.id === id);
+    return ref ? (
+      <Link key={id} to={`/items/${ref.id}`} className="link-quiet">
+        {ref.name}
+      </Link>
+    ) : (
+      <span key={id}>{names.item(id)}</span>
+    );
+  };
+  // Een opgezocht webadres, e-mail, ... toont zoals dat veld (met link); dagen tot blijft "over 12 dagen".
+  if (d.type === "calc" && d.result && d.result !== "calc" && d.calc?.kind !== "days_until")
+    return <FieldValueView def={{ ...d, type: d.result }} value={v} names={names} refs={refs} />;
+  if (d.type === "score") return <ScoreStars value={v as number} />;
+  if (d.type === "item" && typeof v === "string") return refLink(v);
+  if (d.type === "items" && Array.isArray(v))
+    return (
+      <span className="ref-list">
+        {(v as string[]).map((id, i) => (
+          <span key={id}>
+            {i > 0 && ", "}
+            {refLink(id)}
+          </span>
+        ))}
+      </span>
+    );
+  if (typeof v === "string" && (d.type === "url" || (d.type === "text" && WEB_ADDRESS.test(v)))) return <WebLink url={v} />;
+  if (typeof v === "string" && d.type === "email") return <OutLink href={`mailto:${v}`} text={v} />;
+  if (typeof v === "string" && d.type === "phone") return <OutLink href={`tel:${v.replace(/[^\d+]/g, "")}`} text={v} />;
+  if (typeof v === "string" && d.type === "address")
+    return <OutLink href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v)}`} text={v} external />;
+  return <>{formatFieldValue(d, v, names)}</>;
+}
+
+/** Een mail, telefoon of kaart openen. Op een kiosk gewoon tekst. */
+function OutLink({ href, text, external }: { href: string; text: string; external?: boolean }) {
+  if (isKiosk) return <span>{text}</span>;
+  return (
+    <a href={href} className="link-quiet" {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+      {text}
+    </a>
   );
 }
 
@@ -618,6 +1019,40 @@ function WebLink({ url }: { url: string }) {
     <a href={url} target="_blank" rel="noopener noreferrer" className="link-quiet">
       {host}
     </a>
+  );
+}
+
+/**
+ * Een takenlijst op de fiche: afvinken kan meteen (zonder het formulier te openen) als je het veld mag wijzigen.
+ * `onToggle` bewaart; tot dan staat het vinkje er al (en bij een fout gaat het terug).
+ */
+export function ChecklistView({ value, onToggle }: { value: ChecklistEntry[]; onToggle?: (next: ChecklistEntry[]) => Promise<void> }) {
+  const [shown, setShown] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    setShown(value);
+  }
+  return (
+    <ul className="checklist checklist-view">
+      {shown.map((e, i) => (
+        <li key={i} className="checklist-row" data-done={e.done}>
+          <label>
+            <input
+              type="checkbox"
+              checked={e.done}
+              disabled={!onToggle}
+              onChange={(ev) => {
+                const next = shown.map((x, k) => (k === i ? { ...x, done: ev.target.checked } : x));
+                setShown(next);
+                onToggle?.(next).catch(() => setShown(value));
+              }}
+            />
+            <span>{e.text}</span>
+          </label>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -655,32 +1090,47 @@ export function fieldsDraft(defs: FieldDef[]): FieldDraft[] {
   return defs.map((d) => ({ ...d, optionsText: (d.options ?? []).join(", ") }));
 }
 
-/** Van wat in het formulier staat naar velden voor de API. Een nieuw veld krijgt een sleutel uit zijn naam. */
-export function buildFields(drafts: FieldDraft[]): { fields: FieldDef[] } | { error: string } {
+/**
+ * Van wat in het formulier staat naar velden voor de API. Een nieuw veld krijgt een sleutel uit zijn naam (en een
+ * berekening die het gebruikt, krijgt die sleutel mee). `selfId`: deze lijst ("self" bij een nieuwe).
+ */
+export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: FieldDef[] } | { error: string } {
   const taken = drafts.filter((d) => !d.isNew).map((d) => d.key);
-  const fields: FieldDef[] = [];
+  const keys = new Map<string, string>();
   for (const d of drafts) {
     const label = d.label.trim();
     if (!label) return { error: "Geef elk veld een naam (of haal het weg)." };
+    const key = d.isNew ? fieldKey(label, taken) : d.key;
+    taken.push(key);
+    keys.set(d.key, key);
+  }
+  const rename = (k: string) => keys.get(k) ?? k;
+  const refOf = (k: string) => {
+    const ref = drafts.find((d) => d.key === k)?.ref_type;
+    return ref === "self" ? selfId : ref;
+  };
+  const fields: FieldDef[] = [];
+  for (const d of drafts) {
+    const label = d.label.trim();
     const options = d.optionsText
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean);
     if (d.type === "select" && options.length === 0) return { error: `Geef de keuzes voor ${label}, gescheiden door komma's.` };
-    if (d.type === "item" && !d.ref_type) return { error: `Kies naar welke lijst ${label} verwijst.` };
-    const key = d.isNew ? fieldKey(label, taken) : d.key;
-    taken.push(key);
+    if ((d.type === "item" || d.type === "items") && !d.ref_type) return { error: `Kies naar welke lijst ${label} verwijst.` };
+    if (d.type === "calc" && !d.calc) return { error: `Kies wat ${label} uitrekent.` };
     fields.push({
-      key,
+      key: rename(d.key),
       label,
       type: d.type,
       ...((d.type === "select" || d.type === "multi") && options.length ? { options } : {}),
-      ...(d.type === "number" && d.unit?.trim() ? { unit: d.unit.trim() } : {}),
-      ...(d.type === "item" ? { ref_type: d.ref_type } : {}),
+      ...((d.type === "number" || d.type === "calc") && d.unit?.trim() ? { unit: d.unit.trim() } : {}),
+      ...(d.type === "item" || d.type === "items" ? { ref_type: d.ref_type } : {}),
       ...(d.type === "code" && d.format ? { format: d.format } : {}),
+      ...(d.type === "calc" && d.calc ? { calc: renameCalc(d.calc, rename, refOf, selfId) } : {}),
       ...(d.column ? { column: true } : {}),
       ...(d.filter && FILTERABLE.includes(d.type) ? { filter: true } : {}),
-      ...(d.required ? { required: true } : {}),
+      ...(d.required && d.type !== "calc" ? { required: true } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
     });
   }
@@ -688,24 +1138,38 @@ export function buildFields(drafts: FieldDraft[]): { fields: FieldDef[] } | { er
 }
 
 /**
- * De velden van een lijst: naam en soort veld op één regel; onder ⋯ de keuzes, eenheid, verwijzing, formaat, uitleg,
- * kolom, filter, verplicht en de volgorde. `types`: de lijsten waarnaar een verwijzing kan wijzen.
+ * De velden van een lijst: naam en soort veld op één regel; onder ⋯ de uitleg bij die soort, de keuzes, eenheid,
+ * verwijzing, formaat, wat een berekening uitrekent, uitleg, kolom, filter en verplicht. `types`: de lijsten waarnaar
+ * een verwijzing kan wijzen; `lists`: de lijsten waarmee een berekening kan werken (ook eronder).
  */
 export function FieldsEditor({
   value,
   onChange,
   types,
+  lists = types,
   selfLabel,
   selfId,
 }: {
   value: FieldDraft[];
   onChange: (v: FieldDraft[]) => void;
   types: ItemType[];
+  lists?: CalcList[];
   selfLabel: string;
   /** De lijst zelf (bij bewerken); bij een nieuwe lijst verwijst "self" naar zichzelf. */
   selfId?: string;
 }) {
   const counter = useRef(0);
+  const self = selfId ?? "self";
+  // Elke berekening meteen nakijken: haar uitkomst (welke velden een andere berekening kan gebruiken) of wat nog mist.
+  const preview = useMemo(
+    () =>
+      previewCalcs(
+        value.map((d) => ({ ...d, label: d.label.trim() || "Naamloos veld" })),
+        lists.filter((l) => l.id !== self),
+        self,
+      ),
+    [value, lists, self],
+  );
   const update = (i: number, patch: Partial<FieldDraft>) => onChange(value.map((f, k) => (k === i ? { ...f, ...patch } : f)));
   const sortable = useSortable(
     value.map((f) => f.key),
@@ -740,10 +1204,16 @@ export function FieldsEditor({
                   aria-label={`Soort van ${f.label || "het veld"}`}
                   onChange={(e) => update(i, { type: e.target.value as FieldType, open: true })}
                 >
-                  {Object.entries(FIELD_TYPES).map(([type, t]) => (
-                    <option key={type} value={type}>
-                      {t.label}
-                    </option>
+                  {Object.entries(FIELD_GROUPS).map(([group, groupLabel]) => (
+                    <optgroup key={group} label={groupLabel}>
+                      {Object.entries(FIELD_TYPES)
+                        .filter(([, t]) => t.group === group)
+                        .map(([type, t]) => (
+                          <option key={type} value={type}>
+                            {t.label}
+                          </option>
+                        ))}
+                    </optgroup>
                   ))}
                 </select>
                 <button
@@ -758,6 +1228,17 @@ export function FieldsEditor({
               </div>
               {f.open && (
                 <div className="fields-editor-more">
+                  <p className="hint">{FIELD_TYPES[f.type].hint}</p>
+                  {f.type === "calc" && (
+                    <CalcEditor
+                      field={preview.fields[i]}
+                      fields={preview.fields}
+                      lists={lists.filter((l) => l.id !== self)}
+                      selfId={self}
+                      error={preview.errors[f.key]}
+                      onChange={(calc) => update(i, { calc })}
+                    />
+                  )}
                   {(f.type === "select" || f.type === "multi") && (
                     <label className="field">
                       <span className="label">{f.type === "select" ? "Keuzes" : "Voorstellen"}</span>
@@ -768,15 +1249,20 @@ export function FieldsEditor({
                       />
                     </label>
                   )}
-                  {f.type === "number" && (
+                  {(f.type === "number" || (f.type === "calc" && preview.fields[i].result === "number")) && (
                     <label className="field">
                       <span className="label">
                         Eenheid <span className="optional">· optioneel</span>
                       </span>
-                      <input value={f.unit ?? ""} maxLength={12} placeholder="bv. km, cm, kg" onChange={(e) => update(i, { unit: e.target.value })} />
+                      <input
+                        value={f.unit ?? ""}
+                        maxLength={12}
+                        placeholder={f.type === "calc" ? "bv. dagen, flessen" : "bv. km, cm, kg"}
+                        onChange={(e) => update(i, { unit: e.target.value })}
+                      />
                     </label>
                   )}
-                  {f.type === "item" && (
+                  {(f.type === "item" || f.type === "items") && (
                     <label className="field">
                       <span className="label">Verwijst naar</span>
                       <select value={f.ref_type ?? ""} onChange={(e) => update(i, { ref_type: e.target.value || undefined })}>
@@ -808,7 +1294,7 @@ export function FieldsEditor({
                     </span>
                     <input value={f.hint ?? ""} maxLength={160} placeholder="Wat hier hoort" onChange={(e) => update(i, { hint: e.target.value })} />
                   </label>
-                  <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />
+                  {f.type !== "calc" && <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />}
                   <Switch checked={Boolean(f.column)} onChange={(on) => update(i, { column: on })} label="Als kolom in de lijst" />
                   {FILTERABLE.includes(f.type) && (
                     <Switch checked={Boolean(f.filter)} onChange={(on) => update(i, { filter: on })} label="Als filter boven de lijst" />

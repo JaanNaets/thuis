@@ -5,7 +5,8 @@ import { cleanAttributes, missingRequired, referencedItems, referencedPeople, ty
 import { applyRuleDefaults } from "../../shared/rules";
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
-import { accessibleProjects, placeholders, projectAccess, requireProject, typesFor, type ProjectAccess } from "../context";
+import { withCalcs } from "../compute";
+import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 
@@ -177,6 +178,7 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
   const me = c.get("person").id;
   const { row, access, type, types } = await requireItem(c, id);
   const item = toItem(row, access.rights, type);
+  await withCalcs(db, me, type, access.rights, [item]);
   const [fileRows, logRows] = await db.batch([
     db.prepare("SELECT id, item_id, filename, content_type, size_bytes, created_at FROM item_files WHERE item_id = ? ORDER BY created_at").bind(id),
     db
@@ -197,10 +199,14 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
   const backlinks: ItemDetail["backlinks"] = [];
   for (const cand of candidates.filter(canSee)) {
     if (!allTypes.has(cand.type_id)) {
-      const t = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(cand.type_id).first<Omit<ItemType, "fields"> & { fields: string }>();
-      if (t) allTypes.set(t.id, { ...t, fields: JSON.parse(t.fields) as FieldDef[] });
+      const t = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(cand.type_id).first<TypeRow>();
+      if (t) allTypes.set(t.id, toItemType(t));
     }
-    const field = allTypes.get(cand.type_id)?.fields.find((f) => f.type === "item" && parseData(cand.data)[f.key] === id);
+    const data = parseData(cand.data);
+    const field = allTypes.get(cand.type_id)?.fields.find((f) => {
+      const v = data[f.key];
+      return (f.type === "item" && v === id) || (f.type === "items" && Array.isArray(v) && (v as string[]).includes(id));
+    });
     if (field) backlinks.push({ id: cand.id, name: cand.name, type_id: cand.type_id, project_id: cand.project_id, field_label: field.label });
   }
   return {
@@ -236,6 +242,10 @@ projectItems.get("/:id/items", async (c) => {
     .all<ItemRow>();
   const byId = new Map(visible.map((t) => [t.id, t]));
   const list = results.map((r) => toItem(r, access.rights, byId.get(r.type_id)!));
+  for (const t of visible) {
+    const ofType = list.filter((i) => i.type_id === t.id);
+    if (ofType.length) await withCalcs(db, me, t, access.rights, ofType);
+  }
   return c.json({ items: list, ...(await namesFor(db, me, access.chain, types, list)) } satisfies ItemList);
 });
 
@@ -531,7 +541,7 @@ projectItems.post("/:id/items/import", async (c) => {
 // ---------- een etiket lezen ----------
 
 /** Velden die de AI van een foto kan lezen. */
-const READABLE = ["text", "number", "money", "date", "year", "year_range", "select", "multi", "bool"];
+const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
 
 function labelSchema(fields: FieldDef[]) {
   const properties: Record<string, unknown> = { name: { type: ["string", "null"] } };
@@ -551,8 +561,9 @@ function labelSchema(fields: FieldDef[]) {
 
 function describeField(f: FieldDef): string {
   const extra =
-    { year_range: ` (${f.key}_from en ${f.key}_to: jaartallen)`, money: " (in euro)", multi: " (lijst)", date: " (YYYY-MM-DD)" }[f.type as string] ??
-    (f.unit ? ` (in ${f.unit})` : "");
+    { year_range: ` (${f.key}_from en ${f.key}_to: jaartallen)`, money: " (in euro)", multi: " (lijst)", date: " (YYYY-MM-DD)", time: " (HH:MM)" }[
+      f.type as string
+    ] ?? (f.unit ? ` (in ${f.unit})` : "");
   return `- ${f.key}: ${f.label}${extra}${f.hint ? `. ${f.hint}` : ""}`;
 }
 

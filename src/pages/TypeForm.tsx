@@ -4,12 +4,13 @@ import type { IconKey } from "../../shared/templates";
 import type { ItemType, ItemTypeInput, ProjectDetail } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
-import { SubmitButton } from "../components/Controls";
+import { CardHead, SubmitButton } from "../components/Controls";
 import { buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
 import { buildRules, ruleDraft, RulesEditor, type RuleDraft } from "../components/RulesEditor";
+import { ShareTemplate } from "../components/TemplateShare";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
@@ -29,10 +30,12 @@ export function TypeFormPage() {
   // Verwijzen kan naar lijsten van dit project en erboven.
   const chain = new Set([p.project.id, ...p.path.map((x) => x.id)]);
   const refTypes = all.filter((t) => chain.has(t.project_id) && t.id !== typeId);
-  return <TypeForm project={p} existing={existing} refTypes={refTypes} />;
+  // Een berekening kan ook tellen wat in een subproject naar deze lijst verwijst.
+  const calcLists = all.filter((t) => t.id !== typeId);
+  return <TypeForm project={p} existing={existing} refTypes={refTypes} calcLists={calcLists} />;
 }
 
-function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; existing?: FullType; refTypes: ItemType[] }) {
+function TypeForm({ project: p, existing, refTypes, calcLists }: { project: ProjectDetail; existing?: FullType; refTypes: ItemType[]; calcLists: ItemType[] }) {
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
@@ -49,7 +52,7 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const built = buildFields(fields);
+    const built = buildFields(fields, existing?.id);
     if ("error" in built) return setError(built.error);
     const rules = buildRules(rule, fields, (key) => built.fields[fields.findIndex((f) => f.key === key)]?.key);
     if ("error" in rules) return setError(rules.error);
@@ -114,7 +117,7 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
       </section>
 
       <section className="card form-section">
-        <FieldsEditor value={fields} onChange={setFields} types={refTypes} selfLabel={plural || name || "Deze lijst"} selfId={existing?.id} />
+        <FieldsEditor value={fields} onChange={setFields} types={refTypes} lists={calcLists} selfLabel={plural || name || "Deze lijst"} selfId={existing?.id} />
       </section>
 
       <RulesEditor
@@ -130,6 +133,18 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
         {busy ? "Opslaan…" : "Opslaan"}
       </SubmitButton>
+      {existing && (
+        <section className="card">
+          <CardHead
+            icon="copy"
+            title="Deze lijst delen"
+            description="Een bestand met deze lijst en haar velden (en de lijsten waarnaar ze verwijst), zonder items. Iemand anders voegt ze toe met Lijsten → Uit sjabloon."
+          />
+          <div className="card-body">
+            <ShareTemplate path={`/types/${existing.id}/template`} />
+          </div>
+        </section>
+      )}
       {existing && (
         <button type="button" className="btn btn-danger-ghost" style={{ justifySelf: "start" }} onClick={remove}>
           <Icon name="trash" size={16} /> Lijst verwijderen

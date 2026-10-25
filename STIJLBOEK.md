@@ -15,6 +15,8 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | Kleuren, maten, schaduwen, curves | `src/styles.css`, bovenaan in `:root` |
 | Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`) |
 | Lijsten, velden en items | `src/components/Fields.tsx`, `ItemsView.tsx` en `shared/fields.ts` |
+| Berekeningen | `src/components/CalcEditor.tsx` en `shared/calc.ts` |
+| Sjablonen (ingebouwd en gedeeld) | `shared/templates.ts`, `shared/template-file.ts` en `src/components/TemplateShare.tsx` |
 | Rechten | `shared/access.ts` (wat een rol mag, per lijst en per veld) |
 | Navigatie met overgangen | `src/router.tsx` (`Link`, `NavLink`, `useNavigate`) en `src/routes.tsx` |
 | Iconen | `src/components/Icon.tsx` |
@@ -362,21 +364,34 @@ Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--de
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
 - Kant-en-klare velden: `FieldInputs` (alle velden van een lijst), `TagPicker`, `Switch`, `ToneSwatches`,
-  `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`.
+  `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`. Uitleg bij een label: `Tip`.
 
 ### Lijsten en velden: `Fields.tsx`
 
 Alles wat je bijhoudt, is een **item** in een **lijst**: een lijst heeft eigen velden (Wijnen met jaargang en
 druiven, Klantenkaarten met een barcode). De lijsten van een project gelden ook in zijn subprojecten. In de code heet
 een lijst `item_type` (`ItemType`, `type_id`); in alles wat de gebruiker leest, is het een **lijst**. De veldsoorten
-staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar een type, een controle
-(`cleanValue`), een opmaak (`formatFieldValue`) en hier een invoer.
+staan in `FIELD_TYPES` (`shared/fields.ts`), elk met een groep (`FIELD_GROUPS`) en één zin uitleg; een nieuwe
+veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`formatFieldValue`), tekst lezen
+(`parseFieldText`) en hier een invoer.
+
+| Groep | Veldsoorten |
+| --- | --- |
+| Tekst | Tekst, Lange tekst, Webadres, E-mail, Telefoon, Adres, Barcode of QR-code |
+| Getallen en geld | Getal (met eenheid), Bedrag, Score op 5 |
+| Datum en tijd | Datum, Periode (van–tot datums), Uur, Duur, Jaar, Van–tot (jaren), Herhaling ("elke 3 maanden") |
+| Keuzes en lijstjes | Keuzelijst, Meerdere waarden, Ja of nee, Takenlijst |
+| Mensen en verwijzingen | Persoon, Personen, Personen met aandeel, Verwijzing, Verwijzingen |
+| Berekenen | Berekening (zie hieronder) |
 
 | Component of hulpje | Wat |
 | --- | --- |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst: naam en soort veld op één regel, onder ⋯ keuzes, eenheid, verwijzing, codeformaat, kolom, filter, verplicht en uitleg |
-| `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen |
-| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link (op een kiosk als tekst) |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, kolom, filter, verplicht en uitleg |
+| `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
+| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
+| `ChecklistInput`, `ChecklistView` | Takenlijst (`.checklist`): invullen met altijd een lege regel onderaan; op de fiche een eigen kaart waar je meteen afvinkt (bewaart zonder het formulier) |
+| `PeoplePicker` | Personen aanvinken: `tag person-chip` (een tag met avatar) |
+| `ItemsSelect` | Meerdere items uit een andere lijst: kleine tags met een kruisje (`.ref-chips`), een keuzelijst eronder |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
 | `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis) |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
@@ -386,11 +401,66 @@ staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar ee
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`) |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
+- Herhaling (`.interval-input`): "elke [3] [maanden]". Duur typ je vrij ("1u30", "90", "1,5 uur"); onder het veld
+  staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
-  lijsten met hun velden. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon.
+  lijsten met hun velden. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon. Losse
+  lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
+  bij **Instellen → Lijsten → Uit sjabloon**.
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm.
+
+### Berekeningen: `CalcEditor`
+
+Een veld van de soort **Berekening** rekent de app zelf uit, bij het lezen (niets wordt bewaard). Bewust een handvol
+soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
+
+| Soort | Voorbeeld |
+| --- | --- |
+| Rekensom | Aantal × Prijs; Totaal × 1,21 (een berekening op een berekening mag) |
+| Vergelijking (ja/nee) | Aantal ≤ Bijna op onder → "Kopen" |
+| Dagen tot | Garantie tot → "over 138 dagen", "vandaag", "3 dagen geleden" |
+| Tijd sinds | Jaargang → "10 jaar" |
+| Datum plus | Laatst onderhouden + Herhaling → Volgend onderhoud |
+| Uit een gelinkt item | Via de Verwijzing Wijnhuis: zijn Land |
+| Samenvatten | Hoeveel, som, gemiddelde, kleinste, grootste: van de items in een Verwijzing(en)-veld, of van de items die hiernaar verwijzen (wat je bij een verkoper uitgaf) |
+
+- `CalcEditor` staat onder ⋯ van het veld: eerst de soort (met de uitleg eronder), dan per soort de velden. Elke
+  keuzelijst toont enkel velden die passen. Wat nog niet klopt, staat er meteen onder in rood (`previewCalcs`);
+  de API kijkt hetzelfde na (`checkCalcs`) en weigert een kring.
+- De uitkomst toont zoals een veld van die soort (bedrag, datum, ja/nee, getal met eenheid); een opgezocht webadres
+  is een link. Ze kan een kolom of filter zijn.
+- Rechten: een berekening telt enkel wat jij mag zien. Mag je een veld waarvan ze afhangt niet zien, dan blijft
+  ze leeg (ook een som over gelinkte items als je bij één ervan het veld niet ziet).
+- Opzoeken en samenvatten rekent de API uit (`worker/compute.ts`); in het formulier staan die er niet, op de fiche wel.
+
+### Uitleg: `Tip`
+
+`<Tip text="…" label="Hoe Totaal berekend wordt" />` is een kleine (i) naast een label: de uitleg verschijnt in
+een donker ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape, ergens anders tikken of scrollen.
+
+- Enkel waar uitleg echt helpt en niet in één `.hint` past: bij een berekening (wat ze uitrekent), bij een keuze
+  die je moet begrijpen ("Welke items" bij samenvatten).
+- Uitleg die iedereen nodig heeft, staat gewoon als `.hint` onder het veld; verberg ze niet in een `Tip`.
+- Op een `label` werkt de (i) zonder het veld te focussen.
+
+### Sjablonen delen: `ShareTemplate` en `TemplateFilePicker` (`TemplateShare.tsx`)
+
+Een project (met zijn subprojecten) of één lijst kan je delen als bestand (`.thuis.json`, `shared/template-file.ts`):
+de lijsten, velden, berekeningen en regels, **zonder** items, mensen, rollen, tags of standaardverdelingen.
+
+| Waar | Wat |
+| --- | --- |
+| Instellen → Algemeen, kaart "Delen als sjabloon" | `ShareTemplate`: "Als bestand bewaren", en op een gsm ook "Delen…" (deelmenu). Niet op een kiosk |
+| Formulier van een lijst, kaart "Deze lijst delen" | Dezelfde knoppen, voor één lijst (met de lijsten waarnaar ze verwijst) |
+| Nieuw project → "Uit een bestand" | Kies het bestand; naam, icoon, kleur en beschrijving komen eruit, wat erin zit staat in `.template-file` |
+| Instellen → Lijsten → "Uit sjabloon" | Een `Sheet`: bovenaan "Uit een bestand…", daaronder de ingebouwde lijsten (een badge "Staat er al" als die naam al bestaat) |
+
+- Een lijst die meekomt omdat ernaar verwezen wordt (de Verkopers bij Wijnen), wordt bij het importeren hergebruikt
+  als er erboven al een lijst met die naam is.
+- Wat binnenkomt, kijkt zowel de app als de API na; een verwijzing kan enkel naar een lijst uit het sjabloon of uit
+  de eigen keten. Wat niet klopt, valt weg in plaats van alles te weigeren (behalve een kapot bestand).
 
 ### Volgorde: `useSortable` (`Sortable.tsx`)
 
@@ -514,7 +584,8 @@ Twee soorten, inline in `Icon.tsx`:
 
 - **Gevuld voor dingen** (bon, kaart, doos, portefeuille, speld, tandwiel, …): Phosphor "fill" (phosphoricons.com).
   Grijs (`--muted-foreground`) in menu, knoppen en rijen; donker als het item actief is.
-- **Lijnen voor richtingen en handelingen** (plus, min, kruis, vinkje, chevrons, pijl, zoeken): Lucide-stijl, 1,9 dik.
+- **Lijnen voor richtingen en handelingen** (plus, min, kruis, vinkje, chevrons, pijl, zoeken, downloaden, delen,
+  uitleg (i)): Lucide-stijl, 1,9 dik.
 - Een nieuw icoon: pad kopiëren van een van beide sites naar de juiste lijst (`FILLED` of `LINES`).
 - Maten: 13 (in icoontegel) · 14–16 (knoppen, filters, tekst) · 17 (zijbalk) · 18 (standaard) · 21 (onderbalk).
 
@@ -679,4 +750,5 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.
+- [ ] Moet iets uitgelegd worden? Eerst een `.hint`; een `Tip` enkel waar de uitleg niet in één regel past.
 - [ ] Nieuw patroon nodig? Bouw het als component, en **voeg het toe aan dit stijlboek**.
