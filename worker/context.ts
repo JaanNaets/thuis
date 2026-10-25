@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import type { Member } from "../shared/types";
+import type { Member, ProjectScope } from "../shared/types";
 import type { AppEnv } from "./types";
 import { ValidationError } from "./validate";
 
@@ -49,21 +49,28 @@ export async function assertOwned(db: D1Database, household: string, table: Owne
 }
 
 /**
- * Mag dit lid aan een project (of, zonder project, aan het huishouden)?
- * Gasten mogen enkel in projecten waarin ze zitten; volledige leden overal in hun huishouden.
+ * Wat dit lid in een project mag: 'all' (alles), 'own' (enkel zijn deel bekijken) of null (niets).
+ * Volledige leden mogen alles in hun huishouden; een gast enkel in de projecten waarin die zit.
+ */
+export async function projectScope(db: D1Database, household: string, member: Member, projectId: string): Promise<ProjectScope | null> {
+  if (member.access === "full") {
+    return (await db.prepare("SELECT 1 FROM projects WHERE id = ? AND household_id = ?").bind(projectId, household).first()) ? "all" : null;
+  }
+  const row = await db
+    .prepare(
+      `SELECT pm.scope FROM project_members pm JOIN projects p ON p.id = pm.project_id
+       WHERE pm.project_id = ? AND pm.member_id = ? AND p.household_id = ?`,
+    )
+    .bind(projectId, member.id, household)
+    .first<{ scope: ProjectScope }>();
+  return row?.scope ?? null;
+}
+
+/**
+ * Mag dit lid aan een project werken (of, zonder project, aan het huishouden): uitgaven, geldbewegingen, dingen?
+ * Gasten enkel in projecten waarin ze volledig meedoen; wie enkel zijn deel ziet, kan niets aanmaken.
  */
 export async function canUseProject(db: D1Database, household: string, member: Member, projectId: string | null): Promise<boolean> {
   if (!projectId) return member.access === "full";
-  if (member.access === "full") {
-    return Boolean(await db.prepare("SELECT 1 FROM projects WHERE id = ? AND household_id = ?").bind(projectId, household).first());
-  }
-  return Boolean(
-    await db
-      .prepare(
-        `SELECT 1 FROM project_members pm JOIN projects p ON p.id = pm.project_id
-         WHERE pm.project_id = ? AND pm.member_id = ? AND p.household_id = ?`,
-      )
-      .bind(projectId, member.id, household)
-      .first(),
-  );
+  return (await projectScope(db, household, member, projectId)) === "all";
 }

@@ -18,9 +18,10 @@ import { QuantityField, SubmitButton, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { Spinner } from "./Motion";
 
-/** Waar een ding woont: bezit op /bezit, verbruik op /voorraad. */
-export function itemPath(item: { id: string; type: ItemType }): string {
-  return `${item.type === "asset" ? "/bezit" : "/voorraad"}/${item.id}`;
+/** Waar een ding woont: bezit op /bezit, verbruik op /voorraad; iets van een project onder dat project. */
+export function itemPath(item: { id: string; type: ItemType; project_id?: string | null }): string {
+  const base = item.project_id ? `/projecten/${item.project_id}` : "";
+  return `${base}${item.type === "asset" ? "/bezit" : "/voorraad"}/${item.id}`;
 }
 
 /** De rollen die bij een soort ding passen. Verbruik koop je bij; bezit koop je, onderhoud je, herstel je. */
@@ -59,6 +60,9 @@ export function itemToInput(item: ItemDetail, taxonomy: Taxonomy, patch: Partial
     value_cents: item.value_cents,
     content_amount: item.content_amount,
     content_unit: item.content_unit,
+    project_id: item.project_id,
+    attributes: item.attributes,
+    owners: item.owners,
     tag_ids: item.tag_ids,
     ...patch,
   };

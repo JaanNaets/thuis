@@ -1,5 +1,6 @@
 // Types die zowel de Worker (API) als de React-app gebruiken.
 
+import type { Attributes, FieldDef, OwnerShare } from "./fields";
 import type { DefaultSplit, PaymentInput, SplitInput, SplitLine, SplitMode } from "./split";
 import type { VendorKind } from "./vendor";
 
@@ -214,14 +215,47 @@ export type Project = {
   created_at: string;
   /** Deelnemers. */
   member_ids: string[];
+  /** Per deelnemer: doet volledig mee ('all') of ziet enkel zijn deel ('own'). */
+  member_scopes: Record<string, ProjectScope>;
+  /** Sjabloon waarmee het project begon (wine, bikes, custom); leeg = gewoon project. */
+  template: string | null;
+  /** Onderdelen: uitgaven en/of dingen (een verzameling). */
+  track_expenses: 0 | 1;
+  track_items: 0 | 1;
+  /** Soort en eenheid van een nieuw ding in dit project. */
+  item_type: ItemType | null;
+  item_unit: Unit | null;
+  /** Eigen velden van de dingen in dit project. */
+  fields: FieldDef[];
 };
+
+export const PROJECT_SCOPES = {
+  all: { label: "Volledig", hint: "Ziet en bewerkt alles in het project" },
+  own: { label: "Enkel zijn deel", hint: "Ziet enkel de dingen waarvan die mede-eigenaar is en de uitgaven waarin die deelt" },
+} as const;
+export type ProjectScope = keyof typeof PROJECT_SCOPES;
 
 export type ProjectInput = Pick<
   Project,
-  "name" | "description" | "color" | "start_on" | "end_on" | "budget_cents" | "separate_balance" | "default_split" | "member_ids"
+  | "name"
+  | "description"
+  | "color"
+  | "start_on"
+  | "end_on"
+  | "budget_cents"
+  | "separate_balance"
+  | "default_split"
+  | "member_ids"
+  | "member_scopes"
+  | "template"
+  | "track_expenses"
+  | "track_items"
+  | "item_type"
+  | "item_unit"
+  | "fields"
 >;
 
-export type ProjectListItem = Project & { total_cents: number; expense_count: number; last_expense_on: string | null };
+export type ProjectListItem = Project & { total_cents: number; expense_count: number; last_expense_on: string | null; item_count: number };
 
 /** Een pot: gezamenlijke rekening, spaarpot of reiskas. */
 export type Pot = {
@@ -286,7 +320,12 @@ export type PurchaseDetail = PurchaseListItem & {
   lines: SplitLine[];
   tag_ids: string[];
   /** De dingen waar deze uitgave aan hangt. */
-  links: (Pick<ItemLink, "id" | "item_id" | "role" | "quantity" | "amount_cents" | "note"> & { item_name: string; item_type: ItemType; unit: Unit })[];
+  links: (Pick<ItemLink, "id" | "item_id" | "role" | "quantity" | "amount_cents" | "note"> & {
+    item_name: string;
+    item_type: ItemType;
+    item_project_id: string | null;
+    unit: Unit;
+  })[];
 };
 
 export type PurchaseInput = Pick<Purchase, "description" | "purchased_on" | "amount_cents" | "category_id" | "project_id" | "warranty_until" | "notes"> & {
@@ -426,6 +465,8 @@ export type ProjectDetail = ProjectListItem & {
   /** Uitgaven en geldbewegingen van het project, nieuwste eerst. */
   entries: ExpenseEntry[];
   recurring: RecurringExpense[];
+  /** Wat jij in dit project mag: alles, of enkel je deel (dan zijn uitgaven en saldo's tot jouw deel beperkt). */
+  my_scope: ProjectScope;
 };
 
 // ---------- voorraad ----------
@@ -509,6 +550,11 @@ export type Item = {
   value_cents: number | null;
   content_amount: number | null;
   content_unit: ContentUnit | null;
+  /** In een project met dingen (de wijnkelder): de waarden van de eigen velden. */
+  project_id: string | null;
+  attributes: Attributes;
+  /** Foto (bv. het etiket); verandert bij elke nieuwe foto. */
+  photo_version: number | null;
   archived: 0 | 1;
   created_by: string;
   created_at: string;
@@ -530,6 +576,8 @@ export type ItemListItem = Item & {
   warranty_until: string | null;
   /** Waar het gekocht werd (de aankoop zelf). */
   bought_at: string | null;
+  /** Eigenaars in procent; leeg = van het huishouden samen. */
+  owners: OwnerShare[];
 };
 
 /** Een uitgave die aan een ding hangt, met wat je van die uitgave nodig hebt. */
@@ -593,6 +641,8 @@ export type ItemDetail = ItemListItem & {
   parent: { id: string; name: string; type: ItemType } | null;
   /** Wat erbij hoort. */
   children: ItemListItem[];
+  /** Mag dit lid het aanpassen? Een gast die enkel zijn deel ziet: nee. */
+  can_edit?: boolean;
 };
 
 export type ItemInput = Pick<
@@ -613,7 +663,11 @@ export type ItemInput = Pick<
   | "value_cents"
   | "content_amount"
   | "content_unit"
+  | "project_id"
+  | "attributes"
 > & {
+  /** Eigenaars (gewichten of procenten); leeg = van het huishouden samen. */
+  owners: OwnerShare[];
   /** Naam van de verkoper waar je het meestal koopt. */
   vendor: string | null;
   tag_ids: string[];
@@ -644,6 +698,21 @@ export type StockActionInput = {
   vendor?: string | null;
   note?: string | null;
 };
+
+/** Eén rij uit een lijst (CSV) om in een project te zetten. */
+export type ItemImportRow = {
+  name: string;
+  brand?: string | null;
+  quantity?: number | null;
+  location?: string | null;
+  notes?: string | null;
+  attributes?: Record<string, unknown>;
+};
+
+export type ItemImportResult = { created: number; skipped: { row: number; error: string }[] };
+
+/** Wat de app van een etiket of foto las, in de velden van het project. */
+export type LabelScan = { name: string | null; brand: string | null; attributes: Attributes; message?: string };
 
 export type ProductSuggestion = {
   name: string | null;

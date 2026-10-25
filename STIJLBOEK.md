@@ -432,6 +432,35 @@ herstelling, onderdeel of een andere kost. Een etentje of een massage hangt nerg
 - "Goed om te weten" (de notitie van een bezit) is wat altijd geldt; wat op een dag gebeurde, gaat in het logboek.
 - Prijzen van verbruik: per eenheid ("€ 6,20/zak"), en met een inhoud per eenheid ook per kg of liter.
 
+### Projecten met dingen: `ProjectFields.tsx` en `ProjectItems.tsx`
+
+Een project houdt **uitgaven** bij, **dingen** (een verzameling: de wijnkelder, de koersfietsen), of allebei. Een
+sjabloon (`PROJECT_TEMPLATES` in `shared/fields.ts`) zet alles klaar: soort (raakt op / blijft), eenheid, eigen
+velden en hoe naam en merk heten ("Wijn", "Wijnhuis"). Daarna kan je alles aanpassen.
+
+| Component of hulpje | Wat |
+| --- | --- |
+| `.template-picker` + `.template-option` | Soort project kiezen bij een nieuw project: icoontegel, titel en één zin (radio's) |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een project: naam en soort op één regel, onder ⋯ keuzes, eenheid, kolom, filter en betekenis |
+| `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen in het formulier van een ding; korte velden per twee (`.attr-fields`) |
+| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche |
+| `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
+| `OwnersField` (`ownersDraft` → `buildOwners`) | **Eigenaar**: Samen · Gelijk · Procent, met dezelfde rijen als bij het verdelen |
+| `LabelScanner` | Foto van een etiket: de app vult naam, merk en velden in (zacht blauw, `auto`) en bewaart de foto |
+| `ItemPhoto` | De foto van een ding bovenaan de fiche: toevoegen, vervangen, weghalen |
+| `ProjectItems` | De lijst: zoeken, filters uit de velden, "Nu drinkklaar", eigenaar, tabel `.table-collection` |
+| `CollectionSummary`, `CollectionActions` | Zijkolom: waarde, aantal, drinkklaar en per eigenaar; "Lijst importeren" en "Uit factuur" |
+
+- "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg. Leeg = van het huishouden samen.
+- De tabel `.table-collection` krijgt haar kolommen van het project: `style={{ "--cols": … }}` (naam, hooguit twee
+  velden met `column`, en het aantal of de waarde). Naast de zijkolom is er niet meer plaats.
+- Bij een verzameling staan "Snel invullen" en "Wie doet mee" op gsm ná de lijst (`.split-collection` + `.aside-late`).
+- Een ding van een project woont onder dat project (`/projecten/:id/voorraad/:id`, `/projecten/:id/bezit/:id`): link
+  altijd met `itemPath(item)`. Wijn telt niet mee in Voorraad; fietsen staan ook in Bezit (gegroepeerd per project).
+- Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop) houdt plaats en
+  eigenaar en maakt de rest leeg. Een lijst importeren (`.column-map`: kolom → veld, onthouden per project; wat we
+  niet herkennen gaat bij de notitie) en een factuur per lijn (`.invoice-line`) zijn eigen schermen.
+
 ### Kleine bouwstenen
 
 | Klasse of component | Gebruik |
@@ -455,6 +484,9 @@ herstelling, onderdeel of een andere kost. Een etentje of een massage hangt nerg
   Een scherm toont enkel wat een gast mag: geen voorraad, kaarten, verkopers, instellingen van het huishouden,
   en in een project geen knoppen om het project of de deelnemers te beheren. De API weigert het hoe dan ook;
   de app verbergt het zodat een gast nooit tegen een fout aanloopt.
+- Een gast doet per project **volledig** mee, of ziet **enkel zijn deel** (`my_scope = 'own'`): de dingen waarvan die
+  mede-eigenaar is en de uitgaven waarin die deelt, zonder iets te kunnen aanpassen. Verberg dan elke knop die iets
+  bewaart (`item.can_edit === false`, `project.my_scope !== 'all'`).
 - Een nieuw scherm dat een gast mag openen, staat in `GUEST_PATHS` (`App.tsx`).
 
 ### Badges, tags, stipjes, avatars
@@ -572,6 +604,10 @@ terugkerende kosten.
 **Project**: `split` met in de zijkolom het totaal (+ budget), wie meedoet (gasten toevoegen in een `Sheet`) en,
 bij een eigen saldo, wie-moet-wie en de kas; rechts per categorie, de uitgaven en de vaste kosten; onderaan
 archiveren (verwijderen enkel als het project leeg is).
+
+**Project met dingen** (wijnkelder, fietsen): `Tabs` (de dingen · Uitgaven) als het project allebei bijhoudt, dan
+`split` met in de zijkolom de waarde en per eigenaar, "Snel invullen" en wie meedoet; rechts zoeken, filters en de
+tabel. Hoofdactie "Wijn toevoegen" (de naam komt van het sjabloon). Een gast die enkel zijn deel ziet: geen knoppen.
 
 **Bezit**: `split` met in de zijkolom wat het kostte (of de geschatte waarde), herkomst, sinds, garantie, plaats en
 "goed om te weten"; rechts het logboek (notities en kosten door elkaar, nieuwste eerst) en wat erbij hoort.

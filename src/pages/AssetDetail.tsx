@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router";
+import { ownersText, templateOf } from "../../shared/fields";
 import { isLow } from "../../shared/stock";
 import { ITEM_ORIGINS, type ItemDetail, type ItemLink, type ItemLogEntry, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -9,11 +10,12 @@ import { Icon } from "../components/Icon";
 import { EditLinkForm, itemPath, itemToInput, linkCost, LinkPurchaseForm, roleText } from "../components/ItemLinks";
 import { stagger, useCountUp } from "../components/Motion";
 import { PageHead } from "../components/Page";
+import { AttributeRows, ItemPhoto } from "../components/ProjectFields";
 import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { formatCents, formatDate, formatNumber, today, warrantyStatus } from "../format";
 import { Link, useNavigate } from "../router";
-import { categoryTone, nameForEmail, placeName, refreshTaxonomy, useTaxonomy } from "../taxonomy";
+import { categoryTone, memberById, nameForEmail, placeName, refreshTaxonomy, useTaxonomy } from "../taxonomy";
 import { originText } from "./AssetList";
 import { unitWord } from "./InventoryList";
 import { WARRANTY_BADGE } from "./PurchaseList";
@@ -39,7 +41,13 @@ export function AssetDetail() {
   if (error) return <p className="error page">{error}</p>;
   if (!item || !taxonomy) return null;
   // Verbruik heeft een eigen fiche in Voorraad.
-  if (item.type !== "asset") return <Navigate to={`/voorraad/${item.id}`} replace />;
+  if (item.type !== "asset") return <Navigate to={itemPath(item)} replace />;
+
+  // Iets van een project (een fiets): terug naar dat project, met de velden van het project.
+  const project = taxonomy.projects.find((p) => p.id === item.project_id);
+  const template = templateOf(project?.template);
+  const canEdit = item.can_edit !== false;
+  const home = project ? `/projecten/${project.id}` : "/bezit";
 
   const warranty = warrantyStatus(item.warranty_until);
   const origin = originText(item);
@@ -74,7 +82,7 @@ export function AssetDetail() {
     await api.delete(`/items/${item!.id}`);
     refreshTaxonomy();
     toast("Verwijderd", "trash");
-    navigate("/bezit", { replace: true });
+    navigate(home, { replace: true });
   }
 
   async function unlink(link: ItemLink) {
@@ -90,24 +98,41 @@ export function AssetDetail() {
         title={item.name}
         badge={item.archived ? <span className="badge">Niet meer in huis</span> : undefined}
         description={[origin, item.acquired_on && `sinds ${formatDate(item.acquired_on)}`].filter(Boolean).join(" · ") || undefined}
-        back={{ to: "/bezit", label: "Bezit" }}
+        back={project ? { to: home, label: project.name } : { to: "/bezit", label: "Bezit" }}
         actions={
-          <Link to={`/bezit/${item.id}/bewerken`} className="btn btn-outline btn-sm">
-            <Icon name="edit" size={15} /> Bewerken
-          </Link>
+          canEdit && (
+            <Link to={`${itemPath(item)}/bewerken`} className="btn btn-outline btn-sm">
+              <Icon name="edit" size={15} /> Bewerken
+            </Link>
+          )
         }
         primary={
-          <Link to={newCost} className="btn btn-primary">
-            <Icon name="plus" size={16} /> Kost toevoegen
-          </Link>
+          canEdit && (
+            <Link to={newCost} className="btn btn-primary">
+              <Icon name="plus" size={16} /> Kost toevoegen
+            </Link>
+          )
         }
       />
 
       <div className="split">
         <aside className="split-aside">
           <section className="card">
+            <ItemPhoto
+              item={item}
+              canEdit={canEdit}
+              onChange={(version, message) => {
+                mutate({ ...item, photo_version: version });
+                toast(message);
+              }}
+            />
             <AssetTotal item={item} />
             <dl className="dl">
+              {project && <AttributeRows defs={project.fields} attributes={item.attributes} />}
+              <div>
+                <dt>Eigenaar</dt>
+                <dd>{ownersText(item.owners, (id) => memberById(taxonomy, id)?.name ?? "?")}</dd>
+              </div>
               {item.origin && (
                 <div>
                   <dt>Herkomst</dt>
@@ -150,8 +175,18 @@ export function AssetDetail() {
               )}
               {item.brand && (
                 <div>
-                  <dt>Merk</dt>
+                  <dt>{template.brand_label}</dt>
                   <dd>{item.brand}</dd>
+                </div>
+              )}
+              {project && (
+                <div>
+                  <dt>Project</dt>
+                  <dd>
+                    <Link to={home} className="link-quiet">
+                      {project.name}
+                    </Link>
+                  </dd>
                 </div>
               )}
               {item.quantity > 1 && (
@@ -188,9 +223,11 @@ export function AssetDetail() {
               title="Goed om te weten"
               description={item.notes ? undefined : "Instellingen, tips, waar de handleiding ligt"}
               action={
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: "tips" })}>
-                  <Icon name="edit" size={15} /> {item.notes ? "Bewerken" : "Toevoegen"}
-                </button>
+                canEdit && (
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: "tips" })}>
+                    <Icon name="edit" size={15} /> {item.notes ? "Bewerken" : "Toevoegen"}
+                  </button>
+                )
               }
             />
             {item.notes && <p className="tips-block">{item.notes}</p>}
@@ -204,14 +241,16 @@ export function AssetDetail() {
               title="Logboek"
               description={timeline.length === 0 ? "Onderhoud, herstellingen en notities, met de kosten erbij" : undefined}
               action={
-                <div className="btn-row">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: "attach" })}>
-                    Uitgave koppelen
-                  </button>
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: "log" })}>
-                    <Icon name="plus" size={15} /> Notitie
-                  </button>
-                </div>
+                canEdit && (
+                  <div className="btn-row">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ kind: "attach" })}>
+                      Uitgave koppelen
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing({ kind: "log" })}>
+                      <Icon name="plus" size={15} /> Notitie
+                    </button>
+                  </div>
+                )
               }
             />
             {timeline.length > 0 && (
@@ -219,7 +258,7 @@ export function AssetDetail() {
                 {timeline.map((e, i) => (
                   <li key={e.kind === "log" ? `l${e.entry.id}` : `c${e.link.id}`} style={stagger(i)}>
                     {e.kind === "log" ? (
-                      <button type="button" className="row" onClick={() => setEditing({ kind: "log", entry: e.entry })}>
+                      <button type="button" className="row" disabled={!canEdit} onClick={() => setEditing({ kind: "log", entry: e.entry })}>
                         <span className="timeline-date">{formatDate(e.date)}</span>
                         <span className="row-main">
                           <span className="timeline-text">{e.entry.text}</span>
@@ -242,14 +281,16 @@ export function AssetDetail() {
                           </span>
                         </Link>
                         <span className="row-end">{formatCents(linkCost(e.link))}</span>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-icon btn-sm"
-                          onClick={() => setEditing({ kind: "link", link: e.link })}
-                          aria-label="Koppeling aanpassen"
-                        >
-                          <Icon name="dots" size={15} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => setEditing({ kind: "link", link: e.link })}
+                            aria-label="Koppeling aanpassen"
+                          >
+                            <Icon name="dots" size={15} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </li>
@@ -258,66 +299,74 @@ export function AssetDetail() {
             )}
           </section>
 
-          <section className="card">
-            <CardHead
-              icon="package"
-              title="Hoort erbij"
-              description={item.children.length === 0 ? "Pellets, filters, zakken: wat je voor dit ding koopt of erbij hoort" : undefined}
-              action={
-                <Link to={`/voorraad/nieuw?hoortbij=${item.id}`} className="btn btn-outline btn-sm">
-                  <Icon name="plus" size={15} /> Verbruik
-                </Link>
-              }
-            />
-            {item.children.length > 0 && (
-              <ul className="rows">
-                {item.children.map((child) => {
-                  const low = child.type === "consumable" && isLow(child.quantity, child.min_quantity);
-                  return (
-                    <li key={child.id}>
-                      <Link to={itemPath(child)} className="row" style={{ minHeight: 52 }}>
-                        <span className="cell-main">
-                          <span className={`row-media tone-${categoryTone(taxonomy, child.category_id)}`}>
-                            <Icon name={child.type === "asset" ? "armchair" : "package"} size={16} />
+          {(!project || item.children.length > 0) && (
+            <section className="card">
+              <CardHead
+                icon="package"
+                title="Hoort erbij"
+                description={item.children.length === 0 ? "Pellets, filters, zakken: wat je voor dit ding koopt of erbij hoort" : undefined}
+                action={
+                  !project && (
+                    <Link to={`/voorraad/nieuw?hoortbij=${item.id}`} className="btn btn-outline btn-sm">
+                      <Icon name="plus" size={15} /> Verbruik
+                    </Link>
+                  )
+                }
+              />
+              {item.children.length > 0 && (
+                <ul className="rows">
+                  {item.children.map((child) => {
+                    const low = child.type === "consumable" && isLow(child.quantity, child.min_quantity);
+                    return (
+                      <li key={child.id}>
+                        <Link to={itemPath(child)} className="row" style={{ minHeight: 52 }}>
+                          <span className="cell-main">
+                            <span className={`row-media tone-${categoryTone(taxonomy, child.category_id)}`}>
+                              <Icon name={child.type === "asset" ? "armchair" : "package"} size={16} />
+                            </span>
+                            <span className="row-main">
+                              <span className="row-title">{child.name}</span>
+                              {low && (
+                                <span className="row-meta">
+                                  <span className="badge badge-warning">{child.quantity === 0 ? "Op" : "Bijna op"}</span>
+                                </span>
+                              )}
+                            </span>
                           </span>
-                          <span className="row-main">
-                            <span className="row-title">{child.name}</span>
-                            {low && (
-                              <span className="row-meta">
-                                <span className="badge badge-warning">{child.quantity === 0 ? "Op" : "Bijna op"}</span>
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                        {child.type === "consumable" && (
-                          <span className="row-end">
-                            {formatNumber(child.quantity)} <span className="muted small">{unitWord(child.quantity, child.unit)}</span>
-                          </span>
-                        )}
-                        <Icon name="next" size={16} className="row-chevron" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {item.children.length === 0 && <p className="footnote">Een bestaand item hang je eraan bij dat item: Bewerken → Hoort bij.</p>}
-          </section>
+                          {child.type === "consumable" && (
+                            <span className="row-end">
+                              {formatNumber(child.quantity)} <span className="muted small">{unitWord(child.quantity, child.unit)}</span>
+                            </span>
+                          )}
+                          <Icon name="next" size={16} className="row-chevron" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {item.children.length === 0 && <p className="footnote">Een bestaand item hang je eraan bij dat item: Bewerken → Hoort bij.</p>}
+            </section>
+          )}
 
-          <div className="btn-row" style={{ justifySelf: "start" }}>
-            <button type="button" className="btn btn-ghost" onClick={toggleArchived}>
-              <Icon name="archive" size={16} /> {item.archived ? "Terug in huis" : "Niet meer in huis"}
-            </button>
-            <button type="button" className="btn btn-danger-ghost" onClick={remove}>
-              <Icon name="trash" size={16} /> Verwijderen
-            </button>
-          </div>
+          {canEdit && (
+            <div className="btn-row" style={{ justifySelf: "start" }}>
+              <button type="button" className="btn btn-ghost" onClick={toggleArchived}>
+                <Icon name="archive" size={16} /> {item.archived ? "Terug in huis" : "Niet meer in huis"}
+              </button>
+              <button type="button" className="btn btn-danger-ghost" onClick={remove}>
+                <Icon name="trash" size={16} /> Verwijderen
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <Link to={newCost} className="fab" aria-label="Kost toevoegen">
-        <Icon name="plus" size={24} />
-      </Link>
+      {canEdit && (
+        <Link to={newCost} className="fab" aria-label="Kost toevoegen">
+          <Icon name="plus" size={24} />
+        </Link>
+      )}
 
       <Sheet open={Boolean(editing)} title={sheetTitle(editing)} onClose={() => setEditing(undefined)}>
         {editing?.kind === "tips" && <TipsForm item={item} taxonomy={taxonomy} onDone={done} />}
@@ -326,6 +375,69 @@ export function AssetDetail() {
         {editing?.kind === "link" && <EditLinkForm item={item} link={editing.link} onDone={done} onUnlink={() => unlink(editing.link)} />}
       </Sheet>
     </article>
+  );
+}
+
+/** Enkel de notities van het logboek (bv. proefnotities bij een wijn), nieuwste eerst. */
+export function LogCard({
+  item,
+  title,
+  empty,
+  canEdit,
+  onChanged,
+}: {
+  item: ItemDetail;
+  title: string;
+  empty: string;
+  canEdit: boolean;
+  onChanged: (message: string) => void;
+}) {
+  const { data: taxonomy } = useTaxonomy();
+  const [editing, setEditing] = useState<ItemLogEntry | "new">();
+  return (
+    <section className="card">
+      <CardHead
+        icon="note"
+        title={title}
+        description={item.log.length === 0 ? empty : undefined}
+        action={
+          canEdit && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
+              <Icon name="plus" size={15} /> Notitie
+            </button>
+          )
+        }
+      />
+      {item.log.length > 0 && (
+        <ul className="rows timeline stagger">
+          {item.log.map((entry, i) => (
+            <li key={entry.id} style={stagger(i)}>
+              <button type="button" className="row" disabled={!canEdit} onClick={() => setEditing(entry)}>
+                <span className="timeline-date">{formatDate(entry.happened_on)}</span>
+                <span className="row-main">
+                  <span className="timeline-text">{entry.text}</span>
+                  <span className="row-meta">
+                    <span>{nameForEmail(taxonomy, entry.created_by)}</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Sheet open={Boolean(editing)} title={editing === "new" ? "Nieuwe notitie" : "Notitie"} onClose={() => setEditing(undefined)}>
+        {editing && (
+          <LogForm
+            item={item}
+            entry={editing === "new" ? undefined : editing}
+            onDone={(message) => {
+              setEditing(undefined);
+              onChanged(message);
+            }}
+          />
+        )}
+      </Sheet>
+    </section>
   );
 }
 

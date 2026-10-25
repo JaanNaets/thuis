@@ -1,3 +1,4 @@
+import { templateOf } from "../../shared/fields";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { descendantIds, flattenTree } from "../../shared/tree";
@@ -249,7 +250,7 @@ function ProjectList() {
           <li key={p.id}>
             <Link to={`/projecten/${p.id}`} className="place-link root" aria-current={pathname === `/projecten/${p.id}` ? "page" : undefined}>
               <span className={`place-icon tone-${p.color ?? PLACE_TONES[i % PLACE_TONES.length]}`}>
-                <Icon name="project" size={15} />
+                <Icon name={templateOf(p.template).icon} size={15} />
               </span>
               <span className="place-name">{p.name}</span>
             </Link>

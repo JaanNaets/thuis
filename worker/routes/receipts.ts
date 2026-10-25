@@ -14,13 +14,13 @@ import type { AppEnv } from "../types";
 
 // Goedkoop en goed in OCR, ook in het Nederlands. ±20-30 neurons per ticket;
 // de gratis hoeveelheid van Workers AI is 10.000 neurons per dag.
-const MODEL = "@cf/google/gemma-4-26b-a4b-it";
+export const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 
 // Harde rem: zelfs op een betaald plan blijven we zo ver onder de gratis hoeveelheid.
 const AI_DAILY_LIMIT = 50;
 
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-const AI_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+export const AI_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const SYSTEM_PROMPT = `Je leest Belgische en Nederlandse kastickets en facturen.
 Geef enkel wat je echt op het document ziet; gebruik null als je twijfelt. Raad nooit.
@@ -95,7 +95,7 @@ receipts.post("/read", async (c) => {
 });
 
 /** Telt een AI-oproep; false als de daglimiet bereikt is. */
-async function useAiBudget(env: Env): Promise<boolean> {
+export async function useAiBudget(env: Env): Promise<boolean> {
   const usage = await env.DB.prepare(
     `INSERT INTO ai_usage (day, calls) VALUES (date('now'), 1)
      ON CONFLICT (day) DO UPDATE SET calls = calls + 1
@@ -235,7 +235,7 @@ async function categoryFromHistory(db: D1Database, household: string, store: str
   return row?.name ?? null;
 }
 
-function safeJson(text: string): unknown {
+export function safeJson(text: string): unknown {
   try {
     return JSON.parse(text.replace(/^\s*```(?:json)?|```\s*$/g, ""));
   } catch {
@@ -243,7 +243,7 @@ function safeJson(text: string): unknown {
   }
 }
 
-function toBase64(buffer: ArrayBuffer): string {
+export function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
   // In stukken, anders wordt de argumentenlijst van fromCharCode te lang.

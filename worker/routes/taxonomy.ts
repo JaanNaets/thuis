@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { FieldDef } from "../../shared/fields";
 import type { DefaultSplit } from "../../shared/split";
 import { descendantIds } from "../../shared/tree";
 import {
@@ -38,13 +39,26 @@ function sortOrder(obj: Obj): number | null {
   return value;
 }
 
-type ProjectRow = Omit<Project, "member_ids" | "default_split"> & { member_ids: string; default_split: string | null };
+type ProjectRow = Omit<Project, "member_ids" | "member_scopes" | "default_split" | "fields"> & {
+  member_ids: string;
+  member_scopes: string;
+  default_split: string | null;
+  fields: string | null;
+};
 
-/** Projecten met hun deelnemers als JSON in dezelfde rij. */
-export const PROJECT_COLUMNS = `p.*, (SELECT json_group_array(pm.member_id) FROM project_members pm WHERE pm.project_id = p.id) AS member_ids`;
+/** Projecten met hun deelnemers (en wat elk mag) als JSON in dezelfde rij. */
+export const PROJECT_COLUMNS = `p.*,
+  (SELECT json_group_array(pm.member_id) FROM project_members pm WHERE pm.project_id = p.id) AS member_ids,
+  (SELECT json_group_object(pm.member_id, pm.scope) FROM project_members pm WHERE pm.project_id = p.id) AS member_scopes`;
 
 export function toProject(row: ProjectRow): Project {
-  return { ...row, member_ids: JSON.parse(row.member_ids) as string[], default_split: parseJson<DefaultSplit>(row.default_split) };
+  return {
+    ...row,
+    member_ids: JSON.parse(row.member_ids) as string[],
+    member_scopes: (parseJson<Project["member_scopes"]>(row.member_scopes) ?? {}) as Project["member_scopes"],
+    default_split: parseJson<DefaultSplit>(row.default_split),
+    fields: parseJson<FieldDef[]>(row.fields) ?? [],
+  };
 }
 
 // ---------- alles in één keer ----------
@@ -111,7 +125,7 @@ taxonomy.get("/", async (c) => {
       ? db.prepare("SELECT * FROM pots WHERE household_id = ? ORDER BY archived, created_at").bind(hh)
       : db
           .prepare(
-            `SELECT * FROM pots WHERE household_id = ? AND project_id IN (SELECT project_id FROM project_members WHERE member_id = ?)
+            `SELECT * FROM pots WHERE household_id = ? AND project_id IN (SELECT project_id FROM project_members WHERE member_id = ? AND scope = 'all')
              ORDER BY archived, created_at`,
           )
           .bind(hh, me.id),

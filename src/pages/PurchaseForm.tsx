@@ -153,12 +153,10 @@ function PurchaseForm({ existing, taxonomy, forItem }: { existing?: PurchaseDeta
   const [params] = useSearchParams();
   const activeProjects = taxonomy.projects.filter((p) => !p.archived || p.id === existing?.project_id);
   // Een gast zet uitgaven altijd in een project; staat er maar één open, dan dat.
+  // Een kost voor iets van een project (een fles wijn, een fiets) komt in dat project.
+  const wantedProject = params.get("project") ?? forItem?.project_id ?? null;
   const startProject =
-    params.get("project") && taxonomy.projects.some((p) => p.id === params.get("project"))
-      ? params.get("project")
-      : !full && activeProjects.length === 1
-        ? activeProjects[0].id
-        : null;
+    wantedProject && taxonomy.projects.some((p) => p.id === wantedProject) ? wantedProject : !full && activeProjects.length === 1 ? activeProjects[0].id : null;
   // Vanaf een verkoper ("Nieuwe aankoop"): die alvast ingevuld, met de categorie die je er meestal koopt.
   const startVendor = existing ? undefined : taxonomy.vendors.find((v) => v.id === params.get("verkoper"));
   const [form, setForm] = useState<FormState>(() => ({

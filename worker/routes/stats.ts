@@ -20,7 +20,7 @@ stats.get("/", async (c) => {
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM purchases WHERE household_id = ?1) AS purchases,
-         (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0 AND type = 'consumable') AS items,
+         (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0 AND type = 'consumable' AND project_id IS NULL) AS items,
          (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0 AND type = 'asset') AS assets,
          (SELECT COUNT(*) FROM items i
             WHERE i.household_id = ?1 AND i.archived = 0 AND i.min_quantity IS NOT NULL

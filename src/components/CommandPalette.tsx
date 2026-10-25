@@ -1,3 +1,5 @@
+import { templateOf } from "../../shared/fields";
+import { itemPath } from "./ItemLinks";
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { flattenTree } from "../../shared/tree";
 import type { ItemListItem, LoyaltyCard, PurchaseListItem } from "../../shared/types";
@@ -87,15 +89,26 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           group: "Projecten",
           label: p.name,
           hint: p.archived ? "gearchiveerd" : undefined,
-          icon: "project",
+          icon: templateOf(p.template).icon,
           to: `/projecten/${p.id}`,
         })),
       (data?.items ?? [])
-        .filter((i) => i.type === "consumable" && match(i.name, i.brand, i.category_name))
+        .filter((i) => i.type === "consumable" && !i.project_id && match(i.name, i.brand, i.category_name))
         .map((i) => ({ key: `i${i.id}`, group: "Voorraad", label: i.name, hint: i.category_name ?? undefined, icon: "package", to: `/voorraad/${i.id}` })),
       (data?.items ?? [])
         .filter((i) => i.type === "asset" && match(i.name, i.brand, i.category_name, i.origin_note))
-        .map((i) => ({ key: `a${i.id}`, group: "Bezit", label: i.name, hint: i.category_name ?? undefined, icon: "armchair", to: `/bezit/${i.id}` })),
+        .map((i) => ({ key: `a${i.id}`, group: "Bezit", label: i.name, hint: i.category_name ?? undefined, icon: "armchair", to: itemPath(i) })),
+      // De dingen van een project (wijnen), met de naam van het project erbij.
+      (data?.items ?? [])
+        .filter((i) => i.project_id && i.type === "consumable" && match(i.name, i.brand, ...Object.values(i.attributes).map(String)))
+        .map((i) => ({
+          key: `w${i.id}`,
+          group: "In projecten",
+          label: i.name,
+          hint: [i.brand, taxonomy?.projects.find((p) => p.id === i.project_id)?.name].filter(Boolean).join(" · ") || undefined,
+          icon: "package",
+          to: itemPath(i),
+        })),
       (data?.purchases ?? [])
         .filter((p) => match(p.description, p.vendor_name, p.notes))
         .map((p) => ({ key: `p${p.id}`, group: "Aankopen", label: p.description, hint: p.vendor_name ?? undefined, icon: "receipt", to: `/aankopen/${p.id}` })),

@@ -23,6 +23,10 @@ commits en uitleg.
   (zie `worker/context.ts`); wat van buiten komt (ids van categorieën, leden, potten) controleer je met `assertOwned`.
   Een gast (`access = 'projects'`) mag bij zijn projecten (`requireFull` of `canUseProject`) en mag de uitgaven
   zien waarin hij zelf betaalde of een deel heeft, maar enkel aanpassen wat in zijn projecten staat. Bij twijfel: weigeren.
+  Per project doet een gast volledig mee (`scope = 'all'`) of ziet hij enkel zijn deel (`'own'`: de dingen waarvan hij
+  mede-eigenaar is en zijn uitgaven, alleen bekijken). Gebruik `projectScope`; `canUseProject` is enkel waar voor `'all'`.
+- Eigen velden van een project staan in `shared/fields.ts`; waarden van buiten gaan altijd door `cleanAttributes`,
+  eigenaars door `normalizeOwners` (procenten, samen 100; leeg = van het huishouden samen).
 - Verkopers bewaren nooit een wachtwoord, enkel het klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

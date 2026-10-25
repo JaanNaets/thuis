@@ -1,3 +1,4 @@
+import { templateOf } from "../../shared/fields";
 import { useState } from "react";
 import type { Member, ProjectListItem, Taxonomy } from "../../shared/types";
 import { useApi } from "../api";
@@ -111,16 +112,16 @@ export function ProjectList() {
                   <Link to={`/projecten/${p.id}`} className="row">
                     <span className="cell-main">
                       <span className={`row-media tone-${p.color ?? "sky"}`}>
-                        <Icon name="project" size={16} />
+                        <Icon name={templateOf(p.template).icon} size={16} />
                       </span>
                       <span className="row-main">
                         <span className="row-title">{p.name}</span>
                         <span className="row-meta narrow-only">
-                          <span>{p.expense_count === 1 ? "1 uitgave" : `${p.expense_count} uitgaven`}</span>
+                          <span>{contentText(p)}</span>
                           {period && <span>{period}</span>}
                         </span>
                         <span className="row-meta wide-only">
-                          <span>{p.expense_count === 1 ? "1 uitgave" : `${p.expense_count} uitgaven`}</span>
+                          <span>{contentText(p)}</span>
                           {p.budget_cents !== null && <span>budget {formatCents(p.budget_cents)}</span>}
                         </span>
                       </span>
@@ -145,4 +146,15 @@ export function ProjectList() {
       )}
     </div>
   );
+}
+
+/** "3 uitgaven", "48 wijnen · 2 uitgaven": wat erin zit. */
+function contentText(p: ProjectListItem): string {
+  const t = templateOf(p.template);
+  const parts = [];
+  if (p.track_items || p.item_count) {
+    parts.push(`${p.item_count} ${p.item_count === 1 ? (t.name_label === "Naam" ? "ding" : t.name_label.toLowerCase()) : t.plural_label.toLowerCase()}`);
+  }
+  if (p.track_expenses || p.expense_count) parts.push(p.expense_count === 1 ? "1 uitgave" : `${p.expense_count} uitgaven`);
+  return parts.join(" · ");
 }

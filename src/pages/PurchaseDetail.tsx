@@ -52,6 +52,8 @@ export function PurchaseDetail() {
     : { to: full ? "/aankopen" : "/gedeeld", label: full ? "Aankopen" : "Gedeeld" };
   // Een gast past enkel uitgaven in zijn projecten aan; wat daarbuiten met hem gedeeld werd, kan hij enkel bekijken.
   const canEdit = full || Boolean(p.project_id && taxonomy?.projects.some((pr) => pr.id === p.project_id));
+  // In een project met dingen (de wijnkelder): de lijnen van de factuur elk als ding.
+  const collection = taxonomy?.projects.find((pr) => pr.id === p.project_id && pr.track_items === 1);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -309,16 +311,27 @@ export function PurchaseDetail() {
                 title="Waarvoor"
                 description={p.links.length === 0 ? "Hang deze uitgave aan iets dat je hebt: de kachel, de pellets, de wasmachine" : undefined}
                 action={
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setLinking(true)}>
-                    <Icon name="plus" size={15} /> Koppelen
-                  </button>
+                  <div className="btn-row">
+                    {collection && (
+                      <Link to={`/projecten/${collection.id}/factuur?aankoop=${p.id}`} className="btn btn-ghost btn-sm">
+                        <Icon name="listLines" size={15} /> Per lijn
+                      </Link>
+                    )}
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setLinking(true)}>
+                      <Icon name="plus" size={15} /> Koppelen
+                    </button>
+                  </div>
                 }
               />
               {p.links.length > 0 && (
                 <ul className="rows">
                   {p.links.map((link) => (
                     <li key={link.id}>
-                      <Link to={itemPath({ id: link.item_id, type: link.item_type })} className="row" style={{ minHeight: 52 }}>
+                      <Link
+                        to={itemPath({ id: link.item_id, type: link.item_type, project_id: link.item_project_id })}
+                        className="row"
+                        style={{ minHeight: 52 }}
+                      >
                         <span className="cell-main">
                           <span className="row-media">
                             <Icon name={link.item_type === "asset" ? "armchair" : "package"} size={16} />

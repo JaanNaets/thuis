@@ -17,7 +17,7 @@ import { categoryTone, categoryTree, locationTree, useTaxonomy } from "../taxono
 type Tab = "all" | "low" | "expiring" | "archived";
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
-function fold(s: string): string {
+export function fold(s: string): string {
   return s
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -61,8 +61,8 @@ export function InventoryList() {
 
   const archived = tab === "archived";
   const { data: everything, error, loading, reload, mutate } = useApi<ItemListItem[]>(archived ? "/items?archived=1" : "/items");
-  // Voorraad is wat opraakt; bezit (toestellen, meubels) staat in Bezit.
-  const data = useMemo(() => everything?.filter((i) => i.type === "consumable"), [everything]);
+  // Voorraad is wat opraakt; bezit (toestellen, meubels) staat in Bezit, en de wijn van de kelder in dat project.
+  const data = useMemo(() => everything?.filter((i) => i.type === "consumable" && !i.project_id), [everything]);
   const { data: taxonomy } = useTaxonomy();
   const now = today();
 

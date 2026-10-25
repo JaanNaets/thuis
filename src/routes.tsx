@@ -14,6 +14,8 @@ import { AssetList } from "./pages/AssetList";
 import { CardList } from "./pages/CardList";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectFormPage } from "./pages/ProjectForm";
+import { ProjectImport } from "./pages/ProjectImport";
+import { ProjectInvoice } from "./pages/ProjectInvoice";
 import { ProjectList } from "./pages/ProjectList";
 import { RecurringFormPage } from "./pages/RecurringForm";
 import { VendorDetail } from "./pages/VendorDetail";
@@ -45,6 +47,15 @@ export const routes: RouteObject[] = [
       { path: "projecten/nieuw", element: <ProjectFormPage /> },
       { path: "projecten/:id", element: <ProjectDetail /> },
       { path: "projecten/:id/bewerken", element: <ProjectFormPage /> },
+      // De dingen van een project (een wijn, een fiets): onder dat project, ook voor gasten.
+      { path: "projecten/:projectId/voorraad/nieuw", element: <ItemFormPage /> },
+      { path: "projecten/:projectId/voorraad/:id", element: <ItemDetail /> },
+      { path: "projecten/:projectId/voorraad/:id/bewerken", element: <ItemFormPage /> },
+      { path: "projecten/:projectId/bezit/nieuw", element: <ItemFormPage /> },
+      { path: "projecten/:projectId/bezit/:id", element: <AssetDetail /> },
+      { path: "projecten/:projectId/bezit/:id/bewerken", element: <ItemFormPage /> },
+      { path: "projecten/:projectId/importeren", element: <ProjectImport /> },
+      { path: "projecten/:projectId/factuur", element: <ProjectInvoice /> },
       { path: "verkopers", element: <VendorList /> },
       { path: "verkopers/nieuw", element: <VendorFormPage /> },
       { path: "verkopers/:id", element: <VendorDetail /> },

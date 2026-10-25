@@ -4834,3 +4834,342 @@ dialog.palette[open]::backdrop {
 .settings-grid {
   max-width: 760px;
 }
+
+/* ---------- projecten met dingen: sjablonen, eigen velden, eigenaars ---------- */
+
+/* Soort project kiezen: vier keuzes als knoppen met een icoontegel. */
+.template-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.template-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.template-option:hover {
+  background: var(--subtle);
+}
+
+.template-option[aria-checked="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.template-option .icon-tile {
+  margin-top: 1px;
+}
+
+.template-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.template-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.template-desc {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (min-width: 560px) {
+  .template-picker {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Velden van een project: naam en soort op één regel, de rest klapt open. */
+.fields-editor {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fields-editor-row {
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.fields-editor-row:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+
+.fields-editor-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 150px) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.fields-editor-more {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--subtle);
+  animation: fade-in 0.25s var(--ease-out) backwards;
+}
+
+/* Waarden van de eigen velden: korte velden per twee, lange over de hele breedte. */
+.attr-fields {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 560px) {
+  .attr-fields {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 12px;
+  }
+
+  .attr-fields > .wide {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Score op 5: sterren, half kan. */
+.score-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 38px;
+}
+
+.score-star {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition: transform 0.25s var(--spring);
+}
+
+.score-star:active {
+  transform: scale(0.88);
+}
+
+.score-input .on,
+.score-stars .on {
+  color: var(--warning-solid);
+}
+
+.score-input .link-button {
+  margin-left: 8px;
+}
+
+.score-stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--faint);
+  vertical-align: -2px;
+}
+
+.score-stars svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Wat een gast in een project ziet, naast zijn naam. */
+.scope-select {
+  width: auto;
+  max-width: 160px;
+  height: 34px !important;
+  font-size: 13px;
+}
+
+/* Opslaan, en ernaast "Opslaan en volgende". */
+.form-actions {
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 560px) {
+  .form-actions:has(> :nth-child(2)) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* De dingen van een project: kolommen komen van het project (`--cols` staat op de tabel zelf). */
+.table-collection {
+  --cols: minmax(0, 1fr) 150px;
+}
+
+/* Een verzameling op gsm: eerst wat er is en de lijst, daarna snel invullen en wie meedoet. */
+@media (max-width: 959px) {
+  .split-collection > .split-aside {
+    display: contents;
+  }
+
+  .split-collection .aside-late {
+    order: 1;
+  }
+}
+
+/* Foto van een ding, bovenaan de fiche. */
+.item-photo {
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px 4px;
+}
+
+.item-photo img {
+  width: 100%;
+  max-height: 280px;
+  border-radius: var(--radius-md);
+  background: var(--subtle);
+  object-fit: contain;
+}
+
+.item-photo .btn-row {
+  justify-content: flex-start;
+}
+
+/* Kolommen van een lijst kiezen: de kop en een voorbeeld links, waar het heen gaat rechts. */
+.column-map {
+  display: grid;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.column-map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 190px);
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.column-map-row:first-child {
+  border-top: 0;
+}
+
+.column-map-name {
+  display: grid;
+  min-width: 0;
+}
+
+.column-map-header {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-map-sample {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-preview {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-preview li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.import-preview li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* Lijnen van een factuur: aanvinken, naam, aantal en bedrag. */
+.invoice-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.invoice-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "check name"
+    ". numbers";
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+  animation: rise-in 0.35s var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 14) * 28ms);
+  transition: opacity 0.2s;
+}
+
+.invoice-line:first-child {
+  border-top: 0;
+}
+
+.invoice-line[data-off="true"] {
+  opacity: 0.5;
+}
+
+.invoice-line > input[type="checkbox"] {
+  grid-area: check;
+}
+
+.invoice-name {
+  grid-area: name;
+  height: 34px !important;
+}
+
+.invoice-numbers {
+  grid-area: numbers;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.invoice-numbers .split-input {
+  width: 92px;
+}
+
+.invoice-per {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}

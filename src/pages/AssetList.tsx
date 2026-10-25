@@ -1,14 +1,16 @@
 import { Fragment, useMemo, useState } from "react";
+import { ownersText, templateOf, valueByOwner } from "../../shared/fields";
 import { descendantIds } from "../../shared/tree";
 import { ITEM_ORIGINS, type ItemListItem, type ItemOrigin, type Taxonomy } from "../../shared/types";
 import { useApi } from "../api";
 import { FilterSelect, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
+import { itemPath } from "../components/ItemLinks";
 import { SkeletonRows, stagger } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { formatCents, formatDate, warrantyStatus } from "../format";
 import { Link } from "../router";
-import { categoryTone, categoryTree, locationTree, placeName, useTaxonomy } from "../taxonomy";
+import { categoryTone, categoryTree, locationTree, memberById, placeName, useTaxonomy } from "../taxonomy";
 import { groupByCategory } from "./InventoryList";
 import { WARRANTY_BADGE } from "./PurchaseList";
 
@@ -44,6 +46,8 @@ export function AssetList() {
   const [origin, setOrigin] = useState<ItemOrigin | null>(null);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Van wie: één persoon (ook wat die samen met iemand anders heeft), of wat van het huishouden samen is.
+  const [owner, setOwner] = useState<string | null>(null);
   const archived = tab === "archived";
   const { data, error, loading } = useApi<ItemListItem[]>(archived ? "/items?archived=1" : "/items");
   const { data: taxonomy } = useTaxonomy();
@@ -59,14 +63,33 @@ export function AssetList() {
       if (origin && i.origin !== origin) return false;
       if (cats && !(i.category_id && cats.has(i.category_id))) return false;
       if (places && !i.levels.some((l) => places.has(l.location_id)) && !(i.default_location_id && places.has(i.default_location_id))) return false;
+      if (owner === "together" && i.owners.length > 0) return false;
+      if (owner && owner !== "together" && !i.owners.some((o) => o.member_id === owner)) return false;
       if (q && ![i.name, i.brand, i.category_name, i.notes, i.origin_note, i.bought_at].some((h) => h && fold(h).includes(q))) return false;
       return true;
     });
-  }, [assets, taxonomy, tab, origin, locationId, categoryId, query]);
+  }, [assets, taxonomy, tab, origin, locationId, categoryId, query, owner]);
 
-  const filtered = Boolean(query.trim() || origin || locationId || categoryId);
+  const filtered = Boolean(query.trim() || origin || locationId || categoryId || owner);
   const spent = assets.reduce((sum, i) => sum + i.cost_cents, 0);
-  const groups = taxonomy ? groupByCategory(shown, taxonomy) : [];
+  const owners = useMemo(
+    () => [...new Set(assets.flatMap((i) => i.owners.map((o) => o.member_id)))].map((id) => memberById(taxonomy, id)).filter((m) => m !== undefined),
+    [assets, taxonomy],
+  );
+  // Het deel van die persoon: de waarde (of wat het kostte) × zijn aandeel.
+  const ownerValue = owner && owner !== "together" ? (valueByOwner(shown, []).find((v) => v.member_id === owner)?.cents ?? 0) : null;
+  // Wat bij een project hoort (de fietsen), staat bij dat project; de rest per categorie.
+  const groups = taxonomy
+    ? [
+        ...groupByCategory(
+          shown.filter((i) => !i.project_id),
+          taxonomy,
+        ),
+        ...taxonomy.projects
+          .map((p) => ({ id: `p:${p.id}`, name: p.name, tone: p.color ?? "sky", items: shown.filter((i) => i.project_id === p.id) }))
+          .filter((g) => g.items.length > 0),
+      ]
+    : [];
   let index = 0;
 
   return (
@@ -74,9 +97,11 @@ export function AssetList() {
       <PageHead
         title="Bezit"
         description={
-          data && !archived && assets.length > 0
-            ? `${assets.length === 1 ? "1 ding" : `${assets.length} dingen`} · ${formatCents(spent)} uitgegeven`
-            : "Wat je hebt: gekocht, gekregen of al lang in huis"
+          ownerValue !== null
+            ? `${shown.length === 1 ? "1 ding" : `${shown.length} dingen`} van ${memberById(taxonomy, owner)?.name ?? "?"} · aandeel ${formatCents(ownerValue)}`
+            : data && !archived && assets.length > 0
+              ? `${assets.length === 1 ? "1 ding" : `${assets.length} dingen`} · ${formatCents(spent)} uitgegeven`
+              : "Wat je hebt: gekocht, gekregen of al lang in huis"
         }
         primary={
           <Link to="/bezit/nieuw" className="btn btn-primary">
@@ -132,6 +157,15 @@ export function AssetList() {
             onChange={setCategoryId}
             options={categoryTree(taxonomy, "item").map((c) => ({ value: c.id, label: c.name, depth: c.depth }))}
           />
+          {owners.length > 0 && (
+            <FilterSelect
+              label="Eigenaar"
+              all="Iedereen"
+              value={owner}
+              onChange={setOwner}
+              options={[...owners.map((m) => ({ value: m.id, label: m.name })), { value: "together", label: "Samen" }]}
+            />
+          )}
         </div>
       )}
 
@@ -196,11 +230,13 @@ function AssetRow({ item, taxonomy }: { item: ItemListItem; taxonomy: Taxonomy }
   const running = warranty.tone === "ok" || warranty.tone === "soon";
   const origin = originText(item);
   const place = placeName(taxonomy, item.levels[0]?.location_id ?? item.default_location_id);
+  const project = taxonomy.projects.find((p) => p.id === item.project_id);
+  const owners = item.owners.length ? ownersText(item.owners, (id) => memberById(taxonomy, id)?.name ?? "?") : null;
   return (
-    <Link to={`/bezit/${item.id}`} className="row">
+    <Link to={itemPath(item)} className="row">
       <span className="cell-main">
-        <span className={`row-media tone-${categoryTone(taxonomy, item.category_id)}`}>
-          <Icon name="armchair" size={16} />
+        <span className={`row-media tone-${project ? (project.color ?? "sky") : categoryTone(taxonomy, item.category_id)}`}>
+          <Icon name={project ? templateOf(project.template).icon : "armchair"} size={16} />
         </span>
         <span className="row-main">
           <span className="row-title">{item.name}</span>
@@ -208,7 +244,7 @@ function AssetRow({ item, taxonomy }: { item: ItemListItem; taxonomy: Taxonomy }
             <span>{[origin, item.acquired_on && formatDate(item.acquired_on)].filter(Boolean).join(" · ") || place || "—"}</span>
             {running && <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>}
           </span>
-          {(item.brand || place) && <span className="row-meta wide-only">{[item.brand, place].filter(Boolean).join(" · ")}</span>}
+          {(item.brand || place || owners) && <span className="row-meta wide-only">{[item.brand, place, owners].filter(Boolean).join(" · ")}</span>}
         </span>
       </span>
       <span className="col">{origin ? <span>{origin}</span> : <span className="muted">—</span>}</span>

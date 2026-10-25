@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { checkPayments, computeShares, SPLIT_MODES, type PaymentInput, type SplitInput, type SplitLine } from "../../shared/split";
 import type { Purchase, PurchaseDetail, PurchaseFile, PurchaseInput, PurchaseListItem } from "../../shared/types";
-import { assertOwned } from "../context";
+import { assertOwned, canUseProject } from "../context";
 import type { AppEnv } from "../types";
 import {
   asObject,
@@ -198,7 +198,7 @@ export function toListItem({ payments_json, ...row }: PurchaseRow): PurchaseList
  * betaalde of een deel heeft (bv. gedeeld voor hij kon aanmelden). `m` is de parameter met zijn lid-id.
  */
 export function guestSeesSql(m: string): string {
-  return `(p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ${m})
+  return `(p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ${m} AND scope = 'all')
     OR p.id IN (SELECT purchase_id FROM expense_shares WHERE member_id = ${m})
     OR p.id IN (SELECT purchase_id FROM expense_payments WHERE member_id = ${m}))`;
 }
@@ -218,7 +218,9 @@ function visibleBinds(c: Context<AppEnv>): string[] {
  */
 async function writable(c: Context<AppEnv>, id: string): Promise<Pick<Purchase, "id" | "project_id"> | null> {
   const full = c.get("full");
-  const scope = full ? "p.household_id = ?2" : "p.household_id = ?2 AND p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?3)";
+  const scope = full
+    ? "p.household_id = ?2"
+    : "p.household_id = ?2 AND p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?3 AND scope = 'all')";
   return c.env.DB.prepare(`SELECT p.id, p.project_id FROM purchases p WHERE p.id = ?1 AND ${scope}`)
     .bind(id, ...visibleBinds(c))
     .first<Pick<Purchase, "id" | "project_id">>();
@@ -231,13 +233,8 @@ async function checkProject(c: Context<AppEnv>, projectId: string | null) {
     if (!c.get("full")) throw new ValidationError("Kies een project");
     return;
   }
-  const ok = c.get("full")
-    ? await db.prepare("SELECT 1 FROM projects WHERE id = ? AND household_id = ?").bind(projectId, c.get("household")).first()
-    : await db
-        .prepare("SELECT 1 FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE pm.project_id = ? AND pm.member_id = ? AND p.household_id = ?")
-        .bind(projectId, c.get("member").id, c.get("household"))
-        .first();
-  if (!ok) throw new ValidationError("Dat project bestaat niet (meer)");
+  // Een gast die enkel zijn deel ziet, zet zelf geen uitgaven in het project.
+  if (!(await canUseProject(db, c.get("household"), c.get("member"), projectId))) throw new ValidationError("Dat project bestaat niet (meer)");
 }
 
 // Een categorie met al haar subcategorieën (voor ?category=).
@@ -297,11 +294,15 @@ purchases.get("/:id", async (c) => {
     db.prepare("SELECT tag_id FROM taggings WHERE entity_type = 'purchase' AND entity_id = ?").bind(id),
     db
       .prepare(
-        `SELECT l.id, l.item_id, l.role, l.quantity, l.amount_cents, l.note, i.name AS item_name, i.type AS item_type, i.unit
+        `SELECT l.id, l.item_id, l.role, l.quantity, l.amount_cents, l.note, i.name AS item_name, i.type AS item_type, i.unit,
+           i.project_id AS item_project_id
          FROM item_links l JOIN items i ON i.id = l.item_id
-         WHERE l.purchase_id = ? ORDER BY l.created_at`,
+         WHERE l.purchase_id = ?1
+           -- Een gast ziet enkel de dingen van het project van de uitgave, niet de voorraad van het huishouden.
+           AND (?2 = 1 OR i.project_id = (SELECT project_id FROM purchases WHERE id = ?1))
+         ORDER BY l.created_at`,
       )
-      .bind(id),
+      .bind(id, c.get("full") ? 1 : 0),
   ]);
 
   const row = purchase.results[0] as PurchaseRow | undefined;

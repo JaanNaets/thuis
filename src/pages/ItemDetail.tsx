@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useParams } from "react-router";
 import { Link, useNavigate } from "../router";
+import { ownersText, templateOf } from "../../shared/fields";
 import { isLow } from "../../shared/stock";
 import { MOVEMENT_REASONS, UNITS, type ItemDetail as Detail, type ItemLink, type StockAction, type StockActionInput, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -10,11 +11,13 @@ import { Icon, type IconName } from "../components/Icon";
 import { EditLinkForm, itemPath, linkCost, LinkPurchaseForm } from "../components/ItemLinks";
 import { Num, stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
+import { AttributeRows, ItemPhoto } from "../components/ProjectFields";
 import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
 import { formatCents, formatDate, formatDateTime, formatNumber, parseQuantity } from "../format";
-import { categoryTone, locationTree, nameForEmail, placeName, useTaxonomy } from "../taxonomy";
+import { categoryTone, locationTree, memberById, nameForEmail, placeName, useTaxonomy } from "../taxonomy";
+import { LogCard } from "./AssetDetail";
 import { expiryBadge, unitWord } from "./InventoryList";
 
 const ACTIONS: Record<StockAction, { title: string; icon: IconName }> = {
@@ -40,14 +43,22 @@ export function ItemDetail() {
   if (error) return <p className="error page">{error}</p>;
   if (!item || !taxonomy) return null;
   // Bezit heeft een eigen fiche.
-  if (item.type === "asset") return <Navigate to={`/bezit/${item.id}`} replace />;
+  if (item.type === "asset") return <Navigate to={itemPath(item)} replace />;
+
+  // Iets van een project (een wijn): terug naar dat project, met de velden van het project.
+  const project = taxonomy.projects.find((p) => p.id === item.project_id);
+  const template = templateOf(project?.template);
+  const canEdit = item.can_edit !== false;
+  const home = project ? `/projecten/${project.id}` : "/voorraad";
+  const wine = project?.template === "wine";
 
   const low = isLow(item.quantity, item.min_quantity);
   const expiry = expiryBadge(item.next_expiry);
   const tags = taxonomy.tags.filter((t) => item.tag_ids.includes(t.id));
   const vendor = taxonomy.vendors.find((v) => v.id === item.vendor_id);
-  const actions: StockAction[] = ["add", "consume", "count", "move", "discard"];
-  const title = (action: StockAction) => ACTIONS[action].title;
+  // Een gast ziet de plaatsen van het huishouden niet: verplaatsen en tellen per plaats kan dan niet.
+  const actions: StockAction[] = taxonomy.locations.length ? ["add", "consume", "count", "move", "discard"] : ["add", "consume", "discard"];
+  const title = (action: StockAction) => (action === "consume" && wine ? "Gedronken" : ACTIONS[action].title);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -85,7 +96,7 @@ export function ItemDetail() {
     run(async () => {
       await api.delete(`/items/${item!.id}`);
       toast("Item verwijderd", "trash");
-      navigate("/voorraad", { replace: true });
+      navigate(home, { replace: true });
     });
   }
 
@@ -93,16 +104,21 @@ export function ItemDetail() {
     <article className="page">
       <PageHead
         title={item.name}
-        back={{ to: "/voorraad", label: "Voorraad" }}
+        description={project ? [item.brand, project.name].filter(Boolean).join(" · ") : undefined}
+        back={project ? { to: home, label: project.name } : { to: "/voorraad", label: "Voorraad" }}
         actions={
-          <Link to={`/voorraad/${item.id}/bewerken`} className="btn btn-outline btn-sm">
-            <Icon name="edit" size={15} /> Bewerken
-          </Link>
+          canEdit && (
+            <Link to={`${itemPath(item)}/bewerken`} className="btn btn-outline btn-sm">
+              <Icon name="edit" size={15} /> Bewerken
+            </Link>
+          )
         }
         primary={
-          <Link to={`/aankopen/nieuw?ding=${item.id}`} className="btn btn-primary">
-            <Icon name="plus" size={16} /> Bijgekocht
-          </Link>
+          canEdit && (
+            <Link to={`/aankopen/nieuw?ding=${item.id}`} className="btn btn-primary">
+              <Icon name="plus" size={16} /> Bijgekocht
+            </Link>
+          )
         }
       />
 
@@ -148,7 +164,7 @@ export function ItemDetail() {
                           <button
                             type="button"
                             className="btn btn-ghost"
-                            disabled={busy}
+                            disabled={busy || !canEdit}
                             onClick={() => quick("consume", level.location_id)}
                             aria-label="Eén minder"
                           >
@@ -159,7 +175,13 @@ export function ItemDetail() {
                               <Num value={level.quantity}>{formatNumber(level.quantity)}</Num>
                             </strong>
                           </span>
-                          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => quick("add", level.location_id)} aria-label="Eén meer">
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={busy || !canEdit}
+                            onClick={() => quick("add", level.location_id)}
+                            aria-label="Eén meer"
+                          >
                             <Icon name="plus" size={16} />
                           </button>
                         </span>
@@ -170,24 +192,43 @@ export function ItemDetail() {
               </ul>
             )}
 
-            <div className="stock-actions">
-              {actions.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  className="btn btn-sm btn-outline"
-                  disabled={busy || (["consume", "move", "discard"].includes(action) && item.quantity === 0)}
-                  onClick={() => setSheet(action)}
-                >
-                  <Icon name={ACTIONS[action].icon} size={15} /> {title(action)}
-                </button>
-              ))}
-            </div>
+            {canEdit && (
+              <div className="stock-actions">
+                {actions.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    disabled={busy || (["consume", "move", "discard"].includes(action) && item.quantity === 0)}
+                    onClick={() => setSheet(action)}
+                  >
+                    <Icon name={ACTIONS[action].icon} size={15} /> {title(action)}
+                  </button>
+                ))}
+              </div>
+            )}
             {actionError && <p className="error card-body">{actionError}</p>}
           </section>
 
           <section className="card">
+            {project && (
+              <ItemPhoto
+                item={item}
+                canEdit={canEdit}
+                onChange={(version, message) => {
+                  mutate({ ...item, photo_version: version });
+                  toast(message);
+                }}
+              />
+            )}
             <dl className="dl" style={{ marginTop: -1 }}>
+              {project && <AttributeRows defs={project.fields} attributes={item.attributes} />}
+              {(project || item.owners.length > 0) && (
+                <div>
+                  <dt>Eigenaar</dt>
+                  <dd>{ownersText(item.owners, (id) => memberById(taxonomy, id)?.name ?? "?")}</dd>
+                </div>
+              )}
               {item.parent && (
                 <div>
                   <dt>Hoort bij</dt>
@@ -229,7 +270,7 @@ export function ItemDetail() {
               )}
               {item.brand && (
                 <div>
-                  <dt>Merk</dt>
+                  <dt>{template.brand_label}</dt>
                   <dd>{item.brand}</dd>
                 </div>
               )}
@@ -267,7 +308,20 @@ export function ItemDetail() {
         </aside>
 
         <div className="split-main">
-          <PricesCard item={item} onAttach={() => setLinking("new")} onEdit={setLinking} />
+          {project && (
+            <LogCard
+              item={item}
+              title={wine ? "Proefnotities" : "Logboek"}
+              empty={wine ? "Hoe smaakte hij, bij welk gerecht, met wie" : "Notities en wat er gebeurde"}
+              canEdit={canEdit}
+              onChanged={(message) => {
+                toast(message);
+                reload();
+              }}
+            />
+          )}
+
+          <PricesCard item={item} onAttach={canEdit ? () => setLinking("new") : undefined} onEdit={canEdit ? setLinking : undefined} />
 
           <section className="card">
             <CardHead icon="clock" title="Geschiedenis" description="Elke wijziging, met wie en waar" />
@@ -303,20 +357,24 @@ export function ItemDetail() {
             )}
           </section>
 
-          <div className="btn-row" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: "none" }} disabled={busy} onClick={toggleArchived}>
-              <Icon name="archive" size={16} /> {item.archived ? "Terug uit archief" : "Archiveren"}
-            </button>
-            <button type="button" className="btn btn-danger-ghost" style={{ flex: "none" }} disabled={busy} onClick={remove}>
-              <Icon name="trash" size={16} /> Verwijderen
-            </button>
-          </div>
+          {canEdit && (
+            <div className="btn-row" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
+              <button type="button" className="btn btn-ghost" style={{ flex: "none" }} disabled={busy} onClick={toggleArchived}>
+                <Icon name="archive" size={16} /> {item.archived ? "Terug uit archief" : "Archiveren"}
+              </button>
+              <button type="button" className="btn btn-danger-ghost" style={{ flex: "none" }} disabled={busy} onClick={remove}>
+                <Icon name="trash" size={16} /> Verwijderen
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <Link to={`/aankopen/nieuw?ding=${item.id}`} className="fab" aria-label="Bijgekocht">
-        <Icon name="plus" size={24} />
-      </Link>
+      {canEdit && (
+        <Link to={`/aankopen/nieuw?ding=${item.id}`} className="fab" aria-label="Bijgekocht">
+          <Icon name="plus" size={24} />
+        </Link>
+      )}
 
       <Sheet open={Boolean(linking)} title={linking === "new" ? "Uitgave koppelen" : "Koppeling"} onClose={() => setLinking(undefined)}>
         {linking === "new" && (
@@ -526,7 +584,7 @@ type PriceRow = { link: ItemLink; cost: number; perUnit: number; perContent: num
  * Wat je voor dit verbruik betaalde, per keer en per verkoper: de laatste prijs per eenheid en de goedkoopste.
  * Met een inhoud per eenheid (15 kg per zak) ook de prijs per kg, zodat verschillende zakken te vergelijken zijn.
  */
-function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach: () => void; onEdit: (link: ItemLink) => void }) {
+function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach?: () => void; onEdit?: (link: ItemLink) => void }) {
   const rows: PriceRow[] = item.links
     .filter((l) => l.role === "refill" && l.quantity)
     .map((link) => {
@@ -560,9 +618,11 @@ function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach: () => 
           rows.length === 0 ? "Boek wat je bijkoopt als uitgave: dan zie je hier per winkel wat je betaalde" : `Per ${unit}, de goedkoopste bovenaan`
         }
         action={
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onAttach}>
-            Uitgave koppelen
-          </button>
+          onAttach && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onAttach}>
+              Uitgave koppelen
+            </button>
+          )
         }
       />
       {vendors.length > 0 && (
@@ -589,7 +649,7 @@ function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach: () => 
           </li>
           {rows.map((r) => (
             <li key={r.link.id}>
-              <button type="button" className="row" style={{ minHeight: 48 }} onClick={() => onEdit(r.link)}>
+              <button type="button" className="row" style={{ minHeight: 48 }} disabled={!onEdit} onClick={() => onEdit?.(r.link)}>
                 <span className="row-main">
                   <span className="row-title" style={{ fontWeight: 450 }}>
                     {formatNumber(r.link.quantity!)} {unitWord(r.link.quantity!, unit)} · {formatCents(r.cost)}
@@ -608,7 +668,7 @@ function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach: () => 
         <ul className="rows">
           {others.map((l) => (
             <li key={l.id}>
-              <button type="button" className="row" style={{ minHeight: 48 }} onClick={() => onEdit(l)}>
+              <button type="button" className="row" style={{ minHeight: 48 }} disabled={!onEdit} onClick={() => onEdit?.(l)}>
                 <span className="row-main">
                   <span className="row-title" style={{ fontWeight: 450 }}>
                     {l.description}

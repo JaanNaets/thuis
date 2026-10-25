@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { templateOf } from "../../shared/fields";
 import { useLocation, useParams, useSearchParams } from "react-router";
 import { Link, useNavigate } from "../router";
 import {
@@ -13,7 +14,9 @@ import {
   type ItemListItem,
   type ItemOrigin,
   type ItemType,
+  type LabelScan,
   type ProductSuggestion,
+  type Project,
   type PurchaseDetail,
   type Taxonomy,
   type Unit,
@@ -24,12 +27,25 @@ import { Alert, QuantityField, Segmented, SubmitButton, TreeSelect } from "../co
 import { Icon } from "../components/Icon";
 import { itemPath } from "../components/ItemLinks";
 import { PageHead } from "../components/Page";
+import {
+  attributesDraft,
+  buildAttributes,
+  buildOwners,
+  FieldInputs,
+  fieldSuggestions,
+  LabelScanner,
+  OwnersField,
+  ownersDraft,
+  ownersFromPurchase,
+  type AttributeDraft,
+} from "../components/ProjectFields";
 import { ScanButtons } from "../components/ScanButtons";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
 import { centsToInput, formatDate, formatNumber, parseEuro, parseQuantity, today } from "../format";
-import { categoryTree, locationTree, useTaxonomy } from "../taxonomy";
+import { useSession } from "../session";
+import { activeMembers, categoryTree, locationTree, projectMembers, useTaxonomy } from "../taxonomy";
 
 type FormState = {
   name: string;
@@ -91,16 +107,22 @@ function unitFromQuantityText(text: string | null): Unit | null {
   return null;
 }
 
+/** Notitie en plaatshouders per soort project. */
+const NOTES_PLACEHOLDER: Record<string, string> = {
+  wine: "Proefnotitie, bij welk gerecht, van wie gekregen…",
+  bikes: "Bandenspanning, afstelling, wat nog moet gebeuren…",
+};
+
 export function ItemFormPage() {
-  const { id } = useParams();
+  const { id, projectId } = useParams();
   const [params] = useSearchParams();
   const { data: taxonomy, error } = useTaxonomy();
   if (error && !taxonomy) return <p className="error page">{error}</p>;
   if (!taxonomy) return null;
   if (id) return <EditItem id={id} taxonomy={taxonomy} />;
   const purchaseId = params.get("aankoop");
-  if (purchaseId) return <ItemFromPurchase purchaseId={purchaseId} taxonomy={taxonomy} />;
-  return <ItemForm taxonomy={taxonomy} initialBarcode={params.get("barcode") ?? undefined} />;
+  if (purchaseId) return <ItemFromPurchase purchaseId={purchaseId} taxonomy={taxonomy} projectId={projectId} />;
+  return <ItemForm taxonomy={taxonomy} initialBarcode={params.get("barcode") ?? undefined} projectId={projectId} />;
 }
 
 function EditItem({ id, taxonomy }: { id: string; taxonomy: Taxonomy }) {
@@ -110,11 +132,11 @@ function EditItem({ id, taxonomy }: { id: string; taxonomy: Taxonomy }) {
   return <ItemForm existing={data} taxonomy={taxonomy} />;
 }
 
-function ItemFromPurchase({ purchaseId, taxonomy }: { purchaseId: string; taxonomy: Taxonomy }) {
+function ItemFromPurchase({ purchaseId, taxonomy, projectId }: { purchaseId: string; taxonomy: Taxonomy; projectId?: string }) {
   const { data, error } = useApi<PurchaseDetail>(`/purchases/${purchaseId}`);
   if (error) return <p className="error page">{error}</p>;
   if (!data) return null;
-  return <ItemForm taxonomy={taxonomy} purchase={data} />;
+  return <ItemForm taxonomy={taxonomy} purchase={data} projectId={projectId} />;
 }
 
 function ItemForm({
@@ -122,21 +144,29 @@ function ItemForm({
   taxonomy,
   purchase,
   initialBarcode,
+  projectId,
 }: {
   existing?: ItemDetail;
   taxonomy: Taxonomy;
   purchase?: PurchaseDetail;
   initialBarcode?: string;
+  projectId?: string;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const { full } = useSession();
   const [params] = useSearchParams();
+  // Een ding van een project (een wijn, een fiets): soort, eenheid en velden komen van het project.
+  const project: Project | undefined = taxonomy.projects.find((p) => p.id === (existing ? existing.project_id : projectId));
+  const template = templateOf(project?.template);
+  const fields = project?.fields ?? [];
   // Vanuit Bezit: een bezit; vanuit Voorraad: verbruik.
-  const routeType: ItemType = location.pathname.startsWith("/bezit") ? "asset" : "consumable";
-  const { data: allItems } = useApi<ItemListItem[]>("/items");
+  const routeType: ItemType = project?.item_type ?? (location.pathname.includes("/bezit") ? "asset" : "consumable");
+  const { data: allItems } = useApi<ItemListItem[]>(project ? `/items?project=${project.id}` : "/items");
   const [form, setForm] = useState<FormState>(() => {
     const state = toFormState(existing, taxonomy, routeType);
+    if (project && !existing) state.unit = project.item_unit ?? "stuk";
     if (purchase) {
       state.name = purchase.description;
       // Vanuit een aankoop zonder duidelijke route: iets met garantie is meestal een toestel (bezit).
@@ -152,7 +182,16 @@ function ItemForm({
   });
   const asset = form.type === "asset";
   // Hoort bij: een bezit (de kachel, de stofzuiger), niet zichzelf.
-  const parents = (allItems ?? []).filter((i) => i.type === "asset" && i.id !== existing?.id);
+  const parents = project ? [] : (allItems ?? []).filter((i) => i.type === "asset" && i.id !== existing?.id);
+  const [attrs, setAttrs] = useState<AttributeDraft>(() => attributesDraft(fields, existing?.attributes ?? {}));
+  const [autoAttrs, setAutoAttrs] = useState<Set<string>>(new Set());
+  const residents = activeMembers(taxonomy);
+  const ownerPeople = [...residents, ...(project ? projectMembers(taxonomy, project.id) : [])].filter(
+    (m, i, list) => list.findIndex((x) => x.id === m.id) === i,
+  );
+  const [owners, setOwners] = useState(() => ownersDraft(existing?.owners ?? ownersFromPurchase(purchase, residents)));
+  // De foto van het etiket: na het bewaren bij het ding.
+  const [photo, setPhoto] = useState<File | null>(null);
   const [autoFilled, setAutoFilled] = useState<Set<keyof FormState>>(new Set());
   const touched = useRef(new Set<keyof FormState>());
   const [lookup, setLookup] = useState<{ state: "busy" } | { state: "known"; itemId: string } | { state: "found" } | { state: "none" }>();
@@ -208,14 +247,33 @@ function ItemForm({
     lookupBarcode(result.rawValue);
   }
 
+  // Wat van het etiket gelezen werd, komt enkel in velden die je nog niet zelf invulde.
+  function applyScan(scan: LabelScan, file: File) {
+    setPhoto(file);
+    const filled: Partial<FormState> = {};
+    if (scan.name && !touched.current.has("name")) filled.name = scan.name;
+    if (scan.brand && !touched.current.has("brand")) filled.brand = scan.brand;
+    setForm((f) => ({ ...f, ...filled }));
+    setAutoFilled(new Set(Object.keys(filled) as (keyof FormState)[]));
+    const scanned = attributesDraft(fields, scan.attributes);
+    const keys = Object.keys(scan.attributes).filter((k) => !touchedAttrs.current.has(k));
+    setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, scanned[k]])) }));
+    setAutoAttrs(new Set(keys));
+  }
+  const touchedAttrs = useRef(new Set<string>());
+
   const minQuantity = parseQuantity(form.min_quantity);
   const initialQuantity = parseQuantity(form.initial_quantity);
   const contentAmount = parseQuantity(form.content_amount);
   const value = form.value.trim() ? parseEuro(form.value) : null;
   const price = form.price.trim() ? parseEuro(form.price) : null;
 
-  async function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent, next = false) {
     e.preventDefault();
+    const builtAttrs = buildAttributes(fields, attrs);
+    if ("error" in builtAttrs) return setError(builtAttrs.error);
+    const builtOwners = buildOwners(owners);
+    if ("error" in builtOwners) return setError(builtOwners.error);
     if (Number.isNaN(minQuantity) || Number.isNaN(initialQuantity) || Number.isNaN(contentAmount)) {
       setError("Een hoeveelheid is niet geldig.");
       return;
@@ -243,6 +301,9 @@ function ItemForm({
       value_cents: asset && !purchase ? value : null,
       content_amount: asset ? null : contentAmount,
       content_unit: asset || !contentAmount ? null : form.content_unit,
+      project_id: project?.id ?? null,
+      attributes: builtAttrs.attributes,
+      owners: builtOwners.owners,
       tag_ids: form.tag_ids,
       initial: existing
         ? undefined
@@ -259,7 +320,25 @@ function ItemForm({
     setError(undefined);
     try {
       const saved = existing ? await api.put<ItemDetail>(`/items/${existing.id}`, input) : await api.post<ItemDetail>("/items", input);
-      toast(existing ? "Bijgewerkt" : "Bewaard");
+      if (photo) {
+        const body = new FormData();
+        body.set("file", photo);
+        await api.put(`/items/${saved.id}/photo`, body).catch(() => toast("De foto kon niet bewaard worden", "alert"));
+      }
+      toast(existing ? "Bijgewerkt" : `${saved.name} bewaard`);
+      if (next) {
+        // Opslaan en volgende: zelfde plaats en eigenaars, de rest leeg (de volgende fles uit de kelder).
+        setForm((f) => ({ ...toFormState(undefined, taxonomy, routeType), unit: f.unit, default_location_id: f.default_location_id }));
+        setAttrs(attributesDraft(fields, {}));
+        setAutoAttrs(new Set());
+        setAutoFilled(new Set());
+        touched.current.clear();
+        touchedAttrs.current.clear();
+        setPhoto(null);
+        setSaving(false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       navigate(itemPath(saved), { replace: true });
     } catch (err) {
       setError((err as Error).message);
@@ -270,8 +349,18 @@ function ItemForm({
   return (
     <form className="form page" onSubmit={onSubmit}>
       <PageHead
-        title={existing ? (asset ? "Bezit bewerken" : "Item bewerken") : asset ? "Nieuw bezit" : "Nieuw item"}
-        back={{ to: -1, label: existing ? existing.name : asset ? "Bezit" : "Voorraad" }}
+        title={
+          existing
+            ? `${existing.name} bewerken`
+            : project
+              ? template.name_label !== "Naam"
+                ? `${template.name_label} toevoegen`
+                : "Nieuw ding"
+              : asset
+                ? "Nieuw bezit"
+                : "Nieuw item"
+        }
+        back={{ to: -1, label: existing ? existing.name : (project?.name ?? (asset ? "Bezit" : "Voorraad")) }}
       />
 
       {purchase && (
@@ -280,7 +369,18 @@ function ItemForm({
         </Alert>
       )}
 
-      {!asset && (
+      {project && (
+        <section className="card form-section">
+          <div className="field">
+            <span className="label">Etiket</span>
+            <span className="hint">Trek een foto van het etiket: de app vult in wat erop staat, en bewaart de foto bij het ding.</span>
+          </div>
+          <LabelScanner projectId={project.id} onResult={applyScan} />
+          {photo && <span className="hint">De foto wordt bewaard bij het ding.</span>}
+        </section>
+      )}
+
+      {!asset && !project && (
         <section className="card form-section">
           <div className="field">
             <span className="label">Barcode</span>
@@ -311,39 +411,59 @@ function ItemForm({
             className={autoClass("name")}
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder={asset ? "bv. Pelletkachel, Wasmachine" : "bv. Halfvolle melk, Pellets"}
+            placeholder={project ? NAME_PLACEHOLDER[project.template ?? ""] : asset ? "bv. Pelletkachel, Wasmachine" : "bv. Halfvolle melk, Pellets"}
           />
         </label>
 
-        <div className="field">
-          <span className="label">Soort</span>
-          <Segmented
-            label="Soort"
-            value={form.type}
-            onChange={(v) => set("type", v)}
-            options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: <span>{ITEM_TYPES[t].label}</span> }))}
-          />
-          <span className="hint">{ITEM_TYPES[form.type].hint}</span>
-        </div>
-
-        <div className="field-row">
+        {project && (
           <label className="field">
-            <span className="label">Categorie</span>
-            <TreeSelect
-              className={autoClass("category_id")}
-              nodes={categoryTree(taxonomy, "item")}
-              value={form.category_id}
-              onChange={(id) => set("category_id", id)}
-              empty="Geen categorie"
+            <span className="label">{template.brand_label}</span>
+            <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
+          </label>
+        )}
+
+        {!project && (
+          <div className="field">
+            <span className="label">Soort</span>
+            <Segmented
+              label="Soort"
+              value={form.type}
+              onChange={(v) => set("type", v)}
+              options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: <span>{ITEM_TYPES[t].label}</span> }))}
             />
-          </label>
-          <label className="field">
-            <span className="label">Standaardplaats</span>
-            <TreeSelect nodes={locationTree(taxonomy)} value={form.default_location_id} onChange={(id) => set("default_location_id", id)} empty="Geen" />
-          </label>
-        </div>
+            <span className="hint">{ITEM_TYPES[form.type].hint}</span>
+          </div>
+        )}
 
-        {!asset && (
+        {project ? (
+          full && (
+            <label className="field">
+              <span className="label">
+                Plaats <span className="optional">· {asset ? "waar het staat" : "waar ze liggen"}</span>
+              </span>
+              <TreeSelect nodes={locationTree(taxonomy)} value={form.default_location_id} onChange={(id) => set("default_location_id", id)} empty="Geen" />
+            </label>
+          )
+        ) : (
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Categorie</span>
+              <TreeSelect
+                className={autoClass("category_id")}
+                nodes={categoryTree(taxonomy, "item")}
+                value={form.category_id}
+                onChange={(id) => set("category_id", id)}
+                empty="Geen categorie"
+              />
+            </label>
+            <label className="field">
+              <span className="label">Standaardplaats</span>
+              <TreeSelect nodes={locationTree(taxonomy)} value={form.default_location_id} onChange={(id) => set("default_location_id", id)} empty="Geen" />
+            </label>
+          </div>
+        )}
+
+        {!asset && !project && (
           <div className="field">
             <span className="label">
               Meestal gekocht bij <span className="optional">· verkoper</span>
@@ -352,7 +472,7 @@ function ItemForm({
           </div>
         )}
 
-        {asset ? (
+        {project ? null : asset ? (
           <label className="field">
             <span className="label">Merk</span>
             <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
@@ -377,7 +497,7 @@ function ItemForm({
           </div>
         )}
 
-        {!asset && (
+        {!asset && !project && (
           <div className="field-row">
             <label className="field">
               <span className="label">Eenheid</span>
@@ -402,7 +522,7 @@ function ItemForm({
           </div>
         )}
 
-        {!asset && (
+        {!asset && !project && (
           <div className="field">
             <span className="label">
               Inhoud per {form.unit} <span className="optional">· om prijzen per kg of liter te vergelijken</span>
@@ -442,6 +562,26 @@ function ItemForm({
             </select>
           </label>
         )}
+      </section>
+
+      {fields.length > 0 && (
+        <section className="card form-section">
+          <FieldInputs
+            defs={fields}
+            value={attrs}
+            auto={autoAttrs}
+            suggestions={fieldSuggestions(fields, allItems ?? [])}
+            onChange={(next, key) => {
+              touchedAttrs.current.add(key);
+              setAutoAttrs((prev) => (prev.has(key) ? new Set([...prev].filter((k) => k !== key)) : prev));
+              setAttrs(next);
+            }}
+          />
+        </section>
+      )}
+
+      <section className="card form-section">
+        <OwnersField people={ownerPeople} meId={taxonomy.me.id} value={owners} onChange={setOwners} />
       </section>
 
       {asset && (
@@ -506,15 +646,17 @@ function ItemForm({
       {!existing && (
         <section className="card form-section">
           <div className="field">
-            <span className="label">{asset ? "Hoeveel" : "Nu in huis"}</span>
+            <span className="label">{asset ? "Hoeveel" : project ? `Aantal ${UNITS[form.unit]}` : "Nu in huis"}</span>
             <QuantityField value={form.initial_quantity} onChange={(v) => set("initial_quantity", v)} label="Hoeveelheid nu in huis" />
           </div>
           {!asset && (
             <div className="field-row">
-              <label className="field">
-                <span className="label">Vervalt op</span>
-                <input type="date" value={form.initial_expires} onChange={(e) => set("initial_expires", e.target.value)} />
-              </label>
+              {!project && (
+                <label className="field">
+                  <span className="label">Vervalt op</span>
+                  <input type="date" value={form.initial_expires} onChange={(e) => set("initial_expires", e.target.value)} />
+                </label>
+              )}
               {purchase && (
                 <label className="field">
                   <span className="label">
@@ -535,30 +677,46 @@ function ItemForm({
       )}
 
       <section className="card form-section">
-        <div className="field">
-          <span className="label">Tags</span>
-          <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
-        </div>
+        {full && (
+          <div className="field">
+            <span className="label">Tags</span>
+            <TagPicker tags={taxonomy.tags} value={form.tag_ids} onChange={(ids) => set("tag_ids", ids)} />
+          </div>
+        )}
 
         <label className="field">
           <span className="label">
             <Icon name={asset ? "sparkles" : "note"} size={15} /> {asset ? "Goed om te weten" : "Notitie"}
           </span>
           <textarea
-            rows={asset ? 4 : 3}
+            rows={asset || project ? 4 : 3}
             maxLength={4000}
             value={form.notes}
             onChange={(e) => set("notes", e.target.value)}
-            placeholder={asset ? "Instellingen, tips, serienummer, waar de handleiding ligt…" : "bv. enkel de bio-versie"}
+            placeholder={
+              NOTES_PLACEHOLDER[project?.template ?? ""] ?? (asset ? "Instellingen, tips, serienummer, waar de handleiding ligt…" : "bv. enkel de bio-versie")
+            }
           />
         </label>
       </section>
 
       {error && <p className="error">{error}</p>}
 
-      <SubmitButton busy={saving} className="btn btn-primary btn-lg">
-        {saving ? "Opslaan…" : "Opslaan"}
-      </SubmitButton>
+      <div className="form-actions">
+        <SubmitButton busy={saving} className="btn btn-primary btn-lg">
+          {saving ? "Opslaan…" : "Opslaan"}
+        </SubmitButton>
+        {project && !existing && (
+          <button type="button" className="btn btn-outline btn-lg" disabled={saving} onClick={(e) => onSubmit(e, true)}>
+            Opslaan en volgende
+          </button>
+        )}
+      </div>
     </form>
   );
 }
+
+const NAME_PLACEHOLDER: Record<string, string> = {
+  wine: "bv. Clos de Vougeot Grand Cru",
+  bikes: "bv. Ridley Helium SLX",
+};
