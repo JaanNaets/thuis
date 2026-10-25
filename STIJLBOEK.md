@@ -105,7 +105,7 @@ de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of gro
 
 - Witte achtergrond, inhoud met 16px marge.
 - **Onderbalk** met vijf tabs (Aankopen, Uitgaven, Voorraad, Kaarten, Meer); een gast heeft er twee (Projecten, Meer).
-  Een grijs vlak schuift naar de actieve tab. Wat niet in de onderbalk past (Projecten, Verkopers) en het wisselen
+  Een grijs vlak schuift naar de actieve tab. Wat niet in de onderbalk past (Projecten, Bezit, Verkopers) en het wisselen
   van huishouden staat bovenaan **Meer** (`PhoneMenu` in `SettingsPage.tsx`).
 - **Zwevende + knop** rechtsonder voor de hoofdactie van het scherm.
 - **Kleine titelbalk** bovenaan die verschijnt zodra de grote titel uit beeld scrollt (zit in `PageHead`).
@@ -285,7 +285,7 @@ Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de k
 ```
 
 - Kolommen staan in `styles.css` als `--cols` per tabel (`.table-purchases`, `.table-stock`, `.table-entries`,
-  `.table-projects`, `.table-vendors`).
+  `.table-projects`, `.table-vendors`, `.table-assets`).
   Een nieuwe tabel krijgt een eigen klasse met `--cols`; de eerste kolom is altijd `minmax(0, 1fr)`.
 - Hooguit 4 kolommen tussen 768 en 1100px; extra kolommen krijgen `xl` (verschijnen pas vanaf 1100px).
 - Wat op gsm in de grijze regel staat, heeft `narrow-only`; wat enkel in de tabel onder de titel moet, `wide-only`.
@@ -410,6 +410,24 @@ Het logo van een verkoper in het vierkantje van een rij (`row-media`, op wit en 
 icoon van de soort (winkel, webshop, vakman, dienst, particulier). `className="lg"` voor 52px bovenaan de fiche.
 Een verkopersfiche bewaart **nooit een wachtwoord**: enkel klantnummer, op wiens naam en waarmee je aanmeldt.
 
+### Bezit en verbruik: `ItemLinks.tsx`
+
+Een uitgave kan aan een ding hangen, met een rol: de aankoop zelf, bijgekocht (met het aantal), onderhoud,
+herstelling, onderdeel of een andere kost. Een etentje of een massage hangt nergens aan; dat blijft een uitgave.
+
+| Component of hulpje | Wat |
+| --- | --- |
+| `LinkItemForm` | Vanaf een uitgave: kies het ding ("Waarvoor" op de aankoopfiche) |
+| `LinkPurchaseForm` | Vanaf een ding: zoek een uitgave die er al is ("Uitgave koppelen") |
+| `EditLinkForm` | Rol, aantal of bedrag aanpassen, of losmaken |
+| `itemPath(item)` | `/bezit/:id` voor bezit, `/voorraad/:id` voor verbruik: link altijd hiermee |
+| `rolesFor`, `roleText`, `linkCost` | Welke rollen bij een soort passen, "Bijgekocht · 20 zakken", wat een koppeling kostte |
+
+- Nieuwe kosten voor een ding gaan via het gewone aankoopformulier met `?ding=<id>&rol=<rol>`: bovenaan staat
+  "Voor …", na het bewaren hangt de uitgave eraan en ga je terug naar het ding.
+- "Goed om te weten" (de notitie van een bezit) is wat altijd geldt; wat op een dag gebeurde, gaat in het logboek.
+- Prijzen van verbruik: per eenheid ("€ 6,20/zak"), en met een inhoud per eenheid ook per kg of liter.
+
 ### Kleine bouwstenen
 
 | Klasse of component | Gebruik |
@@ -421,6 +439,8 @@ Een verkopersfiche bewaart **nooit een wachtwoord**: enkel klantnummer, op wiens
 | `.budget` | Balk die volloopt tot het budget; rood erover (`data-over`) |
 | `.only-phone` | Enkel op een gsm (bv. `PhoneMenu`) |
 | `.field-row-wide` | Twee lange velden (IBAN, ondernemingsnummer) die pas vanaf 560px naast elkaar staan |
+| `.tips-block` | "Goed om te weten" van een bezit: de tekst met de regels zoals getypt |
+| `.timeline` + `.timeline-date` | Logboek: datum links, notitie of uitgave rechts |
 
 ### Huishoudens en toegang
 
@@ -547,6 +567,13 @@ terugkerende kosten.
 **Project**: `split` met in de zijkolom het totaal (+ budget), wie meedoet (gasten toevoegen in een `Sheet`) en,
 bij een eigen saldo, wie-moet-wie en de kas; rechts per categorie, de uitgaven en de vaste kosten; onderaan
 archiveren (verwijderen enkel als het project leeg is).
+
+**Bezit**: `split` met in de zijkolom wat het kostte (of de geschatte waarde), herkomst, sinds, garantie, plaats en
+"goed om te weten"; rechts het logboek (notities en kosten door elkaar, nieuwste eerst) en wat erbij hoort.
+Hoofdactie "Kost toevoegen". Weg uit huis = "Niet meer in huis" (archiveren), niet verwijderen.
+
+**Verbruik** (een item in Voorraad): voorraad per plaats en de knoppen in de zijkolom; rechts de prijzen per
+verkoper (goedkoopste bovenaan) en de geschiedenis. Hoofdactie "Bijgekocht" (een uitgave met het aantal).
 
 **Verkoper**: `split` met in de zijkolom logo en totaal, contactgegevens, je account, bedrijf en contactpersonen;
 rechts klantenkaarten, per jaar, lopende garanties, aankopen, voorraad en vestigingen. Contacten en vestigingen

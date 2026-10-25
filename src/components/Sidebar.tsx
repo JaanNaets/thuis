@@ -19,6 +19,7 @@ export const MENU: MenuItem[] = [
   { to: "/uitgaven", label: "Uitgaven", icon: "wallet", tab: true },
   { to: "/projecten", label: "Projecten", icon: "project" },
   { to: "/voorraad", label: "Voorraad", icon: "package", tab: true },
+  { to: "/bezit", label: "Bezit", icon: "armchair" },
   { to: "/kaarten", label: "Kaarten", icon: "card", tab: true },
   { to: "/verkopers", label: "Verkopers", icon: "store" },
 ];
@@ -38,6 +39,8 @@ function countFor(stats: Stats | undefined, to: string): { value: number; warn?:
       return { value: stats.purchases };
     case "/voorraad":
       return stats.low > 0 ? { value: stats.low, warn: true } : { value: stats.items };
+    case "/bezit":
+      return { value: stats.assets };
     case "/kaarten":
       return { value: stats.cards };
     case "/verkopers":

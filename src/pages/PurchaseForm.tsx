@@ -2,17 +2,18 @@ import { useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useNavigate } from "../router";
 import type { ReceiptGuess, ReceiptReadResult } from "../../shared/receipt";
-import type { Purchase, PurchaseDetail, PurchaseInput, Taxonomy } from "../../shared/types";
+import { LINK_ROLES, UNITS, type ItemDetail, type LinkRole, type Purchase, type PurchaseDetail, type PurchaseInput, type Taxonomy } from "../../shared/types";
 import { api, apiUrl, useApi } from "../api";
-import { Alert, SubmitButton, TreeSelect, type AlertTone } from "../components/Controls";
+import { Alert, QuantityField, SubmitButton, Switch, TreeSelect, type AlertTone } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
 import { Icon } from "../components/Icon";
+import { itemPath, rolesFor } from "../components/ItemLinks";
 import { PageHead } from "../components/Page";
 import { buildSplit, initialSplitState, SplitEditor, type SplitState } from "../components/SplitEditor";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
-import { addYears, centsToInput, parseEuro, today } from "../format";
+import { addYears, centsToInput, parseEuro, parseQuantity, today } from "../format";
 import { prepareUpload } from "../image";
 import { readReceipt } from "../receipt";
 import { useSession } from "../session";
@@ -89,8 +90,8 @@ function toFormState(p: PurchaseDetail | undefined, projectId: string | null): F
       purchased_on: today(),
       amount: "",
       category_id: null,
-      // In een project (bv. een reis) is garantie zelden van tel.
-      warranty: projectId ? "none" : "2",
+      // Garantie is de uitzondering: pas als je ze toevoegt, stelt de app 2 jaar voor.
+      warranty: "none",
       warranty_custom: "",
       notes: "",
       project_id: projectId,
@@ -112,11 +113,22 @@ function toFormState(p: PurchaseDetail | undefined, projectId: string | null): F
 
 export function PurchaseFormPage() {
   const { id } = useParams();
+  const [params] = useSearchParams();
   const { data: taxonomy, error } = useTaxonomy();
   if (error && !taxonomy) return <p className="error page">{error}</p>;
   if (!taxonomy) return null;
-  if (!id) return <PurchaseForm taxonomy={taxonomy} />;
-  return <EditPurchase id={id} taxonomy={taxonomy} />;
+  if (id) return <EditPurchase id={id} taxonomy={taxonomy} />;
+  const itemId = params.get("ding");
+  if (itemId) return <PurchaseForItem itemId={itemId} taxonomy={taxonomy} />;
+  return <PurchaseForm taxonomy={taxonomy} />;
+}
+
+/** Vanaf een ding ("Kost toevoegen", "Bijgekocht"): de uitgave wordt er na het bewaren aan gekoppeld. */
+function PurchaseForItem({ itemId, taxonomy }: { itemId: string; taxonomy: Taxonomy }) {
+  const { data, error } = useApi<ItemDetail>(`/items/${itemId}`);
+  if (error) return <p className="error page">{error}</p>;
+  if (!data) return null;
+  return <PurchaseForm taxonomy={taxonomy} forItem={data} />;
 }
 
 function EditPurchase({ id, taxonomy }: { id: string; taxonomy: Taxonomy }) {
@@ -131,7 +143,9 @@ function usedBy(existing?: PurchaseDetail): string[] {
   return existing ? [...existing.payments.flatMap((p) => (p.member_id ? [p.member_id] : [])), ...existing.shares.map((s) => s.member_id)] : [];
 }
 
-function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxonomy: Taxonomy }) {
+type ForItem = { role: LinkRole; quantity: string; addStock: boolean };
+
+function PurchaseForm({ existing, taxonomy, forItem }: { existing?: PurchaseDetail; taxonomy: Taxonomy; forItem?: ItemDetail }) {
   const navigate = useNavigate();
   const toast = useToast();
   const { full } = useSession();
@@ -149,7 +163,18 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
   const [form, setForm] = useState<FormState>(() => ({
     ...toFormState(existing, startProject),
     ...(startVendor && { vendor: startVendor.name, category_id: startVendor.category_id }),
+    // Verbruik bijkopen: de naam en de winkel waar je het meestal koopt.
+    ...(forItem?.type === "consumable" && {
+      description: forItem.name,
+      vendor: taxonomy.vendors.find((v) => v.id === forItem.vendor_id)?.name ?? "",
+    }),
   }));
+  const [link, setLink] = useState<ForItem>(() => {
+    const roles = forItem ? rolesFor(forItem.type) : [];
+    const wanted = params.get("rol") as LinkRole | null;
+    return { role: wanted && roles.includes(wanted) ? wanted : (roles[0] ?? "other"), quantity: "1", addStock: true };
+  });
+  const [linked, setLinked] = useState(false);
   const defaultsFor = (projectId: string | null) =>
     projectId ? (taxonomy.projects.find((p) => p.id === projectId)?.default_split ?? taxonomy.household.default_split) : taxonomy.household.default_split;
   const [split, setSplit] = useState<SplitState>(() =>
@@ -246,6 +271,12 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
       return;
     }
 
+    const linkQuantity = link.role === "refill" ? parseQuantity(link.quantity) : null;
+    if (forItem && link.role === "refill" && (!linkQuantity || Number.isNaN(linkQuantity))) {
+      setError("Vul in hoeveel je kocht.");
+      return;
+    }
+
     const input: PurchaseInput = {
       description: form.description,
       vendor: form.vendor,
@@ -270,6 +301,24 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
         const body = new FormData();
         for (const file of files) body.append("file", await prepareUpload(file));
         await api.post(`/purchases/${saved.id}/files`, body);
+        setFiles([]);
+      }
+
+      if (forItem) {
+        if (!linked) {
+          await api.post(`/items/${forItem.id}/links`, {
+            purchase_id: saved.id,
+            role: link.role,
+            quantity: linkQuantity,
+            amount_cents: null,
+            note: null,
+            add_stock: link.role === "refill" && link.addStock,
+          });
+          setLinked(true);
+        }
+        toast(`Bewaard bij ${forItem.name}`);
+        navigate(itemPath(forItem), { replace: true });
+        return;
       }
 
       toast(existing ? "Uitgave bijgewerkt" : "Uitgave bewaard");
@@ -284,8 +333,53 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
     <form className="form page" onSubmit={onSubmit}>
       <PageHead
         title={existing ? "Uitgave bewerken" : form.project_id ? "Nieuwe uitgave" : "Nieuwe aankoop"}
-        back={{ to: -1, label: existing ? existing.description : (taxonomy.projects.find((p) => p.id === form.project_id)?.name ?? "Aankopen") }}
+        back={{
+          to: -1,
+          label: existing ? existing.description : (forItem?.name ?? taxonomy.projects.find((p) => p.id === form.project_id)?.name ?? "Aankopen"),
+        }}
       />
+
+      {forItem && (
+        <section className="card form-section">
+          <div className="for-item">
+            <span className="row-media">
+              <Icon name={forItem.type === "asset" ? "armchair" : "package"} size={16} />
+            </span>
+            <span className="row-main">
+              <span className="row-title">Voor {forItem.name}</span>
+              <span className="row-meta">
+                <span>{LINK_ROLES[link.role].hint}</span>
+              </span>
+            </span>
+          </div>
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Waarvoor</span>
+              <select value={link.role} onChange={(e) => setLink((l) => ({ ...l, role: e.target.value as LinkRole }))}>
+                {rolesFor(forItem.type).map((r) => (
+                  <option key={r} value={r}>
+                    {LINK_ROLES[r].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {link.role === "refill" && (
+              <div className="field">
+                <span className="label">Hoeveel {UNITS[forItem.unit]}</span>
+                <QuantityField value={link.quantity} onChange={(quantity) => setLink((l) => ({ ...l, quantity }))} label="Hoeveelheid" />
+              </div>
+            )}
+          </div>
+          {link.role === "refill" && (
+            <Switch
+              checked={link.addStock}
+              onChange={(addStock) => setLink((l) => ({ ...l, addStock }))}
+              label="In voorraad zetten"
+              hint="Telt meteen bij wat er in huis is."
+            />
+          )}
+        </section>
+      )}
 
       {!existing && (
         <section className="card form-section">
@@ -307,7 +401,7 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
             className={autoClass("description")}
             value={form.description}
             onChange={(e) => set("description", e.target.value)}
-            placeholder="bv. Wasmachine Bosch Serie 6"
+            placeholder={forItem?.type === "asset" ? "bv. Kuisbeurt, nieuwe dichting" : "bv. Wasmachine Bosch Serie 6"}
           />
         </label>
 
@@ -369,24 +463,30 @@ function PurchaseForm({ existing, taxonomy }: { existing?: PurchaseDetail; taxon
       </section>
 
       <section className="card form-section">
-        <div className="field-row">
-          <label className="field">
-            <span className="label">Garantie</span>
-            <select value={form.warranty} onChange={(e) => set("warranty", e.target.value)}>
-              {WARRANTY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {form.warranty === "custom" && (
+        {form.warranty === "none" ? (
+          <button type="button" className="link-button" style={{ justifySelf: "start" }} onClick={() => set("warranty", "2")}>
+            <Icon name="plus" size={14} /> Garantie toevoegen
+          </button>
+        ) : (
+          <div className="field-row">
             <label className="field">
-              <span className="label">Garantie tot</span>
-              <input type="date" required value={form.warranty_custom} onChange={(e) => set("warranty_custom", e.target.value)} />
+              <span className="label">Garantie</span>
+              <select value={form.warranty} onChange={(e) => set("warranty", e.target.value)}>
+                {WARRANTY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          )}
-        </div>
+            {form.warranty === "custom" && (
+              <label className="field">
+                <span className="label">Garantie tot</span>
+                <input type="date" required value={form.warranty_custom} onChange={(e) => set("warranty_custom", e.target.value)} />
+              </label>
+            )}
+          </div>
+        )}
 
         {full && (
           <div className="field">

@@ -15,6 +15,7 @@ const ACTIONS: Entry[] = [
   { key: SETTINGS.to, group: "Ga naar", label: SETTINGS.label, icon: SETTINGS.icon, to: SETTINGS.to },
   { key: "new-purchase", group: "Nieuw", label: "Nieuwe aankoop", icon: "receipt", to: "/aankopen/nieuw" },
   { key: "new-item", group: "Nieuw", label: "Iets in voorraad zetten", icon: "package", to: "/voorraad/nieuw" },
+  { key: "new-asset", group: "Nieuw", label: "Nieuw bezit", icon: "armchair", to: "/bezit/nieuw" },
   { key: "new-card", group: "Nieuw", label: "Nieuwe klantenkaart", icon: "card", to: "/kaarten/nieuw" },
   { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "project", to: "/projecten/nieuw" },
   { key: "new-vendor", group: "Nieuw", label: "Nieuwe verkoper", icon: "store", to: "/verkopers/nieuw" },
@@ -90,8 +91,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           to: `/projecten/${p.id}`,
         })),
       (data?.items ?? [])
-        .filter((i) => match(i.name, i.brand, i.category_name))
+        .filter((i) => i.type === "consumable" && match(i.name, i.brand, i.category_name))
         .map((i) => ({ key: `i${i.id}`, group: "Voorraad", label: i.name, hint: i.category_name ?? undefined, icon: "package", to: `/voorraad/${i.id}` })),
+      (data?.items ?? [])
+        .filter((i) => i.type === "asset" && match(i.name, i.brand, i.category_name, i.origin_note))
+        .map((i) => ({ key: `a${i.id}`, group: "Bezit", label: i.name, hint: i.category_name ?? undefined, icon: "armchair", to: `/bezit/${i.id}` })),
       (data?.purchases ?? [])
         .filter((p) => match(p.description, p.vendor_name, p.notes))
         .map((p) => ({ key: `p${p.id}`, group: "Aankopen", label: p.description, hint: p.vendor_name ?? undefined, icon: "receipt", to: `/aankopen/${p.id}` })),

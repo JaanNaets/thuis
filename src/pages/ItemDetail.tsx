@@ -1,21 +1,21 @@
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { Navigate, useParams } from "react-router";
 import { Link, useNavigate } from "../router";
 import { isLow } from "../../shared/stock";
-import { ITEM_TYPES, MOVEMENT_REASONS, UNITS, type ItemDetail as Detail, type StockAction, type StockActionInput, type Taxonomy } from "../../shared/types";
+import { MOVEMENT_REASONS, UNITS, type ItemDetail as Detail, type ItemLink, type StockAction, type StockActionInput, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useConfirm } from "../components/ConfirmDialog";
 import { CardHead, LevelMeter, QuantityField, SubmitButton, TreeSelect } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
+import { EditLinkForm, itemPath, linkCost, LinkPurchaseForm } from "../components/ItemLinks";
 import { Num, stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
-import { formatDate, formatDateTime, formatNumber, parseQuantity, warrantyStatus } from "../format";
+import { formatCents, formatDate, formatDateTime, formatNumber, parseQuantity } from "../format";
 import { categoryTone, locationTree, nameForEmail, placeName, useTaxonomy } from "../taxonomy";
 import { expiryBadge, unitWord } from "./InventoryList";
-import { WARRANTY_BADGE } from "./PurchaseList";
 
 const ACTIONS: Record<StockAction, { title: string; icon: IconName }> = {
   add: { title: "Erbij", icon: "plus" },
@@ -30,22 +30,24 @@ export function ItemDetail() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const toast = useToast();
-  const { data: item, error, mutate } = useApi<Detail>(`/items/${id}`);
+  const { data: item, error, mutate, reload } = useApi<Detail>(`/items/${id}`);
   const { data: taxonomy } = useTaxonomy();
   const [sheet, setSheet] = useState<StockAction>();
+  const [linking, setLinking] = useState<ItemLink | "new">();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
   if (error) return <p className="error page">{error}</p>;
   if (!item || !taxonomy) return null;
+  // Bezit heeft een eigen fiche.
+  if (item.type === "asset") return <Navigate to={`/bezit/${item.id}`} replace />;
 
   const low = isLow(item.quantity, item.min_quantity);
   const expiry = expiryBadge(item.next_expiry);
   const tags = taxonomy.tags.filter((t) => item.tag_ids.includes(t.id));
   const vendor = taxonomy.vendors.find((v) => v.id === item.vendor_id);
-  const asset = item.type === "asset";
-  const actions: StockAction[] = asset ? ["add", "count", "move", "discard"] : ["add", "consume", "count", "move", "discard"];
-  const title = (action: StockAction) => (action === "discard" && asset ? "Weg uit huis" : ACTIONS[action].title);
+  const actions: StockAction[] = ["add", "consume", "count", "move", "discard"];
+  const title = (action: StockAction) => ACTIONS[action].title;
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -97,6 +99,11 @@ export function ItemDetail() {
             <Icon name="edit" size={15} /> Bewerken
           </Link>
         }
+        primary={
+          <Link to={`/aankopen/nieuw?ding=${item.id}`} className="btn btn-primary">
+            <Icon name="plus" size={16} /> Bijgekocht
+          </Link>
+        }
       />
 
       <div className="split">
@@ -136,9 +143,7 @@ export function ItemDetail() {
                           {level.next_expiry && <span className="row-meta">vervalt {formatDate(level.next_expiry)}</span>}
                         </span>
                       </span>
-                      {asset ? (
-                        <strong>{formatNumber(level.quantity)}</strong>
-                      ) : (
+                      {
                         <span className="stepper">
                           <button
                             type="button"
@@ -158,7 +163,7 @@ export function ItemDetail() {
                             <Icon name="plus" size={16} />
                           </button>
                         </span>
-                      )}
+                      }
                     </div>
                   </li>
                 ))}
@@ -170,7 +175,7 @@ export function ItemDetail() {
                 <button
                   key={action}
                   type="button"
-                  className={`btn btn-sm ${action === "add" ? "btn-primary" : "btn-outline"}`}
+                  className="btn btn-sm btn-outline"
                   disabled={busy || (["consume", "move", "discard"].includes(action) && item.quantity === 0)}
                   onClick={() => setSheet(action)}
                 >
@@ -183,10 +188,16 @@ export function ItemDetail() {
 
           <section className="card">
             <dl className="dl" style={{ marginTop: -1 }}>
-              <div>
-                <dt>Soort</dt>
-                <dd>{ITEM_TYPES[item.type].label}</dd>
-              </div>
+              {item.parent && (
+                <div>
+                  <dt>Hoort bij</dt>
+                  <dd>
+                    <Link to={itemPath(item.parent)} className="link-quiet">
+                      {item.parent.name}
+                    </Link>
+                  </dd>
+                </div>
+              )}
               {item.category_id && (
                 <div>
                   <dt>Categorie</dt>
@@ -222,6 +233,14 @@ export function ItemDetail() {
                   <dd>{item.brand}</dd>
                 </div>
               )}
+              {item.content_amount && item.content_unit && (
+                <div>
+                  <dt>Inhoud</dt>
+                  <dd>
+                    {formatNumber(item.content_amount)} {item.content_unit} per {item.unit}
+                  </dd>
+                </div>
+              )}
               {item.barcode && (
                 <div>
                   <dt>Barcode</dt>
@@ -248,33 +267,7 @@ export function ItemDetail() {
         </aside>
 
         <div className="split-main">
-          {item.purchases.length > 0 && (
-            <section className="card">
-              <CardHead icon="receipt" title="Aankoop" description="Bewijsstuk en garantie" />
-              <ul className="rows">
-                {item.purchases.map((p) => {
-                  const warranty = warrantyStatus(p.warranty_until);
-                  return (
-                    <li key={p.id}>
-                      <Link to={`/aankopen/${p.id}`} className="row">
-                        <span className="row-media">
-                          <Icon name="receipt" size={16} />
-                        </span>
-                        <span className="row-main">
-                          <span className="row-title">{p.description}</span>
-                          <span className="row-meta">
-                            <span>{formatDate(p.purchased_on)}</span>
-                            {warranty.tone !== "none" && <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>}
-                          </span>
-                        </span>
-                        <Icon name="next" size={16} className="row-chevron" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          )}
+          <PricesCard item={item} onAttach={() => setLinking("new")} onEdit={setLinking} />
 
           <section className="card">
             <CardHead icon="clock" title="Geschiedenis" description="Elke wijziging, met wie en waar" />
@@ -320,6 +313,40 @@ export function ItemDetail() {
           </div>
         </div>
       </div>
+
+      <Link to={`/aankopen/nieuw?ding=${item.id}`} className="fab" aria-label="Bijgekocht">
+        <Icon name="plus" size={24} />
+      </Link>
+
+      <Sheet open={Boolean(linking)} title={linking === "new" ? "Uitgave koppelen" : "Koppeling"} onClose={() => setLinking(undefined)}>
+        {linking === "new" && (
+          <LinkPurchaseForm
+            item={item}
+            onDone={(message) => {
+              setLinking(undefined);
+              toast(message);
+              reload();
+            }}
+          />
+        )}
+        {linking && linking !== "new" && (
+          <EditLinkForm
+            item={item}
+            link={linking}
+            onDone={(message) => {
+              setLinking(undefined);
+              toast(message);
+              reload();
+            }}
+            onUnlink={async () => {
+              await api.delete(`/items/${item.id}/links/${linking.id}`);
+              setLinking(undefined);
+              toast("Losgemaakt");
+              reload();
+            }}
+          />
+        )}
+      </Sheet>
 
       <Sheet open={Boolean(sheet)} title={sheet ? `${title(sheet)} · ${item.name}` : ""} onClose={() => setSheet(undefined)}>
         {sheet && (
@@ -490,5 +517,112 @@ function StockForm({
         <SubmitButton busy={busy}>Bewaren</SubmitButton>
       </div>
     </form>
+  );
+}
+
+type PriceRow = { link: ItemLink; cost: number; perUnit: number; perContent: number | null };
+
+/**
+ * Wat je voor dit verbruik betaalde, per keer en per verkoper: de laatste prijs per eenheid en de goedkoopste.
+ * Met een inhoud per eenheid (15 kg per zak) ook de prijs per kg, zodat verschillende zakken te vergelijken zijn.
+ */
+function PricesCard({ item, onAttach, onEdit }: { item: Detail; onAttach: () => void; onEdit: (link: ItemLink) => void }) {
+  const rows: PriceRow[] = item.links
+    .filter((l) => l.role === "refill" && l.quantity)
+    .map((link) => {
+      const cost = linkCost(link);
+      const perUnit = cost / link.quantity!;
+      return { link, cost, perUnit, perContent: item.content_amount ? perUnit / item.content_amount : null };
+    });
+  const others = item.links.filter((l) => !(l.role === "refill" && l.quantity));
+
+  // Per verkoper de laatste aankoop (de lijst staat al met de nieuwste eerst).
+  const byVendor = new Map<string, { name: string; last: PriceRow; low: number; count: number }>();
+  for (const r of rows) {
+    const key = r.link.vendor_id ?? "none";
+    const v = byVendor.get(key);
+    if (v) {
+      v.low = Math.min(v.low, r.perUnit);
+      v.count++;
+    } else byVendor.set(key, { name: r.link.vendor_name ?? "Onbekende verkoper", last: r, low: r.perUnit, count: 1 });
+  }
+  const vendors = [...byVendor.values()].sort((a, b) => a.last.perUnit - b.last.perUnit);
+  const unit = item.unit;
+  const per = (r: PriceRow) =>
+    `${formatCents(Math.round(r.perUnit))}/${unit}${r.perContent !== null ? ` · ${formatCents(Math.round(r.perContent))}/${item.content_unit}` : ""}`;
+
+  return (
+    <section className="card">
+      <CardHead
+        icon="coins"
+        title="Prijzen"
+        description={
+          rows.length === 0 ? "Boek wat je bijkoopt als uitgave: dan zie je hier per winkel wat je betaalde" : `Per ${unit}, de goedkoopste bovenaan`
+        }
+        action={
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onAttach}>
+            Uitgave koppelen
+          </button>
+        }
+      />
+      {vendors.length > 0 && (
+        <ul className="rows">
+          {vendors.map((v, i) => (
+            <li key={v.name}>
+              <div className="row" style={{ minHeight: 52 }}>
+                <span className="row-main">
+                  <span className="row-title">
+                    {v.name} {i === 0 && vendors.length > 1 && <span className="badge badge-success">goedkoopst</span>}
+                  </span>
+                  <span className="row-meta">
+                    <span>laatst {formatDate(v.last.link.purchased_on)}</span>
+                    <span>{v.count === 1 ? "1 keer" : `${v.count} keer`}</span>
+                    {v.low < v.last.perUnit && <span>ooit {formatCents(Math.round(v.low))}</span>}
+                  </span>
+                </span>
+                <span className="row-end">{per(v.last)}</span>
+              </div>
+            </li>
+          ))}
+          <li className="group-row">
+            Elke keer <span className="group-count">{rows.length}</span>
+          </li>
+          {rows.map((r) => (
+            <li key={r.link.id}>
+              <button type="button" className="row" style={{ minHeight: 48 }} onClick={() => onEdit(r.link)}>
+                <span className="row-main">
+                  <span className="row-title" style={{ fontWeight: 450 }}>
+                    {formatNumber(r.link.quantity!)} {unitWord(r.link.quantity!, unit)} · {formatCents(r.cost)}
+                  </span>
+                  <span className="row-meta">
+                    <span>{[formatDate(r.link.purchased_on), r.link.vendor_name].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </span>
+                <span className="row-end muted">{per(r)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {others.length > 0 && (
+        <ul className="rows">
+          {others.map((l) => (
+            <li key={l.id}>
+              <button type="button" className="row" style={{ minHeight: 48 }} onClick={() => onEdit(l)}>
+                <span className="row-main">
+                  <span className="row-title" style={{ fontWeight: 450 }}>
+                    {l.description}
+                  </span>
+                  <span className="row-meta">
+                    <span>{[formatDate(l.purchased_on), l.vendor_name].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </span>
+                <span className="row-end">{formatCents(linkCost(l))}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

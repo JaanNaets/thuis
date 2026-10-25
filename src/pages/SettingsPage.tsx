@@ -484,6 +484,7 @@ function PhoneMenu() {
   const links = full
     ? [
         { to: "/projecten", icon: "project" as const, title: "Projecten", meta: "Verbouwing, reis, feest: apart bijgehouden" },
+        { to: "/bezit", icon: "armchair" as const, title: "Bezit", meta: "Wat je hebt, met kosten, tips en logboek" },
         { to: "/verkopers", icon: "store" as const, title: "Verkopers", meta: "Winkels, webshops, vakmensen en hun gegevens" },
       ]
     : [];

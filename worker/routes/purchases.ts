@@ -274,7 +274,7 @@ purchases.get("/", async (c) => {
 purchases.get("/:id", async (c) => {
   const id = c.req.param("id");
   const db = c.env.DB;
-  const [purchase, files, shares, lines, tags, items] = await db.batch([
+  const [purchase, files, shares, lines, tags, links] = await db.batch([
     db.prepare(`SELECT ${PURCHASE_LIST_COLUMNS} ${PURCHASE_LIST_FROM} WHERE p.id = ? AND ${visibleSql(c.get("full"))}`).bind(id, ...visibleBinds(c)),
     db.prepare(`SELECT ${FILE_COLUMNS} FROM purchase_files WHERE purchase_id = ? ORDER BY created_at`).bind(id),
     db.prepare("SELECT member_id, share_cents, split_value FROM expense_shares WHERE purchase_id = ?").bind(id),
@@ -282,8 +282,9 @@ purchases.get("/:id", async (c) => {
     db.prepare("SELECT tag_id FROM taggings WHERE entity_type = 'purchase' AND entity_id = ?").bind(id),
     db
       .prepare(
-        `SELECT DISTINCT i.id, i.name FROM stock_movements m JOIN items i ON i.id = m.item_id
-         WHERE m.purchase_id = ? ORDER BY i.name COLLATE NOCASE`,
+        `SELECT l.id, l.item_id, l.role, l.quantity, l.amount_cents, l.note, i.name AS item_name, i.type AS item_type, i.unit
+         FROM item_links l JOIN items i ON i.id = l.item_id
+         WHERE l.purchase_id = ? ORDER BY l.created_at`,
       )
       .bind(id),
   ]);
@@ -299,9 +300,9 @@ purchases.get("/:id", async (c) => {
       ...l,
       member_ids: JSON.parse(l.member_ids) as string[],
     })),
-    // Een gast ziet geen tags of voorraad van het huishouden.
+    // Een gast ziet geen tags, voorraad of bezit van het huishouden.
     tag_ids: full ? (tags.results as { tag_id: string }[]).map((t) => t.tag_id) : [],
-    items: full ? (items.results as PurchaseDetail["items"]) : [],
+    links: full ? (links.results as PurchaseDetail["links"]) : [],
   };
   return c.json(detail);
 });

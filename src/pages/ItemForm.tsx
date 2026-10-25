@@ -2,11 +2,16 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router";
 import { Link, useNavigate } from "../router";
 import {
+  CONTENT_UNITS,
+  ITEM_ORIGINS,
   ITEM_TYPES,
   UNITS,
   type BarcodeLookup,
+  type ContentUnit,
   type ItemDetail,
   type ItemInput,
+  type ItemListItem,
+  type ItemOrigin,
   type ItemType,
   type ProductSuggestion,
   type PurchaseDetail,
@@ -17,12 +22,13 @@ import { api, useApi } from "../api";
 import type { ScanResult } from "../barcode-detect";
 import { Alert, QuantityField, Segmented, SubmitButton, TreeSelect } from "../components/Controls";
 import { Icon } from "../components/Icon";
+import { itemPath } from "../components/ItemLinks";
 import { PageHead } from "../components/Page";
 import { ScanButtons } from "../components/ScanButtons";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
-import { formatDate, formatNumber, parseQuantity } from "../format";
+import { centsToInput, formatDate, formatNumber, parseEuro, parseQuantity, today } from "../format";
 import { categoryTree, locationTree, useTaxonomy } from "../taxonomy";
 
 type FormState = {
@@ -39,12 +45,22 @@ type FormState = {
   tag_ids: string[];
   initial_quantity: string;
   initial_expires: string;
+  parent_id: string | null;
+  origin: ItemOrigin;
+  origin_note: string;
+  acquired_on: string;
+  /** Bezit zonder aankoop: geschatte waarde. */
+  value: string;
+  content_amount: string;
+  content_unit: ContentUnit;
+  /** Uit een aankoop: wat dit item ervan kostte. */
+  price: string;
 };
 
-function toFormState(item: ItemDetail | undefined, taxonomy: Taxonomy): FormState {
+function toFormState(item: ItemDetail | undefined, taxonomy: Taxonomy, type: ItemType): FormState {
   return {
     name: item?.name ?? "",
-    type: item?.type ?? "consumable",
+    type: item?.type ?? type,
     category_id: item?.category_id ?? null,
     default_location_id: item?.default_location_id ?? null,
     unit: item?.unit ?? "stuk",
@@ -56,6 +72,14 @@ function toFormState(item: ItemDetail | undefined, taxonomy: Taxonomy): FormStat
     tag_ids: item?.tag_ids ?? [],
     initial_quantity: "1",
     initial_expires: "",
+    parent_id: item?.parent_id ?? null,
+    origin: item?.origin ?? "bought",
+    origin_note: item?.origin_note ?? "",
+    acquired_on: item?.acquired_on ?? "",
+    value: item?.value_cents ? centsToInput(item.value_cents) : "",
+    content_amount: item?.content_amount ? formatNumber(item.content_amount) : "",
+    content_unit: item?.content_unit ?? "kg",
+    price: "",
   };
 }
 
@@ -107,17 +131,28 @@ function ItemForm({
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const [params] = useSearchParams();
+  // Vanuit Bezit: een bezit; vanuit Voorraad: verbruik.
+  const routeType: ItemType = location.pathname.startsWith("/bezit") ? "asset" : "consumable";
+  const { data: allItems } = useApi<ItemListItem[]>("/items");
   const [form, setForm] = useState<FormState>(() => {
-    const state = toFormState(existing, taxonomy);
+    const state = toFormState(existing, taxonomy, routeType);
     if (purchase) {
-      // Iets met garantie is meestal een toestel of gereedschap: dat houd je bij als bezit.
       state.name = purchase.description;
-      state.type = purchase.warranty_until ? "asset" : "consumable";
+      // Vanuit een aankoop zonder duidelijke route: iets met garantie is meestal een toestel (bezit).
+      if (!location.pathname.startsWith("/bezit")) state.type = purchase.warranty_until ? "asset" : "consumable";
       state.vendor = purchase.vendor_name ?? "";
+      state.origin = "bought";
+      state.acquired_on = purchase.purchased_on;
+      state.price = purchase.amount_cents ? centsToInput(purchase.amount_cents) : "";
     }
+    if (!existing && params.get("hoortbij")) state.parent_id = params.get("hoortbij");
     if (initialBarcode) state.barcode = initialBarcode;
     return state;
   });
+  const asset = form.type === "asset";
+  // Hoort bij: een bezit (de kachel, de stofzuiger), niet zichzelf.
+  const parents = (allItems ?? []).filter((i) => i.type === "asset" && i.id !== existing?.id);
   const [autoFilled, setAutoFilled] = useState<Set<keyof FormState>>(new Set());
   const touched = useRef(new Set<keyof FormState>());
   const [lookup, setLookup] = useState<{ state: "busy" } | { state: "known"; itemId: string } | { state: "found" } | { state: "none" }>();
@@ -175,11 +210,18 @@ function ItemForm({
 
   const minQuantity = parseQuantity(form.min_quantity);
   const initialQuantity = parseQuantity(form.initial_quantity);
+  const contentAmount = parseQuantity(form.content_amount);
+  const value = form.value.trim() ? parseEuro(form.value) : null;
+  const price = form.price.trim() ? parseEuro(form.price) : null;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (Number.isNaN(minQuantity) || Number.isNaN(initialQuantity)) {
+    if (Number.isNaN(minQuantity) || Number.isNaN(initialQuantity) || Number.isNaN(contentAmount)) {
       setError("Een hoeveelheid is niet geldig.");
+      return;
+    }
+    if (Number.isNaN(value) || Number.isNaN(price)) {
+      setError("Een bedrag is niet geldig.");
       return;
     }
     const input: ItemInput = {
@@ -187,31 +229,38 @@ function ItemForm({
       type: form.type,
       category_id: form.category_id,
       default_location_id: form.default_location_id,
-      unit: form.unit,
-      barcode: form.barcode,
+      unit: asset ? "stuk" : form.unit,
+      barcode: asset ? null : form.barcode,
       brand: form.brand,
-      vendor: form.vendor,
-      min_quantity: minQuantity,
+      vendor: asset ? null : form.vendor,
+      min_quantity: asset ? null : minQuantity,
       notes: form.notes,
+      parent_id: form.parent_id,
+      origin: asset ? form.origin : null,
+      origin_note: asset && form.origin !== "bought" ? form.origin_note || null : null,
+      acquired_on: asset ? form.acquired_on || null : null,
+      // Gekocht met een aankoop erbij: de kost komt van die aankoop; anders een geschatte waarde.
+      value_cents: asset && !purchase ? value : null,
+      content_amount: asset ? null : contentAmount,
+      content_unit: asset || !contentAmount ? null : form.content_unit,
       tag_ids: form.tag_ids,
       initial: existing
         ? undefined
         : {
             quantity: initialQuantity ?? 0,
             location_id: form.default_location_id,
-            expires_on: form.initial_expires || null,
+            expires_on: asset ? null : form.initial_expires || null,
             purchase_id: purchase?.id ?? null,
+            amount_cents: purchase && price !== purchase.amount_cents ? price : null,
           },
     };
 
     setSaving(true);
     setError(undefined);
     try {
-      const saved = existing
-        ? await api.put<ItemDetail>(`/items/${existing.id}`, input)
-        : await api.post<ItemDetail>("/items", input);
-      toast(existing ? "Item bijgewerkt" : "Item bewaard");
-      navigate(`/voorraad/${saved.id}`, { replace: true });
+      const saved = existing ? await api.put<ItemDetail>(`/items/${existing.id}`, input) : await api.post<ItemDetail>("/items", input);
+      toast(existing ? "Bijgewerkt" : "Bewaard");
+      navigate(itemPath(saved), { replace: true });
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
@@ -220,7 +269,10 @@ function ItemForm({
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title={existing ? "Item bewerken" : "Nieuw item"} back={{ to: -1, label: existing ? existing.name : "Voorraad" }} />
+      <PageHead
+        title={existing ? (asset ? "Bezit bewerken" : "Item bewerken") : asset ? "Nieuw bezit" : "Nieuw item"}
+        back={{ to: -1, label: existing ? existing.name : asset ? "Bezit" : "Voorraad" }}
+      />
 
       {purchase && (
         <Alert tone="ok">
@@ -228,27 +280,27 @@ function ItemForm({
         </Alert>
       )}
 
-      <section className="card form-section">
-        <div className="field">
-          <span className="label">Barcode</span>
-          <span className="hint">Scan het product: naam, merk en categorie komen vanzelf.</span>
-        </div>
-        <ScanButtons hint="Scan de barcode van het product" onResult={onScan} />
-        {lookup?.state === "busy" && <Alert tone="busy">Product opzoeken</Alert>}
-        {lookup?.state === "found" && <Alert tone="ok">Gevonden in Open Food Facts. Kijk het even na.</Alert>}
-        {lookup?.state === "none" && !existing && (
-          <Alert tone="none">Dit product kennen we niet. Vul het zelf in; volgende keer herkent de app het.</Alert>
-        )}
-        {lookup?.state === "known" && (
-          <Alert tone="partial">
-            Dit item heb je al.{" "}
-            <Link to={`/voorraad/${lookup.itemId}`} className="link">
-              Open het
-            </Link>{" "}
-            om de voorraad aan te passen.
-          </Alert>
-        )}
-      </section>
+      {!asset && (
+        <section className="card form-section">
+          <div className="field">
+            <span className="label">Barcode</span>
+            <span className="hint">Scan het product: naam, merk en categorie komen vanzelf.</span>
+          </div>
+          <ScanButtons hint="Scan de barcode van het product" onResult={onScan} />
+          {lookup?.state === "busy" && <Alert tone="busy">Product opzoeken</Alert>}
+          {lookup?.state === "found" && <Alert tone="ok">Gevonden in Open Food Facts. Kijk het even na.</Alert>}
+          {lookup?.state === "none" && !existing && <Alert tone="none">Dit product kennen we niet. Vul het zelf in; volgende keer herkent de app het.</Alert>}
+          {lookup?.state === "known" && (
+            <Alert tone="partial">
+              Dit item heb je al.{" "}
+              <Link to={`/voorraad/${lookup.itemId}`} className="link">
+                Open het
+              </Link>{" "}
+              om de voorraad aan te passen.
+            </Alert>
+          )}
+        </section>
+      )}
 
       <section className="card form-section">
         <label className="field">
@@ -259,7 +311,7 @@ function ItemForm({
             className={autoClass("name")}
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder="bv. Halfvolle melk"
+            placeholder={asset ? "bv. Pelletkachel, Wasmachine" : "bv. Halfvolle melk, Pellets"}
           />
         </label>
 
@@ -287,75 +339,197 @@ function ItemForm({
           </label>
           <label className="field">
             <span className="label">Standaardplaats</span>
-            <TreeSelect
-              nodes={locationTree(taxonomy)}
-              value={form.default_location_id}
-              onChange={(id) => set("default_location_id", id)}
-              empty="Geen"
-            />
+            <TreeSelect nodes={locationTree(taxonomy)} value={form.default_location_id} onChange={(id) => set("default_location_id", id)} empty="Geen" />
           </label>
         </div>
 
-        <div className="field">
-          <span className="label">
-            Meestal gekocht bij <span className="optional">· verkoper</span>
-          </span>
-          <VendorField vendors={taxonomy.vendors} value={form.vendor} onChange={(v) => set("vendor", v)} />
-        </div>
+        {!asset && (
+          <div className="field">
+            <span className="label">
+              Meestal gekocht bij <span className="optional">· verkoper</span>
+            </span>
+            <VendorField vendors={taxonomy.vendors} value={form.vendor} onChange={(v) => set("vendor", v)} />
+          </div>
+        )}
 
-        <div className="field-row">
+        {asset ? (
           <label className="field">
             <span className="label">Merk</span>
             <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
           </label>
-          <label className="field">
-            <span className="label">Barcode</span>
-            <input
-              inputMode="numeric"
-              maxLength={64}
-              className="mono"
-              value={form.barcode}
-              onChange={(e) => set("barcode", e.target.value)}
-              onBlur={() => form.barcode && form.barcode !== existing?.barcode && lookupBarcode(form.barcode)}
-            />
-          </label>
-        </div>
+        ) : (
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Merk</span>
+              <input maxLength={100} className={autoClass("brand")} value={form.brand} onChange={(e) => set("brand", e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="label">Barcode</span>
+              <input
+                inputMode="numeric"
+                maxLength={64}
+                className="mono"
+                value={form.barcode}
+                onChange={(e) => set("barcode", e.target.value)}
+                onBlur={() => form.barcode && form.barcode !== existing?.barcode && lookupBarcode(form.barcode)}
+              />
+            </label>
+          </div>
+        )}
 
-        <div className="field-row">
+        {!asset && (
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Eenheid</span>
+              <select className={autoClass("unit")} value={form.unit} onChange={(e) => set("unit", e.target.value as Unit)}>
+                {(Object.keys(UNITS) as Unit[]).map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">Bijna op onder</span>
+              <input
+                inputMode="decimal"
+                value={form.min_quantity}
+                placeholder="geen minimum"
+                aria-invalid={Number.isNaN(minQuantity)}
+                onChange={(e) => set("min_quantity", e.target.value)}
+              />
+            </label>
+          </div>
+        )}
+
+        {!asset && (
+          <div className="field">
+            <span className="label">
+              Inhoud per {form.unit} <span className="optional">· om prijzen per kg of liter te vergelijken</span>
+            </span>
+            <div className="field-row">
+              <input
+                inputMode="decimal"
+                value={form.content_amount}
+                onChange={(e) => set("content_amount", e.target.value)}
+                placeholder="bv. 15"
+                aria-label="Inhoud"
+                aria-invalid={Number.isNaN(contentAmount)}
+              />
+              <select value={form.content_unit} onChange={(e) => set("content_unit", e.target.value as ContentUnit)} aria-label="Eenheid van de inhoud">
+                {CONTENT_UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {parents.length > 0 && (
           <label className="field">
-            <span className="label">Eenheid</span>
-            <select className={autoClass("unit")} value={form.unit} onChange={(e) => set("unit", e.target.value as Unit)}>
-              {(Object.keys(UNITS) as Unit[]).map((u) => (
-                <option key={u} value={u}>
-                  {u}
+            <span className="label">
+              Hoort bij <span className="optional">· {asset ? "bv. de afstandsbediening bij de tv" : "bv. pellets bij de kachel"}</span>
+            </span>
+            <select value={form.parent_id ?? ""} onChange={(e) => set("parent_id", e.target.value || null)}>
+              <option value="">Niets</option>
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </select>
           </label>
-          <label className="field">
-            <span className="label">Bijna op onder</span>
-            <input
-              inputMode="decimal"
-              value={form.min_quantity}
-              placeholder="geen minimum"
-              aria-invalid={Number.isNaN(minQuantity)}
-              onChange={(e) => set("min_quantity", e.target.value)}
-            />
-          </label>
-        </div>
+        )}
       </section>
+
+      {asset && (
+        <section className="card form-section">
+          <div className="field">
+            <span className="label">Herkomst</span>
+            <Segmented
+              label="Herkomst"
+              value={form.origin}
+              onChange={(v) => set("origin", v)}
+              options={(Object.keys(ITEM_ORIGINS) as ItemOrigin[]).map((o) => ({ value: o, label: <span>{ITEM_ORIGINS[o].label}</span> }))}
+            />
+          </div>
+          {form.origin !== "bought" && (
+            <label className="field">
+              <span className="label">{form.origin === "gift" ? "Van wie" : "Waar komt het vandaan"}</span>
+              <input
+                maxLength={200}
+                value={form.origin_note}
+                onChange={(e) => set("origin_note", e.target.value)}
+                placeholder={form.origin === "gift" ? "bv. Marc en Ann" : "bv. van het vorige huis"}
+              />
+            </label>
+          )}
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Sinds</span>
+              <input type="date" max={today()} value={form.acquired_on} onChange={(e) => set("acquired_on", e.target.value)} />
+            </label>
+            {purchase ? (
+              <label className="field">
+                <span className="label">
+                  Prijs <span className="optional">· van de aankoop</span>
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={form.price}
+                  onChange={(e) => set("price", e.target.value)}
+                  placeholder="€ 0,00"
+                  aria-invalid={Number.isNaN(price)}
+                />
+              </label>
+            ) : (
+              <label className="field">
+                <span className="label">{form.origin === "bought" ? "Wat het kostte" : "Geschatte waarde"}</span>
+                <input
+                  inputMode="decimal"
+                  value={form.value}
+                  onChange={(e) => set("value", e.target.value)}
+                  placeholder="optioneel"
+                  aria-invalid={Number.isNaN(value)}
+                />
+              </label>
+            )}
+          </div>
+          {form.origin === "bought" && !purchase && !existing && (
+            <span className="hint">Staat de aankoop in de app? Koppel ze daarna op de fiche, dan komt de garantie mee.</span>
+          )}
+        </section>
+      )}
 
       {!existing && (
         <section className="card form-section">
           <div className="field">
-            <span className="label">Nu in huis</span>
+            <span className="label">{asset ? "Hoeveel" : "Nu in huis"}</span>
             <QuantityField value={form.initial_quantity} onChange={(v) => set("initial_quantity", v)} label="Hoeveelheid nu in huis" />
           </div>
-          {form.type === "consumable" && (
-            <label className="field">
-              <span className="label">Vervalt op</span>
-              <input type="date" value={form.initial_expires} onChange={(e) => set("initial_expires", e.target.value)} />
-            </label>
+          {!asset && (
+            <div className="field-row">
+              <label className="field">
+                <span className="label">Vervalt op</span>
+                <input type="date" value={form.initial_expires} onChange={(e) => set("initial_expires", e.target.value)} />
+              </label>
+              {purchase && (
+                <label className="field">
+                  <span className="label">
+                    Betaald <span className="optional">· voor dit item</span>
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={form.price}
+                    onChange={(e) => set("price", e.target.value)}
+                    placeholder="€ 0,00"
+                    aria-invalid={Number.isNaN(price)}
+                  />
+                </label>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -368,14 +542,14 @@ function ItemForm({
 
         <label className="field">
           <span className="label">
-            <Icon name="note" size={15} /> Notitie
+            <Icon name={asset ? "sparkles" : "note"} size={15} /> {asset ? "Goed om te weten" : "Notitie"}
           </span>
           <textarea
-            rows={3}
-            maxLength={2000}
+            rows={asset ? 4 : 3}
+            maxLength={4000}
             value={form.notes}
             onChange={(e) => set("notes", e.target.value)}
-            placeholder={form.type === "asset" ? "Serienummer, waar de handleiding ligt, …" : "bv. enkel de bio-versie"}
+            placeholder={asset ? "Instellingen, tips, serienummer, waar de handleiding ligt…" : "bv. enkel de bio-versie"}
           />
         </label>
       </section>

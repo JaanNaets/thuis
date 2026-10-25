@@ -1152,6 +1152,10 @@ button.row-link {
   --cols: minmax(0, 1fr) minmax(0, 170px) 120px 110px;
 }
 
+.table-assets {
+  --cols: minmax(0, 1fr) minmax(0, 170px) 110px 110px;
+}
+
 /* ---------- badges, stipjes, avatars, meter ---------- */
 
 /* Pil: grijs vlak, geen rand. Met kleur enkel voor een status. */
@@ -3134,6 +3138,70 @@ dialog.sheet[open]::backdrop {
   color: var(--muted-foreground);
 }
 
+/* ---------- bezit ---------- */
+
+/* "Goed om te weten": de vaste tips van een ding, met de regels zoals getypt. */
+.tips-block {
+  margin: 0 16px 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--subtle);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* Logboek: datum links, notitie of uitgave rechts. */
+.timeline .row {
+  align-items: flex-start;
+}
+
+.timeline-date {
+  flex: none;
+  width: 92px;
+  padding-top: 1px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-text {
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.timeline .row-end,
+.timeline .btn-icon {
+  align-self: center;
+}
+
+@media (max-width: 420px) {
+  .timeline-date {
+    width: 74px;
+  }
+}
+
+/* Bovenaan een uitgave voor een ding: "Voor Pelletkachel". */
+.for-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Een uitgave kiezen om te koppelen: een lijst die zelf scrollt, en de gekozen uitgave als kader. */
+.pick-list {
+  max-height: min(52vh, 420px);
+  margin: 0 -8px;
+  overflow-y: auto;
+}
+
+.row.picked-row {
+  border: 1px solid var(--input);
+}
+
 /* ---------- verkopers ---------- */
 
 /* Een logo staat op wit en wordt nooit bijgesneden. */
@@ -4621,6 +4689,10 @@ dialog.palette[open]::backdrop {
 
   .table-stock {
     --cols: minmax(0, 1fr) minmax(0, 170px) 140px 110px 150px;
+  }
+
+  .table-assets {
+    --cols: minmax(0, 1fr) minmax(0, 190px) 110px 168px 110px;
   }
 
   .nav-text {

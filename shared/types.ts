@@ -14,7 +14,18 @@ export function isTone(value: unknown): value is Tone {
 }
 
 /** Tellers voor de navigatie. */
-export type Stats = { purchases: number; items: number; low: number; expiring: number; cards: number; vendors: number; projects: number };
+export type Stats = {
+  purchases: number;
+  /** Verbruik (voorraad). */
+  items: number;
+  /** Bezit. */
+  assets: number;
+  low: number;
+  expiring: number;
+  cards: number;
+  vendors: number;
+  projects: number;
+};
 
 // ---------- huishoudens en toegang ----------
 
@@ -274,8 +285,8 @@ export type PurchaseDetail = PurchaseListItem & {
   shares: (ExpenseShare & { split_value: number | null })[];
   lines: SplitLine[];
   tag_ids: string[];
-  /** Voorraad die met deze aankoop binnenkwam. */
-  items: { id: string; name: string }[];
+  /** De dingen waar deze uitgave aan hangt. */
+  links: (Pick<ItemLink, "id" | "item_id" | "role" | "quantity" | "amount_cents" | "note"> & { item_name: string; item_type: ItemType; unit: Unit })[];
 };
 
 export type PurchaseInput = Pick<Purchase, "description" | "purchased_on" | "amount_cents" | "category_id" | "project_id" | "warranty_until" | "notes"> & {
@@ -410,7 +421,7 @@ export type ProjectDetail = ProjectListItem & {
 // ---------- voorraad ----------
 
 export const ITEM_TYPES = {
-  consumable: { label: "Verbruik", hint: "Eten, schoonmaak, verzorging: raakt op" },
+  consumable: { label: "Verbruik", hint: "Eten, schoonmaak, pellets: raakt op" },
   asset: { label: "Bezit", hint: "Toestellen, gereedschap, meubels: blijft" },
 } as const;
 export type ItemType = keyof typeof ITEM_TYPES;
@@ -441,6 +452,29 @@ export function isUnit(value: unknown): value is Unit {
   return typeof value === "string" && Object.hasOwn(UNITS, value);
 }
 
+/** Hoe een bezit in huis kwam. */
+export const ITEM_ORIGINS = {
+  bought: { label: "Gekocht" },
+  gift: { label: "Gekregen" },
+  had: { label: "Had ik al" },
+} as const;
+export type ItemOrigin = keyof typeof ITEM_ORIGINS;
+
+/** Inhoud per eenheid, om prijzen te vergelijken (15 kg per zak). */
+export const CONTENT_UNITS = ["kg", "g", "l", "ml"] as const;
+export type ContentUnit = (typeof CONTENT_UNITS)[number];
+
+/** Waarom een uitgave aan een ding hangt. */
+export const LINK_ROLES = {
+  purchase: { label: "Aankoop", hint: "Dit ding zelf gekocht" },
+  refill: { label: "Bijgekocht", hint: "De voorraad aangevuld" },
+  maintenance: { label: "Onderhoud", hint: "Kuisbeurt, nazicht, …" },
+  repair: { label: "Herstelling", hint: "Iets kapot laten maken" },
+  part: { label: "Onderdeel", hint: "Onderdeel of toebehoren" },
+  other: { label: "Andere kost", hint: "Iets anders voor dit ding" },
+} as const;
+export type LinkRole = keyof typeof LINK_ROLES;
+
 export type Item = {
   id: string;
   name: string;
@@ -453,7 +487,18 @@ export type Item = {
   /** Waar je het meestal koopt. */
   vendor_id: string | null;
   min_quantity: number | null;
+  /** Bij bezit: "goed om te weten" (instellingen, tips). */
   notes: string | null;
+  /** Hoort bij een ander ding (pellets bij de kachel). */
+  parent_id: string | null;
+  origin: ItemOrigin | null;
+  /** Van wie gekregen, waar het vandaan komt. */
+  origin_note: string | null;
+  acquired_on: string | null;
+  /** Geschatte waarde, als het niet gekocht is. */
+  value_cents: number | null;
+  content_amount: number | null;
+  content_unit: ContentUnit | null;
   archived: 0 | 1;
   created_by: string;
   created_at: string;
@@ -469,7 +514,39 @@ export type ItemListItem = Item & {
   tag_ids: string[];
   quantity: number;
   next_expiry: string | null;
+  /** Alles wat er ooit aan uitgegeven werd (aankoop, onderhoud, bijkopen, …). */
+  cost_cents: number;
+  /** De langste garantie van de aankopen eraan. */
+  warranty_until: string | null;
+  /** Waar het gekocht werd (de aankoop zelf). */
+  bought_at: string | null;
 };
+
+/** Een uitgave die aan een ding hangt, met wat je van die uitgave nodig hebt. */
+export type ItemLink = {
+  id: string;
+  item_id: string;
+  purchase_id: string;
+  role: LinkRole;
+  quantity: number | null;
+  /** Wat dit ding ervan kostte; leeg = het hele bedrag van de uitgave. */
+  amount_cents: number | null;
+  note: string | null;
+  description: string;
+  purchased_on: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  purchase_amount_cents: number | null;
+  warranty_until: string | null;
+};
+
+export type ItemLinkInput = Pick<ItemLink, "purchase_id" | "role" | "quantity" | "amount_cents" | "note"> & {
+  /** Bij bijkopen: meteen in voorraad zetten (op deze plaats, of de standaardplaats). */
+  add_stock?: boolean;
+  location_id?: string | null;
+};
+
+export type ItemLogEntry = { id: string; item_id: string; happened_on: string; text: string; created_by: string; created_at: string };
 
 export const MOVEMENT_REASONS = {
   purchase: "Gekocht",
@@ -500,15 +577,46 @@ export type StockMovement = {
 
 export type ItemDetail = ItemListItem & {
   movements: StockMovement[];
-  purchases: { id: string; description: string; purchased_on: string; warranty_until: string | null }[];
+  /** Uitgaven aan dit ding, nieuwste eerst. */
+  links: ItemLink[];
+  log: ItemLogEntry[];
+  parent: { id: string; name: string; type: ItemType } | null;
+  /** Wat erbij hoort. */
+  children: ItemListItem[];
 };
 
-export type ItemInput = Pick<Item, "name" | "type" | "category_id" | "default_location_id" | "unit" | "barcode" | "brand" | "min_quantity" | "notes"> & {
+export type ItemInput = Pick<
+  Item,
+  | "name"
+  | "type"
+  | "category_id"
+  | "default_location_id"
+  | "unit"
+  | "barcode"
+  | "brand"
+  | "min_quantity"
+  | "notes"
+  | "parent_id"
+  | "origin"
+  | "origin_note"
+  | "acquired_on"
+  | "value_cents"
+  | "content_amount"
+  | "content_unit"
+> & {
   /** Naam van de verkoper waar je het meestal koopt. */
   vendor: string | null;
   tag_ids: string[];
   /** Enkel bij een nieuw item: wat er nu al is. */
-  initial?: { quantity: number; location_id: string | null; expires_on: string | null; purchase_id: string | null };
+  initial?: {
+    quantity: number;
+    location_id: string | null;
+    expires_on: string | null;
+    /** Uit deze aankoop: het item wordt eraan gekoppeld (bezit: de aankoop zelf, verbruik: bijgekocht). */
+    purchase_id: string | null;
+    /** Wat het item van die aankoop kostte; leeg = het hele bedrag. */
+    amount_cents?: number | null;
+  };
 };
 
 export const STOCK_ACTIONS = ["add", "consume", "discard", "count", "move"] as const;

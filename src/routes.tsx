@@ -8,6 +8,8 @@ import { PurchaseDetail } from "./pages/PurchaseDetail";
 import { PurchaseFormPage } from "./pages/PurchaseForm";
 import { PurchaseList } from "./pages/PurchaseList";
 import { SettingsPage } from "./pages/SettingsPage";
+import { AssetDetail } from "./pages/AssetDetail";
+import { AssetList } from "./pages/AssetList";
 import { CardList } from "./pages/CardList";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectFormPage } from "./pages/ProjectForm";
@@ -49,6 +51,10 @@ export const routes: RouteObject[] = [
       { path: "voorraad/nieuw", element: <ItemFormPage /> },
       { path: "voorraad/:id", element: <ItemDetail /> },
       { path: "voorraad/:id/bewerken", element: <ItemFormPage /> },
+      { path: "bezit", element: <AssetList /> },
+      { path: "bezit/nieuw", element: <ItemFormPage /> },
+      { path: "bezit/:id", element: <AssetDetail /> },
+      { path: "bezit/:id/bewerken", element: <ItemFormPage /> },
       { path: "meer", element: <SettingsPage /> },
       { path: "kaarten", element: <CardList /> },
       { path: "kaarten/nieuw", lazy: loadCardForm },

@@ -13,14 +13,15 @@ stats.get("/", async (c) => {
       .prepare("SELECT COUNT(*) AS projects FROM project_members pm JOIN projects p ON p.id = pm.project_id WHERE pm.member_id = ? AND p.archived = 0")
       .bind(c.get("member").id)
       .first<{ projects: number }>();
-    const empty: Stats = { purchases: 0, items: 0, low: 0, expiring: 0, cards: 0, vendors: 0, projects: row?.projects ?? 0 };
+    const empty: Stats = { purchases: 0, items: 0, assets: 0, low: 0, expiring: 0, cards: 0, vendors: 0, projects: row?.projects ?? 0 };
     return c.json(empty);
   }
   const row = await db
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM purchases WHERE household_id = ?1) AS purchases,
-         (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0) AS items,
+         (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0 AND type = 'consumable') AS items,
+         (SELECT COUNT(*) FROM items WHERE household_id = ?1 AND archived = 0 AND type = 'asset') AS assets,
          (SELECT COUNT(*) FROM items i
             WHERE i.household_id = ?1 AND i.archived = 0 AND i.min_quantity IS NOT NULL
               AND COALESCE((SELECT SUM(s.quantity) FROM stock_levels s WHERE s.item_id = i.id), 0) < i.min_quantity) AS low,

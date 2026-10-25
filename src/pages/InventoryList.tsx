@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { Link, useNavigate } from "../router";
 import { expiresSoon, isLow } from "../../shared/stock";
 import { descendantIds, flattenTree, rootOf } from "../../shared/tree";
-import { ITEM_TYPES, UNITS, type BarcodeLookup, type ItemDetail, type ItemListItem, type ItemType, type Taxonomy } from "../../shared/types";
+import { UNITS, type BarcodeLookup, type ItemDetail, type ItemListItem, type Taxonomy } from "../../shared/types";
 import { api, useApi } from "../api";
 import type { ScanResult } from "../barcode-detect";
 import { BarcodeScanner } from "../components/BarcodeScanner";
@@ -42,7 +42,6 @@ export function InventoryList() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("all");
-  const [type, setType] = useState<ItemType | null>(null);
   // De plaats staat in het adres (?plaats=), zodat de boom in de zijbalk er rechtstreeks naartoe kan.
   const [searchParams, setSearchParams] = useSearchParams();
   const locationId = searchParams.get("plaats");
@@ -61,7 +60,9 @@ export function InventoryList() {
   const [actionError, setActionError] = useState<string>();
 
   const archived = tab === "archived";
-  const { data, error, loading, reload, mutate } = useApi<ItemListItem[]>(archived ? "/items?archived=1" : "/items");
+  const { data: everything, error, loading, reload, mutate } = useApi<ItemListItem[]>(archived ? "/items?archived=1" : "/items");
+  // Voorraad is wat opraakt; bezit (toestellen, meubels) staat in Bezit.
+  const data = useMemo(() => everything?.filter((i) => i.type === "consumable"), [everything]);
   const { data: taxonomy } = useTaxonomy();
   const now = today();
 
@@ -98,7 +99,6 @@ export function InventoryList() {
         if (places && item.levels.length === 0 && !(item.default_location_id && places.has(item.default_location_id))) return false;
         if (cats && !(item.category_id && cats.has(item.category_id))) return false;
         if (tagId && !item.tag_ids.includes(tagId)) return false;
-        if (type && item.type !== type) return false;
         if (tab === "low" && !isLow(item.quantity, item.min_quantity)) return false;
         if (tab === "expiring" && !expiresSoon(item.next_expiry, now)) return false;
         if (q) {
@@ -115,16 +115,26 @@ export function InventoryList() {
         }
         return true;
       });
-  }, [data, taxonomy, query, tab, type, locationId, categoryId, tagId, now]);
+  }, [data, taxonomy, query, tab, locationId, categoryId, tagId, now]);
 
-  const filtered = Boolean(query.trim() || type || locationId || categoryId || tagId);
+  const filtered = Boolean(query.trim() || locationId || categoryId || tagId);
 
   async function quick(item: ItemListItem, action: "add" | "consume") {
     setActionError(undefined);
     const delta = action === "add" ? 1 : -1;
     mutate((list) => list?.map((i) => (i.id === item.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)));
     try {
-      const { movements: _m, purchases: _p, ...updated } = await api.post<ItemDetail>(`/items/${item.id}/stock`, { action, quantity: 1 });
+      const {
+        movements: _m,
+        links: _l,
+        log: _g,
+        parent: _p,
+        children: _c,
+        ...updated
+      } = await api.post<ItemDetail>(`/items/${item.id}/stock`, {
+        action,
+        quantity: 1,
+      });
       mutate((list) => list?.map((i) => (i.id === item.id ? updated : i)));
     } catch (err) {
       setActionError((err as Error).message);
@@ -151,7 +161,7 @@ export function InventoryList() {
       <PageHead
         title="Voorraad"
         badge={counts && counts.low > 0 ? <span className="badge badge-warning">{counts.low} bijna op</span> : undefined}
-        description="Wat er in huis is, waar het ligt en wanneer het vervalt"
+        description="Wat opraakt: waar het ligt, wanneer het vervalt en waar het het goedkoopst is"
         primary={
           <Link to="/voorraad/nieuw" className="btn btn-primary">
             <Icon name="plus" size={16} /> Nieuw item
@@ -189,13 +199,6 @@ export function InventoryList() {
 
       {taxonomy && (
         <div className="filters">
-          <FilterSelect
-            label="Soort"
-            all="Alle"
-            value={type}
-            onChange={(v) => setType(v as ItemType | null)}
-            options={(Object.keys(ITEM_TYPES) as ItemType[]).map((t) => ({ value: t, label: ITEM_TYPES[t].label }))}
-          />
           <FilterSelect
             label="Plaats"
             all="Overal"
@@ -273,7 +276,7 @@ export function InventoryList() {
 }
 
 /** Groepeert per hoofdcategorie, in de volgorde van de categorieënlijst; "Zonder categorie" achteraan. */
-function groupByCategory(items: ItemListItem[], taxonomy: Taxonomy) {
+export function groupByCategory(items: ItemListItem[], taxonomy: Taxonomy) {
   const order = flattenTree(taxonomy.categories.filter((c) => c.domain === "item")).map((c) => c.id);
   const groups = new Map<string | null, ItemListItem[]>();
   for (const item of items) {

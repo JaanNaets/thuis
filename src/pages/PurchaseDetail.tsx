@@ -9,8 +9,10 @@ import { Avatar, CardHead } from "../components/Controls";
 import { FilePicker } from "../components/FilePicker";
 import { FileViewer } from "../components/FileViewer";
 import { Icon } from "../components/Icon";
+import { itemPath, LinkItemForm, roleText } from "../components/ItemLinks";
 import { Spinner, stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
+import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { formatBytes, formatCents, formatDate, warrantyStatus } from "../format";
 import { prepareUpload } from "../image";
@@ -31,6 +33,7 @@ export function PurchaseDetail() {
   const { full } = useSession();
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [viewing, setViewing] = useState<PurchaseFile>();
+  const [linking, setLinking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
@@ -293,27 +296,45 @@ export function PurchaseDetail() {
 
           {full && (
             <section className="card">
-              <CardHead icon="package" title="In voorraad" description="Een toestel of iets dat je bijhoudt, met dit bewijsstuk en de garantie erbij." />
-              {p.items.length > 0 && (
+              <CardHead
+                icon="armchair"
+                title="Waarvoor"
+                description={p.links.length === 0 ? "Hang deze uitgave aan iets dat je hebt: de kachel, de pellets, de wasmachine" : undefined}
+                action={
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setLinking(true)}>
+                    <Icon name="plus" size={15} /> Koppelen
+                  </button>
+                }
+              />
+              {p.links.length > 0 && (
                 <ul className="rows">
-                  {p.items.map((item) => (
-                    <li key={item.id}>
-                      <Link to={`/voorraad/${item.id}`} className="row" style={{ minHeight: 52 }}>
-                        <span className="row-media">
-                          <Icon name="package" size={16} />
+                  {p.links.map((link) => (
+                    <li key={link.id}>
+                      <Link to={itemPath({ id: link.item_id, type: link.item_type })} className="row" style={{ minHeight: 52 }}>
+                        <span className="cell-main">
+                          <span className="row-media">
+                            <Icon name={link.item_type === "asset" ? "armchair" : "package"} size={16} />
+                          </span>
+                          <span className="row-main">
+                            <span className="row-title">{link.item_name}</span>
+                            <span className="row-meta">
+                              <span>{roleText(link.role, link.quantity, link.unit)}</span>
+                            </span>
+                          </span>
                         </span>
-                        <span className="row-main">
-                          <span className="row-title">{item.name}</span>
-                        </span>
+                        {link.amount_cents !== null && <span className="row-end">{formatCents(link.amount_cents)}</span>}
                         <Icon name="next" size={16} className="row-chevron" />
                       </Link>
                     </li>
                   ))}
                 </ul>
               )}
-              <div className="card-body" style={{ paddingTop: p.items.length ? 14 : 0 }}>
-                <Link to={`/voorraad/nieuw?aankoop=${p.id}`} className="btn btn-outline btn-block">
-                  <Icon name="package" size={16} /> {p.items.length > 0 ? "Nog iets in voorraad zetten" : "In voorraad zetten"}
+              <div className="card-body btn-row" style={{ paddingTop: p.links.length ? 14 : 0 }}>
+                <Link to={`/bezit/nieuw?aankoop=${p.id}`} className="btn btn-outline">
+                  <Icon name="armchair" size={16} /> Nieuw bezit
+                </Link>
+                <Link to={`/voorraad/nieuw?aankoop=${p.id}`} className="btn btn-outline">
+                  <Icon name="package" size={16} /> In voorraad
                 </Link>
               </div>
             </section>
@@ -326,6 +347,19 @@ export function PurchaseDetail() {
       </div>
 
       {viewing && <FileViewer file={viewing} onClose={() => setViewing(undefined)} />}
+
+      <Sheet open={linking} title="Waarvoor is deze uitgave?" onClose={() => setLinking(false)}>
+        {linking && (
+          <LinkItemForm
+            purchase={p}
+            onDone={(message) => {
+              setLinking(false);
+              toast(message);
+              reload();
+            }}
+          />
+        )}
+      </Sheet>
     </article>
   );
 }
