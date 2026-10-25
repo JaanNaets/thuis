@@ -1,37 +1,20 @@
-import { templateOf } from "../../shared/fields";
-import { itemPath } from "./ItemLinks";
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { flattenTree } from "../../shared/tree";
-import type { ItemListItem, LoyaltyCard, PurchaseListItem } from "../../shared/types";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { SearchResult } from "../../shared/types";
 import { api } from "../api";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
-import { useTaxonomy } from "../taxonomy";
 import { Icon, type IconName } from "./Icon";
-import { GUEST_MENU, MENU, SETTINGS } from "./Sidebar";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
 
 const ACTIONS: Entry[] = [
-  ...MENU.map((m) => ({ key: m.to, group: "Ga naar", label: m.label, icon: m.icon, to: m.to })),
-  { key: SETTINGS.to, group: "Ga naar", label: SETTINGS.label, icon: SETTINGS.icon, to: SETTINGS.to },
-  { key: "new-purchase", group: "Nieuw", label: "Nieuwe aankoop", icon: "receipt", to: "/aankopen/nieuw" },
-  { key: "new-item", group: "Nieuw", label: "Iets in voorraad zetten", icon: "package", to: "/voorraad/nieuw" },
-  { key: "new-asset", group: "Nieuw", label: "Nieuw bezit", icon: "armchair", to: "/bezit/nieuw" },
-  { key: "new-card", group: "Nieuw", label: "Nieuwe klantenkaart", icon: "card", to: "/kaarten/nieuw" },
-  { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "project", to: "/projecten/nieuw" },
-  { key: "new-vendor", group: "Nieuw", label: "Nieuwe verkoper", icon: "store", to: "/verkopers/nieuw" },
-  { key: "new-recurring", group: "Nieuw", label: "Terugkerende kost", icon: "repeat", to: "/uitgaven/terugkerend/nieuw" },
+  { key: "home", group: "Ga naar", label: "Projecten", icon: "project", to: "/" },
+  { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
+  { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "plus", to: "/projecten/nieuw" },
 ];
 
-/** Een gast ziet enkel zijn projecten. */
-const GUEST_ACTIONS: Entry[] = [
-  ...GUEST_MENU.map((m) => ({ key: m.to, group: "Ga naar", label: m.label, icon: m.icon, to: m.to })),
-  { key: SETTINGS.to, group: "Ga naar", label: SETTINGS.label, icon: SETTINGS.icon, to: SETTINGS.to },
-];
-
-/** Zonder zoekterm: enkel de vaste acties. Met zoekterm: hoogstens zoveel per groep. */
-const PER_GROUP = 5;
+/** Met zoekterm: hoogstens zoveel per groep. */
+const PER_GROUP = 6;
 
 function normalize(text: string): string {
   return text
@@ -41,18 +24,17 @@ function normalize(text: string): string {
 }
 
 /**
- * Zoekpalet (⌘K of het zoekveld in de zijbalk): springt naar een scherm, een aankoop, iets in voorraad,
- * een kaart, een verkoper of een plaats. Pijltjes kiezen, Enter opent, Escape sluit.
+ * Zoekpalet (⌘K of het zoekveld in de zijbalk): springt naar een project of een item in je projecten.
+ * Pijltjes kiezen, Enter opent, Escape sluit.
  */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { data: taxonomy } = useTaxonomy();
-  const { full } = useSession();
+  const { projects } = useSession();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [data, setData] = useState<{ items: ItemListItem[]; purchases: PurchaseListItem[]; cards: LoyaltyCard[] }>();
+  const [found, setFound] = useState<SearchResult>();
   const [highlight, setHighlight] = useState<{ top: number; height: number }>();
 
   // Vóór het meten hieronder openen, anders is het palet nog onzichtbaar en meet alles 0.
@@ -61,67 +43,56 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (open && !dialog.open) {
       setQuery("");
       setActive(0);
+      setFound(undefined);
       dialog.showModal();
-      // Telkens vers ophalen: het palet is klein, de lijsten ook. Een gast ziet enkel de aankopen van zijn projecten.
-      Promise.all([
-        full ? api.get<ItemListItem[]>("/items") : [],
-        api.get<PurchaseListItem[]>("/purchases"),
-        full ? api.get<LoyaltyCard[]>("/loyalty-cards") : [],
-      ]).then(
-        ([items, purchases, cards]) => setData({ items, purchases, cards }),
-        () => {},
-      );
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, full]);
+  }, [open]);
+
+  // Items zoekt de server (enkel wat je mag zien), even na het typen.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) return setFound(undefined);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api.get<SearchResult>(`/search?q=${encodeURIComponent(q)}`).then(
+        (r) => !cancelled && setFound(r),
+        () => {},
+      );
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
 
   const results = useMemo(() => {
     const q = normalize(query.trim());
-    const actions = full ? ACTIONS : GUEST_ACTIONS;
-    if (!q) return actions;
+    if (!q) return ACTIONS;
     const match = (...texts: (string | null | undefined)[]) => texts.some((t) => t && normalize(t).includes(q));
     const groups: Entry[][] = [
-      actions.filter((a) => match(a.label)),
-      (taxonomy?.projects ?? [])
+      ACTIONS.filter((a) => match(a.label)),
+      projects
         .filter((p) => match(p.name, p.description))
         .map((p) => ({
-          key: `j${p.id}`,
+          key: `p${p.id}`,
           group: "Projecten",
           label: p.name,
           hint: p.archived ? "gearchiveerd" : undefined,
-          icon: templateOf(p.template).icon,
+          icon: (p.icon ?? "project") as IconName,
           to: `/projecten/${p.id}`,
         })),
-      (data?.items ?? [])
-        .filter((i) => i.type === "consumable" && !i.project_id && match(i.name, i.brand, i.category_name))
-        .map((i) => ({ key: `i${i.id}`, group: "Voorraad", label: i.name, hint: i.category_name ?? undefined, icon: "package", to: `/voorraad/${i.id}` })),
-      (data?.items ?? [])
-        .filter((i) => i.type === "asset" && match(i.name, i.brand, i.category_name, i.origin_note))
-        .map((i) => ({ key: `a${i.id}`, group: "Bezit", label: i.name, hint: i.category_name ?? undefined, icon: "armchair", to: itemPath(i) })),
-      // De dingen van een project (wijnen), met de naam van het project erbij.
-      (data?.items ?? [])
-        .filter((i) => i.project_id && i.type === "consumable" && match(i.name, i.brand, ...Object.values(i.attributes).map(String)))
-        .map((i) => ({
-          key: `w${i.id}`,
-          group: "In projecten",
-          label: i.name,
-          hint: [i.brand, taxonomy?.projects.find((p) => p.id === i.project_id)?.name].filter(Boolean).join(" · ") || undefined,
-          icon: "package",
-          to: itemPath(i),
-        })),
-      (data?.purchases ?? [])
-        .filter((p) => match(p.description, p.vendor_name, p.notes))
-        .map((p) => ({ key: `p${p.id}`, group: "Aankopen", label: p.description, hint: p.vendor_name ?? undefined, icon: "receipt", to: `/aankopen/${p.id}` })),
-      (data?.cards ?? []).filter((c) => match(c.name)).map((c) => ({ key: `c${c.id}`, group: "Kaarten", label: c.name, icon: "card", to: `/kaarten/${c.id}` })),
-      (full ? (taxonomy?.vendors ?? []) : [])
-        .filter((v) => match(v.name, v.customer_number))
-        .map((v) => ({ key: `v${v.id}`, group: "Verkopers", label: v.name, hint: v.customer_number ?? undefined, icon: "store", to: `/verkopers/${v.id}` })),
-      flattenTree(full ? (taxonomy?.locations ?? []) : [])
-        .filter((l) => match(l.path))
-        .map((l) => ({ key: `l${l.id}`, group: "Plaatsen", label: l.path, hint: "voorraad", icon: "pin", to: `/voorraad?plaats=${l.id}` })),
+      (found?.items ?? []).map((i) => ({
+        key: `i${i.id}`,
+        group: "Items",
+        label: i.name,
+        hint: `${i.type_name} · ${i.project_name}`,
+        icon: (i.icon ?? "folder") as IconName,
+        to: `/items/${i.id}`,
+      })),
     ];
     return groups.flatMap((g) => g.slice(0, PER_GROUP));
-  }, [query, data, taxonomy, full]);
+  }, [query, projects, found]);
 
   const current = Math.min(active, results.length - 1);
 
@@ -155,7 +126,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         <input
           autoFocus
           value={query}
-          placeholder="Zoek een aankoop, iets in huis, een kaart…"
+          placeholder="Zoek een project of iets erin…"
           aria-label="Zoeken"
           aria-controls="palette-list"
           aria-activedescendant={results[current] ? `palette-${results[current].key}` : undefined}
@@ -178,7 +149,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         />
         <kbd>Esc</kbd>
       </div>
-
       <div className="palette-list" id="palette-list" role="listbox" ref={listRef}>
         {highlight && <span className="palette-highlight" style={{ "--top": `${highlight.top}px`, "--h": `${highlight.height}px` } as CSSProperties} />}
         {results.length === 0 && <p className="palette-empty">Niets gevonden voor “{query.trim()}”</p>}

@@ -200,10 +200,6 @@ kbd {
   font-weight: 500;
 }
 
-.notes {
-  white-space: pre-wrap;
-}
-
 .link {
   color: var(--accent-ink);
   font-weight: 500;
@@ -288,12 +284,6 @@ kbd {
   }
 }
 
-@keyframes grow-x {
-  from {
-    transform: scaleX(0);
-  }
-}
-
 @keyframes grow-y {
   from {
     opacity: 0;
@@ -352,7 +342,6 @@ kbd {
   animation-delay: 0.06s;
 }
 
-
 /*
  * Schermwissels: View Transitions (de router doet dat voor elke Link, NavLink en useNavigate
  * uit src/router.tsx). Op een gsm vloeit het hele scherm in elkaar over; de onderbalk blijft
@@ -382,7 +371,7 @@ kbd {
   animation: none;
 }
 
-/* Laadstreepje bovenaan, enkel als een scherm eerst nog code moet ophalen (bv. de eerste kaart). */
+/* Laadstreepje bovenaan, enkel als een scherm eerst nog code moet ophalen (bv. de eerste PDF). */
 .nav-progress {
   position: fixed;
   inset: 0 0 auto;
@@ -412,7 +401,7 @@ kbd {
   padding: calc(env(safe-area-inset-top) + 20px) 16px calc(var(--tabbar) + env(safe-area-inset-bottom) + 96px);
 }
 
-/* Onderbalk: gelijke tabs (vijf, of twee voor een gast) en een vlak dat meeschuift naar de actieve. */
+/* Onderbalk: gelijke tabs (Projecten, Zoeken, Ik) en een vlak dat meeschuift naar de actieve. */
 .tabbar {
   position: fixed;
   inset: auto 0 0;
@@ -448,7 +437,8 @@ kbd {
   background: var(--muted);
 }
 
-.tabbar a {
+.tabbar a,
+.tabbar .tab-button {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -461,7 +451,16 @@ kbd {
   transition: color 0.25s;
 }
 
-.tabbar a svg {
+.tabbar .tab-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.tabbar a svg,
+.tabbar .tab-button svg {
   transition: transform 0.35s var(--spring);
 }
 
@@ -473,20 +472,9 @@ kbd {
   transform: translateY(-1px) scale(1.06);
 }
 
-.tabbar a:active svg {
+.tabbar a:active svg,
+.tabbar .tab-button:active svg {
   transform: scale(0.88);
-}
-
-.tabbar .tab-dot {
-  position: absolute;
-  top: 6px;
-  left: calc(50% + 8px);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warning-solid);
-  box-shadow: 0 0 0 2px var(--background);
-  animation: pop-in 0.4s var(--spring);
 }
 
 .sidebar,
@@ -538,7 +526,6 @@ kbd {
   background: currentColor;
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
-
 
 /* ---------- paginakop ---------- */
 
@@ -1131,31 +1118,6 @@ button.row-link {
   font-variant-numeric: tabular-nums;
 }
 
-/* Kolommen per tabel. Kolommen met .xl verschijnen pas vanaf 1100px. */
-.table-purchases {
-  --cols: minmax(0, 1fr) minmax(0, 130px) 100px 92px;
-}
-
-.table-stock {
-  --cols: minmax(0, 1fr) minmax(0, 160px) 150px;
-}
-
-.table-entries {
-  --cols: minmax(0, 1fr) minmax(0, 170px) 104px 120px;
-}
-
-.table-projects {
-  --cols: minmax(0, 1fr) minmax(0, 110px) minmax(0, 200px) 110px;
-}
-
-.table-vendors {
-  --cols: minmax(0, 1fr) minmax(0, 170px) 120px 110px;
-}
-
-.table-assets {
-  --cols: minmax(0, 1fr) minmax(0, 170px) 110px 110px;
-}
-
 /* ---------- badges, stipjes, avatars, meter ---------- */
 
 /* Pil: grijs vlak, geen rand. Met kleur enkel voor een status. */
@@ -1502,8 +1464,7 @@ button.row-link {
  * Een formulier of kaart als heel scherm: de balken bovenaan lopen over de volle breedte,
  * enkel de inhoud blijft smal.
  */
-.page.form,
-.page.card-page {
+.page.form {
   max-width: none;
 }
 
@@ -1806,63 +1767,6 @@ input[type="checkbox"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* Keuzelijst met suggesties (verkoper). */
-.combobox {
-  position: relative;
-}
-
-.combobox-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  max-height: 264px;
-  margin: 0;
-  padding: 4px;
-  overflow-y: auto;
-  list-style: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--background);
-  box-shadow: var(--shadow-lg);
-  transform-origin: top center;
-  animation: combobox-in 0.22s var(--ease-out);
-}
-
-@keyframes combobox-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-  }
-}
-
-.combobox-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.12s;
-}
-
-.combobox-option[aria-selected="true"] {
-  background: var(--muted);
-}
-
-.combobox-option svg {
-  color: var(--muted-foreground);
-}
-
-.combobox-option .count {
-  margin-left: auto;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-
 /* Tags: klein en stil, met een vinkje dat zichzelf tekent. */
 .tag-picker {
   display: flex;
@@ -1925,11 +1829,6 @@ input[type="checkbox"] {
 .tag.add {
   border-style: dashed;
   color: var(--muted-foreground);
-}
-
-.tag-count {
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 
 .scan-buttons {
@@ -2017,7 +1916,6 @@ input[type="checkbox"] {
   color: var(--muted-foreground);
   background: var(--subtle);
 }
-
 
 /* ---------- skeleton & lege staat ---------- */
 
@@ -2258,21 +2156,7 @@ dialog.sheet[open]::backdrop {
   animation: num-down 0.38s var(--ease-out);
 }
 
-/* ---------- aankopen ---------- */
-
-.purchase-summary {
-  display: grid;
-  gap: 2px;
-  padding: 18px 16px;
-}
-
-.amount-big {
-  font-size: 30px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
+/* ---------- fiche: eigenschappen, tags, bestanden ---------- */
 
 .dl {
   margin: 0;
@@ -2309,109 +2193,11 @@ dialog.sheet[open]::backdrop {
   overflow-wrap: anywhere;
 }
 
-.dl .sub dt,
-.dl .sub dd {
-  padding-left: 12px;
-  color: var(--muted-foreground);
-  font-weight: 400;
-  font-size: 13px;
-}
-
-.dl .sub {
-  min-height: 34px;
-  border-top-style: dashed;
-}
-
-.note-block {
-  display: flex;
-  gap: 10px;
-  margin: 0 16px 16px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--subtle);
-  border: 1px solid var(--border);
-  font-size: 13.5px;
-  white-space: pre-wrap;
-}
-
-.note-block svg {
-  margin-top: 2px;
-  color: var(--muted-foreground);
-}
-
 .tag-line {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 16px 16px;
-}
-
-.gallery {
-  list-style: none;
-  margin: 0;
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: 10px;
-}
-
-.gallery:empty {
-  display: none;
-}
-
-.gallery li {
-  display: grid;
-  gap: 4px;
-}
-
-.gallery-open {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--subtle);
-  color: inherit;
-  font: inherit;
-  cursor: zoom-in;
-  transition: box-shadow 0.25s, transform 0.25s var(--ease-out);
-}
-
-@media (hover: hover) {
-  .gallery-open:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-  }
-}
-
-.gallery-open img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.file-tile {
-  height: 100%;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 8px;
-  padding: 10px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.gallery-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-left: 2px;
-  font-size: 12px;
 }
 
 .file-picker {
@@ -2451,22 +2237,9 @@ dialog.sheet[open]::backdrop {
   white-space: nowrap;
 }
 
-/* ---------- wie betaalde wat ---------- */
+/* ---------- verdelen (SharesField) ---------- */
 
-/* Verdelen (SplitEditor): wie betaalde, wie meedoet en wie hoeveel draagt. */
-.split-editor {
-  display: grid;
-  gap: 20px;
-}
-
-.split-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* Stille tekstknop naast een label ("Meerdere betalers"). */
+/* Stille tekstknop naast een label ("Per veld", "Wissen"). */
 .link-button {
   display: inline-flex;
   align-items: center;
@@ -2604,16 +2377,6 @@ dialog.sheet[open]::backdrop {
   font-weight: 500;
 }
 
-.split-pot {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--muted);
-  color: var(--muted-foreground);
-}
-
 .split-status.ok {
   color: var(--success);
 }
@@ -2623,550 +2386,9 @@ dialog.sheet[open]::backdrop {
   color: var(--destructive);
 }
 
-/* Per lijn van het ticket: omschrijving, bedrag en wie het had. */
-.lines-editor {
-  display: grid;
-  gap: 10px;
-  margin-top: 2px;
-}
+/* ---------- fiche: lange tekst en logboek ---------- */
 
-.lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-}
-
-.line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px auto;
-  grid-template-areas:
-    "desc amount remove"
-    "people people people";
-  align-items: center;
-  gap: 6px 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--divider);
-  animation: rise-in 0.35s var(--ease-out) backwards;
-  animation-delay: calc(min(var(--i, 0), 14) * 28ms);
-}
-
-.line:first-child {
-  border-top: 0;
-}
-
-.line-desc {
-  grid-area: desc;
-}
-
-.line-amount {
-  grid-area: amount;
-  text-align: right;
-}
-
-.line-desc,
-.line-amount {
-  height: 34px !important;
-}
-
-.line > .btn {
-  grid-area: remove;
-}
-
-.line-people {
-  grid-area: people;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-
-.line-person {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-}
-
-.line-person .avatar {
-  width: 24px;
-  height: 24px;
-  font-size: 11.5px;
-  transition:
-    opacity 0.25s,
-    filter 0.25s,
-    transform 0.3s var(--spring);
-}
-
-.line-person[aria-pressed="false"] .avatar {
-  opacity: 0.35;
-  filter: grayscale(1);
-}
-
-.line-person[aria-pressed="true"] .avatar {
-  transform: scale(1.08);
-}
-
-.line-everyone {
-  margin-left: 4px;
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-}
-
-.lines-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding-top: 10px;
-  border-top: 1px solid var(--divider);
-}
-
-.lines-shares {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.lines-share {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-@media (min-width: 560px) {
-  .line {
-    grid-template-columns: minmax(0, 1fr) 92px auto auto;
-    grid-template-areas: "desc amount people remove";
-  }
-}
-
-/* Iemand anders mee laten delen: naam, Toevoegen, sluiten; uitleg eronder. */
-.add-person {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 6px 8px;
-  margin-top: 4px;
-  animation: slide-down 0.3s var(--ease-out);
-}
-
-.add-person input {
-  height: 34px !important;
-}
-
-.add-person .hint {
-  grid-column: 1 / -1;
-}
-
-/* Onder een bedrag: waarvan het een deel is ("van € 92,00"). */
-.row-end-sub {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-/* Avatars die over elkaar schuiven (deelnemers, wie had een lijn). */
-.avatar-stack {
-  display: inline-flex;
-  align-items: center;
-}
-
-.avatar-stack .avatar + .avatar {
-  margin-left: -5px;
-}
-
-.avatar-stack .avatar {
-  box-shadow:
-    inset 0 0 0 1px var(--tone-line, var(--border)),
-    0 0 0 2px var(--background);
-}
-
-.avatar-more {
-  margin-left: 6px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.balance {
-  display: grid;
-  gap: 16px;
-  padding: 4px 16px 16px;
-}
-
-.balance-label {
-  color: var(--muted-foreground);
-  font-size: 13.5px;
-}
-
-.balance-amount {
-  margin-top: 2px;
-  font-size: 34px;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.balance-people {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--faint);
-}
-
-.balance-even {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14.5px;
-  font-weight: 500;
-}
-
-.balance-even .ok {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--success-bg);
-  color: var(--success);
-  animation: pop-in 0.45s var(--spring);
-}
-
-.month-total {
-  padding: 8px 16px 0;
-  font-size: 30px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.month-sub {
-  padding: 0 16px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-.bars {
-  list-style: none;
-  margin: 0;
-  padding: 16px;
-  display: grid;
-  gap: 13px;
-}
-
-.bars li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 12px;
-  font-size: 13.5px;
-}
-
-.bar-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-weight: 500;
-}
-
-.bar-amount {
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.bar-track {
-  grid-column: 1 / -1;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--muted);
-}
-
-.bar {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--tone, var(--accent));
-  transform-origin: left;
-  animation: grow-x 1s var(--ease-out) backwards;
-  animation-delay: calc(var(--i, 0) * 70ms + 0.1s);
-}
-
-/* ---------- potten en projecten ---------- */
-
-/* Potten: wat erin zit, per lid wat die stortte min wat die verbruikte. */
-.pot {
-  display: grid;
-  gap: 6px;
-  padding-bottom: 10px;
-}
-
-.pot-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-@media (hover: hover) {
-  .pot-head:hover {
-    background: #f9f9f9;
-  }
-}
-
-.pot-cash {
-  flex: none;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-}
-
-.negative {
-  color: var(--danger);
-}
-
-.pot-members {
-  list-style: none;
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0 10px 0 58px;
-  font-size: 13px;
-}
-
-.pot-members li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pot-members li > span:last-child {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-.pot-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 0 58px;
-}
-
-.pot-actions .hint {
-  margin-left: auto;
-}
-
-/* Budget van een project: een balk die volloopt, rood als je erover gaat. */
-.budget {
-  display: grid;
-  gap: 6px;
-  margin-top: 14px;
-}
-
-.budget-track {
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--muted);
-}
-
-.budget .bar {
-  display: block;
-  background: var(--accent);
-}
-
-.budget[data-over="true"] .bar {
-  background: var(--danger-solid);
-}
-
-.budget-text {
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-.budget[data-over="true"] .budget-text {
-  color: var(--danger);
-}
-
-/* ---------- voorraad ---------- */
-
-.stock-item .row-title {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  white-space: normal;
-  line-height: 1.3;
-}
-
-.stock-item.empty-stock .row-media {
-  opacity: 0.5;
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-}
-
-.stepper .btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius);
-}
-
-@media (pointer: coarse) {
-  .stepper .btn {
-    width: 40px;
-    height: 40px;
-  }
-}
-
-.stepper-value {
-  display: grid;
-  justify-items: center;
-  min-width: 44px;
-  line-height: 1.15;
-}
-
-.stepper-value strong {
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.stepper-value small {
-  color: var(--muted-foreground);
-  font-size: 11px;
-}
-
-.stock-head {
-  display: grid;
-  gap: 8px;
-  padding: 18px 16px 16px;
-}
-
-.stock-total {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 38px;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1.05;
-}
-
-.stock-total small {
-  color: var(--muted-foreground);
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-.stock-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-.stock-sub:empty {
-  display: none;
-}
-
-.levels .row {
-  min-height: 52px;
-}
-
-.level-place {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-}
-
-.level-place svg {
-  color: var(--muted-foreground);
-}
-
-.stock-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
-  margin: 0 16px;
-  padding: 14px 0 16px;
-  border-top: 1px solid var(--divider);
-}
-
-.card > .rows.levels {
-  margin: 0 8px;
-  padding: 4px 0;
-  border-top: 1px solid var(--divider);
-}
-
-.stock-actions .btn {
-  padding: 0 10px;
-}
-
-.history .row {
-  min-height: 56px;
-  align-items: flex-start;
-}
-
-.delta {
-  display: grid;
-  place-items: center;
-  min-width: 46px;
-  height: 24px;
-  margin-top: 1px;
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.delta.up {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.delta.down {
-  background: var(--muted);
-  color: var(--muted-foreground);
-}
-
-/* ---------- bezit ---------- */
-
-/* "Goed om te weten": de vaste tips van een ding, met de regels zoals getypt. */
+/* Een lange tekst (notitie, "goed om te weten"), met de regels zoals getypt. */
 .tips-block {
   margin: 0 16px 16px;
   padding: 12px 14px;
@@ -3178,7 +2400,7 @@ dialog.sheet[open]::backdrop {
   white-space: pre-wrap;
 }
 
-/* Logboek: datum links, notitie of uitgave rechts. */
+/* Logboek: datum links, notitie rechts. */
 .timeline .row {
   align-items: flex-start;
 }
@@ -3210,238 +2432,9 @@ dialog.sheet[open]::backdrop {
   }
 }
 
-/* Bovenaan een uitgave voor een ding: "Voor Pelletkachel". */
-.for-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* ---------- barcode ---------- */
 
-/* Een uitgave kiezen om te koppelen: een lijst die zelf scrollt, en de gekozen uitgave als kader. */
-.pick-list {
-  max-height: min(52vh, 420px);
-  margin: 0 -8px;
-  overflow-y: auto;
-}
-
-.row.picked-row {
-  border: 1px solid var(--input);
-}
-
-/* ---------- verkopers ---------- */
-
-/* Een logo staat op wit en wordt nooit bijgesneden. */
-.row-media.vendor-logo {
-  background: var(--background);
-}
-
-.row-media.vendor-logo img {
-  padding: 3px;
-  object-fit: contain;
-}
-
-.row-media.lg {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-lg);
-}
-
-.vendor-summary {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 16px;
-}
-
-.vendor-summary .purchase-summary {
-  padding: 0;
-}
-
-.logo-field {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.logo-pick {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  flex: none;
-  padding: 0;
-  overflow: hidden;
-  border: 1px dashed var(--input);
-  border-radius: var(--radius-lg);
-  background: var(--subtle);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    border-color 0.2s,
-    background-color 0.2s;
-}
-
-.logo-pick:hover {
-  border-color: var(--ring);
-  background: var(--muted);
-}
-
-.logo-pick:has(img) {
-  border-style: solid;
-  border-color: var(--border);
-  background: var(--background);
-}
-
-.logo-pick img {
-  width: 100%;
-  height: 100%;
-  padding: 4px;
-  object-fit: contain;
-}
-
-/* Klantenkaart in een rij: een klein kaartje in de kleur van de kaart. */
-.row-media.card-chip {
-  border: 0;
-  background: var(--muted);
-  color: rgb(255 255 255 / 0.92);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
-}
-
-/* Een link in een notitieblok (bv. de winkel bij een klantenkaart). */
-a.note-link {
-  align-items: center;
-  transition: background-color 0.2s;
-}
-
-a.note-link span {
-  flex: 1;
-  font-weight: 500;
-}
-
-a.note-link:hover {
-  background: var(--muted);
-}
-
-/* ---------- instellingen ---------- */
-
-/* Op een gsm bovenaan Meer: wat niet in de onderbalk staat, en wisselen van huishouden. */
-.phone-menu {
-  display: grid;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.phone-menu .workspace-check {
-  color: var(--accent);
-}
-
-/* Aangemeld, maar nog nergens lid van. */
-.no-access {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 12px;
-  min-height: 100dvh;
-  max-width: 440px;
-  margin: 0 auto;
-  padding: 24px;
-  text-align: center;
-}
-
-.no-access h1 {
-  margin-top: 4px;
-  font-size: 20px;
-}
-
-.no-access p {
-  color: var(--muted-foreground);
-}
-
-.tree-row {
-  padding-left: calc(16px + var(--depth, 0) * 20px);
-}
-
-/* ---------- klantenkaarten ---------- */
-
-.cards {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-/* Verhouding van een echte bankkaart (85,6 × 54 mm). */
-.card-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  aspect-ratio: 1.586;
-  padding: 14px 16px;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06), var(--shadow-sm);
-  transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
-}
-
-/* Een glans die over de kaart schuift als je erover gaat. */
-.card-tile::after {
-  content: "";
-  position: absolute;
-  inset: -40%;
-  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.35) 50%, transparent 60%);
-  transform: translateX(-70%);
-  transition: transform 0.9s var(--ease-out);
-  pointer-events: none;
-}
-
-@media (hover: hover) {
-  .card-tile:hover {
-    transform: translateY(-3px);
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06), var(--shadow-lg);
-  }
-  .card-tile:hover::after {
-    transform: translateX(70%);
-  }
-}
-
-.card-tile:active {
-  transform: scale(0.97);
-}
-
-.card-name {
-  position: relative;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.card-digits {
-  position: relative;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  opacity: 0.75;
-}
-
-.barcode-panel {
-  overflow: hidden;
-  text-align: center;
-  animation: rise-in 0.5s 0.05s var(--ease-out) backwards;
-}
-
-.barcode-panel-head {
-  height: 6px;
-}
-
-.barcode-panel .barcode {
-  padding: 24px 16px 0;
-}
-
+/* Scherp vergroot, zodat een kassascanner hem leest. */
 .barcode canvas {
   max-width: 100%;
   height: auto;
@@ -3450,64 +2443,6 @@ a.note-link:hover {
 
 .barcode .error {
   padding: 0 8px;
-}
-
-.card-number {
-  padding: 12px 16px 22px;
-  font-family: var(--font-mono);
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  overflow-wrap: anywhere;
-}
-
-.barcode-panel.preview .barcode {
-  padding: 16px;
-}
-
-.swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.swatch {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.1);
-  cursor: pointer;
-  transition: box-shadow 0.25s var(--ease-out), transform 0.2s var(--spring);
-}
-
-.swatch:active {
-  transform: scale(0.88);
-}
-
-.swatch.selected {
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.1), 0 0 0 2px var(--background), 0 0 0 4px var(--foreground);
-}
-
-.swatches input[type="color"] {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  overflow: hidden;
-  background: none;
-  cursor: pointer;
-}
-
-.swatches input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-
-.swatches input[type="color"]::-webkit-color-swatch {
-  border: 0;
 }
 
 /* ---------- bestandsviewer & scanner (volledig scherm) ---------- */
@@ -3674,7 +2609,6 @@ a.note-link:hover {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
-
 
 /* ---------- zoekpalet (⌘K) ---------- */
 
@@ -3847,7 +2781,7 @@ dialog.palette[open]::backdrop {
   animation: fade-in 0.25s;
 }
 
-/* ---------- indeling met zijkolom (details, uitgaven) ---------- */
+/* ---------- indeling met zijkolom (fiche, project) ---------- */
 
 .split,
 .split-aside,
@@ -4183,19 +3117,6 @@ dialog.palette[open]::backdrop {
     margin-right: auto;
   }
 
-  .cards {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-  }
-
-  .card-tile {
-    padding: 18px 20px;
-  }
-
-  .card-name {
-    font-size: 17px;
-  }
-
   /* ---------- zijbalk ---------- */
 
   /* Op het grijze canvas: werkplek bovenaan, zoeken, menu, de plaatsen in huis, Instellingen onderaan. */
@@ -4254,121 +3175,11 @@ dialog.palette[open]::backdrop {
     background: #e2e2e2;
   }
 
-
-  .workspace-wrap {
-    position: relative;
-    flex: none;
-  }
-
   .workspace-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .workspace-chevrons {
-    margin-left: auto;
-    color: var(--faint);
-  }
-
-  /* Keuzemenu van de werkplek: wisselen van huishouden of een nieuw aanmaken. Schuift en schaalt in. */
-  .workspace-menu {
-    position: absolute;
-    top: 52px;
-    left: 0;
-    z-index: 60;
-    display: grid;
-    gap: 2px;
-    width: 240px;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    background: var(--background);
-    box-shadow: var(--shadow-lg);
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-    transform-origin: top left;
-    visibility: hidden;
-    transition:
-      opacity 0.2s,
-      transform 0.3s var(--ease-out),
-      visibility 0s 0.3s;
-  }
-
-  .workspace-menu[data-open="true"] {
-    opacity: 1;
-    transform: none;
-    visibility: visible;
-    transition:
-      opacity 0.2s,
-      transform 0.35s var(--ease-out);
-  }
-
-  .workspace-menu-label {
-    padding: 6px 8px 4px;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    font-weight: 500;
-  }
-
-  .workspace-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 38px;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--text-soft);
-    font: inherit;
-    font-size: 13.5px;
-    font-weight: 500;
-    text-align: left;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-
-  .workspace-item:hover {
-    background: var(--muted);
-  }
-
-  .workspace-item-icon {
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    flex: none;
-    border-radius: 7px;
-    background: var(--muted);
-    color: var(--muted-foreground);
-  }
-
-  .workspace-item[aria-checked="true"] .workspace-item-icon {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
-  }
-
-  .workspace-item-name {
-    display: grid;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .workspace-item-name small {
-    color: var(--muted-foreground);
-    font-size: 12px;
-    font-weight: 400;
-  }
-
-  .workspace-check {
-    color: var(--accent);
-  }
-
-  .workspace-item.add {
-    color: var(--muted-foreground);
   }
 
   .workspace-note {
@@ -4709,18 +3520,6 @@ dialog.palette[open]::backdrop {
     margin-top: 0;
   }
 
-  .table-purchases {
-    --cols: minmax(0, 1fr) minmax(0, 160px) 104px 168px 96px;
-  }
-
-  .table-stock {
-    --cols: minmax(0, 1fr) minmax(0, 170px) 140px 110px 150px;
-  }
-
-  .table-assets {
-    --cols: minmax(0, 1fr) minmax(0, 190px) 110px 168px 110px;
-  }
-
   .nav-text {
     display: inline;
   }
@@ -4764,7 +3563,7 @@ dialog.palette[open]::backdrop {
   }
 }
 
-/* Detail en uitgaven: zijkolom van 320px met secties, rechts de kaarten. */
+/* Fiche en project: zijkolom van 320px met secties, rechts de kaarten. */
 @media (min-width: 960px) {
   .page-head:has(~ .split) {
     margin-bottom: 0;
@@ -4835,7 +3634,7 @@ dialog.palette[open]::backdrop {
   max-width: 760px;
 }
 
-/* ---------- projecten met dingen: sjablonen, eigen velden, eigenaars ---------- */
+/* ---------- sjablonen, eigen velden, importeren ---------- */
 
 /* Soort project kiezen: vier keuzes als knoppen met een icoontegel. */
 .template-picker {
@@ -4996,7 +3795,7 @@ dialog.palette[open]::backdrop {
   height: 14px;
 }
 
-/* Wat een gast in een project ziet, naast zijn naam. */
+/* De rol van iemand in een project, naast zijn naam. */
 .scope-select {
   width: auto;
   max-width: 160px;
@@ -5016,23 +3815,14 @@ dialog.palette[open]::backdrop {
   }
 }
 
-/* De dingen van een project: kolommen komen van het project (`--cols` staat op de tabel zelf). */
-.table-collection {
-  --cols: minmax(0, 1fr) 150px;
-}
-
-/* Een verzameling op gsm: eerst wat er is en de lijst, daarna snel invullen en wie meedoet. */
+/* Op gsm en smalle tablets eerst de lijst, daarna de zijkolom (subprojecten, wie). */
 @media (max-width: 959px) {
-  .split-collection > .split-aside {
-    display: contents;
-  }
-
-  .split-collection .aside-late {
-    order: 1;
+  .split-main-first > .split-main {
+    order: -1;
   }
 }
 
-/* Foto van een ding, bovenaan de fiche. */
+/* Foto van een item, bovenaan de fiche. */
 .item-photo {
   display: grid;
   gap: 10px;
@@ -5113,63 +3903,138 @@ dialog.palette[open]::backdrop {
   padding-top: 0;
 }
 
-/* Lijnen van een factuur: aanvinken, naam, aantal en bedrag. */
-.invoice-lines {
+/* ---------- generieke kern: projecten, soorten, rollen ---------- */
+
+/* Een icoon kiezen voor een project of soort. */
+.icon-picker {
   display: grid;
-  margin: 0;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 6px;
+}
+
+.icon-option {
+  display: grid;
+  place-items: center;
+  height: 40px;
   padding: 0;
-  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    color 0.2s;
 }
 
-.invoice-line {
+.icon-option:hover {
+  background: var(--subtle);
+}
+
+.icon-option[aria-checked="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* Projectboom op het overzicht: subprojecten springen in. */
+.project-row {
+  padding-left: calc(10px + var(--depth, 0) * 28px);
+}
+
+/* Een barcode of QR-code: typen, formaat kiezen of scannen. */
+.code-input {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    "check name"
-    ". numbers";
-  align-items: center;
-  gap: 6px 10px;
-  padding: 10px 0;
-  border-top: 1px solid var(--divider);
-  animation: rise-in 0.35s var(--ease-out) backwards;
-  animation-delay: calc(min(var(--i, 0), 14) * 28ms);
-  transition: opacity 0.2s;
-}
-
-.invoice-line:first-child {
-  border-top: 0;
-}
-
-.invoice-line[data-off="true"] {
-  opacity: 0.5;
-}
-
-.invoice-line > input[type="checkbox"] {
-  grid-area: check;
-}
-
-.invoice-name {
-  grid-area: name;
-  height: 34px !important;
-}
-
-.invoice-numbers {
-  grid-area: numbers;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 130px) auto;
   gap: 8px;
 }
 
-.invoice-numbers .split-input {
-  width: 92px;
+/* Een code groot tonen om te laten scannen. */
+.code-view {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 8px 0 4px;
+  text-align: center;
 }
 
-.invoice-per {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted-foreground);
-  font-size: 13px;
+.code-view .barcode canvas {
+  max-height: 220px;
+}
+
+.code-text {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+/* De lijst van een soort: kolommen komen van de velden (`--cols` staat op de tabel zelf). */
+.table-items {
+  --cols: minmax(0, 1fr);
+}
+
+.table .col.col-end {
+  justify-content: flex-end;
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
+}
+
+/* Mensen in een project: de rol als keuzelijst, bewerken en weghalen. */
+.member-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+/* Een rol: per soort niet zien, zien of wijzigen, en open te klappen per veld. */
+.role-type {
+  display: grid;
+  gap: 10px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.role-type:first-child {
+  border-top: 0;
+}
+
+.role-type-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.role-type .link-button {
+  justify-self: start;
+}
+
+.role-fields {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--subtle);
+  animation: fade-in 0.25s var(--ease-out) backwards;
+}
+
+.role-field {
+  display: grid;
+  gap: 6px;
+}
+
+.role-field-name {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+@media (min-width: 640px) {
+  .role-field {
+    grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
 }

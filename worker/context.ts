@@ -1,76 +1,183 @@
 import { createMiddleware } from "hono/factory";
-import type { Member, ProjectScope } from "../shared/types";
+import { cleanRights, NO_RIGHTS, type Rights } from "../shared/access";
+import type { FieldDef } from "../shared/fields";
+import type { ItemType, Person, Project, ProjectNode, Tone } from "../shared/types";
+import { TONES } from "../shared/types";
 import type { AppEnv } from "./types";
-import { ValidationError } from "./validate";
+import { ForbiddenError, NotFoundError } from "./validate";
 
 /**
- * Koppelt elke aanvraag aan een huishouden en aan het lid dat ze doet. Faalt gesloten:
- * wie geen lid is van het gevraagde huishouden, krijgt niets.
- *
- * De app stuurt het gekozen huishouden mee als ?hh= (zo werkt het ook voor afbeeldingen en de offline kopie)
- * of in de header X-Household. Zonder keuze nemen we het eerste huishouden waar je volledige toegang hebt
- * (of anders het eerste waar je lid van bent).
+ * Koppelt elke aanvraag aan een persoon. Wie voor het eerst aanmeldt, krijgt een persoon (zonder projecten).
+ * Bestaat er al een persoon met dit e-mailadres (iemand voegde je toe), dan ben je die persoon.
  */
-export const withHousehold = createMiddleware<AppEnv>(async (c, next) => {
-  const email = c.get("user");
-  const requested = c.req.query("hh") || c.req.header("x-household");
+export const withPerson = createMiddleware<AppEnv>(async (c, next) => {
+  const email = c.get("user").trim().toLowerCase();
   const db = c.env.DB;
-  const member = requested
-    ? await db.prepare("SELECT * FROM members WHERE household_id = ? AND email = ? COLLATE NOCASE").bind(requested, email).first<Member>()
-    : await db.prepare("SELECT * FROM members WHERE email = ? COLLATE NOCASE ORDER BY access = 'full' DESC, created_at LIMIT 1").bind(email).first<Member>();
-  if (!member) return c.json({ error: "Je hebt geen toegang tot dit huishouden." }, 403);
-
-  c.set("household", member.household_id);
-  c.set("member", member);
-  c.set("full", member.access === "full");
-  return next();
-});
-
-/** Enkel voor wie alles in het huishouden mag zien (niet voor gasten in een project). */
-export const requireFull = createMiddleware<AppEnv>(async (c, next) => {
-  if (!c.get("full")) return c.json({ error: "Hiervoor heb je geen toegang." }, 403);
-  return next();
-});
-
-type Owned = "members" | "categories" | "locations" | "tags" | "vendors" | "projects" | "pots" | "items" | "purchases";
-
-/**
- * Controleert dat id's waarnaar je verwijst bij dit huishouden horen. Een foreign key controleert enkel
- * dat iets bestaat; zonder deze controle zou je naar iets van een ander huishouden kunnen verwijzen.
- */
-export async function assertOwned(db: D1Database, household: string, table: Owned, ids: (string | null | undefined)[]): Promise<void> {
-  const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
-  if (wanted.length === 0) return;
-  const { results } = await db
-    .prepare(`SELECT id FROM ${table} WHERE household_id = ? AND id IN (${wanted.map(() => "?").join(", ")})`)
-    .bind(household, ...wanted)
-    .all<{ id: string }>();
-  if (results.length !== wanted.length) throw new ValidationError("Iets waarnaar je verwijst, bestaat niet (meer). Herlaad de pagina.");
-}
-
-/**
- * Wat dit lid in een project mag: 'all' (alles), 'own' (enkel zijn deel bekijken) of null (niets).
- * Volledige leden mogen alles in hun huishouden; een gast enkel in de projecten waarin die zit.
- */
-export async function projectScope(db: D1Database, household: string, member: Member, projectId: string): Promise<ProjectScope | null> {
-  if (member.access === "full") {
-    return (await db.prepare("SELECT 1 FROM projects WHERE id = ? AND household_id = ?").bind(projectId, household).first()) ? "all" : null;
+  let person = await db.prepare("SELECT id, name, email, color FROM people WHERE email = ?").bind(email).first<Person>();
+  if (!person) {
+    const name =
+      email
+        .split("@")[0]
+        .replace(/[._-]+/g, " ")
+        .replace(/\b\w/g, (ch) => ch.toUpperCase())
+        .slice(0, 60) || "Ik";
+    const color = TONES[Math.floor(Math.random() * TONES.length)] as Tone;
+    person = await db
+      .prepare(
+        "INSERT INTO people (id, name, email, color) VALUES (?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET email = email RETURNING id, name, email, color",
+      )
+      .bind(crypto.randomUUID(), name, email, color)
+      .first<Person>();
   }
-  const row = await db
-    .prepare(
-      `SELECT pm.scope FROM project_members pm JOIN projects p ON p.id = pm.project_id
-       WHERE pm.project_id = ? AND pm.member_id = ? AND p.household_id = ?`,
-    )
-    .bind(projectId, member.id, household)
-    .first<{ scope: ProjectScope }>();
-  return row?.scope ?? null;
+  c.set("person", person!);
+  return next();
+});
+
+type ProjectRow = Project & { created_by: string };
+type RoleRow = { id: string; name: string; rights: string };
+
+/** Wat een persoon in één project mag, met de projecten erboven. */
+export type ProjectAccess = {
+  project: ProjectRow;
+  /** Het project zelf en alles erboven, van onder naar boven (ook wat je zelf niet mag zien). */
+  chain: string[];
+  /** De projecten erboven die je mag zien, van boven naar onder. */
+  path: { id: string; name: string }[];
+  role: { id: string; name: string };
+  rights: Rights;
+  /** De rol komt van een project erboven. */
+  inherited: boolean;
+};
+
+export function parseRights(json: string | null | undefined): Rights {
+  if (!json) return NO_RIGHTS;
+  try {
+    return cleanRights(JSON.parse(json));
+  } catch {
+    return NO_RIGHTS;
+  }
 }
 
 /**
- * Mag dit lid aan een project werken (of, zonder project, aan het huishouden): uitgaven, geldbewegingen, dingen?
- * Gasten enkel in projecten waarin ze volledig meedoen; wie enkel zijn deel ziet, kan niets aanmaken.
+ * Wat deze persoon in dit project mag: de rol van het dichtstbijzijnde project (het project zelf of erboven)
+ * waar de persoon lid is. Geen lidmaatschap = geen toegang (null). Faalt gesloten.
  */
-export async function canUseProject(db: D1Database, household: string, member: Member, projectId: string | null): Promise<boolean> {
-  if (!projectId) return member.access === "full";
-  return (await projectScope(db, household, member, projectId)) === "all";
+export async function projectAccess(db: D1Database, personId: string, projectId: string): Promise<ProjectAccess | null> {
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE up(id, depth) AS (
+         SELECT id, 0 FROM projects WHERE id = ?1
+         UNION ALL
+         SELECT p.parent_id, up.depth + 1 FROM projects p JOIN up ON p.id = up.id WHERE p.parent_id IS NOT NULL AND up.depth < 30
+       )
+       SELECT p.*, up.depth, m.role_id, r.name AS role_name, r.rights
+       FROM up JOIN projects p ON p.id = up.id
+       LEFT JOIN memberships m ON m.project_id = p.id AND m.person_id = ?2
+       LEFT JOIN roles r ON r.id = m.role_id
+       ORDER BY up.depth`,
+    )
+    .bind(projectId, personId)
+    .all<ProjectRow & { depth: number; role_id: string | null; role_name: string | null; rights: string | null }>();
+  const nearest = results.find((r) => r.role_id);
+  if (!nearest) return null;
+  // Je ziet de projecten erboven tot het hoogste project waar je lid bent.
+  const top = Math.max(...results.filter((r) => r.role_id).map((r) => r.depth));
+  const { depth: _d, role_id: _r, role_name: _n, rights: _x, ...project } = results[0];
+  return {
+    project,
+    chain: results.map((r) => r.id),
+    path: results
+      .filter((r) => r.depth > 0 && r.depth <= top)
+      .reverse()
+      .map((r) => ({ id: r.id, name: r.name })),
+    role: { id: nearest.role_id!, name: nearest.role_name! },
+    rights: parseRights(nearest.rights),
+    inherited: nearest.depth > 0,
+  };
 }
+
+/** Zoals projectAccess, maar gooit "niet gevonden" als je er niet bij mag (we verklappen niet of het bestaat). */
+export async function requireProject(db: D1Database, personId: string, projectId: string): Promise<ProjectAccess> {
+  const access = await projectAccess(db, personId, projectId);
+  if (!access) throw new NotFoundError("Dat project bestaat niet (meer), of je hebt er geen toegang toe.");
+  return access;
+}
+
+/** Gooit "geen toestemming" als een recht ontbreekt. */
+export function need(access: ProjectAccess, right: "manage" | "members" | "create" | "delete", message?: string) {
+  if (!access.rights[right]) throw new ForbiddenError(message ?? "Dat mag je in dit project niet.");
+}
+
+/**
+ * Al je projecten met je rol erin: de projecten waar je lid bent en alles eronder. In een subproject waar je
+ * een eigen rol hebt, geldt die rol.
+ */
+export async function accessibleProjects(db: D1Database, personId: string): Promise<ProjectNode[]> {
+  const [{ results: memberships }, { results: projects }] = (await db.batch([
+    db
+      .prepare("SELECT m.project_id, m.role_id, r.name AS role_name, r.rights FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.person_id = ?")
+      .bind(personId),
+    db
+      .prepare(
+        `WITH RECURSIVE down(id, depth) AS (
+           SELECT project_id, 0 FROM memberships WHERE person_id = ?1
+           UNION
+           SELECT p.id, down.depth + 1 FROM projects p JOIN down ON p.parent_id = down.id WHERE down.depth < 30
+         )
+         SELECT DISTINCT p.* FROM projects p JOIN down ON down.id = p.id`,
+      )
+      .bind(personId),
+  ])) as [D1Result<{ project_id: string; role_id: string; role_name: string; rights: string }>, D1Result<ProjectRow>];
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const own = new Map(memberships.map((m) => [m.project_id, m]));
+  const nodes: ProjectNode[] = [];
+  for (const p of projects) {
+    // De dichtstbijzijnde rol: het project zelf, anders erboven.
+    let cursor: ProjectRow | undefined = p;
+    let membership = own.get(p.id);
+    const seen = new Set<string>();
+    while (!membership && cursor?.parent_id && !seen.has(cursor.id)) {
+      seen.add(cursor.id);
+      cursor = byId.get(cursor.parent_id);
+      membership = cursor ? own.get(cursor.id) : undefined;
+    }
+    if (!membership) continue;
+    const { created_by: _c, ...project } = p;
+    nodes.push({
+      ...project,
+      role_id: membership.role_id,
+      role_name: membership.role_name,
+      rights: parseRights(membership.rights),
+      inherited: membership.project_id !== p.id,
+    });
+  }
+  return nodes;
+}
+
+type TypeRow = Omit<ItemType, "fields"> & { fields: string };
+
+export function toItemType(row: TypeRow): ItemType {
+  let fields: FieldDef[] = [];
+  try {
+    fields = JSON.parse(row.fields) as FieldDef[];
+  } catch {
+    fields = [];
+  }
+  return { ...row, fields };
+}
+
+/** De soorten die in een project te gebruiken zijn: die van het project zelf en erboven. */
+export async function typesFor(db: D1Database, chain: string[]): Promise<ItemType[]> {
+  const { results } = await db
+    .prepare(`SELECT * FROM item_types WHERE project_id IN (${chain.map(() => "?").join(", ")}) ORDER BY sort_order, created_at`)
+    .bind(...chain)
+    .all<TypeRow>();
+  // Eerst de soorten van het project zelf, dan die erboven.
+  return results.map(toItemType).sort((a, b) => chain.indexOf(a.project_id) - chain.indexOf(b.project_id));
+}
+
+export function placeholders(n: number): string {
+  return Array.from({ length: n }, () => "?").join(", ");
+}
+
+export type { RoleRow };

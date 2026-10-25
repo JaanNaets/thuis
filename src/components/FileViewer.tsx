@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import type { PurchaseFile } from "../../shared/types";
+import type { ItemFile } from "../../shared/types";
 import { apiUrl } from "../api";
 import { Icon } from "./Icon";
 
@@ -12,7 +12,7 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
  * Toont een bewijsstuk binnen de app. Geen nieuw tabblad: op een kiosk-tablet
  * kan je daar vaak niet meer uit terugkeren.
  */
-export function FileViewer({ file, onClose }: { file: PurchaseFile; onClose: () => void }) {
+export function FileViewer({ file, onClose }: { file: ItemFile; onClose: () => void }) {
   const url = apiUrl(`/files/${file.id}`);
 
   useEffect(() => {

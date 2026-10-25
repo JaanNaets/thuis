@@ -1,17 +1,14 @@
 # Thuis
 
-Onze eigen huishoud-app, volledig op Cloudflare. Onderdelen:
+Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: je bouwt zelf wat je wil bijhouden.
 
-- **Aankopen**: kastickets en facturen bewaren (foto of PDF), met garantie-opvolging.
-- **Uitgaven**: wie betaalde wat, wie wie nog hoeveel moet, en waar het geld per maand naartoe gaat.
-- **Voorraad**: wat er in huis is en waar, met vervaldatums, "bijna op" en een logboek van elke wijziging.
-- **Klantenkaarten**: barcode tonen aan de kassa, ook **zonder internet**. Inlezen met de camera of uit een
-  foto of screenshot.
-- **Instellingen** (op de gsm: **Meer**): wie er in huis woont, verkopers, en de indeling in categorieën,
-  plaatsen en tags.
+- **Projecten** en subprojecten: "Huishouden" is gewoon een project, met daaronder bv. "Wijnkelder" en "Fietsen".
+- **Mensen met een rol** per project: wat ze mogen zien en wijzigen, tot op het niveau van één veld.
+- **Soorten**: een klein formulier met eigen velden (Wijn met jaargang en druiven, Klantenkaart met een barcode).
+- **Items** van een soort, met tags, een foto, bestanden en een logboek.
 
-Overal waar je iets registreert (een aankoop, een item, een aanvulling van de voorraad, een terugbetaling, een
-kaart) kan je een **notitie** kwijt, en waar het past ook de **verkoper**.
+Regels voor een bepaalde use case (kosten verdelen, voorraad, klantenkaarten offline, kastickets lezen) komen er
+bovenop, als sjabloon of als eigen onderdeel.
 
 Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kioskmodus.
 
@@ -20,9 +17,9 @@ Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kiosk
 ```
 src/         React-app (wat je op het scherm ziet)
 worker/      API op Cloudflare Workers (Hono)
-shared/      Types en logica die app en API allebei gebruiken (verdelen, voorraad, ticketlezer)
+shared/      Types en logica die app en API allebei gebruiken (velden, rechten, sjablonen)
 migrations/  Databaseschema (D1), één SQL-bestand per wijziging
-sw/          Service worker: zorgt dat klantenkaarten offline werken
+sw/          Service worker: de app opent ook zonder internet
 STIJLBOEK.md Hoe de app eruitziet en aanvoelt: lees dit voor je iets bouwt
 ```
 
@@ -30,7 +27,7 @@ STIJLBOEK.md Hoe de app eruitziet en aanvoelt: lees dit voor je iets bouwt
 | -------------- | ----------------------------------------------------- |
 | App + API      | Workers (één Worker, statische bestanden + `/api/*`)  |
 | Gegevens       | D1 `huishouden-db`                                    |
-| Foto's en PDF's | R2 `huishouden-bestanden`                            |
+| Foto's en bestanden | R2 `huishouden-bestanden`                        |
 | Aanmelden      | Cloudflare Access                                     |
 
 ## 1. Lokaal draaien
@@ -55,14 +52,14 @@ Je hebt [Node.js](https://nodejs.org) 20 of nieuwer nodig.
    npm run dev
    ```
    Open http://localhost:5173. Alles (database en bestanden) draait lokaal en raakt je echte gegevens niet.
-5. Tests draaien (ticketlezer, verdelen, voorraad):
+   Als iemand anders testen: stuur de header `X-Dev-User: ander@example.com` mee (werkt enkel lokaal).
+5. Tests draaien (velden, importeren, rechten):
    ```sh
    npm test
    ```
 
-Kastickets van foto's lezen gebeurt met Workers AI, en dat draait altijd bij Cloudflare. Met gewoon
-`npm run dev` lezen PDF's wel automatisch, maar foto's niet. Wil je dat lokaal ook testen, gebruik dan
-`npx wrangler login` en daarna `npm run dev:ai`.
+Een etiket lezen gebeurt met Workers AI, en dat draait altijd bij Cloudflare. Met gewoon `npm run dev` werkt
+dat niet. Wil je dat lokaal ook testen, gebruik dan `npx wrangler login` en daarna `npm run dev:ai`.
 
 ## 2. Online zetten
 
@@ -119,7 +116,7 @@ echt binnenliet (`worker/auth.ts`). Daarvoor heeft ze twee gegevens nodig: het *
    - `TEAM_DOMAIN`, bv. `https://naets.cloudflareaccess.com`
    - `POLICY_AUD`, een lange code van letters en cijfers
 6. Klik op **Manage Cloudflare Access**. Kies in de policy voor **Emails**, vul de e-mailadressen van
-   iedereen in het huishouden in, en sla op.
+   iedereen in die de app mag gebruiken in, en sla op.
 
 ### C. Langer ingelogd blijven
 
@@ -150,7 +147,10 @@ Venster gemist? Je vindt de waarden ook terug:
 ### Testen
 
 Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
-e-mailadres in, krijgt een code per mail, en komt in de app. Onderaan staat "Aangemeld als …".
+e-mailadres in, krijgt een code per mail, en komt in de app. Bij **Ik** staat waarmee je aangemeld bent.
+
+Wie de eerste keer aanmeldt, ziet nog geen projecten. Maak er een (bv. "Huishouden" met het sjabloon
+Huishouden), en voeg de anderen toe bij **Instellen → Mensen** met het e-mailadres waarmee ze aanmelden.
 
 ### Lukt inloggen niet?
 
@@ -169,7 +169,8 @@ code, controleer dan:
 - **iPhone**: open de app in Safari → deelknop → **Zet op beginscherm**.
 - **Android**: open de app in Chrome → ⋮ → **App installeren**.
 
-Open de app één keer met internet. Daarna werken je klantenkaarten ook in een winkel zonder bereik.
+Open de app één keer met internet. Daarna opent ze ook zonder bereik, maar je gegevens laden pas met
+internet. Klantenkaarten offline tonen komt terug als regel bovenop de kern.
 
 ## 5. Tablet in kioskmodus
 
@@ -177,7 +178,7 @@ Open de app één keer met internet. Daarna werken je klantenkaarten ook in een 
    Kioskmodus blijft op dat toestel aan (uitzetten met `?kiosk=0`).
 2. Vergrendel de tablet op de app:
    - **Android**: [Fully Kiosk Browser](https://www.fully-kiosk.com) met dezelfde URL als startpagina.
-     Zet "Keep Screen On" aan en geef toestemming voor de camera (foto's van kastickets).
+     Zet "Keep Screen On" aan en geef toestemming voor de camera (scannen, foto's van etiketten).
    - **iPad**: voeg de app toe aan het beginscherm, open ze, en zet **Begeleide toegang** aan
      (Instellingen → Toegankelijkheid). Drie keer op de zijknop drukken start ze.
 
@@ -187,94 +188,70 @@ In kioskmodus:
 - worden bestanden in de app zelf geopend, nooit in een nieuw tabblad;
 - staat er geen "Aangemeld als" onderaan.
 
-## Kastickets automatisch lezen
+## Hoe het werkt
 
-Zodra je bij een nieuwe aankoop een foto of PDF kiest, vult de app de winkel, de datum, het bedrag en de
-categorie in. Automatisch ingevulde velden zijn geel tot je ze zelf aanpast. Er wordt nooit iets opgeslagen
-zonder dat je op **Opslaan** drukt.
+### Projecten en subprojecten
 
-Van gratis naar (bijna) gratis:
+Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
+subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
+Koersfietsen, Gedeelde uitgaven, Verzameling) dat de soorten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
 
-1. **PDF met tekst** (webshopfacturen): de app haalt de tekst eruit en leest die met gewone code
-   (`shared/receipt.ts`). Dat is gratis en exact.
-2. **Foto, of een gescande PDF**: de Worker laat een verkleinde afbeelding lezen door Workers AI
-   (`worker/routes/receipts.ts`). Een ticket kost ±20-30 *neurons*, en de gratis hoeveelheid is
-   10.000 neurons per dag.
-3. **Altijd code achteraf**: wat de AI zegt, wordt nagekeken. Een datum in de toekomst, een negatief bedrag
-   of een onbekende categorie wordt weggegooid in plaats van ingevuld.
-4. **Categorie uit jullie eigen geschiedenis**: kochten jullie al eerder iets bij dezelfde winkel, dan
-   krijgt het die categorie.
+### Mensen en rollen
 
-Een harde limiet van 50 AI-lezingen per dag (`AI_DAILY_LIMIT`) zorgt dat je ook op een betaald plan nooit
-boven de gratis hoeveelheid gaat. Op het gratis plan kan het sowieso niets kosten.
+Elk project heeft rollen. Er zijn er drie om mee te beginnen:
 
-Leest de code een winkel niet? Voeg ze toe aan de lijst `STORES` in `shared/receipt.ts`, en voeg bij
-voorkeur een test toe in `test/receipt.test.ts`.
+| Rol | Mag |
+| --- | --- |
+| Beheerder | Alles: het project instellen, mensen toevoegen, items toevoegen, wijzigen en verwijderen |
+| Lid | Items toevoegen, wijzigen en verwijderen |
+| Lezer | Enkel bekijken |
 
-## Wie betaalde wat
+Een rol maak of pas je aan bij **Instellen → Rollen**: per soort en zelfs per veld kies je **Niet zien**, **Zien**
+of **Wijzigen** (bv. een proever die de wijnen ziet maar de aankoopprijs niet). Een rol geldt ook in de
+subprojecten, tenzij je iemand daar een andere rol geeft.
 
-Bij elke aankoop kies je wie betaalde en voor wie het was:
+Iemand toevoegen doe je bij **Instellen → Mensen**: met een e-mailadres (die persoon meldt later zelf aan; dat
+adres moet dan ook in de Access-policy staan), of zonder, voor iemand die nooit aanmeldt maar wel ergens bij
+hoort (bv. als eigenaar van een fiets). Er blijft altijd minstens één beheerder over.
 
-- **Iedereen**: gelijk verdeeld over wie in huis woont. Een cent die niet deelbaar is, draagt wie betaalde.
-- **Enkel mij**: persoonlijk, telt niet mee in wat de anderen moeten.
-- **Aangepast**: je typt zelf wie hoeveel draagt (samen moet het precies het bedrag zijn).
-- **Gezamenlijk**: betaald van de gemeenschappelijke rekening. Telt niet mee.
+### Soorten en velden
 
-Onder **Uitgaven** zie je wie wie nog hoeveel moet. Heb je het overgeschreven, druk dan op **Terugbetaald**
-(minder mag ook: dan blijft de rest openstaan). Iemand die al eens aangemeld heeft, is vanzelf lid. Je partner
-voeg je vooraf toe bij **Instellingen → Huishouden** (op de gsm: **Meer**), met het e-mailadres waarmee die later aanmeldt.
+Een soort is een klein formulier: een naam ("Wijn", meervoud "Wijnen") en velden. Een veld kan zijn: tekst, lange
+tekst, getal, bedrag, datum, jaar, periode van jaren (bv. drinkklaar 2026–2032), keuze, meerkeuze, ja/nee, score,
+barcode of QR-code, persoon, verwijzing naar een ander item (de wijn → het wijnhuis) of eigenaars (wie welk
+deel heeft). Een veld kan een kolom in de lijst zijn, een filter, of verplicht. De soorten van een project gelden
+ook in zijn subprojecten.
 
-## Voorraad
+### Items
 
-- **Verbruik** (melk, wasmiddel, ...) raakt op; **Bezit** (wasmachine, boormachine, ...) blijft.
-- Elk item ligt op een of meer **plaatsen** (Keuken › Koelkast). Met − en + in de lijst pas je de voorraad
-  meteen aan: − neemt eerst weg wat het eerst vervalt.
-- Stel **"bijna op onder"** in, dan verschijnt het item in de filter **Bijna op**. Dat is meteen je boodschappenlijst.
-- **Scannen** zoekt het product eerst in jullie eigen voorraad, en anders gratis in
-  [Open Food Facts](https://world.openfoodfacts.org) (naam, merk, categorie). Geen AI, geen kosten.
-- Een aankoop met garantie kan je **in voorraad zetten**. Zo hangt het toestel aan zijn kasticket en garantie.
-- Iets weg uit huis maar wil je de geschiedenis houden? **Archiveren** in plaats van verwijderen.
+Items voeg je toe in een project, of importeer je als lijst (Google Sheets als CSV, Excel, of geplakte cellen):
+je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
+een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
 
-## Verkopers
+### Een etiket lezen
 
-Een verkoper is een winkel, een webshop, een vakman of iemand op 2dehands. Typ de naam bij een aankoop: bestaande
-verkopers verschijnen terwijl je typt, een nieuwe naam wordt vanzelf een nieuwe verkoper. Hoofdletters maken niet
-uit ("colruyt" en "Colruyt" zijn dezelfde).
-
-Je vult een verkoper in bij:
-
-- een **aankoop**: waar je het kocht (de ticketlezer vult hem in);
-- een **voorraaditem**: waar je het meestal koopt;
-- **Erbij** in de voorraad: waar je het deze keer kocht (staat in de geschiedenis).
-
-Bij **Instellingen → Verkopers** geef je een verkoper een website, telefoonnummer en notitie (klantnummer,
-contactpersoon, ...), en zie je al je aankopen bij die verkoper.
-
-## Klantenkaart uit een foto
-
-Bij een nieuwe kaart kan je **Scannen** (camera) of **Uit foto** kiezen. Uit foto werkt met een foto van de
-kaart, maar ook met een screenshot uit de app van de winkel. Het lezen gebeurt volledig op je toestel.
+Bij een nieuw item kan je een foto van een etiket nemen: de app vult de naam en de velden in (zacht blauw tot je
+ze zelf aanpast) en bewaart de foto. Dat gebeurt met Workers AI. Een harde limiet van 50 lezingen per dag
+(`AI_DAILY_LIMIT`) zorgt dat je ook op een betaald plan nooit boven de gratis hoeveelheid gaat. Wat de AI zegt,
+gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zonder dat je op **Opslaan** drukt.
 
 ## Hoe de gegevens ingedeeld zijn
 
-De database is gebouwd om later uit te breiden tot een volledige "home ERP" (agenda, onderhoud, budgetten, ...):
-
 | Tabel | Wat |
 | ----- | --- |
-| `members` | Wie in het huishouden woont. Gekoppeld aan het e-mailadres van de login. |
-| `vendors` | Verkopers: winkels, webshops, vakmensen. Aankopen, items en voorraadbewegingen verwijzen ernaar. |
-| `categories` | Eén boom per **domein**: `expense` (aankopen) en `item` (voorraad). Later kan er een domein bij. |
-| `locations` | Plaatsen in huis, ook een boom. |
-| `tags` + `taggings` | Vrije labels op om het even wat (`entity_type` = `purchase`, `item`, ...). |
-| `purchases` | Aankopen en uitgaven, met `paid_by` en `split_mode`. |
-| `expense_shares` | Wie welk deel van een aankoop draagt. Samen altijd het volledige bedrag. |
-| `settlements` | Terugbetalingen tussen leden. |
-| `items` | Producten en bezittingen, met type, eenheid, barcode en minimum. |
-| `stock_levels` | Hoeveel er nu op elke plaats ligt. |
-| `stock_movements` | Logboek van elke voorraadwijziging; wordt nooit aangepast. Kan naar een aankoop verwijzen. |
+| `people` | Personen. Met een e-mailadres als ze aanmelden, zonder als ze nooit aanmelden. |
+| `projects` | Projecten, als boom (`parent_id`). |
+| `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
+| `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. |
+| `item_types` | Soorten: naam en velden (`fields`, als JSON). |
+| `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
+| `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
+| `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |
+| `item_log` | Het logboek van een item. |
+| `ai_usage` | Hoeveel AI-lezingen er vandaag al waren. |
 
-Opsommingen (zoals het type van een item of de reden van een beweging) controleert de Worker, niet de database.
-Zo kan er later een waarde bij zonder de tabel te herbouwen.
+Velden en rechten controleert de Worker, niet de database (`shared/fields.ts` en `shared/access.ts`). Zo kan er
+later een veldsoort of recht bij zonder de tabellen te herbouwen.
 
 ## De database aanpassen
 
@@ -295,7 +272,7 @@ Pas je `wrangler.jsonc` aan (bv. een nieuwe binding)? Draai dan `npm run cf-type
 
 ## Goed om te weten
 
-- **Bedragen** staan in cent in de database (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
+- **Bedragen** staan in cent (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
 - **Foto's** worden in de browser verkleind tot max. 2000 px voor de upload.
 - **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen gekleurde codes slecht.
 - **Ontwerp**: zie [STIJLBOEK.md](STIJLBOEK.md). Daar staat hoe elk scherm, onderdeel en elke tekst eruitziet,

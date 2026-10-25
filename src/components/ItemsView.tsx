@@ -1,0 +1,251 @@
+import { useMemo, useState, type CSSProperties } from "react";
+import { formatFieldValue, rangeStatus, type Attributes, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
+import type { ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
+import { apiUrl, useApi } from "../api";
+import { Link } from "../router";
+import { FilterSelect, FilterToggle } from "./Controls";
+import { namesFrom, ScoreStars } from "./Fields";
+import { Icon, type IconName } from "./Icon";
+import { SkeletonRows, stagger } from "./Motion";
+import { EmptyState } from "./Page";
+
+/** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
+export function fold(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+/** Wat een waarde is als tekst (om op te zoeken en te filteren). */
+function valueTexts(def: FieldDef, value: FieldValue | undefined, names: Names): string[] {
+  if (value === undefined) return [];
+  if (def.type === "multi" && Array.isArray(value)) return value as string[];
+  return [formatFieldValue(def, value, names)];
+}
+
+const NUMERIC = ["money", "number", "score", "year"];
+
+/**
+ * De items van één soort in een project: zoeken, filters uit de velden (en tags), en een tabel met de velden die
+ * als kolom staan. Een periode met filter wordt "nu" (bv. een wijn die nu drinkklaar is).
+ */
+export function ItemsView({ project, type }: { project: ProjectDetail; type: ItemTypeView }) {
+  const [archived, setArchived] = useState(false);
+  const { data, error, loading } = useApi<ItemList>(`/projects/${project.project.id}/items?type=${type.id}${archived ? "&archived=1" : ""}`);
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Record<string, string | null>>({});
+  const [now, setNow] = useState<Record<string, boolean>>({});
+  const [tag, setTag] = useState<string | null>(null);
+
+  const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
+  const fields = type.fields;
+  const columns = fields.filter((f) => f.column).slice(0, 2);
+  const filterFields = fields.filter((f) => f.filter && f.type !== "year_range");
+  const rangeFields = fields.filter((f) => f.filter && f.type === "year_range");
+  const items = data?.items ?? [];
+  const year = new Date().getFullYear();
+
+  const options = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const def of filterFields) {
+      const values = new Set<string>();
+      for (const item of items) valueTexts(def, item.data[def.key], names).forEach((v) => v && values.add(v));
+      out[def.key] = [...values].sort((a, b) => (def.type === "year" ? b.localeCompare(a) : a.localeCompare(b, "nl")));
+    }
+    return out;
+  }, [items, filterFields, names]);
+  const usedTags = project.tags.filter((t) => items.some((i) => i.tag_ids.includes(t.id)));
+
+  const shown = useMemo(() => {
+    const q = fold(query.trim());
+    return items.filter((item) => {
+      for (const def of filterFields) {
+        const want = filters[def.key];
+        if (want && !valueTexts(def, item.data[def.key], names).includes(want)) return false;
+      }
+      for (const def of rangeFields) if (now[def.key] && rangeStatus(item.data[def.key], year) !== "now") return false;
+      if (tag && !item.tag_ids.includes(tag)) return false;
+      if (q) {
+        const haystack = [
+          item.name,
+          ...fields.flatMap((f) => valueTexts(f, item.data[f.key], names)),
+          ...project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name),
+        ];
+        if (!haystack.some((h) => h && fold(h).includes(q))) return false;
+      }
+      return true;
+    });
+  }, [items, query, filters, now, tag, fields, filterFields, rangeFields, names, project.tags, year]);
+
+  const filtered = Boolean(query.trim() || tag || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
+  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (NUMERIC.includes(c.type) ? "110px" : "minmax(0, 160px)"))].join(" ");
+  const icon = (type.icon ?? "folder") as IconName;
+
+  return (
+    <>
+      <div className="toolbar">
+        <label className="search">
+          <Icon name="search" size={16} />
+          <input
+            type="search"
+            placeholder={`Zoek in ${type.plural.toLowerCase()}…`}
+            aria-label={`Zoek in ${type.plural.toLowerCase()}`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        {type.can_create && !project.project.archived && (
+          <Link
+            to={`/projecten/${project.project.id}/importeren?soort=${type.id}`}
+            className="btn btn-outline btn-icon"
+            aria-label={`Lijst importeren als ${type.plural.toLowerCase()}`}
+            title="Lijst importeren"
+          >
+            <Icon name="table" />
+          </Link>
+        )}
+      </div>
+
+      <div className="filters">
+        {rangeFields.map((def) => (
+          <FilterToggle key={def.key} on={now[def.key] ?? false} onChange={(on) => setNow((n) => ({ ...n, [def.key]: on }))}>
+            <Icon name="clock" size={14} /> {def.label}: nu
+          </FilterToggle>
+        ))}
+        {filterFields
+          .filter((def) => options[def.key]?.length)
+          .map((def) => (
+            <FilterSelect
+              key={def.key}
+              label={def.label}
+              all="Alle"
+              value={filters[def.key] ?? null}
+              onChange={(v) => setFilters((f) => ({ ...f, [def.key]: v }))}
+              options={options[def.key].map((v) => ({ value: v, label: v }))}
+            />
+          ))}
+        {usedTags.length > 0 && (
+          <FilterSelect label="Tag" all="Alle" value={tag} onChange={setTag} options={usedTags.map((t) => ({ value: t.id, label: t.name }))} />
+        )}
+        <FilterToggle on={archived} onChange={setArchived}>
+          <Icon name="archive" size={14} /> Archief
+        </FilterToggle>
+      </div>
+
+      {error && <p className="error">{error}</p>}
+      {!data && loading && <SkeletonRows rows={5} />}
+      {data && shown.length === 0 && (
+        <EmptyState
+          icon={icon}
+          title={filtered || archived ? "Niets gevonden" : `Nog geen ${type.plural.toLowerCase()}`}
+          action={
+            type.can_create &&
+            !filtered &&
+            !archived && (
+              <Link to={`/projecten/${project.project.id}/nieuw?soort=${type.id}`} className="btn btn-outline btn-sm">
+                <Icon name="plus" size={16} /> {type.name} toevoegen
+              </Link>
+            )
+          }
+        >
+          {filtered
+            ? "Pas de zoekterm of filters aan."
+            : archived
+              ? "Wat je archiveert, komt hier."
+              : type.can_create
+                ? "Voeg er een toe, of importeer een lijst."
+                : undefined}
+        </EmptyState>
+      )}
+
+      {shown.length > 0 && (
+        <div className="card table table-items" style={{ "--cols": cols } as CSSProperties}>
+          <div className="table-head" aria-hidden="true">
+            <span>{type.name_label ?? type.name}</span>
+            {columns.map((c, k) => (
+              <span key={c.key} className={NUMERIC.includes(c.type) || k === columns.length - 1 ? "end" : undefined}>
+                {c.label}
+              </span>
+            ))}
+          </div>
+          <ul className="rows stagger">
+            {shown.map((item, i) => (
+              <li key={item.id} style={stagger(i)}>
+                <ItemRow
+                  item={item}
+                  icon={icon}
+                  tone={project.project.color ?? "sky"}
+                  columns={columns}
+                  names={names}
+                  tags={project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ItemRow({
+  item,
+  icon,
+  tone,
+  columns,
+  names,
+  tags,
+}: {
+  item: { id: string; name: string; data: Attributes; photo_version: number | null };
+  icon: IconName;
+  tone: string;
+  columns: FieldDef[];
+  names: Names;
+  tags: string[];
+}) {
+  const meta = [...columns.map((c) => formatFieldValue(c, item.data[c.key], names)), ...tags].filter(Boolean).join(" · ");
+  return (
+    <Link to={`/items/${item.id}`} className="row">
+      <span className="cell-main">
+        {item.photo_version ? (
+          <span className="row-media">
+            <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt="" loading="lazy" />
+          </span>
+        ) : (
+          <span className={`row-media tone-${tone}`}>
+            <Icon name={icon} size={16} />
+          </span>
+        )}
+        <span className="row-main">
+          <span className="row-title">{item.name}</span>
+          {meta && (
+            <span className="row-meta narrow-only">
+              <span>{meta}</span>
+            </span>
+          )}
+          {tags.length > 0 && (
+            <span className="row-meta wide-only">
+              <span>{tags.join(" · ")}</span>
+            </span>
+          )}
+        </span>
+      </span>
+      {columns.map((c) => {
+        const v = item.data[c.key];
+        const end = NUMERIC.includes(c.type) ? "col col-end" : "col";
+        return (
+          <span key={c.key} className={end}>
+            {v === undefined ? (
+              <span className="muted">—</span>
+            ) : c.type === "score" ? (
+              <ScoreStars value={v as number} />
+            ) : (
+              <span>{formatFieldValue(c, v, names)}</span>
+            )}
+          </span>
+        );
+      })}
+    </Link>
+  );
+}

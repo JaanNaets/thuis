@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from "vite";
 // Bestanden uit public/ die offline beschikbaar moeten zijn.
 const PUBLIC_FILES = ["/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
 
-// Enkel nodig om iets toe te voegen of te bekijken (scanner, PDF), niet om kaarten te tonen.
+// Enkel nodig om iets toe te voegen of te bekijken (scanner, PDF), niet om een barcode te tonen.
 // Die worden pas bewaard wanneer ze een eerste keer gebruikt worden.
 const SKIP_PRECACHE = /zxing_reader|pdf\.worker|assets\/pdf-|ponyfill|PdfPages|\.map$/;
 
@@ -41,6 +41,6 @@ export default defineConfig(({ mode }) => ({
     cloudflare({ remoteBindings: mode === "ai" }),
     serviceWorker(),
   ],
-  // De barcodebibliotheek is bewust een apart, groot bestand dat pas laadt bij de klantenkaarten.
+  // De barcodebibliotheek is bewust een apart, groot bestand dat pas laadt als er een code getoond wordt.
   build: { chunkSizeWarningLimit: 1000 },
 }));

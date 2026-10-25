@@ -1,6 +1,6 @@
 # Thuis: werkafspraken
 
-Huishoud-app op Cloudflare (Workers, D1, R2). Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten,
+App voor thuis op Cloudflare (Workers, D1, R2): projecten, mensen met rollen, en items met eigen velden. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten,
 commits en uitleg.
 
 ## Ontwerp: lees eerst het stijlboek
@@ -19,15 +19,22 @@ commits en uitleg.
   rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
 
 - Bedragen in cent, datums als `YYYY-MM-DD`. Opmaak via `src/format.ts`.
-- Alles hoort bij een huishouden. Elke route onder het huishouden gebruikt `c.get("household")` en filtert daarop
-  (zie `worker/context.ts`); wat van buiten komt (ids van categorieën, leden, potten) controleer je met `assertOwned`.
-  Een gast (`access = 'projects'`) mag bij zijn projecten (`requireFull` of `canUseProject`) en mag de uitgaven
-  zien waarin hij zelf betaalde of een deel heeft, maar enkel aanpassen wat in zijn projecten staat. Bij twijfel: weigeren.
-  Per project doet een gast volledig mee (`scope = 'all'`) of ziet hij enkel zijn deel (`'own'`: de dingen waarvan hij
-  mede-eigenaar is en zijn uitgaven, alleen bekijken). Gebruik `projectScope`; `canUseProject` is enkel waar voor `'all'`.
-- Eigen velden van een project staan in `shared/fields.ts`; waarden van buiten gaan altijd door `cleanAttributes`,
-  eigenaars door `normalizeOwners` (procenten, samen 100; leeg = van het huishouden samen).
-- Verkopers bewaren nooit een wachtwoord, enkel het klantnummer en waarmee je aanmeldt.
+- Alles is een **project** (een boom: `parent_id`), ook "Huishouden": achter de schermen is geen enkel project
+  speciaal. Een persoon (`people`) krijgt per project een **rol** (`memberships`); die geldt ook in de subprojecten,
+  tenzij er dichter een eigen lidmaatschap is. Wat een rol mag, staat in `shared/access.ts`: `manage`, `members`,
+  `create`, `delete`, en per soort en per veld Niet zien / Zien / Wijzigen.
+- Elke route die iets van een project raakt, haalt eerst de toegang op met `requireProject` (of `projectAccess`) uit
+  `worker/context.ts`, en een item met `requireItem` (`worker/routes/items.ts`). Geen lidmaatschap = 404 "niet
+  gevonden"; ontbreekt een recht, dan `need(access, …)` of een `ForbiddenError`. Bij twijfel: weigeren.
+- Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
+  (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
+  terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van soorten, tags, rollen, personen) controleer je
+  tegen de keten van het project (`access.chain`).
+- Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
+  `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
+- Regels voor een use case (verdelen, voorraad, …) bouw je bovenop de kern, niet erin: als sjabloon
+  (`shared/templates.ts`), veldsoort (`shared/fields.ts`) of eigen route die dezelfde toegangsregels volgt.
+- Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.
 - Gedeelde types en logica in `shared/`, met tests in `test/` (`npm test`).

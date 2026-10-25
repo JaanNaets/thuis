@@ -1,11 +1,23 @@
 import { useState, type KeyboardEvent } from "react";
 import { TONES, type Tag } from "../../shared/types";
 import { api, ApiError } from "../api";
-import { refreshTaxonomy } from "../taxonomy";
 import { Icon } from "./Icon";
 
-/** Tags aan- en uitvinken, of meteen een nieuwe maken. */
-export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: string[]; onChange: (ids: string[]) => void }) {
+/** Tags aan- en uitvinken, of meteen een nieuwe maken (in `projectId`). */
+export function TagPicker({
+  tags,
+  value,
+  onChange,
+  projectId,
+  onCreated,
+}: {
+  tags: Tag[];
+  value: string[];
+  onChange: (ids: string[]) => void;
+  /** Zonder project kan je geen nieuwe tag maken. */
+  projectId?: string;
+  onCreated?: (tag: Tag) => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,8 +38,8 @@ export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: strin
     setBusy(true);
     setError(undefined);
     try {
-      const tag = await api.post<Tag>("/tags", { name: trimmed, color: TONES[tags.length % TONES.length] });
-      await refreshTaxonomy();
+      const tag = await api.post<Tag>(`/projects/${projectId}/tags`, { name: trimmed, color: TONES[tags.length % TONES.length] });
+      onCreated?.(tag);
       onChange([...value, tag.id]);
       setName("");
       setAdding(false);
@@ -52,20 +64,14 @@ export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: strin
       {tags.map((tag) => {
         const on = value.includes(tag.id);
         return (
-          <button
-            key={tag.id}
-            type="button"
-            className={`tag tone-${tag.color ?? "butter"}`}
-            aria-pressed={on}
-            onClick={() => toggle(tag.id)}
-          >
+          <button key={tag.id} type="button" className={`tag tone-${tag.color ?? "butter"}`} aria-pressed={on} onClick={() => toggle(tag.id)}>
             <Icon name="check" size={14} className="check" />
             {!on && <span className="dot" />}
             {tag.name}
           </button>
         );
       })}
-      {adding ? (
+      {!projectId ? null : adding ? (
         <span className="tag-new">
           <input
             autoFocus

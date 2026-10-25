@@ -1,29 +1,22 @@
 import { createContext, useContext } from "react";
-import type { HouseholdAccess, Stats } from "../shared/types";
+import type { Person, ProjectNode } from "../shared/types";
 
 /**
- * Wie aangemeld is, in welk huishouden, en de tellers van de zijbalk. Eén keer opgehaald in App, overal leesbaar.
- * `full` = volledige toegang tot het huishouden; zonder is het een gast die enkel zijn projecten ziet.
+ * Wie aangemeld is en al zijn projecten (met zijn rol in elk). Eén keer opgehaald in App, overal leesbaar.
+ * Na het aanmaken, hernoemen of verwijderen van een project: `reloadMe()`.
  */
 export type Session = {
-  email?: string;
-  households: HouseholdAccess[];
-  /** Het gekozen huishouden, met jouw lidmaatschap daarin. */
-  membership?: HouseholdAccess;
-  full: boolean;
-  stats?: Stats;
-  openSearch: () => void;
-  switchHousehold: (id: string) => void;
-  /** Na het aanmaken of hernoemen van een huishouden. */
+  person: Person;
+  projects: ProjectNode[];
   reloadMe: () => void;
+  openSearch: () => void;
 };
 
 export const SessionContext = createContext<Session>({
-  households: [],
-  full: false,
-  openSearch: () => {},
-  switchHousehold: () => {},
+  person: { id: "", name: "", email: null, color: null },
+  projects: [],
   reloadMe: () => {},
+  openSearch: () => {},
 });
 
 export function useSession(): Session {

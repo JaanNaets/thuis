@@ -51,8 +51,7 @@ export function PageHead({
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
-  const { membership, email } = useSession();
-  const me = membership?.member;
+  const { person: me } = useSession();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -79,16 +78,16 @@ export function PageHead({
     <>
       <div className="panel-bar">
         <nav className="breadcrumb" aria-label="Kruimelpad">
-          {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Thuis</Link>}
+          {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Projecten</Link>}
           <Icon name="next" size={14} className="sep" />
           <span className="current">{title}</span>
         </nav>
         <div className="panel-actions">
           {primary}
-          {me && (
+          {me.id && (
             <>
               <span className="panel-sep" />
-              <Link to="/meer" className="panel-avatar" title={`${me.name} · ${email}`} aria-label="Instellingen">
+              <Link to="/ik" className="panel-avatar" title={`${me.name} · ${me.email ?? ""}`} aria-label="Jouw gegevens">
                 <Avatar member={me} />
               </Link>
             </>

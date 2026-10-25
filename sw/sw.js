@@ -1,4 +1,4 @@
-// Service worker: laat de app (en zeker de klantenkaarten) werken zonder internet.
+// Service worker: laat de app openen zonder internet.
 // Bij `vite build` vult vite.config.ts hieronder de versie en de lijst met bestanden in.
 
 const VERSION = "__VERSION__";
@@ -7,8 +7,8 @@ const PRECACHE = __PRECACHE__;
 const SHELL_CACHE = `shell-${VERSION}`;
 const DATA_CACHE = "data-v1";
 
-// API-routes die offline beschikbaar moeten blijven. Al de rest (aankopen, bestanden) vraagt internet.
-const OFFLINE_API = ["/api/loyalty-cards", "/api/me"];
+// API-routes die offline beschikbaar moeten blijven (jij en je projecten). Al de rest vraagt internet.
+const OFFLINE_API = ["/api/me"];
 const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener("install", (event) => {
@@ -44,7 +44,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Klantenkaarten: netwerk met korte time-out, anders de laatst bewaarde versie.
+  // Netwerk met korte time-out, anders de laatst bewaarde versie.
   if (OFFLINE_API.includes(url.pathname)) {
     event.respondWith(networkFirst(request));
     return;

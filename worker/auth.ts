@@ -18,14 +18,15 @@ function getJwks(teamDomain: string) {
  * Cloudflare Access staat vóór de app en zet een ondertekend JWT in elke aanvraag.
  * We controleren dat JWT zelf, zodat niemand de app kan bereiken door Access te omzeilen.
  *
- * Lokaal (npm run dev) is er geen Access; daar gebruiken we DEV_USER uit .dev.vars.
- * Die uitzondering geldt enkel op localhost, zodat een verkeerd gezette variabele
+ * Lokaal (npm run dev) is er geen Access; daar gebruiken we DEV_USER uit .dev.vars. Om met meerdere mensen te
+ * testen, kan een test lokaal een ander e-mailadres meegeven in de header X-Dev-User.
+ * Die uitzonderingen gelden enkel op localhost én met DEV_USER, zodat een verkeerd gezette variabele
  * in productie de beveiliging niet kan uitschakelen.
  */
 export const requireAccess = createMiddleware<AppEnv>(async (c, next) => {
   const isLocal = ["localhost", "127.0.0.1"].includes(new URL(c.req.url).hostname);
   if (isLocal && c.env.DEV_USER) {
-    c.set("user", c.env.DEV_USER);
+    c.set("user", c.req.header("x-dev-user") || c.env.DEV_USER);
     return next();
   }
 

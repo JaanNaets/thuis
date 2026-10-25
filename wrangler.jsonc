@@ -28,10 +28,7 @@
     }
   ],
 
-  // Elke nacht (3u17 UTC) de terugkerende kosten inboeken.
-  "triggers": { "crons": ["17 3 * * *"] },
-
-  // Workers AI, enkel voor kastickets die de code niet zelf kan lezen.
+  // Workers AI, om een foto van een etiket te lezen.
   "ai": { "binding": "AI" },
 
   // Cloudflare Access (zie README, stap 3). Geen geheimen: de Worker gebruikt ze enkel

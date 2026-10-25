@@ -107,6 +107,12 @@ export function optionalBoolean(obj: Obj, key: string, fallback: boolean): boole
 /** Een conflict met wat al in de database staat (dubbele naam, nog in gebruik, ...). */
 export class ConflictError extends Error {}
 
+/** Bestaat niet, of je mag het niet zien (we zeggen niet welk van de twee). */
+export class NotFoundError extends Error {}
+
+/** Je mag het zien, maar dit mag je er niet mee doen. */
+export class ForbiddenError extends Error {}
+
 /**
  * Vertaalt een databasefout naar een duidelijke melding.
  * D1 zegt bv. "UNIQUE constraint failed: items.barcode" of "FOREIGN KEY constraint failed".

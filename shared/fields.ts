@@ -1,32 +1,50 @@
-// Eigen velden van een project (wijnkelder, koersfietsen, …) en wie eigenaar is van een ding.
+// Velden: de bouwstenen van een soort (een zelf samengesteld formulier zoals "Wijn" of "Klantenkaart").
 //
-// - Een project kiest zelf welke velden zijn dingen hebben: jaargang, druiven, framemaat, …
-// - Een veld heeft een soort (tekst, jaar, keuzelijst, …) en soms een betekenis (`role`), zodat de app er slim
-//   mee omgaat: "nu drinkklaar" bij een drinkvenster, de waarde van de kelder bij een prijs per eenheid.
-// - Sjablonen geven een goed vertrekpunt; daarna kan je velden toevoegen, hernoemen of weglaten.
-
-import type { ItemImportRow, ItemType, Unit } from "./types";
+// - Een veld heeft een sleutel (blijft, ook als je het hernoemt), een naam en een soort: tekst, getal, datum,
+//   keuzelijst, barcode/QR, een persoon, een verwijzing naar een ander item, personen met een aandeel, …
+// - De waarden van een item staan als JSON bij het item, per sleutel. Wat van buiten komt, gaat altijd door
+//   `cleanAttributes`: onbekende velden vallen weg, elke waarde wordt nagekeken.
 
 export const FIELD_TYPES = {
   text: { label: "Tekst" },
+  longtext: { label: "Lange tekst" },
   number: { label: "Getal" },
+  money: { label: "Bedrag" },
+  date: { label: "Datum" },
   year: { label: "Jaar" },
   year_range: { label: "Van–tot (jaren)" },
   select: { label: "Keuzelijst" },
   multi: { label: "Meerdere waarden" },
-  money: { label: "Bedrag" },
-  score: { label: "Score op 5" },
   bool: { label: "Ja of nee" },
-  date: { label: "Datum" },
+  score: { label: "Score op 5" },
+  code: { label: "Barcode of QR-code" },
+  person: { label: "Persoon" },
+  item: { label: "Verwijzing naar een item" },
+  share: { label: "Personen met aandeel" },
 } as const;
 export type FieldType = keyof typeof FIELD_TYPES;
 
-/** Wat een veld betekent. Zonder rol is het gewoon een veld. */
-export const FIELD_ROLES = {
-  drink_window: { label: "Drinkvenster", types: ["year_range"] },
-  unit_price: { label: "Prijs per eenheid", types: ["money"] },
-} as const satisfies Record<string, { label: string; types: FieldType[] }>;
-export type FieldRole = keyof typeof FIELD_ROLES;
+/** Namen volgens de Barcode Detection API (wat de scanner teruggeeft), met het symbool in bwip-js (om te tekenen). */
+export const CODE_FORMATS = {
+  qr_code: { label: "QR-code", bwip: "qrcode" },
+  ean_13: { label: "EAN-13", bwip: "ean13" },
+  ean_8: { label: "EAN-8", bwip: "ean8" },
+  upc_a: { label: "UPC-A", bwip: "upca" },
+  upc_e: { label: "UPC-E", bwip: "upce" },
+  code_128: { label: "Code 128", bwip: "code128" },
+  code_39: { label: "Code 39", bwip: "code39" },
+  code_93: { label: "Code 93", bwip: "code93" },
+  itf: { label: "ITF", bwip: "interleaved2of5" },
+  codabar: { label: "Codabar", bwip: "rationalizedCodabar" },
+  data_matrix: { label: "Data Matrix", bwip: "datamatrix" },
+  pdf417: { label: "PDF417", bwip: "pdf417" },
+  aztec: { label: "Aztec", bwip: "azteccode" },
+} as const;
+export type CodeFormat = keyof typeof CODE_FORMATS;
+
+export function isCodeFormat(value: unknown): value is CodeFormat {
+  return typeof value === "string" && Object.hasOwn(CODE_FORMATS, value);
+}
 
 export type FieldDef = {
   /** Vaste sleutel in de waarden (verandert niet als je het veld hernoemt). */
@@ -37,116 +55,37 @@ export type FieldDef = {
   options?: string[];
   /** Eenheid achter een getal: "km", "cm". */
   unit?: string;
+  /** Verwijzing: naar items van deze soort. */
+  ref_type?: string;
+  /** Barcode/QR: het formaat als je zelf een nummer typt. */
+  format?: CodeFormat;
   /** Als kolom in de lijst. */
   column?: boolean;
   /** Als filter boven de lijst. */
   filter?: boolean;
-  role?: FieldRole;
-  /** Uitleg voor wie een etiket of foto leest. */
+  /** Moet ingevuld zijn. */
+  required?: boolean;
+  /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
 };
 
-/** text, select, date: tekst · number, year, money (cent), score: getal · year_range: [van, tot] · multi: lijst · bool. */
-export type FieldValue = string | number | boolean | string[] | [number | null, number | null];
+/** Een persoon met zijn aandeel in procent (samen 100). */
+export type Share = { person_id: string; share: number };
+export type CodeValue = { text: string; format: CodeFormat };
+
+/**
+ * text, longtext, select, date, person (id), item (id): tekst · number, year, money (cent), score: getal ·
+ * year_range: [van, tot] · multi: lijst · bool · code: { text, format } · share: [{ person_id, share }].
+ */
+export type FieldValue = string | number | boolean | string[] | [number | null, number | null] | CodeValue | Share[];
 export type Attributes = Record<string, FieldValue>;
-
-export type ProjectTemplate = {
-  label: string;
-  description: string;
-  icon: "wine" | "bike" | "project" | "armchair";
-  track_expenses: boolean;
-  track_items: boolean;
-  item_type: ItemType;
-  unit: Unit;
-  /** Hoe de naam en het merk heten in dit project ("Wijn", "Wijnhuis"). */
-  name_label: string;
-  brand_label: string;
-  /** Hoe de lijst heet ("Wijnen", "Fietsen"). */
-  plural_label: string;
-  fields: FieldDef[];
-};
-
-export const PROJECT_TEMPLATES = {
-  expenses: {
-    label: "Gewoon project",
-    description: "Verbouwing, reis, feest: uitgaven bijhouden en verdelen",
-    icon: "project",
-    track_expenses: true,
-    track_items: false,
-    item_type: "asset",
-    unit: "stuk",
-    name_label: "Naam",
-    brand_label: "Merk",
-    plural_label: "Dingen",
-    fields: [],
-  },
-  wine: {
-    label: "Wijnkelder",
-    description: "Elke wijn met jaargang, druiven, streek, drinkvenster en proefnotities",
-    icon: "wine",
-    track_expenses: true,
-    track_items: true,
-    item_type: "consumable",
-    unit: "fles",
-    name_label: "Wijn",
-    brand_label: "Wijnhuis",
-    plural_label: "Wijnen",
-    fields: [
-      { key: "vintage", label: "Jaargang", type: "year", column: true, hint: "jaartal van de oogst op het etiket" },
-      { key: "color", label: "Kleur", type: "select", options: ["Rood", "Wit", "Rosé", "Mousserend", "Zoet", "Versterkt"], column: true, filter: true },
-      { key: "grapes", label: "Druiven", type: "multi", filter: true, hint: "druivenrassen, zoals Pinot Noir of Chardonnay" },
-      { key: "country", label: "Land", type: "text", filter: true },
-      { key: "region", label: "Streek", type: "text", filter: true, hint: "streek of appellatie, zoals Bourgogne of Chablis" },
-      { key: "size", label: "Inhoud", type: "select", options: ["37,5 cl", "50 cl", "75 cl", "1,5 l", "3 l"] },
-      { key: "drink", label: "Drinken", type: "year_range", role: "drink_window" },
-      { key: "price", label: "Aankoopprijs per fles", type: "money", role: "unit_price" },
-      { key: "score", label: "Score", type: "score" },
-    ],
-  },
-  bikes: {
-    label: "Koersfietsen",
-    description: "Fietsen met bouwjaar, maat, groep, kilometers en onderhoud",
-    icon: "bike",
-    track_expenses: true,
-    track_items: true,
-    item_type: "asset",
-    unit: "stuk",
-    name_label: "Fiets",
-    brand_label: "Merk",
-    plural_label: "Fietsen",
-    fields: [
-      { key: "year", label: "Bouwjaar", type: "year", column: true },
-      { key: "frame", label: "Framemaat", type: "text", column: true },
-      { key: "groupset", label: "Groep", type: "text", filter: true, hint: "het schakelsysteem, zoals Shimano Ultegra" },
-      { key: "km", label: "Kilometerstand", type: "number", unit: "km" },
-      { key: "serial", label: "Serienummer", type: "text" },
-    ],
-  },
-  custom: {
-    label: "Eigen verzameling",
-    description: "Kies zelf welke velden je bijhoudt",
-    icon: "armchair",
-    track_expenses: false,
-    track_items: true,
-    item_type: "asset",
-    unit: "stuk",
-    name_label: "Naam",
-    brand_label: "Merk",
-    plural_label: "Dingen",
-    fields: [],
-  },
-} as const satisfies Record<string, ProjectTemplate>;
-export type TemplateKey = keyof typeof PROJECT_TEMPLATES;
-
-export function templateOf(key: string | null | undefined): ProjectTemplate {
-  return key && Object.hasOwn(PROJECT_TEMPLATES, key) ? PROJECT_TEMPLATES[key as TemplateKey] : PROJECT_TEMPLATES.expenses;
-}
 
 // ---------- velden nakijken ----------
 
 const KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
+export const MAX_FIELDS = 40;
 
-/** "Kilometerstand" → "kilometerstand"; zonder accenten of tekens, uniek binnen het project. */
+/** "Kilometerstand" → "kilometerstand"; zonder accenten of tekens, uniek binnen de soort. */
 export function fieldKey(label: string, taken: string[]): string {
   const base =
     label
@@ -162,10 +101,10 @@ export function fieldKey(label: string, taken: string[]): string {
   return key;
 }
 
-/** De velden van een project nakijken (wat de app of iemand anders stuurde). Gooit een fout met uitleg. */
+/** De velden van een soort nakijken (wat de app of iemand anders stuurde). Gooit een fout met uitleg. */
 export function cleanFields(raw: unknown): FieldDef[] {
   if (raw === null || raw === undefined) return [];
-  if (!Array.isArray(raw) || raw.length > 40) throw new Error("Hoogstens 40 velden per project");
+  if (!Array.isArray(raw) || raw.length > MAX_FIELDS) throw new Error(`Hoogstens ${MAX_FIELDS} velden per soort`);
   const seen = new Set<string>();
   return raw.map((r) => {
     const f = (r ?? {}) as Record<string, unknown>;
@@ -176,10 +115,6 @@ export function cleanFields(raw: unknown): FieldDef[] {
     seen.add(key);
     const type = f.type as FieldType;
     if (!Object.hasOwn(FIELD_TYPES, type)) throw new Error(`Onbekende soort voor "${label}"`);
-    const role = f.role as FieldRole | undefined;
-    if (role !== undefined && role !== null && !(Object.hasOwn(FIELD_ROLES, role) && (FIELD_ROLES[role].types as readonly FieldType[]).includes(type))) {
-      throw new Error(`"${label}" kan die betekenis niet hebben`);
-    }
     const options = Array.isArray(f.options)
       ? [
           ...new Set(
@@ -194,16 +129,25 @@ export function cleanFields(raw: unknown): FieldDef[] {
     const def: FieldDef = { key, label, type };
     if (options && (type === "select" || type === "multi") && options.length) def.options = options;
     if (typeof f.unit === "string" && f.unit.trim() && type === "number") def.unit = f.unit.trim().slice(0, 12);
+    if (type === "item") {
+      if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke soort "${label}" verwijst`);
+      def.ref_type = f.ref_type.slice(0, 64);
+    }
+    if (type === "code" && isCodeFormat(f.format)) def.format = f.format;
     if (f.column === true) def.column = true;
-    if (f.filter === true) def.filter = true;
-    if (role) def.role = role;
-    if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 120);
+    if (f.filter === true && FILTERABLE.includes(type)) def.filter = true;
+    if (f.required === true) def.required = true;
+    if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
     return def;
   });
 }
 
+/** Velden waarop je boven de lijst kan filteren. */
+export const FILTERABLE: FieldType[] = ["text", "select", "multi", "year", "year_range", "bool", "person", "item"];
+
 const thisYear = () => new Date().getFullYear();
 const isYear = (n: number) => Number.isInteger(n) && n >= 1800 && n <= thisYear() + 80;
+const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
 /** Eén waarde nakijken; null = leeg (wordt weggelaten). */
 export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
@@ -211,8 +155,10 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
   switch (def.type) {
     case "text":
       return typeof value === "string" && value.trim() ? value.trim().slice(0, 300) : null;
+    case "longtext":
+      return typeof value === "string" && value.trim() ? value.trim().slice(0, 8000) : null;
     case "date":
-      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : null;
     case "select":
       if (typeof value !== "string" || !value.trim()) return null;
       // Hoofdletters van de keuze overnemen ("rood" → "Rood"); een andere waarde mag (bv. uit een import).
@@ -231,11 +177,11 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
       return unique.length ? unique.slice(0, 20) : null;
     }
     case "number":
-      return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 1000) / 1000 : null;
+      return typeof value === "number" && Number.isFinite(value) && Math.abs(value) < 1e12 ? Math.round(value * 1000) / 1000 : null;
     case "year":
       return typeof value === "number" && isYear(value) ? value : null;
     case "money":
-      return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 100_000_000 ? value : null;
+      return typeof value === "number" && Number.isInteger(value) && Math.abs(value) < 100_000_000_00 ? value : null;
     case "score":
       return typeof value === "number" && value >= 0 && value <= 5 ? Math.round(value * 2) / 2 : null;
     case "bool":
@@ -247,10 +193,27 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
       if (from !== null && to !== null && to < from) return [to, from];
       return [from, to];
     }
+    case "code": {
+      const v = (typeof value === "string" ? { text: value } : value) as Partial<CodeValue>;
+      const text = typeof v?.text === "string" ? v.text.trim().slice(0, 500) : "";
+      if (!text) return null;
+      return { text, format: isCodeFormat(v.format) ? v.format : (def.format ?? "qr_code") };
+    }
+    case "person":
+    case "item":
+      return typeof value === "string" && ID_RE.test(value) ? value : null;
+    case "share": {
+      try {
+        const shares = normalizeShares(value);
+        return shares.length ? shares : null;
+      } catch {
+        return null;
+      }
+    }
   }
 }
 
-/** Alle waarden van een ding nakijken tegen de velden van zijn project; onbekende velden vallen weg. */
+/** Alle waarden van een item nakijken tegen de velden van zijn soort; onbekende velden vallen weg. */
 export function cleanAttributes(defs: FieldDef[], raw: unknown): Attributes {
   const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const out: Attributes = {};
@@ -261,28 +224,53 @@ export function cleanAttributes(defs: FieldDef[], raw: unknown): Attributes {
   return out;
 }
 
-// ---------- tekst lezen (formulier, import) ----------
+/** De personen waarnaar waarden verwijzen (persoon, personen met aandeel). */
+export function referencedPeople(defs: FieldDef[], data: Attributes): string[] {
+  const ids = new Set<string>();
+  for (const def of defs) {
+    const v = data[def.key];
+    if (def.type === "person" && typeof v === "string") ids.add(v);
+    if (def.type === "share" && Array.isArray(v)) for (const s of v as Share[]) ids.add(s.person_id);
+  }
+  return [...ids];
+}
 
-/** "€ 24,50" → 2450; "1.234,5" → 123450. NaN als het geen bedrag is. */
+/** De items waarnaar waarden verwijzen, met de soort waarnaar het veld wijst. */
+export function referencedItems(defs: FieldDef[], data: Attributes): { id: string; ref_type: string; key: string }[] {
+  return defs
+    .filter((d) => d.type === "item" && typeof data[d.key] === "string")
+    .map((d) => ({ id: data[d.key] as string, ref_type: d.ref_type!, key: d.key }));
+}
+
+/** Velden die verplicht zijn maar leeg. */
+export function missingRequired(defs: FieldDef[], data: Attributes): FieldDef[] {
+  return defs.filter((d) => d.required && data[d.key] === undefined);
+}
+
+// ---------- tekst lezen en tonen ----------
+
 export function parseMoney(text: string): number {
   let s = text.replace(/[€\s]|eur/gi, "");
   if (!s) return NaN;
   if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
   const n = Number(s);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
+  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
 }
 
 /**
  * Wat iemand typte of wat in een cel van een lijst staat, omzetten naar een waarde voor dit veld.
  * Leeg = null; niet te lezen = undefined (de app toont dan een fout of slaat de cel over).
+ * Personen en verwijzingen lezen we niet uit tekst (daar zijn id's voor nodig).
  */
 export function parseFieldText(def: FieldDef, text: string): FieldValue | null | undefined {
   const s = text.trim();
   if (!s) return null;
   switch (def.type) {
     case "text":
+    case "longtext":
     case "select":
     case "multi":
+    case "code":
       return cleanValue(def, s) ?? undefined;
     case "date": {
       const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
@@ -326,11 +314,19 @@ export function parseFieldText(def: FieldDef, text: string): FieldValue | null |
           : [years[0], years[1] ?? years[0]];
       return cleanValue(def, value) ?? undefined;
     }
+    case "person":
+    case "item":
+    case "share":
+      return undefined;
   }
 }
 
-/** Een waarde netjes tonen: "2019", "€ 24,50", "2026–2032", "Pinot Noir, Gamay", "★★★★☆". */
-export function formatFieldValue(def: FieldDef, value: FieldValue | undefined): string {
+/** Namen bij id's, om personen en verwijzingen te tonen. */
+export type Names = { person: (id: string) => string; item: (id: string) => string };
+const NO_NAMES: Names = { person: () => "?", item: () => "?" };
+
+/** Een waarde netjes tonen: "2019", "€ 24,50", "2026–2032", "Pinot Noir, Gamay", "Jana 60% · Jaan 40%". */
+export function formatFieldValue(def: FieldDef, value: FieldValue | undefined, names: Names = NO_NAMES): string {
   if (value === undefined || value === null) return "";
   switch (def.type) {
     case "money":
@@ -345,121 +341,65 @@ export function formatFieldValue(def: FieldDef, value: FieldValue | undefined): 
     }
     case "bool":
       return value ? "Ja" : "Nee";
-    case "score": {
-      const n = typeof value === "number" ? value : 0;
-      return `${String(n).replace(".", ",")}/5`;
-    }
+    case "score":
+      return `${String(value).replace(".", ",")}/5`;
     case "number":
       return `${String(value).replace(".", ",")}${def.unit ? ` ${def.unit}` : ""}`;
     case "date":
       return typeof value === "string" ? value.split("-").reverse().join("/") : "";
+    case "code":
+      return typeof value === "object" && value && "text" in value ? value.text : "";
+    case "person":
+      return typeof value === "string" ? names.person(value) : "";
+    case "item":
+      return typeof value === "string" ? names.item(value) : "";
+    case "share":
+      return Array.isArray(value) ? sharesText(value as Share[], names.person) : "";
     default:
       return String(value);
   }
 }
 
-/** Waar staat een wijn in zijn drinkvenster? */
-export function drinkStatus(value: FieldValue | undefined, year = thisYear()): "ready" | "young" | "past" | null {
+/** Valt het jaar binnen een periode (van–tot)? Voor de filter "nu" (bv. een wijn die nu drinkklaar is). */
+export function rangeStatus(value: FieldValue | undefined, year = thisYear()): "now" | "later" | "past" | null {
   if (!Array.isArray(value) || value.length !== 2) return null;
   const [from, to] = value as [number | null, number | null];
   if (from === null && to === null) return null;
-  if (from !== null && year < from) return "young";
+  if (from !== null && year < from) return "later";
   if (to !== null && year > to) return "past";
-  return "ready";
+  return "now";
 }
 
-/** Het eerste veld met deze betekenis. */
-export function fieldWithRole(defs: FieldDef[], role: FieldRole): FieldDef | undefined {
-  return defs.find((d) => d.role === role);
-}
-
-// ---------- kolommen van een lijst herkennen ----------
-
-/** Wat een kolom in een lijst kan zijn, naast de eigen velden. */
-export const BASE_COLUMNS = {
-  name: ["naam", "wijn", "name", "wine", "cuvee", "cuvée", "omschrijving", "product", "titel"],
-  brand: ["merk", "wijnhuis", "producent", "producer", "domein", "domaine", "chateau", "château", "brand", "winery"],
-  quantity: ["aantal", "flessen", "aantal flessen", "stuks", "quantity", "qty", "bottles", "voorraad"],
-  location: ["plaats", "locatie", "rek", "vak", "kelder", "location", "bin"],
-  notes: ["notitie", "notities", "opmerking", "opmerkingen", "notes", "proefnotitie", "tasting notes", "commentaar"],
-} as const;
-export type BaseColumn = keyof typeof BASE_COLUMNS;
-
-/** Andere namen die je in een lijst tegenkomt voor de velden van de sjablonen. */
-const FIELD_SYNONYMS: Record<string, string[]> = {
-  vintage: ["jaargang", "jaar", "vintage", "oogst", "year"],
-  color: ["kleur", "type", "soort", "color", "colour"],
-  grapes: ["druif", "druiven", "druivenras", "cepage", "cépage", "grape", "grapes", "varietal"],
-  country: ["land", "country"],
-  region: ["streek", "regio", "appellatie", "appellation", "region", "aoc"],
-  size: ["inhoud", "fles", "formaat", "size", "volume"],
-  drink: ["drinken", "drinkvenster", "drink", "drinkbaar", "drink window", "bewaren tot"],
-  price: ["prijs", "aankoopprijs", "prijs per fles", "price", "kostprijs", "cost"],
-  score: ["score", "punten", "rating", "beoordeling", "sterren"],
-  year: ["bouwjaar", "jaar", "year"],
-  frame: ["framemaat", "maat", "frame", "size"],
-  groupset: ["groep", "groepset", "groupset", "schakeling"],
-  km: ["km", "kilometers", "kilometerstand", "afstand"],
-  serial: ["serienummer", "serial", "frame nummer", "framenummer"],
-};
-
-const norm = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-/** Raadt bij een kolomkop het doel: een basiskolom ("name", "quantity", …), een veld (`field:<key>`), of null. */
-export function guessColumn(header: string, defs: FieldDef[]): string | null {
-  const h = norm(header);
-  if (!h) return null;
-  for (const def of defs) {
-    if (norm(def.label) === h || def.key === h) return `field:${def.key}`;
-  }
-  for (const def of defs) {
-    if ((FIELD_SYNONYMS[def.key] ?? []).some((s) => norm(s) === h)) return `field:${def.key}`;
-  }
-  for (const [col, names] of Object.entries(BASE_COLUMNS)) {
-    if ((names as readonly string[]).some((n) => norm(n) === h)) return col;
-  }
-  return null;
-}
-
-// ---------- eigenaars ----------
-
-export type OwnerShare = { member_id: string; share: number };
+// ---------- personen met aandeel ----------
 
 /**
- * Eigenaars nakijken en omrekenen naar procenten die samen 100 zijn (gewichten mogen ook: 1 en 1 = 50/50).
- * Leeg = van het huishouden samen.
+ * Aandelen nakijken en omrekenen naar procenten die samen 100 zijn (gewichten mogen ook: 1 en 1 = 50/50).
+ * Leeg = niemand apart.
  */
-export function normalizeOwners(raw: unknown): OwnerShare[] {
+export function normalizeShares(raw: unknown): Share[] {
   if (raw === null || raw === undefined) return [];
-  if (!Array.isArray(raw) || raw.length > 30) throw new Error("Te veel eigenaars");
+  if (!Array.isArray(raw) || raw.length > 30) throw new Error("Te veel personen");
   const list = raw.map((r) => {
     const o = (r ?? {}) as Record<string, unknown>;
-    if (typeof o.member_id !== "string" || !o.member_id) throw new Error("Kies wie eigenaar is");
+    if (typeof o.person_id !== "string" || !ID_RE.test(o.person_id)) throw new Error("Kies een persoon");
     const share = typeof o.share === "number" ? o.share : 1;
-    if (!Number.isFinite(share) || share <= 0) throw new Error("Geef elke eigenaar een deel");
-    return { member_id: o.member_id, share };
+    if (!Number.isFinite(share) || share <= 0) throw new Error("Geef elke persoon een deel");
+    return { person_id: o.person_id, share };
   });
-  if (new Set(list.map((o) => o.member_id)).size !== list.length) throw new Error("Iemand staat twee keer bij de eigenaars");
+  if (new Set(list.map((o) => o.person_id)).size !== list.length) throw new Error("Iemand staat er twee keer bij");
   const total = list.reduce((sum, o) => sum + o.share, 0);
-  return list.map((o) => ({ member_id: o.member_id, share: Math.round((o.share / total) * 10000) / 100 }));
+  return list.map((o) => ({ person_id: o.person_id, share: Math.round((o.share / total) * 10000) / 100 }));
 }
 
 /** "Jana", "Jana en Jaan", "Jana 60% · Jaan 40%". */
-export function ownersText(owners: OwnerShare[], name: (id: string) => string): string {
-  if (owners.length === 0) return "Samen";
-  const equal = owners.every((o) => Math.abs(o.share - owners[0].share) < 0.02);
+export function sharesText(shares: Share[], name: (id: string) => string): string {
+  if (shares.length === 0) return "";
+  const equal = shares.every((o) => Math.abs(o.share - shares[0].share) < 0.02);
   if (equal) {
-    const names = owners.map((o) => name(o.member_id));
+    const names = shares.map((o) => name(o.person_id));
     return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} en ${names[names.length - 1]}`;
   }
-  return owners.map((o) => `${name(o.member_id)} ${String(Math.round(o.share * 10) / 10).replace(".", ",")}%`).join(" · ");
+  return shares.map((o) => `${name(o.person_id)} ${String(Math.round(o.share * 10) / 10).replace(".", ",")}%`).join(" · ");
 }
 
 // ---------- een lijst importeren ----------
@@ -522,131 +462,110 @@ export function parseSheet(input: string): Sheet {
   return { headers: headers.map((h, i) => h || `Kolom ${i + 1}`), rows };
 }
 
-/** Waar een kolom heen gaat: een basiskolom, een eigen veld (`field:<key>`), of niets (""). */
-export type ColumnTarget = keyof typeof BASE_COLUMNS | `field:${string}` | "";
+/** Waar een kolom heen gaat: de naam, de tags, een veld (`field:<key>`), of niets (""). */
+export type ColumnTarget = "name" | "tags" | `field:${string}` | "";
 
-/** De beginkeuze per kolom. Wat we niet herkennen, komt bij de notitie: zo gaat er niets verloren. */
+/** Andere namen die je in een lijst tegenkomt voor de naam, de tags en veelgebruikte velden. */
+const SYNONYMS: Record<string, string[]> = {
+  name: ["naam", "wijn", "name", "titel", "omschrijving", "product", "cuvee"],
+  tags: ["tags", "tag", "labels"],
+  jaargang: ["jaargang", "jaar", "vintage", "oogst", "year"],
+  kleur: ["kleur", "color", "colour", "type"],
+  druiven: ["druif", "druiven", "druivenras", "cepage", "grape", "grapes", "varietal"],
+  land: ["land", "country"],
+  streek: ["streek", "regio", "appellatie", "appellation", "region", "aoc"],
+  wijnhuis: ["wijnhuis", "domein", "domaine", "producent", "producer", "chateau", "winery"],
+  merk: ["merk", "brand"],
+  aantal: ["aantal", "flessen", "aantal flessen", "stuks", "quantity", "qty", "bottles", "voorraad"],
+  prijs: ["prijs", "aankoopprijs", "prijs per fles", "price", "kostprijs", "cost", "bedrag"],
+  score: ["score", "punten", "rating", "beoordeling", "sterren"],
+  notitie: ["notitie", "notities", "opmerking", "opmerkingen", "notes", "proefnotitie", "commentaar"],
+  drinken: ["drinken", "drinkvenster", "drink", "drinkbaar", "drink window"],
+};
+
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Raadt bij een kolomkop het doel: de naam, de tags, een veld (`field:<key>`), of null. */
+export function guessColumn(header: string, defs: FieldDef[]): ColumnTarget | null {
+  const h = norm(header);
+  if (!h) return null;
+  for (const def of defs) if (norm(def.label) === h || def.key === h) return `field:${def.key}`;
+  const synonymsOf = (label: string) => Object.values(SYNONYMS).find((list) => list.some((s) => norm(s) === norm(label))) ?? [];
+  for (const def of defs) if (synonymsOf(def.label).some((s) => norm(s) === h)) return `field:${def.key}`;
+  if (SYNONYMS.name.some((s) => norm(s) === h)) return "name";
+  if (SYNONYMS.tags.some((s) => norm(s) === h)) return "tags";
+  return null;
+}
+
+/** Het eerste veld met lange tekst: daar komt bij een import wat we niet herkennen. */
+export function notesField(defs: FieldDef[]): FieldDef | undefined {
+  return defs.find((d) => d.type === "longtext");
+}
+
+/** De beginkeuze per kolom. Wat we niet herkennen, gaat naar het veld met lange tekst (als dat er is). */
 export function guessMapping(headers: string[], defs: FieldDef[]): ColumnTarget[] {
   const used = new Set<string>();
-  return headers.map((h) => {
-    const guess = guessColumn(h, defs) as ColumnTarget | null;
-    // Twee kolommen voor hetzelfde veld: de eerste krijgt het, de rest gaat bij de notitie.
-    if (!guess || (guess !== "notes" && used.has(guess))) return "notes";
-    used.add(guess);
-    return guess;
+  const notes = notesField(defs);
+  return headers.map((h): ColumnTarget => {
+    const guess = guessColumn(h, defs);
+    if (guess && !used.has(guess)) {
+      used.add(guess);
+      return guess;
+    }
+    return notes ? `field:${notes.key}` : "";
   });
 }
 
+export type ImportRow = { name: string; data: Record<string, FieldValue>; tags: string[] };
 export type ImportProblem = { row: number; column: string; value: string };
 
-/** Een getal uit een cel: "6", "6 flessen", "1,5". Leeg = null, onleesbaar = undefined. */
-function parseQuantity(text: string): number | null | undefined {
-  const s = text.trim();
-  if (!s) return null;
-  const n = Number(s.replace(",", ".").match(/^\d+(?:\.\d+)?/)?.[0]);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 /**
- * De rijen van de lijst omzetten met de gekozen kolommen. Wat niet te lezen is (een jaartal "ca. negentig"),
- * komt bij de notitie met de naam van de kolom en staat in `problems`.
+ * De rijen van de lijst omzetten met de gekozen kolommen. Meerdere kolommen naar één veld met lange tekst komen
+ * onder elkaar ("Kop: waarde"). Wat niet te lezen is, komt bij dat veld en staat in `problems`.
  */
-export function importRows(sheet: Sheet, mapping: ColumnTarget[], defs: FieldDef[]): { rows: ItemImportRow[]; problems: ImportProblem[] } {
+export function importRows(sheet: Sheet, mapping: ColumnTarget[], defs: FieldDef[]): { rows: ImportRow[]; problems: ImportProblem[] } {
   const problems: ImportProblem[] = [];
+  const notes = notesField(defs);
   const rows = sheet.rows.map((cells, index) => {
-    const row: ItemImportRow = { name: "", attributes: {} };
-    const notes: string[] = [];
-    const attributes: Record<string, FieldValue> = {};
+    const row: ImportRow = { name: "", data: {}, tags: [] };
+    const extra: Record<string, string[]> = {};
+    const add = (key: string, line: string) => (extra[key] = [...(extra[key] ?? []), line]);
     mapping.forEach((target, col) => {
       const value = (cells[col] ?? "").trim();
       if (!target || !value) return;
       const header = sheet.headers[col];
-      const unreadable = () => {
-        problems.push({ row: index + 1, column: header, value });
-        notes.push(`${header}: ${value}`);
-      };
       if (target === "name") row.name = row.name ? `${row.name} ${value}` : value;
-      else if (target === "brand") row.brand ??= value;
-      else if (target === "location") row.location ??= value;
-      else if (target === "notes") notes.push(mapping.filter((t) => t === "notes").length > 1 ? `${header}: ${value}` : value);
-      else if (target === "quantity") {
-        const n = parseQuantity(value);
-        if (n === undefined) unreadable();
-        else row.quantity ??= n;
-      } else {
+      else if (target === "tags")
+        row.tags.push(
+          ...value
+            .split(/[,;]/)
+            .map((t) => t.trim())
+            .filter(Boolean),
+        );
+      else {
         const def = defs.find((d) => `field:${d.key}` === target);
-        if (!def || def.key in attributes) return;
+        if (!def) return;
+        if (def.type === "longtext") {
+          add(def.key, mapping.filter((t) => t === target).length > 1 ? `${header}: ${value}` : value);
+          return;
+        }
+        if (def.key in row.data) return;
         const parsed = parseFieldText(def, value);
-        if (parsed === undefined) unreadable();
-        else if (parsed !== null) attributes[def.key] = parsed;
+        if (parsed === undefined) {
+          problems.push({ row: index + 1, column: header, value });
+          if (notes) add(notes.key, `${header}: ${value}`);
+        } else if (parsed !== null) row.data[def.key] = parsed;
       }
     });
-    row.attributes = attributes;
-    if (notes.length) row.notes = notes.join("\n");
+    for (const [key, lines] of Object.entries(extra)) row.data[key] = lines.join("\n");
     return row;
   });
   return { rows, problems };
-}
-
-// ---------- waarde en wie wat heeft ----------
-
-type Valued = { type: ItemType; quantity: number; attributes: Attributes; value_cents: number | null; cost_cents: number; owners: OwnerShare[] };
-
-/**
- * Wat iets waard is: bij iets dat opraakt het aantal × de prijs per eenheid (een veld met die betekenis),
- * anders de geschatte waarde of wat het kostte.
- */
-export function itemValue(item: Valued, defs: FieldDef[]): number {
-  if (item.type === "consumable") {
-    const price = fieldWithRole(defs, "unit_price");
-    const unit = price ? item.attributes[price.key] : undefined;
-    return typeof unit === "number" ? Math.round(unit * item.quantity) : 0;
-  }
-  return item.value_cents ?? item.cost_cents ?? 0;
-}
-
-/** De waarde per eigenaar ("" = van het huishouden samen), van groot naar klein. */
-export function valueByOwner(items: Valued[], defs: FieldDef[]): { member_id: string; cents: number }[] {
-  const totals = new Map<string, number>();
-  for (const item of items) {
-    const value = itemValue(item, defs);
-    if (!value) continue;
-    if (item.owners.length === 0) totals.set("", (totals.get("") ?? 0) + value);
-    for (const o of item.owners) totals.set(o.member_id, (totals.get(o.member_id) ?? 0) + (value * o.share) / 100);
-  }
-  return [...totals.entries()].map(([member_id, cents]) => ({ member_id, cents: Math.round(cents) })).sort((a, b) => b.cents - a.cents);
-}
-
-// ---------- een lijn van een factuur ----------
-
-/**
- * "6x Chablis 1er Cru Montmains 2019 75cl" → naam "Chablis 1er Cru Montmains", aantal 6, jaargang 2019.
- * Het jaartal gaat naar het eerste jaarveld van het project (zonder jaarveld blijft het in de naam).
- */
-export function parseInvoiceLine(description: string, defs: FieldDef[]): { name: string; quantity: number; attributes: Attributes } {
-  let name = description.replace(/\s+/g, " ").trim();
-  let quantity = 1;
-  const attributes: Attributes = {};
-  const lead = name.match(/^(\d{1,3})\s*(?:[x×*]|fl\.?|fles(?:sen)?|btl\.?|st\.?|stuks?)\s+/i);
-  const trail = name.match(/\s+(?:[x×*]\s*(\d{1,3})|(\d{1,3})\s*(?:fl\.?|fles(?:sen)?|btl\.?|st\.?|stuks?))$/i);
-  if (lead) {
-    quantity = Number(lead[1]);
-    name = name.slice(lead[0].length);
-  } else if (trail) {
-    quantity = Number(trail[1] ?? trail[2]);
-    name = name.slice(0, -trail[0].length);
-  }
-  // Inhoud van de fles weg uit de naam: "75cl", "0,75 l", "1,5L".
-  name = name.replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:cl|ml|l)\b\.?/gi, " ");
-  const yearField = defs.find((d) => d.type === "year");
-  const year = name.match(/\b(19[4-9]\d|20[0-4]\d)\b/);
-  if (yearField && year) {
-    attributes[yearField.key] = Number(year[1]);
-    name = name.replace(year[0], " ");
-  }
-  name = name
-    .replace(/\s+/g, " ")
-    .replace(/^[\s,–-]+|[\s,–-]+$/g, "")
-    .trim();
-  return { name: name || description.trim(), quantity: quantity > 0 ? quantity : 1, attributes };
 }

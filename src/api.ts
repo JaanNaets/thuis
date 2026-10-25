@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { REFRESH_EVENT } from "./device";
-import { withHousehold } from "./household";
 
 export class ApiError extends Error {
   constructor(
@@ -38,9 +37,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
-/** Volledige URL naar de API, met het gekozen huishouden erbij (ook voor <img src>). */
+/** Volledige URL naar de API (ook voor <img src>). */
 export function apiUrl(path: string): string {
-  return `/api${withHousehold(path)}`;
+  return `/api${path}`;
 }
 
 export const api = {

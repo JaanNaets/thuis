@@ -14,6 +14,8 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | --- | --- |
 | Kleuren, maten, schaduwen, curves | `src/styles.css`, bovenaan in `:root` |
 | Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`) |
+| Velden, soorten en items | `src/components/Fields.tsx`, `ItemsView.tsx` en `shared/fields.ts` |
+| Rechten | `shared/access.ts` (wat een rol mag, per soort en per veld) |
 | Navigatie met overgangen | `src/router.tsx` (`Link`, `NavLink`, `useNavigate`) en `src/routes.tsx` |
 | Iconen | `src/components/Icon.tsx` |
 | Opmaak van bedragen, datums, hoeveelheden | `src/format.ts` |
@@ -47,7 +49,7 @@ Gebruik altijd de variabele, nooit de kleurcode zelf.
 | --- | --- | --- |
 | `--canvas` | #f0f0f0 | Achtergrond achter het paneel, waarop de zijbalk staat (enkel tablet) |
 | `--background` | #ffffff | Paneel, kaarten, knoppen |
-| `--subtle` | #f7f7f7 | Kopstrook van tabellen, notitieblok |
+| `--subtle` | #f7f7f7 | Kopstrook van tabellen |
 | `--muted` | #f2f2f2 | Pillen (`badge`), secundaire knop, tabs, hover in lijsten |
 | `--muted-strong` | #e7e7e7 | Hover van secundaire knoppen, lege streepjes in de meter |
 | `--nav-active` | #e2e2e2 | Actief item in de zijbalk |
@@ -63,12 +65,12 @@ Gebruik altijd de variabele, nooit de kleurcode zelf.
 | `--accent` (+ `-soft`, `-line`, `-ink`) | #2f86eb | Blauw: focus, selectie, actieve filter, toasts, automatisch ingevulde velden |
 | `--accent-gradient` | #62aefa → #2f80ed | Enkel de icoontegeltjes in kaarttitels |
 | `--brand-gradient` | #5b8cff → #4a5ff0 | Enkel het merktegeltje in de zijbalk |
-| `--success*`, `--warning*`, `--danger*` | | Status: garantie loopt / bijna op / vervallen |
+| `--success*`, `--warning*`, `--danger*` | | Status: loopt / bijna voorbij / voorbij |
 
 **Tonen** (`tone-peach`, `tone-butter`, `tone-sage`, `tone-mint`, `tone-sky`, `tone-lilac`, `tone-rose`) zijn de
-kleuren van categorieën, tags, plaatsen en leden. Ze geven `--tone`, `--tone-soft`, `--tone-line`, `--tone-mid`
+kleuren van projecten, tags en personen. Ze geven `--tone`, `--tone-soft`, `--tone-line`, `--tone-mid`
 en `--tone-ink`. Gebruik ze **enkel** voor stipjes (`.dot`), avatars, het vierkantje voor een rij (`.row-media`),
-de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of grote vlakken.
+de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of grote vlakken.
 
 ### Typografie
 
@@ -104,9 +106,8 @@ de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of gro
 ### Gsm (smaller dan 768px)
 
 - Witte achtergrond, inhoud met 16px marge.
-- **Onderbalk** met vijf tabs (Aankopen, Uitgaven, Voorraad, Kaarten, Meer); een gast heeft er twee (Projecten, Meer).
-  Een grijs vlak schuift naar de actieve tab. Wat niet in de onderbalk past (Projecten, Bezit, Verkopers) en het wisselen
-  van huishouden staat bovenaan **Meer** (`PhoneMenu` in `SettingsPage.tsx`).
+- **Onderbalk** met drie tabs: **Projecten**, **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)) en **Ik**.
+  Een grijs vlak schuift naar de actieve tab. Een fiche van een item hoort bij Projecten.
 - **Zwevende + knop** rechtsonder voor de hoofdactie van het scherm.
 - **Kleine titelbalk** bovenaan die verschijnt zodra de grote titel uit beeld scrollt (zit in `PageHead`).
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
@@ -116,44 +117,39 @@ de iconen van plaatsen in de zijbalk en tags. Nooit voor knoppen, kaarten of gro
 ```
 ┌ canvas #f0f0f0 ────────────────────────────────────────────────────────────┐
 │ ┌ werkplek ──┐  ┌ paneel (wit, rand, 16px) ──────────────────────────────┐ │
-│ │ ▣ Thuis    │  │ Aankopen › Wasmachine                  [+ Nieuw] │ [J] │ │  ← paneelbalk 58px
+│ │ ▣ Thuis    │  │ Huishouden › Wijnkelder           [+ Wijn toevoegen] │J│ │  ← paneelbalk 58px
 │ └────────────┘  ├────────────────────────────────────────────────────────┤ │
-│  ────────────   │ Wasmachine Bosch Serie 6  uitleg            [Bewerken] │ │  ← kopregel 56px
-│ [⌕ Zoeken ⌘K]   ├────────────────────────────┬───────────────────────────┤ │
-│ Menu            │ zijkolom (320px)           │ ┌ kaart ────────────────┐ │ │
-│ ▮ Aankopen 24   │ secties met                │ │ ▣ Bewijsstukken       │ │ │
-│   Uitgaven      │ ingezette lijnen           │ │ ┌ kopstrook ────────┐ │ │ │
-│   Voorraad  2   │                            │ │ ingezette rijen       │ │ │
-│   Kaarten       │                            │ └───────────────────────┘ │ │
-│ Plaatsen        │                            │                           │ │
-│ ● Keuken   ⌃    │                            │                           │ │
-│ │ Koelkast      │                            │                           │ │
-│ ● Berging       │                            │                           │ │
-│ + Plaats toev.  │                            │                           │ │
-│ ⚙ Instellingen  └────────────────────────────┴───────────────────────────┘ │
+│ [⌕ Zoeken ⌘K]   │ Wijnkelder  uitleg                         [Instellen] │ │  ← kopregel 56px
+│ ▮ Projecten  2  ├────────────────────────────────────────────────────────┤ │
+│ Projecten       │ Wijnen 12 · Wijnhuizen 3                               │ │  ← tabs per soort
+│ ● Huishouden ⌃  ├───────────────────────────────┬────────────────────────┤ │
+│ │ Wijnkelder    │ zijkolom (320px)              │ ┌ kaart ─────────────┐ │ │
+│ │ Fietsen       │ Subprojecten                  │ │ zoeken, filters    │ │ │
+│ ● Verbouwing    │ Wie                           │ │ tabel met items    │ │ │
+│ + Project       │                               │ └────────────────────┘ │ │
+│ ◉ Jaan          └───────────────────────────────┴────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (8px marge, rand `--border`, afronding 16px). Het paneel scrollt zelf; de zijbalk blijft staan.
-- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: werkplek in een wit blok (het huishouden; een klik opent een
-  menu om te wisselen of een nieuw huishouden te maken), een dun lijntje, het zoekveld (opent het
-  [zoekpalet](#zoekpalet-commandpalette)), sectie "Menu" met tellers, sectie "Projecten" (lopende projecten met een
-  gekleurd icoon), sectie "Plaatsen" (de plaatsenboom), onderaan Instellingen. Het actieve item is een grijze pil
+- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: "Thuis" in een wit blok (naar het overzicht), het zoekveld
+  (opent het [zoekpalet](#zoekpalet-commandpalette)), "Projecten" met een teller, de
+  [projectboom](#projectboom-zijbalk), onderaan jouw naam (naar `/ik`). Het actieve item is een grijze pil
   (`--nav-active`) die meeglijdt.
-- **Paneelbalk** (58px, plakt bovenaan): kruimelpad met `›` links ("Thuis › Voorraad" of "Voorraad › Penne"),
-  rechts de hoofdactie, een verticaal lijntje en wie aangemeld is (afgerond vierkantje, linkt naar Instellingen).
+- **Paneelbalk** (58px, plakt bovenaan): kruimelpad met `›` links ("Huishouden › Wijnkelder"), rechts de
+  hoofdactie, een verticaal lijntje en jouw avatar (linkt naar `/ik`).
 - **Kopregel** (56px, lijn eronder over de hele breedte): kleine titel + badge + grijze uitleg links, acties op
   het item rechts (`btn-outline btn-sm`).
-- Inhoud daaronder met 20px marge. Detailschermen en Uitgaven gebruiken de [zijkolom](#zijkolom-split).
+- Inhoud daaronder met 20px marge. Een project en een fiche gebruiken de [zijkolom](#zijkolom-split).
 - Geen + knop: de hoofdactie staat in de paneelbalk.
 
 ### Opbouw van elk scherm
 
 ```
 PageHead                 paneelbalk (kruimelpad, primary, avatar) + kopregel (titel, badge, uitleg, actions)
-Tabs                     als er weergaves zijn (Alles 10 · Bijna op 2 · …)
-toolbar                  zoeken (+ scanknop)
+Tabs                     als er weergaves zijn (Wijnen 12 · Wijnhuizen 3 · …)
+toolbar                  zoeken (+ iconknop, bv. importeren)
 filters                  filterpillen
 card / card table        de inhoud — of .split met zijkolom en kaarten
 fab                      + knop (enkel gsm, zelfde actie als primary)
@@ -169,27 +165,27 @@ Elk scherm begint ermee. Hij maakt de paneelbalk en de kopregel (tablet) en de g
 
 ```tsx
 <PageHead
-  title="Voorraad"
-  badge={<span className="badge badge-warning">2 bijna op</span>}   // optioneel, kort
-  description="Wat er in huis is, waar het ligt en wanneer het vervalt"
-  back={{ to: "/voorraad", label: "Voorraad" }}                       // enkel op detail- en formulierschermen
-  actions={<Link className="btn btn-outline btn-sm" …>Bewerken</Link>} // acties op dit item, rechts in de kopregel
-  primary={<Link className="btn btn-primary" …><Icon name="plus" size={16} /> Nieuw item</Link>} // in de paneelbalk
+  title="Wijnkelder"
+  badge={<span className="badge">Gearchiveerd</span>}                 // optioneel, kort
+  description="Wat er in de kelder ligt en wanneer het drinkklaar is"
+  back={{ to: `/projecten/${parent.id}`, label: parent.name }}        // het project erboven, of terug
+  actions={<Link className="btn btn-outline btn-sm" …>Instellen</Link>} // acties op dit scherm, rechts in de kopregel
+  primary={<Link className="btn btn-primary" …><Icon name="plus" size={16} /> Wijn toevoegen</Link>} // in de paneelbalk
 />
 ```
 
-- Een overzichtsscherm heeft `primary` (en een `.fab` met dezelfde actie). Een detailscherm heeft `back` en `actions`.
+- Een overzichtsscherm (een project) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
 - Formulieren: `back={{ to: -1, label: … }}` (gewoon terug), geen `primary`.
 - Beschrijving: één korte zin (op tablet staat ze naast de titel en wordt ze afgekapt), zonder punt als het een opsomming is.
 
 ### Zijkolom: `split`
 
-Voor detailschermen en Uitgaven: links de kern, rechts de kaarten (zoals "Product designer" in Bretford).
+Voor een fiche en een project: links de kern, rechts de kaarten (zoals "Product designer" in Bretford).
 
 ```tsx
 <div className="split">
   <aside className="split-aside">
-    <section className="card">…kern: bedrag of voorraad, dl-lijst…</section>
+    <section className="card">…kern: foto, dl-lijst met de velden, tags…</section>
     <section className="card">…nog een sectie…</section>
   </aside>
   <div className="split-main">
@@ -199,7 +195,8 @@ Voor detailschermen en Uitgaven: links de kern, rechts de kaarten (zoals "Produc
 </div>
 ```
 
-- Op gsm en smalle tablets staan beide onder elkaar en zijn de secties gewone kaarten.
+- Op gsm en smalle tablets staan beide onder elkaar en zijn de secties gewone kaarten. Is de rechterkant het
+  belangrijkste (de lijst van een project), zet dan `split split-main-first`: onder 960px komt die eerst.
 - Vanaf 960px: zijkolom van 320px met een lijn rechts tot onderaan het paneel; de kaarten in de zijkolom verliezen
   hun rand en worden secties, gescheiden door een ingezette lijn. Zet de `.split` direct in `.page`, na `PageHead`.
 
@@ -207,7 +204,7 @@ Voor detailschermen en Uitgaven: links de kern, rechts de kaarten (zoals "Produc
 
 | Klasse | Wanneer |
 | --- | --- |
-| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuwe aankoop) |
+| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuw project) |
 | `btn btn-outline` | Gewone acties naast de hoofdactie (Bewerken, Scannen, Uit foto) |
 | `btn btn-ghost` | Stille acties in een rij (−/+ in de stepper, archiveren) |
 | `btn btn-danger` | Enkel als bevestiging in het venster "verwijderen?" |
@@ -268,25 +265,25 @@ Voor detailschermen en Uitgaven: links de kern, rechts de kaarten (zoals "Produc
 Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de kaart** (afgerond, zonder rand).
 
 ```tsx
-<div className="card table table-purchases">
+<div className="card table table-items" style={{ "--cols": "minmax(0, 1fr) minmax(0, 160px) 110px" } as CSSProperties}>
   <div className="table-head" aria-hidden="true">
-    <span>Aankoop</span><span>Verkoper</span><span>Datum</span><span className="xl">Garantie</span><span className="end">Bedrag</span>
+    <span>Wijn</span><span>Wijnhuis</span><span className="end">Jaargang</span>
   </div>
   <ul className="rows stagger">
     <li><Link className="row">
-      <span className="cell-main">…<span className="row-meta narrow-only">verkoper · datum</span></span>
-      <span className="col"><span>{vendor}</span></span>
-      <span className="col"><span>{date}</span></span>
-      <span className="col xl">{badge}</span>
-      <span className="row-end">{amount}</span>
+      <span className="cell-main">…<span className="row-meta narrow-only">wijnhuis · jaargang</span></span>
+      <span className="col"><span>{house}</span></span>
+      <span className="col col-end"><span>{year}</span></span>
     </Link></li>
   </ul>
 </div>
 ```
 
-- Kolommen staan in `styles.css` als `--cols` per tabel (`.table-purchases`, `.table-stock`, `.table-entries`,
-  `.table-projects`, `.table-vendors`, `.table-assets`).
-  Een nieuwe tabel krijgt een eigen klasse met `--cols`; de eerste kolom is altijd `minmax(0, 1fr)`.
+- De lijst van een soort (`ItemsView`) is `.table-items`: de kolommen komen van de velden met `column` (de naam en
+  hooguit twee velden; naast de zijkolom is er niet meer plaats). Getallen (bedrag, getal, score, jaar) zijn 110px
+  breed en rechts uitgelijnd (`col-end`), tekst `minmax(0, 160px)`. Daarom staat `--cols` op de tabel zelf.
+- Een andere tabel met vaste kolommen krijgt een eigen klasse met `--cols` in `styles.css`; de eerste kolom is
+  altijd `minmax(0, 1fr)`.
 - Hooguit 4 kolommen tussen 768 en 1100px; extra kolommen krijgen `xl` (verschijnen pas vanaf 1100px).
 - Wat op gsm in de grijze regel staat, heeft `narrow-only`; wat enkel in de tabel onder de titel moet, `wide-only`.
 - Lege cel: een streepje `—` in `.muted`.
@@ -294,50 +291,51 @@ Dezelfde rijen worden op tablet een tabel met een **grijze kopstrook binnen de k
 ### Tabs met tellers: `Tabs`
 
 ```tsx
-<Tabs label="Voorraad" value={tab} onChange={setTab}
-  tabs={[{ value: "all", label: "Alles", count: 10 }, { value: "low", label: "Bijna op", count: 2 }]} />
+<Tabs label="Soorten" value={type.id} onChange={(t) => setParams({ soort: t }, { replace: true })}
+  tabs={types.map((t) => ({ value: t.id, label: t.plural, count: counts[t.id] ?? 0 }))} />
 ```
 
 Een grijze pil met een wit vlak dat naar de actieve tab glijdt; tellers rollen bij een wijziging. Voor
-verschillende **weergaves van dezelfde lijst** (of de onderwerpen in Instellingen). Niet voor navigatie naar een
-ander scherm.
+verschillende **weergaves binnen één scherm** (de soorten van een project, de onderwerpen bij Instellen). Niet voor
+navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?soort=`, `?tab=`), zodat je ernaar kan linken.
 
 ### Filters: `FilterSelect` en `FilterToggle`
 
 ```tsx
 <div className="filters">
-  <FilterSelect label="Plaats" all="Overal" value={locationId} onChange={setLocationId} options={…} />
-  <FilterToggle on={x} onChange={setX}><Icon name="store" size={14} /> Colruyt</FilterToggle>
+  <FilterSelect label="Druif" all="Alle" value={filters.grape} onChange={…} options={…} />
+  <FilterToggle on={now} onChange={setNow}><Icon name="clock" size={14} /> Drinkklaar: nu</FilterToggle>
 </div>
 ```
 
 Witte pil met dunne rand: grijs label, donkere waarde. Een actieve filter kleurt blauw. Filters staan onder het zoekveld.
-Een filter waarnaar je vanuit een ander scherm wil linken, staat in het adres (zoals `?plaats=` en `?verkoper=`).
+In `ItemsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
+wordt een schakelaar "Label: nu"), plus Tag en Archief. Toon een filter pas als er iets te kiezen valt.
 
 ### Segmenten: `Segmented`
 
-Keuze tussen 2–4 opties in een formulier (Betaald door, Voor wie, Soort). Het witte vlak schuift mee.
+Keuze tussen 2–4 opties in een formulier (Niet zien · Zien · Wijzigen, Gelijk · Procent). Het witte vlak schuift mee.
 Meer dan 4 opties: gebruik een `select`.
 
 ### Zoekpalet: `CommandPalette`
 
-Opent met **⌘K / Ctrl K** of het zoekveld in de zijbalk (`useSession().openSearch()` vanuit een scherm). Zoekt
-zonder op hoofdletters of accenten te letten in schermen, projecten, aankopen, voorraad, kaarten, verkopers en
-plaatsen (een gast: enkel zijn projecten en hun aankopen).
-Pijltjes kiezen (een grijs vlak glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden?
-Voeg het toe als groep in `CommandPalette.tsx`.
+Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk of Zoeken in de onderbalk (`useSession().openSearch()` vanuit
+een scherm). Zoekt zonder op hoofdletters of accenten te letten in acties, je projecten en (via `/api/search`) de
+items die je mag zien. Pijltjes kiezen (een grijs vlak glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je
+moet kunnen vinden? Voeg het toe als groep in `CommandPalette.tsx`.
 
-### Plaatsenboom (zijbalk)
+### Projectboom (zijbalk)
 
-De hoofdplaatsen met elk een gekleurd gevuld speldje (vaste volgorde van tonen), een pijltje om open te klappen
-(de rij groeit van `0fr` naar `1fr`, kinderen schuiven één voor één in) en een hulplijn links van de kinderen.
-Een plaats openen = `/voorraad?plaats=<id>`. Onderaan "+ Plaats toevoegen" (naar `/meer?tab=plaatsen`).
+Je hoofdprojecten, elk met zijn icoon in zijn toon, een pijltje om de subprojecten open te klappen (de rij
+groeit van `0fr` naar `1fr`, kinderen schuiven één voor één in) en een hulplijn links van de kinderen
+(`place-link child`). De boom waarin het project zit dat je bekijkt, staat open. Onderaan "+ Project".
+Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--depth`.
 
 ### Formulier
 
 ```tsx
 <form className="form page" onSubmit={…}>
-  <PageHead title="Nieuw item" back={{ to: -1, label: "Voorraad" }} />
+  <PageHead title="Wijn toevoegen" back={{ to: -1, label: "Wijnkelder" }} />
   <section className="card form-section">
     <label className="field">
       <span className="label">Naam</span>
@@ -359,135 +357,72 @@ Een plaats openen = `/voorraad?plaats=<id>`. Onderaan "+ Plaats toevoegen" (naar
 - Label boven het veld. Optioneel? `<span className="optional">· uitleg</span>` achter het label. Uitleg onder
   een veld in `.hint`.
 - Verplichte velden krijgen `required`, geen sterretje.
-- **Elk formulier waarin je iets registreert heeft een notitieveld**, en waar het past een verkoper (`VendorField`).
+- **Een soort heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
+  lange tekst als eigen kaart.
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
-- Kant-en-klare velden: `VendorField`, `TreeSelect` (categorie, plaats), `TagPicker`, `QuantityField`, `Switch`,
-  `ToneSwatches`, `FilePicker`, `ScanButtons`.
+- Kant-en-klare velden: `FieldInputs` (alle velden van een soort), `TagPicker`, `Switch`, `ToneSwatches`,
+  `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`.
 
-### Verdelen: `SplitEditor` en `DefaultSplitField` (`SplitEditor.tsx`)
+### Soorten en velden: `Fields.tsx`
 
-Elke uitgave (aankoop, terugkerende kost) zegt **wie betaalde** en **hoe het verdeeld wordt**. Altijd met deze
-component, nooit met eigen velden.
-
-```tsx
-const [split, setSplit] = useState(() => initialSplitState({ meId, people, defaults, existing }));
-<section className="card form-section">
-  <SplitEditor amount={cents} people={people} pots={pots} meId={meId} value={split} onChange={setSplit} />
-</section>
-// bij bewaren:
-const built = buildSplit(split, cents); // { payments, split } of { error }
-```
-
-- `people` en `pots` komen uit `splitCandidates(taxonomy, projectId, full, used)` (`taxonomy.ts`): in een project de
-  deelnemers en de kas van dat project, anders de bewoners en de potten van het huishouden.
-- Betaald door: segmenten (≤ 4 keuzes) of een keuzelijst; "Meerdere betalers" geeft per betaler een bedrag.
-- Verdeling: Gelijk · Procent · Delen · Bedrag, en "Per lijn van het ticket" (`allowLines={false}` bij een vaste kost).
-  Tik op een avatar om iemand mee te laten doen of niet (blauw vinkje). Rechts staat meteen wie hoeveel draagt.
-- Onderaan één statusregel: groen "Klopt", of rood wat er nog niet klopt. Bewaren kan pas als het klopt.
-- **Iemand anders** (`onAddPerson` + `suggestions`): iemand mee laten delen die niet in de lijst staat. Een naam
-  die we kennen, wordt die persoon; een nieuwe naam wordt een persoon zonder aanmelding (`addPerson` in
-  `src/people.ts`). Wie later toegevoegd wordt met dezelfde naam (Instellingen → Lid, of een projectdeelnemer),
-  wordt die persoon, met alles wat al gedeeld werd. Enkel voor volledige leden.
-- De gewone verdeling van een huishouden of project (bv. 60/40) kies je met `DefaultSplitField`
-  (`defaultSplitDraft` → `buildDefaultSplit`). Een nieuwe uitgave begint ermee.
-
-### Saldo's en geld: `Ledger.tsx`
-
-Uitgaven en projecten tonen geld met dezelfde onderdelen:
-
-| Component | Wat |
-| --- | --- |
-| `BalancesCard` | Wie moet wie (voorgestelde overschrijvingen), met "Terugbetaald" en "Lening" |
-| `PotsCard` | Potten of de kas van een project: wat erin zit, per lid wat die nog moet bijstorten, Storten/Afhalen |
-| `MoneySheet` | Eén onderblad voor elke geldbeweging: terugbetaling, lening, storting, afhaling |
-| `EntryRow` | Een uitgave of geldbeweging in een `table-entries` (`inProject` verbergt de projectnaam) |
-| `RecurringCard` | Vaste kosten (huur, abonnementen) die zichzelf inboeken |
-| `MonthTotal`, `CategoryBars` | Groot totaal dat optelt en balken per categorie |
-
-- "Jij/jou" in plaats van je eigen naam: `useWords(taxonomy)` → "Sam moet jou nog", "Jij moet Sam nog".
-- Een negatief saldo van een pot is rood (`.negative`); verder geen kleur op bedragen.
-
-### Verkopers: `VendorLogo`
-
-Het logo van een verkoper in het vierkantje van een rij (`row-media`, op wit en nooit bijgesneden), of anders het
-icoon van de soort (winkel, webshop, vakman, dienst, particulier). `className="lg"` voor 52px bovenaan de fiche.
-Een verkopersfiche bewaart **nooit een wachtwoord**: enkel klantnummer, op wiens naam en waarmee je aanmeldt.
-
-### Bezit en verbruik: `ItemLinks.tsx`
-
-Een uitgave kan aan een ding hangen, met een rol: de aankoop zelf, bijgekocht (met het aantal), onderhoud,
-herstelling, onderdeel of een andere kost. Een etentje of een massage hangt nergens aan; dat blijft een uitgave.
+Alles wat je bijhoudt, is een **item** van een **soort**: een klein formulier met eigen velden (Wijn met jaargang en
+druiven, Klantenkaart met een barcode). De soorten van een project gelden ook in zijn subprojecten. De veldsoorten
+staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar een type, een controle
+(`cleanValue`), een opmaak (`formatFieldValue`) en hier een invoer.
 
 | Component of hulpje | Wat |
 | --- | --- |
-| `LinkItemForm` | Vanaf een uitgave: kies het ding ("Waarvoor" op de aankoopfiche) |
-| `LinkPurchaseForm` | Vanaf een ding: zoek een uitgave die er al is ("Uitgave koppelen") |
-| `EditLinkForm` | Rol, aantal of bedrag aanpassen, of losmaken |
-| `itemPath(item)` | `/bezit/:id` voor bezit, `/voorraad/:id` voor verbruik: link altijd hiermee |
-| `rolesFor`, `roleText`, `linkCost` | Welke rollen bij een soort passen, "Bijgekocht · 20 zakken", wat een koppeling kostte |
-
-- Nieuwe kosten voor een ding gaan via het gewone aankoopformulier met `?ding=<id>&rol=<rol>`: bovenaan staat
-  "Voor …", na het bewaren hangt de uitgave eraan en ga je terug naar het ding.
-- "Goed om te weten" (de notitie van een bezit) is wat altijd geldt; wat op een dag gebeurde, gaat in het logboek.
-- Prijzen van verbruik: per eenheid ("€ 6,20/zak"), en met een inhoud per eenheid ook per kg of liter.
-
-### Projecten met dingen: `ProjectFields.tsx` en `ProjectItems.tsx`
-
-Een project houdt **uitgaven** bij, **dingen** (een verzameling: de wijnkelder, de koersfietsen), of allebei. Een
-sjabloon (`PROJECT_TEMPLATES` in `shared/fields.ts`) zet alles klaar: soort (raakt op / blijft), eenheid, eigen
-velden en hoe naam en merk heten ("Wijn", "Wijnhuis"). Daarna kan je alles aanpassen.
-
-| Component of hulpje | Wat |
-| --- | --- |
-| `.template-picker` + `.template-option` | Soort project kiezen bij een nieuw project: icoontegel, titel en één zin (radio's) |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een project: naam en soort op één regel, onder ⋯ keuzes, eenheid, kolom, filter en betekenis |
-| `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen in het formulier van een ding; korte velden per twee (`.attr-fields`) |
-| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een soort: naam en soort op één regel, onder ⋯ keuzes, eenheid, verwijzing, codeformaat, kolom, filter, verplicht en uitleg |
+| `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen |
+| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item |
+| `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
+| `ItemSelect` | Een verwijzing naar een item van een andere soort (de wijn → het wijnhuis) |
+| `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `OwnersField` (`ownersDraft` → `buildOwners`) | **Eigenaar**: Samen · Gelijk · Procent, met dezelfde rijen als bij het verdelen |
-| `LabelScanner` | Foto van een etiket: de app vult naam, merk en velden in (zacht blauw, `auto`) en bewaart de foto |
-| `ItemPhoto` | De foto van een ding bovenaan de fiche: toevoegen, vervangen, weghalen |
-| `ProjectItems` | De lijst: zoeken, filters uit de velden, "Nu drinkklaar", eigenaar, tabel `.table-collection` |
-| `CollectionSummary`, `CollectionActions` | Zijkolom: waarde, aantal, drinkklaar en per eigenaar; "Lijst importeren" en "Uit factuur" |
+| `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto |
+| `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen |
+| `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of soort (`ICONS` in `shared/templates.ts`) |
 
-- "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg. Leeg = van het huishouden samen.
-- De tabel `.table-collection` krijgt haar kolommen van het project: `style={{ "--cols": … }}` (naam, hooguit twee
-  velden met `column`, en het aantal of de waarde). Naast de zijkolom is er niet meer plaats.
-- Bij een verzameling staan "Snel invullen" en "Wie doet mee" op gsm ná de lijst (`.split-collection` + `.aside-late`).
-- Een ding van een project woont onder dat project (`/projecten/:id/voorraad/:id`, `/projecten/:id/bezit/:id`): link
-  altijd met `itemPath(item)`. Wijn telt niet mee in Voorraad; fietsen staan ook in Bezit (gegroepeerd per project).
-- Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop) houdt plaats en
-  eigenaar en maakt de rest leeg. Een lijst importeren (`.column-map`: kolom → veld, onthouden per project; wat we
-  niet herkennen gaat bij de notitie) en een factuur per lijn (`.invoice-line`) zijn eigen schermen.
+- "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
+- Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
+  soorten met hun velden. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon.
+- Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een lijst
+  importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per soort; wat we niet herkennen gaat bij de
+  lange tekst) is een eigen scherm.
+
+### De lijst van een soort: `ItemsView`
+
+`<ItemsView project={detail} type={type} />` is de lijst van één soort in een project: zoeken, filters uit de velden,
+Tag, Archief, een iconknop om te importeren en de tabel `.table-items`. Gebruik ze overal waar items van een soort
+staan; bouw geen eigen lijst.
+
+### Rechten in de app
+
+De API beslist wat iemand mag en weigert de rest. De app **verbergt** wat niet mag, zodat niemand tegen een fout
+aanloopt. Wat de app daarvoor krijgt:
+
+| Waar | Wat |
+| --- | --- |
+| `project.rights` (in `ProjectDetail` en `useSession().projects`) | `manage` (instellen, soorten, rollen), `members` (mensen), `create`, `delete`, en `items` (standaard Niet zien / Zien / Wijzigen) |
+| `type.access`, `type.field_access`, `type.can_create`, `type.can_delete` | Per soort en per veld wat jij mag (`ItemTypeView`) |
+| `item.access`, `item.field_access`, `item.can_delete` | Hetzelfde op de fiche (`ItemDetail`) |
+
+- Een knop die iets toevoegt: enkel bij `can_create`. Bewerken: enkel bij `access === "edit"`. Een veld met
+  `field_access` `view` staat alleen-lezen in het formulier; `none` staat er niet.
+- Een rol stel je in met `RoleForm`: schakelaars voor het project, een standaard, en per soort en per veld een
+  `Segmented` met "Standaard" erbij (open per soort met "Per veld", `.role-type`, `.role-fields`).
+- Afbeeldingen en bestanden uit de API altijd via `apiUrl("/…")`.
 
 ### Kleine bouwstenen
 
 | Klasse of component | Gebruik |
 | --- | --- |
-| `AvatarStack` (`ProjectList.tsx`) | Deelnemers naast elkaar, overlappend, "+3" bij veel mensen |
 | `.link-quiet` | Link in een `dl` of tekst: geen kleur, een zacht lijntje eronder |
-| `.link-button` | Stille blauwe tekstknop rechts naast een label ("Meerdere betalers") |
-| `a.note-link` | Een notitieblok dat linkt (de winkel bij een klantenkaart) |
-| `.budget` | Balk die volloopt tot het budget; rood erover (`data-over`) |
-| `.only-phone` | Enkel op een gsm (bv. `PhoneMenu`) |
-| `.field-row-wide` | Twee lange velden (IBAN, ondernemingsnummer) die pas vanaf 560px naast elkaar staan |
-| `.tips-block` | "Goed om te weten" van een bezit: de tekst met de regels zoals getypt |
-| `.timeline` + `.timeline-date` | Logboek: datum links, notitie of uitgave rechts |
-
-### Huishoudens en toegang
-
-- Alles hoort bij het gekozen huishouden. De API krijgt dat mee via `apiUrl()`/`api` (`?hh=`), ook voor `<img>`:
-  gebruik dus altijd `apiUrl("/…")` voor een afbeelding of bestand uit de API.
-- `useSession()` geeft `full`: `true` = volledige toegang, `false` = **gast**: de projecten waarin die zit, plus
-  onder **Gedeeld** de uitgaven buiten projecten waarin die zelf een deel heeft (enkel bekijken, met zijn deel).
-  Een scherm toont enkel wat een gast mag: geen voorraad, kaarten, verkopers, instellingen van het huishouden,
-  en in een project geen knoppen om het project of de deelnemers te beheren. De API weigert het hoe dan ook;
-  de app verbergt het zodat een gast nooit tegen een fout aanloopt.
-- Een gast doet per project **volledig** mee, of ziet **enkel zijn deel** (`my_scope = 'own'`): de dingen waarvan die
-  mede-eigenaar is en de uitgaven waarin die deelt, zonder iets te kunnen aanpassen. Verberg dan elke knop die iets
-  bewaart (`item.can_edit === false`, `project.my_scope !== 'all'`).
-- Een nieuw scherm dat een gast mag openen, staat in `GUEST_PATHS` (`App.tsx`).
+| `.link-button` | Stille blauwe tekstknop naast een label ("Per veld", "Wissen") |
+| `.tips-block` | Een lange tekst op de fiche, met de regels zoals getypt |
+| `.timeline` + `.timeline-date` | Logboek: datum links, notitie rechts |
+| `.member-actions` | Rol (een `select`), bewerken en weghalen naast iemand in een lijst |
 
 ### Badges, tags, stipjes, avatars
 
@@ -499,9 +434,8 @@ velden en hoe naam en merk heten ("Wijn", "Wijnhuis"). Daarna kan je alles aanpa
 | `badge badge-danger` | Voorbij (vervallen) |
 | `badge badge-accent` | Nieuw of info ("119 connection uploaded" in de referentie) |
 | `tag tone-x` | Tags van de gebruiker |
-| `dot tone-x` | Categorie of plaats in een lijst |
-| `Avatar` | Leden: pastel rondje met een dunne gekleurde letter; `size="sm"` in tekst, gewoon in lijsten, `lg` in kaarten |
-| `LevelMeter` | Voorraadniveau t.o.v. het minimum |
+| `dot tone-x` | De kleur van een project of tag in een lijst |
+| `Avatar` | Personen: pastel rondje met een dunne gekleurde letter; `size="sm"` in tekst, gewoon in lijsten, `lg` in kaarten |
 
 Badges zijn kort: 1–3 woorden.
 
@@ -509,16 +443,16 @@ Badges zijn kort: 1–3 woorden.
 
 | Situatie | Component |
 | --- | --- |
-| Iets is bewaard, verwijderd, verplaatst | `useToast()("Aankoop bewaard")`: lichtblauw met blauwe rand, rechtsonder (tablet) of boven de onderbalk |
+| Iets is bewaard, verwijderd, verplaatst | `useToast()("Wijn bewaard")`: lichtblauw met blauwe rand, rechtsonder (tablet) of boven de onderbalk |
 | Iets gebeurt of lukte half binnen een formulier | `<Alert tone="busy" \| "ok" \| "partial" \| "none">` |
 | Iets kan niet ongedaan gemaakt worden | `useConfirm()({ title, body, confirmLabel, danger: true })` |
-| Een korte invoer (hoeveelheid, terugbetaling, naam) | `<Sheet>`: onderblad op gsm, venster op tablet |
+| Een korte invoer (notitie in het logboek, iemand toevoegen, een tag) | `<Sheet>`: onderblad op gsm, venster op tablet |
 | Lijst is leeg | `<EmptyState icon title action>` met één zin uitleg en hooguit één knop (`btn-outline btn-sm`) |
 | Lijst laadt | `<SkeletonRows rows={5} />` (verschijnt pas na 0,18 s) |
 
-Toasts zijn de bevestiging na een actie. Elke bewaar-, verwijder- of voorraadactie geeft er één, behalve
-−/+ in een lijst: daar is het rollende getal de bevestiging (een toast per tik zou storen).
-Tekst: wat er gebeurde, in de verleden tijd of als korte vaststelling ("2 pakken erbij", "Item bijgewerkt").
+Toasts zijn de bevestiging na een actie. Elke bewaar- of verwijderactie geeft er één, behalve −/+ in een lijst:
+daar is het rollende getal de bevestiging (een toast per tik zou storen).
+Tekst: wat er gebeurde, in de verleden tijd of als korte vaststelling ("12 wijnen toegevoegd", "Rol bijgewerkt").
 
 ### Iconen
 
@@ -534,7 +468,7 @@ Twee soorten, inline in `Icon.tsx`:
 
 - Bedragen: `formatCents` → "€ 1.234,56". Datums: `formatDate` → "20 okt 2026". Hoeveelheden: `formatNumber` +
   `unitWord` ("3 flessen").
-- Een getal dat kan veranderen terwijl je kijkt (voorraad, tellers): `<Num value={n}>` rolt omhoog of omlaag.
+- Een getal dat kan veranderen terwijl je kijkt (tellers): `<Num value={n}>` rolt omhoog of omlaag.
 - Een groot totaal dat verschijnt: `useCountUp(cents)` telt op.
 
 ---
@@ -557,8 +491,9 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 - De inhoud van het nieuwe scherm schuift daarbij 5px omhoog (automatisch via `.page`; in een `.split` komen
   zijkolom en kaarten na elkaar).
 - Filters in het adres (`setSearchParams`) wisselen **zonder** overgang: dat is geen nieuw scherm.
-- Een groot scherm dat apart geladen wordt (kaarten, ±1 MB barcodecode) is een `lazy` route in `routes.tsx`: de
-  router wacht tot het geladen is, zodat de overgang vloeiend blijft, en toont zolang een blauw laadstreepje.
+- Grote code laad je pas als ze nodig is, met `lazy`: de barcodecode (±1 MB, `Barcode` in `Fields.tsx`) en pdf.js
+  (`PdfPages` in `FileViewer`). Een groot scherm kan een `lazy` route in `routes.tsx` zijn: de router wacht tot het
+  geladen is, zodat de overgang vloeiend blijft, en toont zolang een blauw laadstreepje.
 
 ### Micro-animaties
 
@@ -592,39 +527,27 @@ Regels:
 
 ## 6. Patronen per soort scherm
 
-**Overzicht** (Aankopen, Voorraad): `PageHead` met `primary` → `Tabs` → zoeken → filters → `card table` → `fab`.
+**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" → je projecten als boom (subprojecten springen in),
+met je rol eronder → gearchiveerde projecten apart.
 
-**Detail** (één aankoop, één item): `PageHead` met `back` en `actions` → `split`: in de zijkolom de kern (bedrag of
-voorraad + `dl`-lijst met eigenschappen, tags, notitie), rechts kaarten met `CardHead` (bestanden, geschiedenis,
-koppelingen) → onderaan rechts stille knoppen (archiveren, `btn-danger-ghost` verwijderen).
+**Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
+`manage` of `members`) en `primary` "<Soort> toevoegen" → `Tabs` per soort (enkel als er meer dan één is) →
+`split split-main-first`: rechts `ItemsView`, in de zijkolom Subprojecten en Wie (met de rol, en "via …" als het
+lidmaatschap van een project erboven komt) → `fab`. Zonder soorten: een lege staat met "Soort maken".
 
-**Uitgaven**: `split` met in de zijkolom wie-moet-wie, de potten en de maand; rechts de lijst van de maand en de
-terugkerende kosten.
+**Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
+`dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het
+logboek (nieuwste eerst, toevoegen in een `Sheet`) en bestanden → onderaan stille knoppen (archiveren,
+`btn-danger-ghost` verwijderen).
 
-**Project**: `split` met in de zijkolom het totaal (+ budget), wie meedoet (gasten toevoegen in een `Sheet`) en,
-bij een eigen saldo, wie-moet-wie en de kas; rechts per categorie, de uitgaven en de vaste kosten; onderaan
-archiveren (verwijderen enkel als het project leeg is).
+**Formulier**: zie [Formulier](#formulier). Een item: eventueel de soort kiezen, `LabelScanner`, `FieldInputs`,
+tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 
-**Project met dingen** (wijnkelder, fietsen): `Tabs` (de dingen · Uitgaven) als het project allebei bijhoudt, dan
-`split` met in de zijkolom de waarde en per eigenaar, "Snel invullen" en wie meedoet; rechts zoeken, filters en de
-tabel. Hoofdactie "Wijn toevoegen" (de naam komt van het sjabloon). Een gast die enkel zijn deel ziet: geen knoppen.
+**Instellen** (`/projecten/:id/instellingen`): `Tabs` Algemeen · Soorten · Rollen · Mensen · Tags (in het adres:
+`?tab=mensen`), één kaart per tab. Een soort en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
+een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
-**Bezit**: `split` met in de zijkolom wat het kostte (of de geschatte waarde), herkomst, sinds, garantie, plaats en
-"goed om te weten"; rechts het logboek (notities en kosten door elkaar, nieuwste eerst) en wat erbij hoort.
-Hoofdactie "Kost toevoegen". Weg uit huis = "Niet meer in huis" (archiveren), niet verwijderen.
-
-**Verbruik** (een item in Voorraad): voorraad per plaats en de knoppen in de zijkolom; rechts de prijzen per
-verkoper (goedkoopste bovenaan) en de geschiedenis. Hoofdactie "Bijgekocht" (een uitgave met het aantal).
-
-**Verkoper**: `split` met in de zijkolom logo en totaal, contactgegevens, je account, bedrijf en contactpersonen;
-rechts klantenkaarten, per jaar, lopende garanties, aankopen, voorraad en vestigingen. Contacten en vestigingen
-bewerk je in een `Sheet`.
-
-**Formulier**: zie [Formulier](#formulier). Na bewaren: toast + naar het detailscherm.
-
-**Instellingen**: `Tabs` per onderwerp (in het adres: `/meer?tab=plaatsen`), één kaart per tab, bewerken in een `Sheet`.
-
----
+**Ik** (`/ik`): je naam en kleur; je e-mailadres komt van je aanmelding.
 
 ## 7. Toegankelijkheid
 
@@ -649,10 +572,11 @@ bewerk je in een `Sheet`.
 ## 9. Tekst
 
 - Nederlands zoals in Vlaanderen gesproken, met **je/jij**. "Kastickets", "gsm", "verkoper".
-- Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Nieuwe aankoop", "In voorraad zetten", "Terugbetaald".
+- Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Wijn toevoegen", "Lijst importeren", "Instellen".
 - Titels zonder punt. Uitleg in één zin.
-- Fouten zeggen wat er is en wat je kan doen: "Er ligt nog voorraad op deze plaats. Verplaats die eerst."
-- Lege staat: wat er hier komt + hoe je begint. "Nog geen aankopen. Trek een foto van een kasticket: de app vult de rest in."
+- Fouten zeggen wat er is en wat je kan doen: "Er moet altijd iemand overblijven die het project kan instellen."
+- Lege staat: wat er hier komt + hoe je begint. "Nog geen wijnen. Voeg er een toe, of importeer een lijst."
+- Wat de gebruiker maakt, heet zoals hij het noemt: de naam van de soort ("Wijn toevoegen"), niet "item".
 - Datums als "20 okt 2026", bedragen als "€ 1.234,56", hoeveelheden met het juiste meervoud ("1 fles", "3 flessen").
 - Geen jargon ("API", "sync", "entity"), geen uitroeptekens, geen emoji.
 
@@ -685,12 +609,14 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Eén hoofdactie (`btn-primary`), met een `fab` op gsm als het een overzichtsscherm is.
 - [ ] Navigatie via `src/router.tsx`; een nieuw scherm staat in `routes.tsx` (en in het zoekpalet als je het moet kunnen vinden).
 - [ ] Gevulde iconen voor dingen, lijniconen voor richtingen en handelingen.
-- [ ] Notitieveld en (waar het past) verkoper in elk registratieformulier.
+- [ ] Een nieuwe soort of sjabloon heeft een notitieveld (lange tekst).
 - [ ] Lege staat, laadstaat (skeleton) en foutmelding zijn er.
 - [ ] Toast na elke actie die iets bewaart of verwijdert (behalve −/+ in een lijst); `useConfirm` voor wat niet terug kan.
 - [ ] Animaties enkel uit de tabel in [Beweging](#5-beweging), met `backwards`.
 - [ ] Getest op 390px breed (gsm) en 1280px (tablet), en op 820px (tablet rechtop, smalle zijbalk).
-- [ ] Werkt voor een gast (`full` is `false`) of is voor een gast verborgen; afbeeldingen uit de API via `apiUrl`.
+- [ ] Volgt de rechten: knoppen enkel bij `can_create`, `access === "edit"`, `can_delete`, `rights.manage` of
+      `rights.members`; velden volgens `field_access`. Getest met een rol die enkel mag zien. Afbeeldingen uit de API
+      via `apiUrl`.
 - [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).

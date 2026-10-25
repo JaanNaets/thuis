@@ -1,6 +1,6 @@
 import { toCanvas } from "bwip-js/browser";
 import { useEffect, useRef, useState } from "react";
-import { BARCODE_FORMATS, type BarcodeFormat } from "../../shared/types";
+import { CODE_FORMATS as BARCODE_FORMATS, type CodeFormat as BarcodeFormat } from "../../shared/fields";
 
 const TWO_D: BarcodeFormat[] = ["qr_code", "data_matrix", "pdf417", "aztec"];
 

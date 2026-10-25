@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FlatNode, TreeNode } from "../../shared/tree";
-import { TONES, type Member, type Tone } from "../../shared/types";
+import { TONES, type Person, type Tone } from "../../shared/types";
 import { formatNumber, parseQuantity } from "../format";
 import { Icon, type IconName } from "./Icon";
 import { Num, Spinner } from "./Motion";
@@ -17,19 +17,15 @@ export function Segmented<T extends string>({
   options: { value: T; label: ReactNode }[];
   onChange: (value: T) => void;
 }) {
-  const index = Math.max(0, options.findIndex((o) => o.value === value));
+  const index = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
   return (
     <div className="segmented" role="radiogroup" aria-label={label} style={{ "--n": options.length } as CSSProperties}>
       <span className="segmented-thumb" style={{ "--i": index } as CSSProperties} aria-hidden="true" />
       {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={o.value === value}
-          className="segment"
-          onClick={() => onChange(o.value)}
-        >
+        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className="segment" onClick={() => onChange(o.value)}>
           {o.label}
         </button>
       ))}
@@ -88,13 +84,7 @@ export function ToneSwatches({ value, onChange }: { value: Tone | null; onChange
   );
 }
 
-export function Avatar({
-  member,
-  size,
-}: {
-  member: Pick<Member, "name" | "color"> | undefined;
-  size?: "sm" | "lg";
-}) {
+export function Avatar({ member, size }: { member: Pick<Person, "name" | "color"> | undefined; size?: "sm" | "lg" }) {
   return (
     <span className={`avatar ${size ?? ""} tone-${member?.color ?? "butter"}`} aria-hidden="true">
       {member?.name.charAt(0).toUpperCase() ?? "?"}
@@ -103,17 +93,7 @@ export function Avatar({
 }
 
 /** Hoeveelheid met − en + knoppen; je kan ook gewoon typen (1,5). */
-export function QuantityField({
-  value,
-  onChange,
-  min = 0,
-  label,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  min?: number;
-  label: string;
-}) {
+export function QuantityField({ value, onChange, min = 0, label }: { value: string; onChange: (value: string) => void; min?: number; label: string }) {
   const parsed = parseQuantity(value);
   const current = parsed === null || Number.isNaN(parsed) ? 0 : parsed;
   const step = (delta: number) => onChange(formatNumber(Math.max(min, Math.round((current + delta) * 1000) / 1000)));
@@ -123,13 +103,7 @@ export function QuantityField({
       <button type="button" className="btn btn-outline btn-icon" onClick={() => step(-1)} aria-label="Eén minder" disabled={current <= min}>
         <Icon name="minus" />
       </button>
-      <input
-        inputMode="decimal"
-        value={value}
-        aria-label={label}
-        aria-invalid={Number.isNaN(parsed)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input inputMode="decimal" value={value} aria-label={label} aria-invalid={Number.isNaN(parsed)} onChange={(e) => onChange(e.target.value)} />
       <button type="button" className="btn btn-outline btn-icon" onClick={() => step(1)} aria-label="Eén meer">
         <Icon name="plus" />
       </button>
