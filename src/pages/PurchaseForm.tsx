@@ -15,6 +15,7 @@ import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
 import { addYears, centsToInput, parseEuro, parseQuantity, today } from "../format";
 import { prepareUpload } from "../image";
+import { addPerson } from "../people";
 import { readReceipt } from "../receipt";
 import { useSession } from "../session";
 import { categoryTree, splitCandidates, useTaxonomy } from "../taxonomy";
@@ -195,7 +196,15 @@ function PurchaseForm({ existing, taxonomy, forItem }: { existing?: PurchaseDeta
   const [autoFilled, setAutoFilled] = useState<Set<keyof FormState>>(new Set());
   const touched = useRef(new Set<keyof FormState>());
 
-  const { people, pots } = splitCandidates(taxonomy, form.project_id, full, usedBy(existing));
+  // Wie er via "Iemand anders" bij kwam, blijft in de lijst staan.
+  const [extra, setExtra] = useState<string[]>([]);
+  const { people, pots } = splitCandidates(taxonomy, form.project_id, full, [...usedBy(existing), ...extra]);
+  const others = taxonomy.members.filter((m) => !people.some((p) => p.id === m.id));
+  async function onAddPerson(name: string) {
+    const member = await addPerson(taxonomy, form.project_id, name);
+    setExtra((ids) => [...ids, member.id]);
+    return member;
+  }
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     touched.current.add(key);
@@ -206,6 +215,7 @@ function PurchaseForm({ existing, taxonomy, forItem }: { existing?: PurchaseDeta
   /** Ander project: andere deelnemers, dus de verdeling begint opnieuw volgens de standaard van dat project. */
   function setProject(projectId: string | null) {
     set("project_id", projectId);
+    setExtra([]);
     setSplit(initialSplitState({ meId: taxonomy.me.id, people: splitCandidates(taxonomy, projectId, full).people, defaults: defaultsFor(projectId) }));
   }
 
@@ -459,7 +469,17 @@ function PurchaseForm({ existing, taxonomy, forItem }: { existing?: PurchaseDeta
       </section>
 
       <section className="card form-section">
-        <SplitEditor amount={validAmount} people={people} pots={pots} meId={taxonomy.me.id} value={split} onChange={setSplit} receipt={receiptFile} />
+        <SplitEditor
+          amount={validAmount}
+          people={people}
+          pots={pots}
+          meId={taxonomy.me.id}
+          value={split}
+          onChange={setSplit}
+          receipt={receiptFile}
+          onAddPerson={full ? onAddPerson : undefined}
+          suggestions={others}
+        />
       </section>
 
       <section className="card form-section">

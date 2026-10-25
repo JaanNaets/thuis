@@ -296,6 +296,9 @@ function AddMemberForm({ project, taxonomy, onDone }: { project: Detail; taxonom
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // Iemand die al mee deelt zonder aan te melden: wordt dezelfde persoon.
+  const twin =
+    who === "guest" ? taxonomy.members.find((m) => !m.email && m.access === "projects" && m.name.toLowerCase() === name.trim().toLowerCase()) : undefined;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -344,6 +347,11 @@ function AddMemberForm({ project, taxonomy, onDone }: { project: Detail; taxonom
             <span className="label">Naam</span>
             <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="bv. Lien" />
           </label>
+          {twin && (
+            <span className="hint" style={{ marginTop: -8 }}>
+              {twin.name} deelt al mee zonder aan te melden: dat wordt dezelfde persoon, met alles wat al gedeeld werd.
+            </span>
+          )}
           <label className="field">
             <span className="label">
               E-mailadres <span className="optional">· om zelf aan te melden</span>

@@ -27,6 +27,10 @@ export function ExpensesPage() {
     reload();
     refreshTaxonomy();
   };
+  // De bewoners, plus wie van buiten nog iets moet of krijgt (bv. Lien van het etentje).
+  const people = taxonomy
+    ? [...activeMembers(taxonomy), ...taxonomy.members.filter((m) => !m.active && data?.balances.some((b) => b.member_id === m.id && b.balance_cents !== 0))]
+    : [];
 
   return (
     <div className="page">
@@ -46,7 +50,7 @@ export function ExpensesPage() {
       {data && taxonomy && (
         <div className="split">
           <aside className="split-aside">
-            <BalancesCard summary={data} taxonomy={taxonomy} people={activeMembers(taxonomy)} projectId={null} onChanged={changed} />
+            <BalancesCard summary={data} taxonomy={taxonomy} people={people} projectId={null} onChanged={changed} />
             <PotsCard pots={data.pots} taxonomy={taxonomy} people={activeMembers(taxonomy)} projectId={null} onChanged={changed} />
 
             <section className="card">

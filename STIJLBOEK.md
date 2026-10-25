@@ -385,6 +385,10 @@ const built = buildSplit(split, cents); // { payments, split } of { error }
 - Verdeling: Gelijk · Procent · Delen · Bedrag, en "Per lijn van het ticket" (`allowLines={false}` bij een vaste kost).
   Tik op een avatar om iemand mee te laten doen of niet (blauw vinkje). Rechts staat meteen wie hoeveel draagt.
 - Onderaan één statusregel: groen "Klopt", of rood wat er nog niet klopt. Bewaren kan pas als het klopt.
+- **Iemand anders** (`onAddPerson` + `suggestions`): iemand mee laten delen die niet in de lijst staat. Een naam
+  die we kennen, wordt die persoon; een nieuwe naam wordt een persoon zonder aanmelding (`addPerson` in
+  `src/people.ts`). Wie later toegevoegd wordt met dezelfde naam (Instellingen → Lid, of een projectdeelnemer),
+  wordt die persoon, met alles wat al gedeeld werd. Enkel voor volledige leden.
 - De gewone verdeling van een huishouden of project (bv. 60/40) kies je met `DefaultSplitField`
   (`defaultSplitDraft` → `buildDefaultSplit`). Een nieuwe uitgave begint ermee.
 
@@ -446,7 +450,8 @@ herstelling, onderdeel of een andere kost. Een etentje of een massage hangt nerg
 
 - Alles hoort bij het gekozen huishouden. De API krijgt dat mee via `apiUrl()`/`api` (`?hh=`), ook voor `<img>`:
   gebruik dus altijd `apiUrl("/…")` voor een afbeelding of bestand uit de API.
-- `useSession()` geeft `full`: `true` = volledige toegang, `false` = **gast** (enkel de projecten waarin die zit).
+- `useSession()` geeft `full`: `true` = volledige toegang, `false` = **gast**: de projecten waarin die zit, plus
+  onder **Gedeeld** de uitgaven buiten projecten waarin die zelf een deel heeft (enkel bekijken, met zijn deel).
   Een scherm toont enkel wat een gast mag: geen voorraad, kaarten, verkopers, instellingen van het huishouden,
   en in een project geen knoppen om het project of de deelnemers te beheren. De API weigert het hoe dan ook;
   de app verbergt het zodat een gast nooit tegen een fout aanloopt.

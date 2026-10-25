@@ -55,6 +55,9 @@ export const taxonomy = new Hono<AppEnv>();
  * Alles wat formulieren nodig hebben. Een gast (enkel projecten) krijgt enkel wat bij zijn projecten hoort:
  * de mensen daarin, de uitgavencategorieën en de potten van die projecten.
  */
+/** De uitgaven waarin lid ?2 betaalde of een deel heeft. */
+const MY_PURCHASES = "SELECT purchase_id FROM expense_shares WHERE member_id = ?2 UNION SELECT purchase_id FROM expense_payments WHERE member_id = ?2";
+
 taxonomy.get("/", async (c) => {
   const db = c.env.DB;
   const hh = c.get("household");
@@ -77,10 +80,16 @@ taxonomy.get("/", async (c) => {
       ? db.prepare("SELECT * FROM members WHERE household_id = ? ORDER BY active DESC, created_at").bind(hh)
       : db
           .prepare(
+            // Een gast kent: zichzelf, wie in zijn projecten zit, en wie mee betaalde of deelde in iets met hem.
             `SELECT DISTINCT m.* FROM members m
              WHERE m.household_id = ? AND (m.id = ?2 OR m.id IN (
                SELECT pm.member_id FROM project_members pm
-               WHERE pm.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?2)))
+               WHERE pm.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?2))
+             OR m.id IN (
+               SELECT ep.member_id FROM expense_payments ep WHERE ep.purchase_id IN (${MY_PURCHASES})
+               UNION SELECT es.member_id FROM expense_shares es WHERE es.purchase_id IN (${MY_PURCHASES})
+               UNION SELECT t.from_member_id FROM transfers t WHERE t.to_member_id = ?2
+               UNION SELECT t.to_member_id FROM transfers t WHERE t.from_member_id = ?2))
              ORDER BY m.created_at`,
           )
           .bind(hh, me.id),
@@ -151,9 +160,35 @@ export const members = new Hono<AppEnv>();
 
 members.use("*", requireFull);
 
+/**
+ * Iemand met dezelfde naam maar zonder e-mailadres: een persoon met wie al kosten gedeeld werden voor die kon
+ * aanmelden. Wie zo toegevoegd wordt, wordt die persoon, met alles wat al met hem of haar gedeeld werd.
+ */
+export async function findTwin(db: D1Database, household: string, name: string, onlyGuests = false): Promise<Member | null> {
+  return db
+    .prepare(
+      `SELECT * FROM members WHERE household_id = ? AND email IS NULL AND name = ? COLLATE NOCASE
+       ${onlyGuests ? "AND access = 'projects'" : ""} ORDER BY created_at LIMIT 1`,
+    )
+    .bind(household, name.trim())
+    .first<Member>();
+}
+
 members.post("/", async (c) => {
   const m = parseMember(await c.req.json());
   const hh = c.get("household");
+  const twin = await findTwin(c.env.DB, hh, m.name);
+  if (twin) {
+    // Zonder e-mailadres: gewoon dezelfde persoon. Met: koppelen, met de toegang van nu.
+    if (!m.email) return c.json({ ...twin, linked: false });
+    const linked = await guard(
+      c.env.DB.prepare("UPDATE members SET email = ?, active = ?, access = ?, color = COALESCE(?, color) WHERE id = ? RETURNING *")
+        .bind(m.email, m.active, m.access, m.color, twin.id)
+        .first<Member>(),
+      { unique: MEMBER_EMAIL_TAKEN },
+    );
+    return c.json({ ...linked, linked: true });
+  }
   const row = await guard(
     c.env.DB.prepare("INSERT INTO members (id, household_id, name, email, color, active, access) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
       .bind(crypto.randomUUID(), hh, m.name, m.email, m.color ?? (await freeTone(c.env.DB, hh)), m.active, m.access)

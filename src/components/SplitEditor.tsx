@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useId, useState, type CSSProperties } from "react";
 import { computeShares, splitFromDefault, type DefaultSplit, type PaymentInput, type SplitInput, type SplitMode } from "../../shared/split";
 import type { Member, Pot, PurchaseDetail } from "../../shared/types";
 import { api } from "../api";
@@ -152,6 +152,8 @@ export function SplitEditor({
   onChange,
   receipt,
   allowLines = true,
+  onAddPerson,
+  suggestions = [],
 }: {
   amount: number | null;
   people: Member[];
@@ -163,6 +165,10 @@ export function SplitEditor({
   receipt?: () => Promise<File | null>;
   /** "Per lijn van het ticket" aanbieden (niet bij een terugkerende kost). */
   allowLines?: boolean;
+  /** Iemand mee laten delen die (nog) niet in de lijst staat; geeft die persoon terug. */
+  onAddPerson?: (name: string) => Promise<Member>;
+  /** Namen die we al kennen maar niet in de lijst staan, om aan te vullen. */
+  suggestions?: Member[];
 }) {
   const set = (patch: Partial<SplitState>) => onChange({ ...value, ...patch });
   const payerOptions: { key: PayerKey; label: string; member?: Member; pot?: Pot }[] = [
@@ -308,6 +314,16 @@ export function SplitEditor({
           <LinesEditor value={value} people={people} onChange={onChange} amount={amount} receipt={receipt} shareOf={shareOf} />
         )}
 
+        {onAddPerson && (
+          <AddPerson
+            suggestions={suggestions}
+            onAdd={async (name) => {
+              const member = await onAddPerson(name);
+              if (!value.people.includes(member.id)) onChange({ ...value, people: [...value.people, member.id] });
+            }}
+          />
+        )}
+
         {amount ? (
           <span className={`hint split-status ${problem ? "error" : "ok"}`} role="status">
             {problem ?? "Klopt: samen het volledige bedrag."}
@@ -316,6 +332,80 @@ export function SplitEditor({
           <span className="hint">Vul een bedrag in om te verdelen.</span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Iemand anders mee laten delen: een naam typen (of kiezen uit wie we al kennen).
+ * Zit die nog niet in de app, dan wordt het een persoon zonder aanmelding; voeg je die later toe met dezelfde naam,
+ * dan staat alles wat al gedeeld werd er meteen.
+ */
+function AddPerson({ suggestions, onAdd }: { suggestions: Member[]; onAdd: (name: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const listId = useId();
+
+  if (!open) {
+    return (
+      <button type="button" className="link-button" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>
+        <Icon name="userPlus" size={14} /> Iemand anders
+      </button>
+    );
+  }
+
+  async function add() {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onAdd(name);
+      setName("");
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="add-person">
+      <input
+        autoFocus
+        list={listId}
+        maxLength={60}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          // In een formulier: Enter voegt toe in plaats van alles te bewaren.
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder="Naam, bv. Lien"
+        aria-label="Naam van wie mee deelt"
+      />
+      <datalist id={listId}>
+        {suggestions.map((m) => (
+          <option key={m.id} value={m.name} />
+        ))}
+      </datalist>
+      <button type="button" className="btn btn-outline btn-sm" disabled={busy || !name.trim()} onClick={add}>
+        {busy ? <Spinner size={14} /> : <Icon name="plus" size={14} />} Toevoegen
+      </button>
+      <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => setOpen(false)} aria-label="Annuleren">
+        <Icon name="close" size={14} />
+      </button>
+      {error ? (
+        <span className="hint error">{error}</span>
+      ) : (
+        <span className="hint">Zit die nog niet in de app? Voeg die later toe met dezelfde naam: alles wat gedeeld werd, staat er dan meteen.</span>
+      )}
     </div>
   );
 }

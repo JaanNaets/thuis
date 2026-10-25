@@ -538,13 +538,17 @@ export function EntryRow({
   entry,
   taxonomy,
   inProject,
+  myShare,
   onDeleted,
 }: {
   entry: ExpenseEntry;
   taxonomy: Taxonomy;
   /** Op de projectpagina: de naam van het project niet nog eens tonen. */
   inProject?: boolean;
-  onDeleted: (label: string) => void;
+  /** Toon jouw deel in plaats van het hele bedrag (bij Gedeeld). */
+  myShare?: number;
+  /** Zonder: alleen lezen (geen knop om te verwijderen). */
+  onDeleted?: (label: string) => void;
 }) {
   const confirm = useConfirm();
 
@@ -582,7 +586,14 @@ export function EntryRow({
         <span className="col">
           <span>{formatDate(entry.date)}</span>
         </span>
-        <span className="row-end">{formatCents(entry.amount_cents)}</span>
+        {myShare !== undefined ? (
+          <span className="row-end">
+            {formatCents(myShare)}
+            <span className="row-end-sub">van {formatCents(entry.amount_cents)}</span>
+          </span>
+        ) : (
+          <span className="row-end">{formatCents(entry.amount_cents)}</span>
+        )}
       </Link>
     );
   }
@@ -604,7 +615,7 @@ export function EntryRow({
     });
     if (!ok) return;
     await api.delete(`/expenses/transfers/${transfer.id}`);
-    onDeleted(label);
+    onDeleted?.(label);
   }
 
   const actor = entry.from_member_id ?? entry.to_member_id;
@@ -631,9 +642,11 @@ export function EntryRow({
       </span>
       <span className="row-end" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
         {formatCents(entry.amount_cents)}
-        <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={remove} aria-label={`${label} verwijderen`}>
-          <Icon name="trash" size={15} />
-        </button>
+        {onDeleted && (
+          <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={remove} aria-label={`${label} verwijderen`}>
+            <Icon name="trash" size={15} />
+          </button>
+        )}
       </span>
     </div>
   );

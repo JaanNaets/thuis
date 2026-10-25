@@ -2750,6 +2750,32 @@ dialog.sheet[open]::backdrop {
   }
 }
 
+/* Iemand anders mee laten delen: naam, Toevoegen, sluiten; uitleg eronder. */
+.add-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+  animation: slide-down 0.3s var(--ease-out);
+}
+
+.add-person input {
+  height: 34px !important;
+}
+
+.add-person .hint {
+  grid-column: 1 / -1;
+}
+
+/* Onder een bedrag: waarvan het een deel is ("van € 92,00"). */
+.row-end-sub {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 /* Avatars die over elkaar schuiven (deelnemers, wie had een lijn). */
 .avatar-stack {
   display: inline-flex;

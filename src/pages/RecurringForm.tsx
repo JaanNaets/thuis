@@ -10,6 +10,7 @@ import { buildSplit, initialSplitState, SplitEditor, type SplitState } from "../
 import { useToast } from "../components/Toast";
 import { VendorField } from "../components/VendorField";
 import { centsToInput, formatDate, parseEuro, today } from "../format";
+import { addPerson } from "../people";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
 import { categoryTree, splitCandidates, useTaxonomy } from "../taxonomy";
@@ -54,7 +55,14 @@ function RecurringForm({ existing, taxonomy }: { existing?: RecurringExpense; ta
   const used = existing
     ? [...existing.payments.flatMap((p) => (p.member_id ? [p.member_id] : [])), ...existing.split.participants.map((p) => p.member_id)]
     : [];
-  const { people, pots } = splitCandidates(taxonomy, projectId, full, used);
+  const [extra, setExtra] = useState<string[]>([]);
+  const { people, pots } = splitCandidates(taxonomy, projectId, full, [...used, ...extra]);
+  const others = taxonomy.members.filter((m) => !people.some((p) => p.id === m.id));
+  async function onAddPerson(name: string) {
+    const member = await addPerson(taxonomy, projectId, name);
+    setExtra((ids) => [...ids, member.id]);
+    return member;
+  }
   const defaults = project?.default_split ?? taxonomy.household.default_split;
   const [split, setSplit] = useState<SplitState>(() => initialSplitState({ meId: taxonomy.me.id, people, defaults, saved: existing }));
   const [busy, setBusy] = useState(false);
@@ -183,7 +191,17 @@ function RecurringForm({ existing, taxonomy }: { existing?: RecurringExpense; ta
       </section>
 
       <section className="card form-section">
-        <SplitEditor amount={validAmount} people={people} pots={pots} meId={taxonomy.me.id} value={split} onChange={setSplit} allowLines={false} />
+        <SplitEditor
+          amount={validAmount}
+          people={people}
+          pots={pots}
+          meId={taxonomy.me.id}
+          value={split}
+          onChange={setSplit}
+          allowLines={false}
+          onAddPerson={full ? onAddPerson : undefined}
+          suggestions={others}
+        />
       </section>
 
       <section className="card form-section">

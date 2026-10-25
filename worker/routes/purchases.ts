@@ -193,18 +193,33 @@ export function toListItem({ payments_json, ...row }: PurchaseRow): PurchaseList
   return { ...row, payments: JSON.parse(payments_json) as PaymentInput[] };
 }
 
-/** Enkel de aankopen die dit lid mag zien: alles (volledige toegang) of die van zijn projecten. */
-function visibleSql(full: boolean): string {
-  return full ? "p.household_id = ?" : "p.household_id = ? AND p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?)";
+/**
+ * Wat een gast (enkel projecten) van de uitgaven ziet: alles in zijn projecten, plus elke uitgave waarin hij zelf
+ * betaalde of een deel heeft (bv. gedeeld voor hij kon aanmelden). `m` is de parameter met zijn lid-id.
+ */
+export function guestSeesSql(m: string): string {
+  return `(p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ${m})
+    OR p.id IN (SELECT purchase_id FROM expense_shares WHERE member_id = ${m})
+    OR p.id IN (SELECT purchase_id FROM expense_payments WHERE member_id = ${m}))`;
+}
+
+/** De aankopen die dit lid mag zien. Parameters vanaf ?n: het huishouden en, voor een gast, zijn lid-id. */
+function visibleSql(full: boolean, n: number): string {
+  return full ? `p.household_id = ?${n}` : `p.household_id = ?${n} AND ${guestSeesSql(`?${n + 1}`)}`;
 }
 
 function visibleBinds(c: Context<AppEnv>): string[] {
   return c.get("full") ? [c.get("household")] : [c.get("household"), c.get("member").id];
 }
 
-/** De aankoop, als dit lid ze mag zien; anders null. */
-async function accessible(c: Context<AppEnv>, id: string): Promise<Pick<Purchase, "id" | "project_id"> | null> {
-  return c.env.DB.prepare(`SELECT p.id, p.project_id FROM purchases p WHERE p.id = ? AND ${visibleSql(c.get("full"))}`)
+/**
+ * De aankoop, als dit lid ze mag aanpassen: volledige leden alles van het huishouden, een gast enkel wat in zijn
+ * projecten staat. Wat buiten een project met een gast gedeeld werd, kan die zien maar niet veranderen.
+ */
+async function writable(c: Context<AppEnv>, id: string): Promise<Pick<Purchase, "id" | "project_id"> | null> {
+  const full = c.get("full");
+  const scope = full ? "p.household_id = ?2" : "p.household_id = ?2 AND p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?3)";
+  return c.env.DB.prepare(`SELECT p.id, p.project_id FROM purchases p WHERE p.id = ?1 AND ${scope}`)
     .bind(id, ...visibleBinds(c))
     .first<Pick<Purchase, "id" | "project_id">>();
 }
@@ -238,7 +253,7 @@ export const purchases = new Hono<AppEnv>();
 purchases.get("/", async (c) => {
   const q = c.req.query("q")?.trim();
   const activeWarranty = c.req.query("warranty") === "active" ? 1 : 0;
-  const scope = c.get("full") ? "p.household_id = ?7" : "p.household_id = ?7 AND p.project_id IN (SELECT project_id FROM project_members WHERE member_id = ?8)";
+  const scope = visibleSql(c.get("full"), 7);
 
   const { results } = await c.env.DB.prepare(
     `SELECT ${PURCHASE_LIST_COLUMNS}
@@ -275,7 +290,7 @@ purchases.get("/:id", async (c) => {
   const id = c.req.param("id");
   const db = c.env.DB;
   const [purchase, files, shares, lines, tags, links] = await db.batch([
-    db.prepare(`SELECT ${PURCHASE_LIST_COLUMNS} ${PURCHASE_LIST_FROM} WHERE p.id = ? AND ${visibleSql(c.get("full"))}`).bind(id, ...visibleBinds(c)),
+    db.prepare(`SELECT ${PURCHASE_LIST_COLUMNS} ${PURCHASE_LIST_FROM} WHERE p.id = ?1 AND ${visibleSql(c.get("full"), 2)}`).bind(id, ...visibleBinds(c)),
     db.prepare(`SELECT ${FILE_COLUMNS} FROM purchase_files WHERE purchase_id = ? ORDER BY created_at`).bind(id),
     db.prepare("SELECT member_id, share_cents, split_value FROM expense_shares WHERE purchase_id = ?").bind(id),
     db.prepare("SELECT description, amount_cents, member_ids FROM expense_lines WHERE purchase_id = ? ORDER BY position").bind(id),
@@ -361,7 +376,7 @@ purchases.put("/:id", async (c) => {
   const id = c.req.param("id");
   const input = parsePurchase(await c.req.json());
   const db = c.env.DB;
-  if (!(await accessible(c, id))) return c.json({ error: "Aankoop niet gevonden" }, 404);
+  if (!(await writable(c, id))) return c.json({ error: "Deze uitgave kan je niet aanpassen" }, 404);
   const { computed, vendorId, tagIds } = await prepare(c, input);
 
   const [updated] = await db.batch([
@@ -396,7 +411,7 @@ purchases.put("/:id", async (c) => {
 
 purchases.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  if (!(await accessible(c, id))) return c.json({ error: "Aankoop niet gevonden" }, 404);
+  if (!(await writable(c, id))) return c.json({ error: "Deze uitgave kan je niet verwijderen" }, 404);
 
   // Eerst de bestanden uit R2 halen; de rijen in purchase_files verdwijnen daarna vanzelf (ON DELETE CASCADE).
   const { results } = await c.env.DB.prepare("SELECT r2_key FROM purchase_files WHERE purchase_id = ?").bind(id).all<{ r2_key: string }>();
@@ -412,7 +427,7 @@ purchases.delete("/:id", async (c) => {
 // Bewijsstukken uploaden (multipart/form-data, veld "file", meerdere toegelaten).
 purchases.post("/:id/files", async (c) => {
   const purchaseId = c.req.param("id");
-  if (!(await accessible(c, purchaseId))) return c.json({ error: "Aankoop niet gevonden" }, 404);
+  if (!(await writable(c, purchaseId))) return c.json({ error: "Aankoop niet gevonden" }, 404);
 
   const form = await c.req.formData();
   const uploads = form.getAll("file").filter((f): f is File => f instanceof File);
@@ -450,11 +465,11 @@ export const files = new Hono<AppEnv>();
 
 async function accessibleFile(c: Context<AppEnv>, id: string) {
   return c.env.DB.prepare(
-    `SELECT f.r2_key, f.filename, f.content_type FROM purchase_files f JOIN purchases p ON p.id = f.purchase_id
-     WHERE f.id = ? AND ${visibleSql(c.get("full"))}`,
+    `SELECT f.r2_key, f.filename, f.content_type, p.id AS purchase_id FROM purchase_files f JOIN purchases p ON p.id = f.purchase_id
+     WHERE f.id = ?1 AND ${visibleSql(c.get("full"), 2)}`,
   )
     .bind(id, ...visibleBinds(c))
-    .first<{ r2_key: string; filename: string; content_type: string }>();
+    .first<{ r2_key: string; filename: string; content_type: string; purchase_id: string }>();
 }
 
 files.get("/:id", async (c) => {
@@ -477,7 +492,7 @@ files.get("/:id", async (c) => {
 files.delete("/:id", async (c) => {
   const id = c.req.param("id");
   const meta = await accessibleFile(c, id);
-  if (!meta) return c.json({ error: "Bestand niet gevonden" }, 404);
+  if (!meta || !(await writable(c, meta.purchase_id))) return c.json({ error: "Bestand niet gevonden" }, 404);
   await c.env.DB.prepare("DELETE FROM purchase_files WHERE id = ?").bind(id).run();
   await c.env.FILES.delete(meta.r2_key);
   return c.body(null, 204);

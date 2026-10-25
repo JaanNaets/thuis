@@ -8,6 +8,7 @@ import { PurchaseDetail } from "./pages/PurchaseDetail";
 import { PurchaseFormPage } from "./pages/PurchaseForm";
 import { PurchaseList } from "./pages/PurchaseList";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SharedPage } from "./pages/SharedPage";
 import { AssetDetail } from "./pages/AssetDetail";
 import { AssetList } from "./pages/AssetList";
 import { CardList } from "./pages/CardList";
@@ -40,6 +41,7 @@ export const routes: RouteObject[] = [
       { path: "uitgaven/terugkerend/nieuw", element: <RecurringFormPage /> },
       { path: "uitgaven/terugkerend/:id", element: <RecurringFormPage /> },
       { path: "projecten", element: <ProjectList /> },
+      { path: "gedeeld", element: <SharedPage /> },
       { path: "projecten/nieuw", element: <ProjectFormPage /> },
       { path: "projecten/:id", element: <ProjectDetail /> },
       { path: "projecten/:id/bewerken", element: <ProjectFormPage /> },

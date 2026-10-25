@@ -17,7 +17,7 @@ export const GUEST_HOME = "/projecten";
 const KIOSK_IDLE_MS = 5 * 60 * 1000;
 
 /** Wat een gast (enkel projecten) mag openen. Al de rest stuurt de app naar zijn projecten. */
-const GUEST_PATHS = ["/projecten", "/aankopen/", "/uitgaven/terugkerend/", "/meer"];
+const GUEST_PATHS = ["/projecten", "/gedeeld", "/aankopen/", "/uitgaven/terugkerend/", "/meer"];
 
 /** Het geraamte rond elk scherm: zijbalk (tablet), onderbalk (gsm), het witte paneel en het zoekpalet. */
 export function App() {

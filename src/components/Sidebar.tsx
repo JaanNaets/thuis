@@ -25,7 +25,10 @@ export const MENU: MenuItem[] = [
 ];
 
 /** Een gast in een project ziet enkel zijn projecten. */
-export const GUEST_MENU: MenuItem[] = [{ to: "/projecten", label: "Projecten", icon: "project", tab: true }];
+export const GUEST_MENU: MenuItem[] = [
+  { to: "/projecten", label: "Projecten", icon: "project", tab: true },
+  { to: "/gedeeld", label: "Gedeeld", icon: "transfer", tab: true },
+];
 
 export const SETTINGS = { to: "/meer", label: "Instellingen", short: "Meer", icon: "sliders" } as const;
 

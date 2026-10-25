@@ -107,28 +107,33 @@ export function SettingsPage() {
             addLabel="Lid"
           >
             <ul className="rows stagger">
-              {taxonomy.members.map((m, i) => (
-                <li key={m.id} style={stagger(i)}>
-                  <button type="button" className="row" onClick={() => setEditing({ kind: "member", item: m })}>
-                    <Avatar member={m} />
-                    <span className="row-main">
-                      <span className="row-title">
-                        {m.name}
-                        {m.id === taxonomy.me.id && <span className="muted"> · jij</span>}
+              {memberGroups(taxonomy).map(({ label, members }, g) => [
+                <li key={`g${g}`} className="group-row" style={stagger(g)}>
+                  {label} <span className="group-count">{members.length}</span>
+                </li>,
+                ...members.map((m, i) => (
+                  <li key={m.id} style={stagger(g + i + 1)}>
+                    <button type="button" className="row" onClick={() => setEditing({ kind: "member", item: m })}>
+                      <Avatar member={m} />
+                      <span className="row-main">
+                        <span className="row-title">
+                          {m.name}
+                          {m.id === taxonomy.me.id && <span className="muted"> · jij</span>}
+                        </span>
+                        <span className="row-meta">
+                          <span>{m.email ?? "meldt niet aan"}</span>
+                        </span>
                       </span>
-                      <span className="row-meta">
-                        <span>{m.email ?? "meldt niet aan"}</span>
-                      </span>
-                    </span>
-                    {m.access === "projects" ? (
-                      <span className="badge badge-secondary">gast</span>
-                    ) : (
-                      m.active === 0 && <span className="badge badge-secondary">woont hier niet</span>
-                    )}
-                    <Icon name="next" size={16} className="row-chevron" />
-                  </button>
-                </li>
-              ))}
+                      {m.access === "projects" ? (
+                        <span className="badge badge-secondary">gast</span>
+                      ) : (
+                        m.active === 0 && <span className="badge badge-secondary">woont hier niet</span>
+                      )}
+                      <Icon name="next" size={16} className="row-chevron" />
+                    </button>
+                  </li>
+                )),
+              ])}
             </ul>
           </Card>
 
@@ -293,6 +298,8 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
   const [access, setAccess] = useState<Access>(editing.kind === "member" ? (editing.item?.access ?? "full") : "full");
   // Je eigen e-mailadres en toegang kan je niet aanpassen: anders sluit je jezelf buiten.
   const isMe = editing.kind === "member" && editing.item?.id === taxonomy.me.id;
+  // Nieuw lid met de naam van iemand die al mee deelt (zonder e-mailadres): dat wordt die persoon.
+  const twin = editing.kind === "member" && !item ? taxonomy.members.find((m) => !m.email && m.name.toLowerCase() === name.trim().toLowerCase()) : undefined;
   const [color, setColor] = useState<Tone | null>(item && "color" in item ? item.color : null);
   const [parentId, setParentId] = useState<string | null>(item && "parent_id" in item ? item.parent_id : null);
   const [busy, setBusy] = useState(false);
@@ -326,10 +333,11 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
     setBusy(true);
     setError(undefined);
     try {
-      if (item) await api.put(`${base}/${item.id}`, body());
-      else await api.post(base, body());
+      const saved = item ? await api.put<{ linked?: boolean }>(`${base}/${item.id}`, body()) : await api.post<{ linked?: boolean }>(base, body());
       await refreshTaxonomy();
-      toast(item ? "Bijgewerkt" : `${WHAT[editing.kind].charAt(0).toUpperCase()}${WHAT[editing.kind].slice(1)} toegevoegd`);
+      // Iemand met dezelfde naam had al kosten gedeeld: het nieuwe lid is die persoon.
+      if (saved?.linked) toast(`Gekoppeld aan ${name}: alles wat al gedeeld werd, staat er meteen`);
+      else toast(item ? "Bijgewerkt" : `${WHAT[editing.kind].charAt(0).toUpperCase()}${WHAT[editing.kind].slice(1)} toegevoegd`);
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -374,6 +382,15 @@ function EditForm({ editing, taxonomy, onDone }: { editing: Editing; taxonomy: T
             </span>
             <input type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optioneel" disabled={isMe} />
             {isMe && <span className="hint">Je eigen e-mailadres en toegang past een ander lid aan.</span>}
+            {!isMe && twin && (
+              <span className="hint">
+                {twin.name} deelt al mee zonder aan te melden. Met een e-mailadres wordt het nieuwe lid die persoon: alles wat al gedeeld werd, staat er dan
+                meteen.
+              </span>
+            )}
+            {!isMe && editing.kind === "member" && editing.item && !editing.item.email && (
+              <span className="hint">Met een e-mailadres kan die aanmelden en ziet die meteen wat al gedeeld werd.</span>
+            )}
           </label>
           {!isMe && (
             <div className="field">
@@ -555,4 +572,11 @@ function PhoneMenu() {
       </Sheet>
     </div>
   );
+}
+
+/** Leden in twee groepen: wie hier woont, en de anderen (familie, vrienden, wie enkel mee deelt). */
+function memberGroups(t: Taxonomy): { label: string; members: Member[] }[] {
+  const home = t.members.filter((m) => m.active === 1 && m.access === "full");
+  const others = t.members.filter((m) => !home.includes(m));
+  return [{ label: "Woont hier", members: home }, ...(others.length > 0 ? [{ label: "Anderen · delen mee of zitten in een project", members: others }] : [])];
 }

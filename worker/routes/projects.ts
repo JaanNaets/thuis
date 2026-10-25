@@ -7,7 +7,7 @@ import { asObject, guard, optionalBoolean, optionalCents, optionalDate, optional
 import { buildSummary, toEntries, toRecurring, totalsByCategory, type RecurringRow } from "./expenses";
 import { parseDefaultSplit } from "./households";
 import { PURCHASE_LIST_COLUMNS, PURCHASE_LIST_FROM, type PurchaseRow } from "./purchases";
-import { freeTone, PROJECT_COLUMNS, toProject } from "./taxonomy";
+import { findTwin, freeTone, PROJECT_COLUMNS, toProject } from "./taxonomy";
 
 const NOT_FOUND = "Project niet gevonden";
 
@@ -215,14 +215,21 @@ projects.post("/:id/members", requireFull, async (c) => {
   } else {
     const email = optionalString(obj, "email", 200);
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new ValidationError("Dat is geen geldig e-mailadres");
+    const name = requiredString(obj, "name", 60);
     const existing = email
       ? await db.prepare("SELECT id FROM members WHERE household_id = ? AND email = ? COLLATE NOCASE").bind(hh, email).first<{ id: string }>()
       : null;
-    memberId = existing?.id ?? crypto.randomUUID();
-    if (!existing) {
+    // Al iemand met die naam zonder e-mailadres (al mee gedeeld): die persoon, met het e-mailadres erbij.
+    // Enkel een gast: een lid van het huishouden krijgt zo nooit ongemerkt toegang tot alles.
+    const twin = existing ? null : await findTwin(db, hh, name, true);
+    if (twin && email) {
+      await guard(db.prepare("UPDATE members SET email = ? WHERE id = ?").bind(email, twin.id).run(), { unique: "Er is al een lid met dit e-mailadres." });
+    }
+    memberId = existing?.id ?? twin?.id ?? crypto.randomUUID();
+    if (!existing && !twin) {
       await db
         .prepare("INSERT INTO members (id, household_id, name, email, color, active, access) VALUES (?, ?, ?, ?, ?, 0, 'projects')")
-        .bind(memberId, hh, requiredString(obj, "name", 60), email, await freeTone(db, hh))
+        .bind(memberId, hh, name, email, await freeTone(db, hh))
         .run();
     }
   }

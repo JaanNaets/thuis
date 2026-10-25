@@ -47,7 +47,11 @@ export function PurchaseDetail() {
   // Wie wat draagt: tonen zodra er meer dan één persoon in zit, of iemand anders betaalde dan wie het draagt.
   const onlyPayerPays = p.shares.length === 1 && p.payments.length === 1 && p.payments[0].member_id === p.shares[0].member_id;
   const shares = onlyPayerPays ? [] : p.shares;
-  const back = p.project_id ? { to: `/projecten/${p.project_id}`, label: p.project_name ?? "Project" } : { to: "/aankopen", label: "Aankopen" };
+  const back = p.project_id
+    ? { to: `/projecten/${p.project_id}`, label: p.project_name ?? "Project" }
+    : { to: full ? "/aankopen" : "/gedeeld", label: full ? "Aankopen" : "Gedeeld" };
+  // Een gast past enkel uitgaven in zijn projecten aan; wat daarbuiten met hem gedeeld werd, kan hij enkel bekijken.
+  const canEdit = full || Boolean(p.project_id && taxonomy?.projects.some((pr) => pr.id === p.project_id));
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -102,9 +106,11 @@ export function PurchaseDetail() {
         title={p.description}
         back={back}
         actions={
-          <Link to={`/aankopen/${p.id}/bewerken`} className="btn btn-outline btn-sm">
-            <Icon name="edit" size={15} /> Bewerken
-          </Link>
+          canEdit && (
+            <Link to={`/aankopen/${p.id}/bewerken`} className="btn btn-outline btn-sm">
+              <Icon name="edit" size={15} /> Bewerken
+            </Link>
+          )
         }
       />
 
@@ -194,12 +200,14 @@ export function PurchaseDetail() {
                   <dd>{formatCents(s.share_cents)}</dd>
                 </div>
               ))}
-              <div>
-                <dt>Garantie</dt>
-                <dd>
-                  <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>
-                </dd>
-              </div>
+              {warranty.tone !== "none" && (
+                <div>
+                  <dt>Garantie</dt>
+                  <dd>
+                    <span className={`badge ${WARRANTY_BADGE[warranty.tone]}`}>{warranty.label}</span>
+                  </dd>
+                </div>
+              )}
             </dl>
             {tags.length > 0 && (
               <p className="tag-line">
@@ -245,7 +253,7 @@ export function PurchaseDetail() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-icon btn-sm"
-                      disabled={busy}
+                      disabled={busy || !canEdit}
                       onClick={() => deleteFile(f)}
                       aria-label={`${f.filename} verwijderen`}
                     >
@@ -256,7 +264,7 @@ export function PurchaseDetail() {
               ))}
             </ul>
             <div className="card-body" style={{ display: "grid", gap: 10, paddingTop: p.files.length ? 16 : 0 }}>
-              <FilePicker files={newFiles} onChange={setNewFiles} />
+              {canEdit && <FilePicker files={newFiles} onChange={setNewFiles} />}
               {newFiles.length > 0 && (
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={uploadFiles}>
                   {busy && <Spinner />}
@@ -340,9 +348,11 @@ export function PurchaseDetail() {
             </section>
           )}
 
-          <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={deletePurchase} style={{ justifySelf: "start" }}>
-            <Icon name="trash" size={16} /> Verwijderen
-          </button>
+          {canEdit && (
+            <button type="button" className="btn btn-danger-ghost" disabled={busy} onClick={deletePurchase} style={{ justifySelf: "start" }}>
+              <Icon name="trash" size={16} /> Verwijderen
+            </button>
+          )}
         </div>
       </div>
 

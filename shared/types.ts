@@ -407,6 +407,16 @@ export type ExpenseSummary = {
   recurring: RecurringExpense[];
 };
 
+/** Wat buiten de projecten met jou gedeeld werd (vooral voor een gast): je saldo, wie wie moet, en de uitgaven. */
+export type SharedSummary = {
+  balance_cents: number;
+  /** Enkel de overschrijvingen waar jij in zit. */
+  transfers: Transfer[];
+  entries: ExpenseEntry[];
+  /** Jouw deel per uitgave (purchase id → cent). */
+  my_shares: Record<string, number>;
+};
+
 /** Een project met alles wat de projectpagina toont. */
 export type ProjectDetail = ProjectListItem & {
   members: Member[];

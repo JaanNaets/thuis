@@ -17,6 +17,7 @@ import {
   type PotSummary,
   type RecurringExpense,
   type RecurringInput,
+  type SharedSummary,
   type Tone,
   type TransferKind,
 } from "../../shared/types";
@@ -290,6 +291,44 @@ expenses.get("/summary", async (c) => {
   const projectId = c.req.query("project") || null;
   await checkScope(c, projectId);
   return c.json(await buildSummary(c.env.DB, c.get("household"), projectId, month));
+});
+
+/**
+ * Wat buiten de projecten met dit lid gedeeld werd: zijn saldo in het huishouden, de overschrijvingen waar hij in
+ * zit, en de uitgaven en geldbewegingen met hem erin. Zo ziet een gast (enkel projecten) zijn deel, en niets meer.
+ */
+expenses.get("/shared", async (c) => {
+  const db = c.env.DB;
+  const hh = c.get("household");
+  const me = c.get("member").id;
+  const ledger = await buildSummary(db, hh, null, null);
+  const scope = scopeSql("p", null);
+  const [purchases, transfers, shares] = await db.batch([
+    db
+      .prepare(
+        `SELECT ${PURCHASE_LIST_COLUMNS} ${PURCHASE_LIST_FROM}
+         WHERE ${scope} AND (p.id IN (SELECT purchase_id FROM expense_shares WHERE member_id = ?3)
+                             OR p.id IN (SELECT purchase_id FROM expense_payments WHERE member_id = ?3))
+         ORDER BY p.purchased_on DESC, p.created_at DESC LIMIT 200`,
+      )
+      .bind(hh, null, me),
+    db
+      .prepare(
+        `SELECT * FROM transfers t WHERE ${scopeSql("t", null)} AND (t.from_member_id = ?3 OR t.to_member_id = ?3)
+         ORDER BY t.transferred_on DESC, t.created_at DESC LIMIT 200`,
+      )
+      .bind(hh, null, me),
+    db
+      .prepare(`SELECT es.purchase_id, es.share_cents FROM expense_shares es JOIN purchases p ON p.id = es.purchase_id WHERE ${scope} AND es.member_id = ?3`)
+      .bind(hh, null, me),
+  ]);
+  const summary: SharedSummary = {
+    balance_cents: ledger.balances.find((b) => b.member_id === me)?.balance_cents ?? 0,
+    transfers: ledger.transfers.filter((t) => t.from === me || t.to === me),
+    entries: toEntries(purchases.results as PurchaseRow[], transfers.results as MoneyTransfer[]),
+    my_shares: Object.fromEntries((shares.results as { purchase_id: string; share_cents: number }[]).map((r) => [r.purchase_id, r.share_cents])),
+  };
+  return c.json(summary);
 });
 
 // ---------- geldbewegingen: terugbetaling, lening, storting, afhaling ----------
