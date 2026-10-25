@@ -416,10 +416,32 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
   de lijst mee. Na het loslaten staat alles meteen op zijn plaats.
 - Bewaren gebeurt bij het loslaten, zonder toast: de verplaatste rij is de bevestiging (zoals bij −/+). Een fout
   geeft een toast en zet de volgorde terug.
-- Een lijst die je niet mag ordenen, toont geen greep (`.drag-spacer` houdt de uitlijning).
+- Een lijst die je niet mag ordenen, toont geen greep.
 - Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
 - Wat de volgorde betekent: de projecten bovenaan je overzicht zijn **jouw** volgorde (per persoon); subprojecten
   en lijsten zijn die van het project (enkel met `manage`), en de lijsten bepalen ook de volgorde van de tabs.
+- Volgorde is een instelling, geen knop op een overzicht: je projecten bij **Ik**, subprojecten bij **Instellen →
+  Algemeen** (`ProjectOrder`), lijsten bij **Instellen → Lijsten**, velden in het formulier van een lijst.
+
+### Regels: `RulesEditor` en `BalanceCard`
+
+Een **regel** laat de app iets doen met de velden van een lijst (`shared/rules.ts`). Een lijst heeft hooguit één
+regel; je kiest ze onderaan het formulier van de lijst (`RulesEditor`: een `Segmented`, per rol een veld, en bij
+Kosten verdelen de gewone verdeling als `SharesField`). Kies je een regel, dan zoekt de app de passende velden;
+wat ontbreekt, komt erbij.
+
+| Regel | Velden | Wat de app doet |
+| --- | --- | --- |
+| Kosten verdelen (`split`) | Bedrag, Betaald door, Verdeling | Een nieuwe uitgave: jij betaalde, de gewone verdeling (of gelijk over iedereen). Telt mee in Wie moet wie |
+| Terugbetalingen (`settle`) | Bedrag, Van, Aan | Telt mee in Wie moet wie; "Terugbetaald" bewaart hier |
+
+- `BalanceCard` ("Wie moet wie") staat in de zijkolom van een project, met alles eronder. Per overschrijving één
+  rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
+  en datum; minder mag). Niets open: "Alles is verrekend."
+- Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
+- "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
+- Telt enkel wat je mag zien (de lijst en de velden van de regel); wat verborgen is, telt niet mee.
+- Een nieuwe regel (voorraad, ...) komt in `shared/rules.ts` met zijn velden in `RULE_FIELDS`, en in `RulesEditor`.
 
 ### Een lijst tonen: `ItemsView`
 
@@ -560,15 +582,14 @@ Regels:
 
 ## 6. Patronen per scherm
 
-**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" en `actions` "Volgorde" → per project (in de volgorde
-van de boom) een `dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen
-elke lijst (`?lijst=`) met het aantal → gearchiveerde projecten apart. "Volgorde" wisselt naar de boom met grepen
-(`useSortable`); "Klaar" terug. Het kruimelpad toont hier enkel "Overzicht".
+**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" → per project (in de volgorde van de boom) een
+`dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen elke lijst
+(`?lijst=`) met het aantal → gearchiveerde projecten apart. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →
-`split split-main-first`: rechts `ItemsView`, in de zijkolom Subprojecten en Wie (met de rol, en "via …" als het
-lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
+`split split-main-first`: rechts `ItemsView`, in de zijkolom Wie moet wie (als er een lijst met een regel is; op gsm
+vóór de lijst), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
 `dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het
@@ -579,10 +600,11 @@ logboek (nieuwste eerst, toevoegen in een `Sheet`) en bestanden → onderaan sti
 tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 
 **Instellen** (`/projecten/:id/instellingen`): `Tabs` Algemeen · Lijsten · Rollen · Mensen · Tags (in het adres:
-`?tab=mensen`), één kaart per tab. Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
+`?tab=mensen`), één kaart per tab (Algemeen heeft er ook een voor de volgorde van de subprojecten). Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
-**Ik** (`/ik`): je naam en kleur; je e-mailadres komt van je aanmelding.
+**Ik** (`/ik`): je naam en kleur; je e-mailadres komt van je aanmelding. Daaronder de volgorde van je projecten op
+het overzicht.
 
 ## 7. Toegankelijkheid
 

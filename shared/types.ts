@@ -2,6 +2,7 @@
 
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef } from "./fields";
+import type { Rule, Transfer } from "./rules";
 import type { IconKey } from "./templates";
 
 /** Pastelkleuren voor personen, projecten en tags. */
@@ -92,13 +93,30 @@ export type ItemType = {
   name_label: string | null;
   icon: IconKey | null;
   fields: FieldDef[];
+  /** Wat de app met de velden doet (Kosten verdelen, Terugbetalingen). */
+  rules: Rule[];
   sort_order: number;
 };
 
 /** Een lijst zoals jij ze ziet: enkel de velden die je mag zien, en wat je per veld mag. */
 export type ItemTypeView = ItemType & { access: Access; field_access: Record<string, Access>; can_create: boolean; can_delete: boolean };
 
-export type ItemTypeInput = { name: string; plural: string; name_label: string | null; icon: IconKey | null; fields: FieldDef[] };
+export type ItemTypeInput = { name: string; plural: string; name_label: string | null; icon: IconKey | null; fields: FieldDef[]; rules: Rule[] };
+
+/**
+ * Wie wie nog hoeveel moet in een project (met alles eronder), uit de lijsten met de regel Kosten verdelen of
+ * Terugbetalingen die je mag zien. `net`: + = krijgt nog, − = moet nog. `settle`: waar je een terugbetaling bewaart.
+ */
+export type Balance = {
+  active: boolean;
+  people: Person[];
+  net: { person_id: string; amount: number }[];
+  transfers: Transfer[];
+  counted: number;
+  settle: { type_id: string; amount: string; from: string; to: string; date: string | null } | null;
+  /** Je kan het project instellen en er is nog geen lijst Terugbetalingen: die kan je klaarzetten. */
+  can_add_settle: boolean;
+};
 
 export type Tag = { id: string; project_id: string; name: string; color: Tone | null };
 

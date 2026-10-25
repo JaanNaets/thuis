@@ -8,6 +8,7 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { Avatar, CardHead, Segmented, SubmitButton, Tabs, ToneSwatches } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
 import { PageHead } from "../components/Page";
+import { ProjectOrder } from "../components/ProjectOrder";
 import { Sheet } from "../components/Sheet";
 import { useSortable } from "../components/Sortable";
 import { useToast } from "../components/Toast";
@@ -68,6 +69,7 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
   const [description, setDescription] = useState(pr.description ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const children = p.children.filter((c) => !c.archived);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -122,6 +124,16 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
         {busy ? "Opslaan…" : "Opslaan"}
       </SubmitButton>
+      {children.length > 1 && (
+        <section className="card">
+          <CardHead
+            icon="sliders"
+            title="Volgorde van de subprojecten"
+            description="Sleep aan de greep. Geldt voor iedereen in het project; wordt meteen bewaard."
+          />
+          <ProjectOrder nodes={children} parent={pr} onChanged={onSaved} />
+        </section>
+      )}
       <div className="btn-row" style={{ justifySelf: "start" }}>
         <button type="button" className="btn btn-ghost" onClick={archive}>
           <Icon name="archive" size={16} /> {pr.archived ? "Weer actief maken" : "Archiveren"}

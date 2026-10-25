@@ -1,6 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import { cleanRights, NO_RIGHTS, type Rights } from "../shared/access";
 import type { FieldDef } from "../shared/fields";
+import type { Rule } from "../shared/rules";
 import type { ItemType, Person, Project, ProjectNode, Tone } from "../shared/types";
 import { TONES } from "../shared/types";
 import type { AppEnv } from "./types";
@@ -159,16 +160,19 @@ export async function accessibleProjects(db: D1Database, personId: string): Prom
   return nodes;
 }
 
-type TypeRow = Omit<ItemType, "fields"> & { fields: string };
+export type TypeRow = Omit<ItemType, "fields" | "rules"> & { fields: string; rules?: string };
+
+function parseList<T>(json: string | undefined): T[] {
+  try {
+    const value = JSON.parse(json ?? "[]");
+    return Array.isArray(value) ? (value as T[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function toItemType(row: TypeRow): ItemType {
-  let fields: FieldDef[] = [];
-  try {
-    fields = JSON.parse(row.fields) as FieldDef[];
-  } catch {
-    fields = [];
-  }
-  return { ...row, fields };
+  return { ...row, fields: parseList<FieldDef>(row.fields), rules: parseList<Rule>(row.rules) };
 }
 
 /** De lijsten die in een project te gebruiken zijn: die van het project zelf en erboven. */

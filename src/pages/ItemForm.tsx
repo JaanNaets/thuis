@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
+import { applyRuleDefaults } from "../../shared/rules";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
 import { Segmented, SubmitButton } from "../components/Controls";
@@ -49,9 +50,21 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const fields = type.fields;
   const people = project.members.map((m) => m.person);
   const editsType = type.access === "edit";
+  // Een nieuw item begint met wat de regels invullen (bij een uitgave: jij betaalde, de gewone verdeling).
+  const fresh = () =>
+    attributesDraft(
+      fields,
+      applyRuleDefaults(
+        type.rules,
+        {},
+        people.map((p) => p.id),
+        person.id,
+        true,
+      ),
+    );
 
   const [name, setName] = useState(item?.name ?? "");
-  const [attrs, setAttrs] = useState<AttributeDraft>(() => attributesDraft(fields, item?.data ?? {}));
+  const [attrs, setAttrs] = useState<AttributeDraft>(() => (item ? attributesDraft(fields, item.data) : fresh()));
   const [tags, setTags] = useState<Tag[]>(project.tags);
   const [tagIds, setTagIds] = useState<string[]>(item?.tag_ids ?? []);
   const [auto, setAuto] = useState<Set<string>>(new Set());
@@ -89,7 +102,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       if (next) {
         // Opslaan en volgende: tags blijven, de rest is leeg (de volgende fles uit de kelder).
         setName("");
-        setAttrs(attributesDraft(fields, {}));
+        setAttrs(fresh());
         setAuto(new Set());
         touched.current.clear();
         setPhoto(null);

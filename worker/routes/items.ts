@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { canCreate, canDelete, canEditType, fieldAccess, fieldAccessMap, mergeEditable, typeAccess, visibleData, type Rights } from "../../shared/access";
 import { cleanAttributes, missingRequired, referencedItems, referencedPeople, type Attributes, type FieldDef } from "../../shared/fields";
+import { applyRuleDefaults } from "../../shared/rules";
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { accessibleProjects, placeholders, projectAccess, requireProject, typesFor, type ProjectAccess } from "../context";
@@ -91,7 +92,8 @@ async function requireItem(c: Context<AppEnv>, id: string, want: "view" | "edit"
 
 /**
  * De waarden nakijken bij bewaren: enkel velden die je mag wijzigen, verplichte velden ingevuld, en wat je nieuw
- * kiest bij een persoon of verwijzing moet je kennen: iemand uit dit project, een item dat je mag zien.
+ * kiest bij een persoon of verwijzing moet je kennen: iemand uit dit project, een item dat je mag zien. Regels vullen
+ * in wat leeg is (bij een uitgave: jij betaalde, de gewone verdeling).
  */
 async function prepareData(
   db: D1Database,
@@ -100,9 +102,11 @@ async function prepareData(
   type: ItemType,
   incoming: unknown,
   existing: Attributes,
+  isNew: boolean,
 ): Promise<Attributes> {
   const clean = cleanAttributes(type.fields, incoming);
-  const data = mergeEditable(access.rights, type.id, type.fields, existing, clean);
+  const merged = mergeEditable(access.rights, type.id, type.fields, existing, clean);
+  const data = type.rules.length ? applyRuleDefaults(type.rules, merged, await membersOf(db, access.chain), personId, isNew) : merged;
   const changed = (key: string) => JSON.stringify(data[key]) !== JSON.stringify(existing[key]);
 
   const people = referencedPeople(
@@ -135,6 +139,15 @@ async function prepareData(
   );
   if (missing.length) throw new ValidationError(`Vul ${missing.map((f) => `"${f.label}"`).join(" en ")} in.`);
   return data;
+}
+
+/** Iedereen die in dit project zit (zelf of erboven). */
+async function membersOf(db: D1Database, chain: string[]): Promise<string[]> {
+  const { results } = await db
+    .prepare(`SELECT DISTINCT person_id FROM memberships WHERE project_id IN (${placeholders(chain.length)})`)
+    .bind(...chain)
+    .all<{ person_id: string }>();
+  return results.map((r) => r.person_id);
 }
 
 /** Tags moeten van dit project of erboven komen. */
@@ -234,7 +247,7 @@ projectItems.post("/:id/items", async (c) => {
   const type = (await typesFor(db, access.chain)).find((t) => t.id === input.type_id);
   if (!type) throw new ValidationError("Die lijst bestaat hier niet.");
   if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
-  const data = await prepareData(db, me, access, type, input.data, {});
+  const data = await prepareData(db, me, access, type, input.data, {}, true);
   await assertTags(db, access.chain, input.tag_ids);
   const id = crypto.randomUUID();
   await db.batch([
@@ -280,7 +293,7 @@ items.put("/:id", async (c) => {
   if (!editsType && !type.fields.some((f) => fieldAccess(access.rights, type.id, f.key) === "edit"))
     throw new ForbiddenError("Dit item mag je enkel bekijken.");
   if (input.type_id !== type.id) throw new ValidationError("Een item verhuist niet naar een andere lijst.");
-  const data = await prepareData(db, me, access, type, input.data, parseData(row.data));
+  const data = await prepareData(db, me, access, type, input.data, parseData(row.data), false);
   const statements = [
     db
       .prepare("UPDATE items SET name = ?, data = ?, updated_at = datetime('now') WHERE id = ?")
@@ -467,6 +480,7 @@ projectItems.post("/:id/items/import", async (c) => {
   const seen = new Set(existing.map((e) => key(e.name, parseData(e.data))));
   const tagIds = new Map(tagRows.map((t) => [t.name.toLowerCase(), t.id]));
   const newTags: D1PreparedStatement[] = [];
+  const members = type.rules.length ? await membersOf(db, access.chain) : [];
 
   const result: ImportResult = { created: 0, skipped: [] };
   const statements: D1PreparedStatement[] = [];
@@ -475,7 +489,7 @@ projectItems.post("/:id/items/import", async (c) => {
     const r = (raw && typeof raw === "object" ? raw : {}) as { name?: unknown; data?: unknown; tags?: unknown };
     const name = typeof r.name === "string" ? r.name.trim().slice(0, 200) : "";
     if (!name) return result.skipped.push({ row, error: "Geen naam" });
-    const data = cleanAttributes(fields, r.data);
+    const data = applyRuleDefaults(type.rules, cleanAttributes(fields, r.data), members, me, true);
     const missing = missingRequired(fields, data);
     if (missing.length) return result.skipped.push({ row, error: `${missing[0].label} ontbreekt` });
     if (seen.has(key(name, data))) return result.skipped.push({ row, error: "Staat er al in" });

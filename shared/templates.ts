@@ -2,6 +2,7 @@
 // aanpassen. Er is niets speciaals aan: een project uit een sjabloon is een gewoon project.
 
 import type { FieldDef } from "./fields";
+import type { Rule } from "./rules";
 
 /** Iconen voor projecten en lijsten (namen uit src/components/Icon.tsx). */
 export const ICONS = [
@@ -16,6 +17,7 @@ export const ICONS = [
   "pin",
   "receipt",
   "wallet",
+  "transfer",
   "tag",
   "users",
   "folder",
@@ -41,6 +43,8 @@ export type TypeTemplate = {
   name_label?: string;
   icon: IconKey;
   fields: TemplateField[];
+  /** Wat de app met de velden doet (zie shared/rules.ts). */
+  rules?: Rule[];
 };
 
 export type ProjectTemplate = {
@@ -94,9 +98,27 @@ const EXPENSE: TypeTemplate = {
       options: ["Boodschappen", "Wonen", "Energie", "Vervoer", "Gezondheid", "Vrije tijd", "Kleding", "Andere"],
       filter: true,
     },
-    { key: "verdeling", label: "Verdeling", type: "share", hint: "Wie draagt hoeveel (leeg = gelijk)" },
+    { key: "verdeling", label: "Verdeling", type: "share", hint: "Wie draagt hoeveel (leeg = de gewone verdeling, of gelijk)" },
     NOTE,
   ],
+  rules: [{ kind: "split", amount: "bedrag", payer: "betaald_door", for: "verdeling" }],
+};
+
+/** Geld dat iemand aan iemand anders gaf; samen met de uitgaven geeft dat wie wie nog hoeveel moet. */
+export const SETTLEMENT: TypeTemplate = {
+  key: "terugbetaling",
+  name: "Terugbetaling",
+  plural: "Terugbetalingen",
+  name_label: "Omschrijving",
+  icon: "transfer",
+  fields: [
+    { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true },
+    { key: "datum", label: "Datum", type: "date", required: true, column: true },
+    { key: "van", label: "Van", type: "person", required: true, filter: true },
+    { key: "aan", label: "Aan", type: "person", required: true, filter: true },
+    NOTE,
+  ],
+  rules: [{ kind: "settle", amount: "bedrag", from: "van", to: "aan" }],
 };
 
 export const PROJECT_TEMPLATES = {
@@ -155,6 +177,7 @@ export const PROJECT_TEMPLATES = {
         ],
       },
       EXPENSE,
+      SETTLEMENT,
       VENDOR,
       PLACE,
     ],
@@ -215,7 +238,7 @@ export const PROJECT_TEMPLATES = {
     label: "Gedeelde uitgaven",
     description: "Een reis, verbouwing of feest: wie betaalde wat en hoe het verdeeld wordt",
     icon: "wallet",
-    types: [EXPENSE, VENDOR],
+    types: [EXPENSE, SETTLEMENT, VENDOR],
   },
   collection: {
     label: "Verzameling",
@@ -225,6 +248,15 @@ export const PROJECT_TEMPLATES = {
   },
 } as const satisfies Record<string, ProjectTemplate>;
 export type TemplateKey = keyof typeof PROJECT_TEMPLATES;
+
+/** Eén lijst uit een sjabloon, op haar sleutel (om ze later aan een project toe te voegen). */
+export function typeTemplate(key: unknown): TypeTemplate | undefined {
+  for (const template of Object.values(PROJECT_TEMPLATES)) {
+    const found = (template.types as readonly TypeTemplate[]).find((t) => t.key === key);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 export function isTemplateKey(value: unknown): value is TemplateKey {
   return typeof value === "string" && Object.hasOwn(PROJECT_TEMPLATES, value);

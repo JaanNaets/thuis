@@ -9,12 +9,14 @@ import { buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../comp
 import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
+import { buildRules, ruleDraft, RulesEditor, type RuleDraft } from "../components/RulesEditor";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
+import { useSession } from "../session";
 
 type FullType = ItemType & { project_name: string };
 
-/** Een lijst samenstellen: naam, hoe één item heet, icoon en velden. */
+/** Een lijst samenstellen: naam, hoe één item heet, icoon, velden en wat de app ermee doet (de regel). */
 export function TypeFormPage() {
   const { id, typeId } = useParams();
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
@@ -39,6 +41,8 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
   const [nameLabel, setNameLabel] = useState(existing?.name_label ?? "");
   const [icon, setIcon] = useState<IconKey | null>(existing?.icon ?? "folder");
   const [fields, setFields] = useState<FieldDraft[]>(() => fieldsDraft(existing?.fields ?? []));
+  const [rule, setRule] = useState<RuleDraft>(() => ruleDraft(existing?.rules ?? []));
+  const { person } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const back = `/projecten/${p.project.id}/instellingen?tab=lijsten`;
@@ -47,7 +51,9 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
     e.preventDefault();
     const built = buildFields(fields);
     if ("error" in built) return setError(built.error);
-    const input: ItemTypeInput = { name, plural: plural || name, name_label: nameLabel || null, icon, fields: built.fields };
+    const rules = buildRules(rule, fields, (key) => built.fields[fields.findIndex((f) => f.key === key)]?.key);
+    if ("error" in rules) return setError(rules.error);
+    const input: ItemTypeInput = { name, plural: plural || name, name_label: nameLabel || null, icon, fields: built.fields, rules: rules.rules };
     setBusy(true);
     setError(undefined);
     try {
@@ -110,6 +116,15 @@ function TypeForm({ project: p, existing, refTypes }: { project: ProjectDetail; 
       <section className="card form-section">
         <FieldsEditor value={fields} onChange={setFields} types={refTypes} selfLabel={plural || name || "Deze lijst"} selfId={existing?.id} />
       </section>
+
+      <RulesEditor
+        value={rule}
+        onChange={setRule}
+        fields={fields}
+        onAddFields={(added) => setFields((f) => [...f, ...added])}
+        people={p.members.map((m) => m.person)}
+        meId={person.id}
+      />
 
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">

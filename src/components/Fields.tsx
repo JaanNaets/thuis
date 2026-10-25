@@ -66,7 +66,7 @@ const parsePercent = (s: string | undefined) => {
 };
 
 /** Van wat er staat naar aandelen; undefined = klopt nog niet. */
-function buildShares(draft: SharesDraft): Share[] | undefined {
+export function buildShares(draft: SharesDraft): Share[] | undefined {
   if (draft.mode === "none" || draft.people.length === 0) return [];
   if (draft.mode === "equal") return normalizeShares(draft.people.map((id) => ({ person_id: id })));
   const shares = draft.people.map((id) => ({ person_id: id, share: parsePercent(draft.values[id]) }));

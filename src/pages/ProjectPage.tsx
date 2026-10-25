@@ -1,6 +1,7 @@
 import { useParams, useSearchParams } from "react-router";
 import type { ProjectDetail } from "../../shared/types";
 import { useApi } from "../api";
+import { BalanceCard } from "../components/Balance";
 import { Avatar, CardHead, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { ItemsView } from "../components/ItemsView";
@@ -70,6 +71,7 @@ export function ProjectPage() {
 
       <div className="split split-main-first">
         <aside className="split-aside">
+          <BalanceCard key={project.id} projectId={project.id} className="split-lead" />
           <section className="card">
             <CardHead
               icon="project"

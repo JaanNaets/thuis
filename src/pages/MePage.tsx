@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from "react";
 import type { Person, Tone } from "../../shared/types";
 import { api } from "../api";
-import { SubmitButton, ToneSwatches } from "../components/Controls";
+import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
 import { PageHead } from "../components/Page";
+import { ProjectOrder } from "../components/ProjectOrder";
 import { useToast } from "../components/Toast";
 import { isKiosk } from "../device";
+import { childrenOf } from "../projects";
 import { useSession } from "../session";
 
-/** Jouw naam en kleur. Je e-mailadres komt van je aanmelding. */
+/** Jouw naam en kleur (je e-mailadres komt van je aanmelding), en de volgorde van je projecten op het overzicht. */
 export function MePage() {
   const { person, projects, reloadMe } = useSession();
   const toast = useToast();
@@ -15,6 +17,10 @@ export function MePage() {
   const [color, setColor] = useState<Tone | null>(person.color);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const tops = childrenOf(
+    projects.filter((p) => !p.archived),
+    null,
+  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -57,6 +63,13 @@ export function MePage() {
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
         {busy ? "Opslaan…" : "Opslaan"}
       </SubmitButton>
+
+      {tops.length > 1 && (
+        <section className="card">
+          <CardHead icon="sliders" title="Volgorde op je overzicht" description="Sleep aan de greep. Dit is enkel jouw volgorde; ze wordt meteen bewaard." />
+          <ProjectOrder nodes={tops} />
+        </section>
+      )}
     </form>
   );
 }

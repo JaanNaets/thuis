@@ -3830,6 +3830,15 @@ dialog.palette[open]::backdrop {
   .split-main-first > .split-main {
     order: -1;
   }
+
+  /* Wat zo belangrijk is dat het vóór de lijst moet (Wie moet wie): de zijkolom valt open, die kaart komt eerst. */
+  .split-main-first > .split-aside {
+    display: contents;
+  }
+
+  .split-main-first .split-lead {
+    order: -2;
+  }
 }
 
 /* Foto van een item, bovenaan de fiche. */
@@ -4138,11 +4147,6 @@ dialog.palette[open]::backdrop {
   cursor: grabbing;
 }
 
-.drag-spacer {
-  flex: none;
-  width: 18px;
-}
-
 [data-sorting] {
   position: relative;
 }
@@ -4176,7 +4180,7 @@ dialog.palette[open]::backdrop {
   padding-left: 2px;
 }
 
-/* De boom om te ordenen: projecten met hun subprojecten ingesprongen eronder. */
+/* Projecten in volgorde slepen (ProjectOrder): bij Ik en bij Instellen → Algemeen. */
 .sort-list {
   margin: 0;
   padding: 0 8px 8px;
@@ -4195,12 +4199,15 @@ dialog.palette[open]::backdrop {
   padding: 6px 10px;
 }
 
-.sort-children {
-  margin-left: 30px;
-  padding: 0 0 6px;
-}
 
-.sort-list.sort-children > li + li {
-  border-top: 0;
-}
+/* ---------- regels: wie moet wie ---------- */
 
+/* Onder "Wie moet wie": uitleg en de knop om de lijst Terugbetalingen klaar te zetten. */
+.balance-setup {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 0 16px;
+  padding: 12px 0 16px;
+  border-top: 1px solid var(--divider);
+}

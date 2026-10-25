@@ -33,8 +33,10 @@ commits en uitleg.
   tegen de keten van het project (`access.chain`).
 - Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
   `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
-- Regels voor een use case (verdelen, voorraad, …) bouw je bovenop de kern, niet erin: als sjabloon
-  (`shared/templates.ts`), veldsoort (`shared/fields.ts`) of eigen route die dezelfde toegangsregels volgt.
+- Regels voor een use case (verdelen, voorraad, …) bouw je bovenop de kern, niet erin: als **regel op een lijst**
+  (`shared/rules.ts`: welke velden welke rol hebben, nagekeken met `cleanRules`), als sjabloon
+  (`shared/templates.ts`) of veldsoort (`shared/fields.ts`). Een regel telt enkel wat de gebruiker mag zien (de lijst
+  én de velden van de regel), en vult bij bewaren enkel in wat leeg is (`applyRuleDefaults`).
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

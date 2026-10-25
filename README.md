@@ -193,9 +193,23 @@ In kioskmodus:
 ### Het overzicht
 
 De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
-zit: één tik en je bent er. Met **Volgorde** sleep je de projecten in de volgorde die jij wil (dat is per persoon);
-subprojecten orden je daar ook, als je het project instelt. De volgorde van de lijsten (en dus van de tabs in een
-project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
+zit: één tik en je bent er. De volgorde van je projecten sleep je bij **Ik** (dat is per persoon); die van de
+subprojecten bij **Instellen → Algemeen**, als je het project instelt. De volgorde van de lijsten (en dus van de tabs
+in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
+
+### Wie betaalde wat
+
+Een lijst kan een **regel** hebben: dan doet de app iets met haar velden. Kies ze onderaan het formulier van de lijst.
+
+- **Kosten verdelen** (Uitgaven in de sjablonen Huishouden en Gedeelde uitgaven): elke uitgave heeft een bedrag,
+  wie betaalde en een verdeling. Een nieuwe uitgave begint met "jij betaalde" en de gewone verdeling van de lijst
+  (bv. 60/40), of gelijk over iedereen in het project. Een cent die niet deelbaar is, draagt wie betaalde.
+- **Terugbetalingen**: geld van iemand aan iemand anders.
+
+Op het project staat dan **Wie moet wie**: zo weinig mogelijk overschrijvingen, met alles uit het project en zijn
+subprojecten. Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
+Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar met één knop klaar. Wat je niet mag zien
+(een lijst, of het bedrag), telt voor jou niet mee.
 
 ### Projecten en subprojecten
 
@@ -250,7 +264,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Lijsten: naam, naam van één item en velden (`fields`, als JSON). |
+| `item_types` | Lijsten: naam, naam van één item, velden (`fields`) en regels (`rules`, zie `shared/rules.ts`), als JSON. |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
 | `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |

@@ -1,31 +1,23 @@
-import { useEffect, useState } from "react";
 import type { Overview, OverviewType, ProjectNode } from "../../shared/types";
-import { api, useApi } from "../api";
-import { CardHead } from "../components/Controls";
+import { useApi } from "../api";
 import { Icon, type IconName } from "../components/Icon";
 import { Num, stagger } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { projectIcon } from "../components/Sidebar";
-import { useSortable } from "../components/Sortable";
-import { useToast } from "../components/Toast";
-import { childrenOf, projectTree } from "../projects";
+import { projectTree } from "../projects";
 import { Link } from "../router";
 import { useSession } from "../session";
 
 /**
  * Je overzicht: per project een kaart met zijn lijsten en hoeveel erin zit, zodat je met één tik bij
- * je wijnen of klantenkaarten bent. Met "Volgorde" zet je de projecten zoals jij ze wil.
+ * je wijnen of klantenkaarten bent. De volgorde zet je bij Ik (je projecten) en Instellen (subprojecten).
  */
 export function Home() {
   const { projects } = useSession();
   const { data: overview } = useApi<Overview>("/me/overview");
-  const [arranging, setArranging] = useState(false);
   const tree = projectTree(projects, true);
   const active = tree.filter((p) => !p.archived);
   const archived = tree.filter((p) => p.archived);
-  const live = projects.filter((p) => !p.archived);
-  const tops = childrenOf(live, null);
-  const canArrange = tops.length > 1 || live.some((p) => p.rights.manage && childrenOf(live, p.id).length > 1);
   const lists = new Map(overview?.projects.map((p) => [p.id, p.types]));
   const nameOf = new Map(projects.map((p) => [p.id, p.name]));
 
@@ -34,19 +26,10 @@ export function Home() {
       <PageHead
         title="Overzicht"
         description={active.length ? "Je projecten en wat erin zit" : undefined}
-        actions={
-          canArrange && (
-            <button type="button" className="btn btn-outline btn-sm" aria-pressed={arranging} onClick={() => setArranging((a) => !a)}>
-              <Icon name={arranging ? "check" : "grip"} size={15} /> {arranging ? "Klaar" : "Volgorde"}
-            </button>
-          )
-        }
         primary={
-          !arranging && (
-            <Link to="/projecten/nieuw" className="btn btn-primary">
-              <Icon name="plus" size={16} /> Nieuw project
-            </Link>
-          )
+          <Link to="/projecten/nieuw" className="btn btn-primary">
+            <Icon name="plus" size={16} /> Nieuw project
+          </Link>
         }
       />
 
@@ -62,15 +45,6 @@ export function Home() {
         >
           Begin met een huishouden, een wijnkelder of een leeg project. Daarna kies je zelf wat je bijhoudt en wie wat mag.
         </EmptyState>
-      ) : arranging ? (
-        <section className="card">
-          <CardHead
-            icon="sliders"
-            title="Volgorde"
-            description="Sleep aan de greep. Je projecten bovenaan zet je voor jezelf; subprojecten voor iedereen in het project."
-          />
-          <ProjectOrder nodes={tops} all={live} parent={null} />
-        </section>
       ) : (
         <div className="dashboard stagger">
           {active.map((p, i) => (
@@ -79,7 +53,7 @@ export function Home() {
         </div>
       )}
 
-      {!arranging && archived.length > 0 && (
+      {archived.length > 0 && (
         <>
           <h2 className="section-title">Gearchiveerd</h2>
           <div className="card">
@@ -104,11 +78,9 @@ export function Home() {
         </>
       )}
 
-      {!arranging && (
-        <Link to="/projecten/nieuw" className="fab" aria-label="Nieuw project">
-          <Icon name="plus" size={24} />
-        </Link>
-      )}
+      <Link to="/projecten/nieuw" className="fab" aria-label="Nieuw project">
+        <Icon name="plus" size={24} />
+      </Link>
     </div>
   );
 }
@@ -152,63 +124,5 @@ function ProjectCard({ project: p, above, types, index }: { project: ProjectNode
         <p className="dash-empty">Nog niets om bij te houden</p>
       )}
     </section>
-  );
-}
-
-/**
- * Eén niveau van de boom om te ordenen. Bovenaan is het jouw volgorde; subprojecten ordent wie het project
- * erboven instelt (dat geldt voor iedereen). Een niveau dat je niet mag ordenen, staat er zonder greep.
- */
-function ProjectOrder({ nodes, all, parent }: { nodes: ProjectNode[]; all: ProjectNode[]; parent: ProjectNode | null }) {
-  const { reloadMe } = useSession();
-  const toast = useToast();
-  const sorted = nodes.map((n) => n.id);
-  const key = sorted.join(",");
-  const [order, setOrder] = useState(sorted);
-  useEffect(() => setOrder(key.split(",")), [key]);
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const canSort = nodes.length > 1 && (parent === null || parent.rights.manage);
-
-  async function save(ids: string[]) {
-    setOrder(ids);
-    try {
-      await api.put(parent ? `/projects/${parent.id}/children/order` : "/me/order", { ids });
-      reloadMe();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-      setOrder(sorted);
-    }
-  }
-  const sortable = useSortable(order, save, (id) => byId.get(id)?.name ?? "");
-
-  return (
-    <>
-      <ul className={parent ? "sort-list sort-children" : "sort-list"}>
-        {order.map((id) => {
-          const n = byId.get(id);
-          if (!n) return null;
-          const kids = childrenOf(all, id);
-          return (
-            <li key={id} {...sortable.itemProps(id)}>
-              <div className="sort-row">
-                {canSort ? (
-                  <button {...sortable.handleProps(id)}>
-                    <Icon name="grip" size={16} />
-                  </button>
-                ) : (
-                  <span className="drag-spacer" aria-hidden="true" />
-                )}
-                <span className={`row-media tone-${n.color ?? "sky"}`}>
-                  <Icon name={projectIcon(n)} size={16} />
-                </span>
-                <span className="row-title">{n.name}</span>
-              </div>
-              {kids.length > 0 && <ProjectOrder nodes={kids} all={all} parent={n} />}
-            </li>
-          );
-        })}
-      </ul>
-      {sortable.status}
-    </>
   );
 }

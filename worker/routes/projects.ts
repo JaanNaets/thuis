@@ -1,9 +1,33 @@
 import { Hono } from "hono";
-import { canCreate, canDelete, canSeeType, cleanRights, DEFAULT_ROLES, fieldAccessMap, typeAccess, visibleFields, type Rights } from "../../shared/access";
-import { cleanFields, type FieldDef } from "../../shared/fields";
-import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateFields } from "../../shared/templates";
-import { isTone, type ItemType, type Member, type Person, type ProjectDetail, type ProjectNode, type Role, type Tag } from "../../shared/types";
-import { need, parseRights, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess } from "../context";
+import {
+  canCreate,
+  canDelete,
+  canSeeType,
+  cleanRights,
+  DEFAULT_ROLES,
+  fieldAccess,
+  fieldAccessMap,
+  typeAccess,
+  visibleFields,
+  type Rights,
+} from "../../shared/access";
+import { cleanFields, type Attributes, type FieldDef } from "../../shared/fields";
+import { balances, cleanRules, movementOf, ruleFieldKeys, settleUp, type Rule } from "../../shared/rules";
+import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateFields, typeTemplate } from "../../shared/templates";
+import { descendantIds } from "../../shared/tree";
+import { isTone, type Balance, type ItemType, type Member, type Person, type ProjectDetail, type ProjectNode, type Role, type Tag } from "../../shared/types";
+import {
+  accessibleProjects,
+  need,
+  parseRights,
+  placeholders,
+  projectAccess,
+  requireProject,
+  toItemType,
+  typesFor,
+  type ProjectAccess,
+  type TypeRow,
+} from "../context";
 import type { AppEnv } from "../types";
 import {
   asObject,
@@ -71,7 +95,32 @@ function parseTypeInput(body: unknown) {
     name_label: optionalString(obj, "name_label", 40),
     icon: icon as string | null,
     fields: obj.fields,
+    rules: obj.rules,
   };
+}
+
+/**
+ * De regels van een lijst nakijken tegen haar (nagekeken) velden. Wie in een standaardverdeling staat, moet in het
+ * project zitten.
+ */
+async function cleanTypeRules(db: D1Database, raw: unknown, fields: FieldDef[], chain: string[]): Promise<Rule[]> {
+  let rules: Rule[];
+  try {
+    rules = cleanRules(raw, fields);
+  } catch (err) {
+    throw new ValidationError((err as Error).message);
+  }
+  const people = rules.flatMap((r) => (r.kind === "split" ? (r.default ?? []).map((s) => s.person_id) : []));
+  if (people.length) {
+    const { results } = await db
+      .prepare(
+        `SELECT DISTINCT person_id FROM memberships WHERE project_id IN (${placeholders(chain.length)}) AND person_id IN (SELECT value FROM json_each(?))`,
+      )
+      .bind(...chain, JSON.stringify(people))
+      .all();
+    if (results.length !== new Set(people).size) throw new ValidationError("De gewone verdeling: kies enkel mensen uit dit project.");
+  }
+  return rules;
 }
 
 /** Het bovenste project van de boom (waar de beheerders staan). */
@@ -137,7 +186,7 @@ async function insertTemplateTypes(db: D1Database, projectId: string, templateKe
   const byName = Object.fromEntries(above.map((t) => [t.name.toLowerCase(), t.id]));
   return template.types.map((t, i) =>
     db
-      .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(
         ids[t.key],
         projectId,
@@ -146,6 +195,7 @@ async function insertTemplateTypes(db: D1Database, projectId: string, templateKe
         "name_label" in t ? (t.name_label ?? null) : null,
         t.icon,
         JSON.stringify(resolveTemplateFields(t.fields, ids, byName)),
+        JSON.stringify("rules" in t ? (t.rules ?? []) : []),
         i * 10,
       ),
   );
@@ -310,6 +360,93 @@ projects.get("/:id", async (c) => {
   return c.json(detail);
 });
 
+/**
+ * Wie wie nog hoeveel moet: alle items in dit project en eronder uit lijsten met de regel Kosten verdelen of
+ * Terugbetalingen. Telt enkel wat jij mag zien: de lijst, en het bedrag, wie betaalde en de verdeling. Wat je niet
+ * mag zien, telt niet mee (en verraadt niets).
+ */
+projects.get("/:id/balance", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const nodes = await accessibleProjects(db, me);
+  const below = descendantIds(nodes, access.project.id);
+  const rightsOf = new Map(nodes.filter((n) => below.has(n.id)).map((n) => [n.id, n.rights]));
+  const [{ results: typeRows }, chainTypes] = await Promise.all([
+    db
+      .prepare(
+        `SELECT * FROM item_types WHERE rules != '[]' AND (project_id IN (SELECT value FROM json_each(?1)) OR project_id IN (SELECT value FROM json_each(?2)))`,
+      )
+      .bind(JSON.stringify([...below]), JSON.stringify(access.chain))
+      .all<TypeRow>(),
+    typesFor(db, access.chain),
+  ]);
+  const ruleTypes = new Map(
+    typeRows
+      .map(toItemType)
+      .filter((t) => t.rules.length)
+      .map((t) => [t.id, t]),
+  );
+  const settleType = chainTypes.find(
+    (t) =>
+      t.rules[0]?.kind === "settle" && canCreate(access.rights, t.id) && ruleFieldKeys(t.rules[0]).every((k) => fieldAccess(access.rights, t.id, k) === "edit"),
+  );
+  const result: Balance = {
+    active: false,
+    people: [],
+    net: [],
+    transfers: [],
+    counted: 0,
+    settle: null,
+    can_add_settle: access.rights.manage && !chainTypes.some((t) => t.rules[0]?.kind === "settle"),
+  };
+  if (!ruleTypes.size) return c.json(result);
+
+  const { results: rows } = await db
+    .prepare(
+      `SELECT project_id, type_id, data FROM items
+       WHERE archived = 0 AND project_id IN (SELECT value FROM json_each(?1)) AND type_id IN (SELECT value FROM json_each(?2))`,
+    )
+    .bind(JSON.stringify([...below]), JSON.stringify([...ruleTypes.keys()]))
+    .all<{ project_id: string; type_id: string; data: string }>();
+  const movements = [];
+  for (const row of rows) {
+    const rights = rightsOf.get(row.project_id);
+    const type = ruleTypes.get(row.type_id);
+    if (!rights || !type) continue;
+    const rule = type.rules[0];
+    if (typeAccess(rights, type.id) === "none" || ruleFieldKeys(rule).some((k) => fieldAccess(rights, type.id, k) === "none")) continue;
+    let data: Attributes = {};
+    try {
+      data = JSON.parse(row.data) as Attributes;
+    } catch {
+      continue;
+    }
+    const movement = movementOf(rule, data);
+    if (movement) movements.push(movement);
+  }
+  const net = balances(movements);
+  const ids = [...net.keys()];
+  const { results: people } = await db
+    .prepare("SELECT id, name, email, color FROM people WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(ids))
+    .all<Person>();
+  // Zichtbaar als hier een lijst met uitgaven is die je mag zien, of als er iets meetelt.
+  const visibleSplit = [...ruleTypes.values()].some((t) => t.rules[0].kind === "split" && [...rightsOf.values()].some((r) => typeAccess(r, t.id) !== "none"));
+  const date = settleType?.fields.find((f) => f.type === "date" && f.required) ?? settleType?.fields.find((f) => f.type === "date");
+  const rule = settleType?.rules[0];
+  return c.json({
+    ...result,
+    active: visibleSplit || movements.length > 0,
+    people,
+    net: [...net].filter(([, v]) => v !== 0).map(([person_id, amount]) => ({ person_id, amount })),
+    transfers: settleUp(net),
+    counted: movements.length,
+    settle:
+      settleType && rule?.kind === "settle" ? { type_id: settleType.id, amount: rule.amount, from: rule.from, to: rule.to, date: date?.key ?? null } : null,
+  } satisfies Balance);
+});
+
 projects.put("/:id", async (c) => {
   const input = parseProjectInput(await c.req.json());
   const db = c.env.DB;
@@ -354,12 +491,43 @@ projects.post("/:id/types", async (c) => {
   need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const id = crypto.randomUUID();
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id);
+  const rules = await cleanTypeRules(db, input.rules, fields, access.chain);
   await db
     .prepare(
-      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
     )
-    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields))
+    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules))
+    .run();
+  return c.json({ id }, 201);
+});
+
+/** Een lijst uit een sjabloon toevoegen aan een bestaand project (bv. Terugbetalingen). */
+projects.post("/:id/types/template", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
+  const template = typeTemplate(asObject(await c.req.json()).key);
+  if (!template) throw new ValidationError("Die lijst bestaat niet als sjabloon.");
+  const above = await typesFor(db, access.chain);
+  const byName = Object.fromEntries(above.map((t) => [t.name.toLowerCase(), t.id]));
+  const id = crypto.randomUUID();
+  const fields = resolveTemplateFields(template.fields, { [template.key]: id }, byName);
+  await db
+    .prepare(
+      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+    )
+    .bind(
+      id,
+      access.project.id,
+      template.name,
+      template.plural,
+      template.name_label ?? null,
+      template.icon,
+      JSON.stringify(fields),
+      JSON.stringify(template.rules ?? []),
+    )
     .run();
   return c.json({ id }, 201);
 });
@@ -380,14 +548,14 @@ projects.get("/:id/all-types", async (c) => {
        ORDER BY t.sort_order, t.created_at`,
     )
     .bind(access.project.id, JSON.stringify(access.chain))
-    .all<Omit<ItemType, "fields"> & { fields: string; project_name: string }>();
+    .all<TypeRow & { project_name: string }>();
   return c.json(results.map((r) => ({ ...toItemType(r), project_name: r.project_name })));
 });
 
 export const types = new Hono<AppEnv>();
 
 async function requireType(db: D1Database, personId: string, typeId: string) {
-  const row = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(typeId).first<Omit<ItemType, "fields"> & { fields: string }>();
+  const row = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(typeId).first<TypeRow>();
   if (!row) throw new NotFoundError("Die lijst bestaat niet (meer).");
   const access = await projectAccess(db, personId, row.project_id);
   if (!access) throw new NotFoundError("Die lijst bestaat niet (meer).");
@@ -400,9 +568,11 @@ types.put("/:id", async (c) => {
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id);
+  // Zonder regels in de vraag blijven de huidige (als ze nog bij de velden passen).
+  const rules = await cleanTypeRules(db, input.rules === undefined ? type.rules : input.rules, fields, access.chain);
   await db
-    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ? WHERE id = ?")
-    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), type.id)
+    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, rules = ? WHERE id = ?")
+    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules), type.id)
     .run();
   return c.json({ id: type.id });
 });
