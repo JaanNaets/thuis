@@ -21,6 +21,7 @@ import {
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
 import { api, apiUrl, useApi } from "../api";
 import type { ScanResult } from "../barcode-detect";
+import { isKiosk } from "../device";
 import { centsToInput } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
@@ -588,6 +589,8 @@ export function AttributeRows({ defs, data, names, refs }: { defs: FieldDef[]; d
                   <Link to={`/items/${ref.id}`} className="link-quiet">
                     {ref.name}
                   </Link>
+                ) : d.type === "text" && typeof v === "string" && WEB_ADDRESS.test(v) ? (
+                  <WebLink url={v} />
                 ) : (
                   formatFieldValue(d, v, names)
                 )}
@@ -596,6 +599,24 @@ export function AttributeRows({ defs, data, names, refs }: { defs: FieldDef[]; d
           );
         })}
     </>
+  );
+}
+
+const WEB_ADDRESS = /^https?:\/\/\S+$/i;
+
+/** Een webadres in een tekstveld: enkel het domein, als link. Op een kiosk gewoon tekst (geen nieuw tabblad). */
+function WebLink({ url }: { url: string }) {
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return <>{url}</>;
+  }
+  if (isKiosk) return <span>{host}</span>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="link-quiet">
+      {host}
+    </a>
   );
 }
 

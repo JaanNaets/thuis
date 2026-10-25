@@ -375,7 +375,7 @@ staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar ee
 | --- | --- |
 | `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een soort: naam en soort op één regel, onder ⋯ keuzes, eenheid, verwijzing, codeformaat, kolom, filter, verplicht en uitleg |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen |
-| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item |
+| `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link (op een kiosk als tekst) |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
 | `ItemSelect` | Een verwijzing naar een item van een andere soort (de wijn → het wijnhuis) |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
