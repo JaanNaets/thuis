@@ -28,6 +28,7 @@ import { Link } from "../router";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { useSortable } from "./Sortable";
 
 // De barcodecode is groot (±1 MB); enkel laden wanneer er een code getoond wordt.
 const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode })));
@@ -706,11 +707,11 @@ export function FieldsEditor({
 }) {
   const counter = useRef(0);
   const update = (i: number, patch: Partial<FieldDraft>) => onChange(value.map((f, k) => (k === i ? { ...f, ...patch } : f)));
-  const move = (i: number, delta: number) => {
-    const next = [...value];
-    [next[i], next[i + delta]] = [next[i + delta], next[i]];
-    onChange(next);
-  };
+  const sortable = useSortable(
+    value.map((f) => f.key),
+    (keys) => onChange(keys.map((k) => value.find((f) => f.key === k)!)),
+    (k) => value.find((f) => f.key === k)?.label || "Veld",
+  );
   const add = () => {
     counter.current += 1;
     onChange([...value, { key: `nieuw_${counter.current}`, label: "", type: "text", isNew: true, optionsText: "", open: true }]);
@@ -722,8 +723,11 @@ export function FieldsEditor({
       {value.length > 0 && (
         <ul className="fields-editor">
           {value.map((f, i) => (
-            <li key={f.key} className="fields-editor-row" data-open={f.open ?? false}>
+            <li key={f.key} className="fields-editor-row" data-open={f.open ?? false} {...sortable.itemProps(f.key)}>
               <div className="fields-editor-main">
+                <button {...sortable.handleProps(f.key)}>
+                  <Icon name="grip" size={16} />
+                </button>
                 <input
                   value={f.label}
                   maxLength={40}
@@ -810,12 +814,6 @@ export function FieldsEditor({
                     <Switch checked={Boolean(f.filter)} onChange={(on) => update(i, { filter: on })} label="Als filter boven de lijst" />
                   )}
                   <div className="btn-row">
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={i === 0} onClick={() => move(i, -1)}>
-                      <Icon name="up" size={14} /> Hoger
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={i === value.length - 1} onClick={() => move(i, 1)}>
-                      <Icon name="down" size={14} /> Lager
-                    </button>
                     <button type="button" className="btn btn-danger-ghost btn-sm" onClick={() => onChange(value.filter((_, k) => k !== i))}>
                       <Icon name="trash" size={14} /> Weghalen
                     </button>
@@ -826,6 +824,7 @@ export function FieldsEditor({
           ))}
         </ul>
       )}
+      {sortable.status}
       <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={add}>
         <Icon name="plus" size={15} /> Veld toevoegen
       </button>

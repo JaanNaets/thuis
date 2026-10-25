@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { rightsSummary } from "../../shared/access";
 import type { IconKey } from "../../shared/templates";
@@ -9,6 +9,7 @@ import { Avatar, CardHead, Segmented, SubmitButton, Tabs, ToneSwatches } from ".
 import { Icon, type IconName } from "../components/Icon";
 import { PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
+import { useSortable } from "../components/Sortable";
 import { useToast } from "../components/Toast";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
@@ -44,7 +45,7 @@ export function ProjectSettings() {
       <Tabs label="Onderwerp" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />
       <div className="settings-grid">
         {tab === "algemeen" && <GeneralTab project={p} onSaved={reload} />}
-        {tab === "soorten" && <TypesTab project={p} />}
+        {tab === "soorten" && <TypesTab project={p} onChanged={reload} />}
         {tab === "rollen" && <RolesTab project={p} />}
         {tab === "mensen" && <PeopleTab project={p} onChanged={reload} />}
         {tab === "tags" && <TagsTab project={p} onChanged={reload} />}
@@ -136,11 +137,27 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
 
 // ---------- soorten ----------
 
-function TypesTab({ project: p }: { project: ProjectDetail }) {
+function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged: () => void }) {
   const id = p.project.id;
+  const toast = useToast();
   const projectName = (pid: string) => p.path.find((x) => x.id === pid)?.name ?? "erboven";
   const own = p.types.filter((t) => t.project_id === id);
   const inherited = p.types.filter((t) => t.project_id !== id);
+  // De volgorde van de eigen soorten is ook die van de tabs in het project.
+  const key = own.map((t) => t.id).join(",");
+  const [order, setOrder] = useState(() => own.map((t) => t.id));
+  useEffect(() => setOrder(key ? key.split(",") : []), [key]);
+  async function save(ids: string[]) {
+    setOrder(ids);
+    try {
+      await api.put(`/projects/${id}/types/order`, { ids });
+      onChanged();
+    } catch (err) {
+      toast((err as Error).message, "alert");
+      setOrder(own.map((t) => t.id));
+    }
+  }
+  const sortable = useSortable(order, save, (tid) => own.find((t) => t.id === tid)?.plural ?? "");
   return (
     <section className="card">
       <CardHead
@@ -154,25 +171,36 @@ function TypesTab({ project: p }: { project: ProjectDetail }) {
         }
       />
       <ul className="rows">
-        {own.map((t) => (
-          <li key={t.id}>
-            <Link to={`/projecten/${id}/soorten/${t.id}`} className="row">
-              <span className="cell-main">
-                <span className="row-media tone-sky">
-                  <Icon name={(t.icon ?? "folder") as IconName} size={16} />
-                </span>
-                <span className="row-main">
-                  <span className="row-title">{t.plural}</span>
-                  <span className="row-meta">
-                    <span>{t.fields.length === 1 ? "1 veld" : `${t.fields.length} velden`}</span>
-                    <span>{(p.counts[t.id] ?? 0) === 1 ? "1 item" : `${p.counts[t.id] ?? 0} items`}</span>
+        {order.map((tid) => {
+          const t = own.find((x) => x.id === tid);
+          if (!t) return null;
+          return (
+            <li key={t.id} {...sortable.itemProps(t.id)}>
+              <div className="row">
+                {own.length > 1 && (
+                  <button {...sortable.handleProps(t.id)}>
+                    <Icon name="grip" size={16} />
+                  </button>
+                )}
+                <Link to={`/projecten/${id}/soorten/${t.id}`} className="row-link">
+                  <span className="cell-main">
+                    <span className="row-media tone-sky">
+                      <Icon name={(t.icon ?? "folder") as IconName} size={16} />
+                    </span>
+                    <span className="row-main">
+                      <span className="row-title">{t.plural}</span>
+                      <span className="row-meta">
+                        <span>{t.fields.length === 1 ? "1 veld" : `${t.fields.length} velden`}</span>
+                        <span>{(p.counts[t.id] ?? 0) === 1 ? "1 item" : `${p.counts[t.id] ?? 0} items`}</span>
+                      </span>
+                    </span>
                   </span>
-                </span>
-              </span>
-              <Icon name="next" size={16} className="row-chevron" />
-            </Link>
-          </li>
-        ))}
+                  <Icon name="next" size={16} className="row-chevron" />
+                </Link>
+              </div>
+            </li>
+          );
+        })}
         {inherited.map((t) => (
           <li key={t.id}>
             <div className="row">
@@ -192,6 +220,7 @@ function TypesTab({ project: p }: { project: ProjectDetail }) {
         ))}
       </ul>
       {p.types.length === 0 && <p className="card-body muted small">Nog geen soorten. Maak er een, bv. "Wijn" met jaargang en druiven.</p>}
+      {sortable.status}
     </section>
   );
 }

@@ -115,7 +115,9 @@ export function need(access: ProjectAccess, right: "manage" | "members" | "creat
 export async function accessibleProjects(db: D1Database, personId: string): Promise<ProjectNode[]> {
   const [{ results: memberships }, { results: projects }] = (await db.batch([
     db
-      .prepare("SELECT m.project_id, m.role_id, r.name AS role_name, r.rights FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.person_id = ?")
+      .prepare(
+        "SELECT m.project_id, m.role_id, m.sort_order, r.name AS role_name, r.rights FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.person_id = ?",
+      )
       .bind(personId),
     db
       .prepare(
@@ -127,7 +129,7 @@ export async function accessibleProjects(db: D1Database, personId: string): Prom
          SELECT DISTINCT p.* FROM projects p JOIN down ON down.id = p.id`,
       )
       .bind(personId),
-  ])) as [D1Result<{ project_id: string; role_id: string; role_name: string; rights: string }>, D1Result<ProjectRow>];
+  ])) as [D1Result<{ project_id: string; role_id: string; sort_order: number; role_name: string; rights: string }>, D1Result<ProjectRow>];
   const byId = new Map(projects.map((p) => [p.id, p]));
   const own = new Map(memberships.map((m) => [m.project_id, m]));
   const nodes: ProjectNode[] = [];
@@ -143,8 +145,11 @@ export async function accessibleProjects(db: D1Database, personId: string): Prom
     }
     if (!membership) continue;
     const { created_by: _c, ...project } = p;
+    // Bovenaan (de ouder zie je niet): jouw eigen volgorde, van je lidmaatschap.
+    const top = !p.parent_id || !byId.has(p.parent_id);
     nodes.push({
       ...project,
+      sort_order: top && own.has(p.id) ? own.get(p.id)!.sort_order : p.sort_order,
       role_id: membership.role_id,
       role_name: membership.role_name,
       rights: parseRights(membership.rights),

@@ -61,7 +61,7 @@ export function ProjectNew() {
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title={parent ? "Nieuw subproject" : "Nieuw project"} back={{ to: -1, label: parent?.name ?? "Projecten" }} />
+      <PageHead title={parent ? "Nieuw subproject" : "Nieuw project"} back={{ to: -1, label: parent?.name ?? "Overzicht" }} />
 
       <section className="card form-section">
         <div className="field">

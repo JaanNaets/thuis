@@ -190,6 +190,13 @@ In kioskmodus:
 
 ## Hoe het werkt
 
+### Het overzicht
+
+De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
+zit: één tik en je bent er. Met **Volgorde** sleep je de projecten in de volgorde die jij wil (dat is per persoon);
+subprojecten orden je daar ook, als je het project instelt. De volgorde van de soorten (en dus van de tabs in een
+project) sleep je bij **Instellen → Soorten**, die van de velden in het formulier van een soort.
+
 ### Projecten en subprojecten
 
 Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
@@ -242,7 +249,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `people` | Personen. Met een e-mailadres als ze aanmelden, zonder als ze nooit aanmelden. |
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
-| `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. |
+| `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
 | `item_types` | Soorten: naam en velden (`fields`, als JSON). |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |

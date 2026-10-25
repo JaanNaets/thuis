@@ -65,7 +65,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
               <NavLink to="/" className={({ isActive }) => (isActive || pathname.startsWith("/projecten") || pathname.startsWith("/items") ? "active" : "")}>
                 <Icon name="project" size={21} />
-                <span>Projecten</span>
+                <span>Overzicht</span>
               </NavLink>
               <button type="button" className="tab-button" onClick={() => setSearching(true)}>
                 <Icon name="search" size={21} />

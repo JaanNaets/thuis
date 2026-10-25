@@ -1,5 +1,7 @@
 // Kleine helpers om binnenkomende JSON te controleren voor we iets in de database schrijven.
 
+import { cleanOrder } from "../shared/order";
+
 export class ValidationError extends Error {}
 
 type Obj = Record<string, unknown>;
@@ -69,6 +71,13 @@ export function idList(obj: Obj, key: string, max = 50): string[] {
     throw new ValidationError(`'${key}' moet een lijst van id's zijn`);
   }
   return [...new Set(value as string[])];
+}
+
+/** Een nieuwe volgorde: { ids: [...] } in de gewenste volgorde. */
+export function parseOrder(body: unknown): string[] {
+  const ids = cleanOrder(asObject(body).ids);
+  if (!ids) throw new ValidationError("Geen geldige volgorde");
+  return ids;
 }
 
 export function optionalEnum<T extends string>(obj: Obj, key: string, values: readonly T[]): T | null {

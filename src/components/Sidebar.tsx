@@ -51,9 +51,9 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
       <div className="sidebar-scroll">
         <nav className="sidebar-nav">
           <span className="sidebar-indicator" style={{ "--i": 0, opacity: pathname === "/" ? 1 : 0 } as CSSProperties} />
-          <NavLink to="/" end title="Projecten">
+          <NavLink to="/" end title="Overzicht">
             <Icon name="project" size={17} />
-            <span className="nav-text">Projecten</span>
+            <span className="nav-text">Overzicht</span>
             {projects.length > 0 && <span className="nav-count">{projects.filter((p) => !p.archived).length}</span>}
           </NavLink>
         </nav>

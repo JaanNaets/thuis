@@ -6,7 +6,8 @@ export type FlatNode<T> = T & { depth: number; path: string };
 
 const collator = new Intl.Collator("nl", { sensitivity: "base", numeric: true });
 
-function byOrder(a: TreeNode, b: TreeNode): number {
+/** Volgorde in een boom: sort_order, dan op naam. */
+export function byOrder(a: TreeNode, b: TreeNode): number {
   return a.sort_order - b.sort_order || collator.compare(a.name, b.name);
 }
 

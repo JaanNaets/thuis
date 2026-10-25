@@ -188,6 +188,17 @@ const LINES = {
     </>
   ),
   loader: <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
+  /** Greep om te slepen (Lucide grip-vertical). */
+  grip: (
+    <>
+      <circle cx="9" cy="5" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="19" r="1" />
+      <circle cx="15" cy="5" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="19" r="1" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof FILLED | keyof typeof LINES;

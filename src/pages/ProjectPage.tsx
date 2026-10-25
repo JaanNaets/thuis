@@ -41,7 +41,7 @@ export function ProjectPage() {
         title={project.name}
         badge={project.archived ? <span className="badge">Gearchiveerd</span> : undefined}
         description={project.description ?? undefined}
-        back={parent ? { to: `/projecten/${parent.id}`, label: parent.name } : { to: "/", label: "Projecten" }}
+        back={parent ? { to: `/projecten/${parent.id}`, label: parent.name } : { to: "/", label: "Overzicht" }}
         actions={
           settings && (
             <Link to={`/projecten/${project.id}/instellingen`} className="btn btn-outline btn-sm">

@@ -78,8 +78,13 @@ export function PageHead({
     <>
       <div className="panel-bar">
         <nav className="breadcrumb" aria-label="Kruimelpad">
-          {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Projecten</Link>}
-          <Icon name="next" size={14} className="sep" />
+          {/* Op het overzicht zelf geen "Overzicht › Overzicht". */}
+          {(back || title !== "Overzicht") && (
+            <>
+              {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Overzicht</Link>}
+              <Icon name="next" size={14} className="sep" />
+            </>
+          )}
           <span className="current">{title}</span>
         </nav>
         <div className="panel-actions">

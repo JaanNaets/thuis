@@ -13,6 +13,7 @@ import {
   NotFoundError,
   optionalId,
   optionalString,
+  parseOrder,
   requiredId,
   requiredString,
   ValidationError,
@@ -75,6 +76,16 @@ function parseTypeInput(body: unknown) {
 
 /** Het bovenste project van de boom (waar de beheerders staan). */
 const rootOf = (access: ProjectAccess) => access.chain[access.chain.length - 1];
+
+/** Een lidmaatschap. Staat het project bovenaan je overzicht, dan komt het daar achteraan. */
+function insertMembership(db: D1Database, projectId: string, personId: string, roleId: string) {
+  return db
+    .prepare(
+      `INSERT INTO memberships (project_id, person_id, role_id, sort_order)
+       VALUES (?1, ?2, ?3, (SELECT ifnull(max(sort_order), 0) + 10 FROM memberships WHERE person_id = ?2))`,
+    )
+    .bind(projectId, personId, roleId);
+}
 
 /**
  * Er moet bovenaan altijd iemand overblijven die alles mag (instellen én mensen beheren), anders kan niemand het
@@ -175,11 +186,33 @@ projects.post("/", async (c) => {
           .bind(roleIds[i], id, r.name, JSON.stringify(r.rights), i * 10),
       ),
     );
-    statements.push(db.prepare("INSERT INTO memberships (project_id, person_id, role_id) VALUES (?, ?, ?)").bind(id, me.id, roleIds[0]));
+    statements.push(insertMembership(db, id, me.id, roleIds[0]));
   }
   statements.push(...(await insertTemplateTypes(db, id, input.template, chain)));
   await db.batch(statements);
   return c.json({ id }, 201);
+});
+
+/** De volgorde van de subprojecten. Die geldt voor iedereen, dus enkel wie het project instelt. */
+projects.put("/:id/children/order", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan de subprojecten ordenen.");
+  const ids = parseOrder(await c.req.json());
+  await db.batch(ids.map((id, i) => db.prepare("UPDATE projects SET sort_order = ? WHERE id = ? AND parent_id = ?").bind((i + 1) * 10, id, access.project.id)));
+  return c.json({ ok: true });
+});
+
+/** De volgorde van de eigen soorten (de tabs van het project). */
+projects.put("/:id/types/order", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kan de soorten ordenen.");
+  const ids = parseOrder(await c.req.json());
+  await db.batch(
+    ids.map((id, i) => db.prepare("UPDATE item_types SET sort_order = ? WHERE id = ? AND project_id = ?").bind((i + 1) * 10, id, access.project.id)),
+  );
+  return c.json({ ok: true });
 });
 
 projects.get("/:id", async (c) => {
@@ -499,7 +532,7 @@ projects.post("/:id/members", async (c) => {
       .bind(crypto.randomUUID(), name, email, color, me.id)
       .first<Person>();
   }
-  await guard(db.prepare("INSERT INTO memberships (project_id, person_id, role_id) VALUES (?, ?, ?)").bind(access.project.id, person!.id, roleId).run(), {
+  await guard(insertMembership(db, access.project.id, person!.id, roleId).run(), {
     unique: `${person!.name} zit al in dit project. Pas de rol aan in de lijst.`,
   });
   return c.json(person, 201);
@@ -525,7 +558,7 @@ projects.put("/:id/members/:personId", async (c) => {
       .bind(personId, ...access.chain)
       .first();
     if (!known) throw new NotFoundError("Die persoon zit niet in dit project.");
-    await db.prepare("INSERT INTO memberships (project_id, person_id, role_id) VALUES (?, ?, ?)").bind(access.project.id, personId, roleId).run();
+    await insertMembership(db, access.project.id, personId, roleId).run();
   }
   return c.json({ ok: true });
 });

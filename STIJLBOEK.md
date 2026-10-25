@@ -106,8 +106,8 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 ### Gsm (smaller dan 768px)
 
 - Witte achtergrond, inhoud met 16px marge.
-- **Onderbalk** met drie tabs: **Projecten**, **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)) en **Ik**.
-  Een grijs vlak schuift naar de actieve tab. Een fiche van een item hoort bij Projecten.
+- **Onderbalk** met drie tabs: **Overzicht**, **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)) en **Ik**.
+  Een grijs vlak schuift naar de actieve tab. Een project en een fiche horen bij Overzicht.
 - **Zwevende + knop** rechtsonder voor de hoofdactie van het scherm.
 - **Kleine titelbalk** bovenaan die verschijnt zodra de grote titel uit beeld scrollt (zit in `PageHead`).
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
@@ -120,7 +120,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 │ │ ▣ Thuis    │  │ Huishouden › Wijnkelder           [+ Wijn toevoegen] │J│ │  ← paneelbalk 58px
 │ └────────────┘  ├────────────────────────────────────────────────────────┤ │
 │ [⌕ Zoeken ⌘K]   │ Wijnkelder  uitleg                         [Instellen] │ │  ← kopregel 56px
-│ ▮ Projecten  2  ├────────────────────────────────────────────────────────┤ │
+│ ▮ Overzicht  2  ├────────────────────────────────────────────────────────┤ │
 │ Projecten       │ Wijnen 12 · Wijnhuizen 3                               │ │  ← tabs per soort
 │ ● Huishouden ⌃  ├───────────────────────────────┬────────────────────────┤ │
 │ │ Wijnkelder    │ zijkolom (320px)              │ ┌ kaart ─────────────┐ │ │
@@ -134,7 +134,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 - **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (8px marge, rand `--border`, afronding 16px). Het paneel scrollt zelf; de zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: "Thuis" in een wit blok (naar het overzicht), het zoekveld
-  (opent het [zoekpalet](#zoekpalet-commandpalette)), "Projecten" met een teller, de
+  (opent het [zoekpalet](#zoekpalet-commandpalette)), "Overzicht" met een teller, de
   [projectboom](#projectboom-zijbalk), onderaan jouw naam (naar `/ik`). Het actieve item is een grijze pil
   (`--nav-active`) die meeglijdt.
 - **Paneelbalk** (58px, plakt bovenaan): kruimelpad met `›` links ("Huishouden › Wijnkelder"), rechts de
@@ -391,6 +391,35 @@ staan in `FIELD_TYPES` (`shared/fields.ts`); een nieuwe veldsoort krijgt daar ee
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per soort; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm.
 
+### Volgorde: `useSortable` (`Sortable.tsx`)
+
+Alles wat de gebruiker zelf ordent (projecten, soorten, velden), sleep je aan een **greep** (`grip`, links in de rij).
+Op het toetsenbord werkt dezelfde greep met ↑ ↓ Home End. Bouw nooit "Hoger/Lager"-knoppen.
+
+```tsx
+const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de nieuwe volgorde meteen, dan pas de API
+<ul className="rows">
+  {order.map((id) => (
+    <li key={id} {...sortable.itemProps(id)}>
+      <div className="row">
+        <button {...sortable.handleProps(id)}><Icon name="grip" size={16} /></button>
+        <Link className="row-link" …>…</Link>
+      </div>
+    </li>
+  ))}
+</ul>
+{sortable.status}
+```
+
+- De gesleepte rij zweeft (`--shadow-lg`) en volgt de vinger; de andere schuiven opzij; dicht bij de rand scrolt
+  de lijst mee. Na het loslaten staat alles meteen op zijn plaats.
+- Bewaren gebeurt bij het loslaten, zonder toast: de verplaatste rij is de bevestiging (zoals bij −/+). Een fout
+  geeft een toast en zet de volgorde terug.
+- Een lijst die je niet mag ordenen, toont geen greep (`.drag-spacer` houdt de uitlijning).
+- Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
+- Wat de volgorde betekent: de projecten bovenaan je overzicht zijn **jouw** volgorde (per persoon); subprojecten
+  en soorten zijn die van het project (enkel met `manage`), en de soorten bepalen ook de volgorde van de tabs.
+
 ### De lijst van een soort: `ItemsView`
 
 `<ItemsView project={detail} type={type} />` is de lijst van één soort in een project: zoeken, filters uit de velden,
@@ -423,6 +452,8 @@ aanloopt. Wat de app daarvoor krijgt:
 | `.tips-block` | Een lange tekst op de fiche, met de regels zoals getypt |
 | `.timeline` + `.timeline-date` | Logboek: datum links, notitie rechts |
 | `.member-actions` | Rol (een `select`), bewerken en weghalen naast iemand in een lijst |
+| `.dashboard` + `.dash-card` + `.dash-head` | Het overzicht: kaarten zo breed als past; de kop opent het project, de rijen eronder de lijsten |
+| `.sr-only` | Tekst enkel voor schermlezers (bv. de nieuwe plaats na het verslepen) |
 
 ### Badges, tags, stipjes, avatars
 
@@ -450,8 +481,8 @@ Badges zijn kort: 1–3 woorden.
 | Lijst is leeg | `<EmptyState icon title action>` met één zin uitleg en hooguit één knop (`btn-outline btn-sm`) |
 | Lijst laadt | `<SkeletonRows rows={5} />` (verschijnt pas na 0,18 s) |
 
-Toasts zijn de bevestiging na een actie. Elke bewaar- of verwijderactie geeft er één, behalve −/+ in een lijst:
-daar is het rollende getal de bevestiging (een toast per tik zou storen).
+Toasts zijn de bevestiging na een actie. Elke bewaar- of verwijderactie geeft er één, behalve −/+ in een lijst en
+het verslepen van een rij: daar is wat beweegt de bevestiging (een toast per tik zou storen).
 Tekst: wat er gebeurde, in de verleden tijd of als korte vaststelling ("12 wijnen toegevoegd", "Rol bijgewerkt").
 
 ### Iconen
@@ -509,6 +540,7 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 | Onderblad, venster, zoekpalet | glijdt en schaalt in en uit (`@starting-style`) | 0,35–0,45 s |
 | Toast | veert omhoog, glijdt weg | 0,5 / 0,25 s |
 | Vinkje | tekent zichzelf (`draw`) | 0,4 s |
+| Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
 | Indrukken | knop schaalt naar 0,97, icoon in menu naar 0,86 | 0,15 s |
 | Hover | achtergrond of rand verandert, pijltje schuift 2px, + draait 90° | 0,2–0,35 s |
 
@@ -527,8 +559,10 @@ Regels:
 
 ## 6. Patronen per soort scherm
 
-**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" → je projecten als boom (subprojecten springen in),
-met je rol eronder → gearchiveerde projecten apart.
+**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" en `actions` "Volgorde" → per project (in de volgorde
+van de boom) een `dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen
+elke lijst (`?soort=`) met het aantal → gearchiveerde projecten apart. "Volgorde" wisselt naar de boom met grepen
+(`useSortable`); "Klaar" terug. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Soort> toevoegen" → `Tabs` per soort (enkel als er meer dan één is) →
@@ -620,4 +654,5 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
+- [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.
 - [ ] Nieuw patroon nodig? Bouw het als component, en **voeg het toe aan dit stijlboek**.

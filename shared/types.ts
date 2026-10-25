@@ -47,6 +47,10 @@ export type ProjectNode = Project & {
 
 export type Me = { person: Person; projects: ProjectNode[] };
 
+/** Je overzicht: per project de soorten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
+export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number };
+export type Overview = { projects: { id: string; types: OverviewType[] }[] };
+
 export type ProjectInput = {
   name: string;
   description: string | null;

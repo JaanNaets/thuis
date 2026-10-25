@@ -125,6 +125,16 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Enkel voor schermlezers (bv. "Wijnen: plaats 2 van 4" na het verslepen). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (pointer: fine) {
   body {
     font-size: 14px;
@@ -3716,7 +3726,7 @@ dialog.palette[open]::backdrop {
 
 .fields-editor-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 150px) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 150px) auto;
   align-items: center;
   gap: 8px;
 }
@@ -4038,3 +4048,159 @@ dialog.palette[open]::backdrop {
     gap: 12px;
   }
 }
+
+/* ---------- overzicht en volgorde ---------- */
+
+/* Het overzicht: per project een kaart met zijn lijsten. Kaarten zo breed als past, de hoogte volgt de inhoud. */
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+/* De kop van een projectkaart opent het project (een rij zonder lijn eronder, de lijsten volgen ingezet). */
+.dash-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 8px 0;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s;
+}
+
+@media (hover: hover) {
+  .dash-head:hover {
+    background: #f9f9f9;
+  }
+}
+
+.dash-head:active {
+  background: var(--muted);
+}
+
+.dash-card > .rows {
+  margin-top: 2px;
+  border-top: 1px solid var(--divider);
+  padding-top: 6px;
+}
+
+.dash-card .row {
+  min-height: 48px;
+}
+
+.dash-card .row .row-media {
+  width: 30px;
+  height: 30px;
+}
+
+.dash-card .row-end {
+  color: var(--muted-foreground);
+}
+
+.dash-empty {
+  margin: 0;
+  padding: 4px 18px 16px 60px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+/*
+ * Slepen om te herschikken (useSortable): een greep links, de gesleepte rij volgt de vinger en zweeft, de andere
+ * schuiven opzij. Na het loslaten één beeld zonder overgang ("settle"), zodat niets terugschuift.
+ */
+.drag-handle {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  margin: 0 -4px 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+}
+
+.drag-handle:hover {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-spacer {
+  flex: none;
+  width: 18px;
+}
+
+[data-sorting] {
+  position: relative;
+}
+
+[data-sorting="shift"] {
+  transition: transform 0.25s var(--ease-out);
+}
+
+[data-sorting="drag"] {
+  z-index: 2;
+  border-radius: var(--radius-md);
+  background: var(--background);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-sorting="drag"],
+[data-sorting="drag"] * {
+  cursor: grabbing;
+}
+
+@media (pointer: coarse) {
+  .drag-handle {
+    width: 36px;
+    height: 44px;
+  }
+}
+
+/* Een rij met een greep en een link: de link begint na de greep. */
+.row > .drag-handle + .row-link {
+  margin-left: 0;
+  padding-left: 2px;
+}
+
+/* De boom om te ordenen: projecten met hun subprojecten ingesprongen eronder. */
+.sort-list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+}
+
+.sort-list > li + li {
+  border-top: 1px solid var(--divider);
+}
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 10px;
+}
+
+.sort-children {
+  margin-left: 30px;
+  padding: 0 0 6px;
+}
+
+.sort-list.sort-children > li + li {
+  border-top: 0;
+}
+

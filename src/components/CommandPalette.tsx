@@ -8,7 +8,7 @@ import { Icon, type IconName } from "./Icon";
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
 
 const ACTIONS: Entry[] = [
-  { key: "home", group: "Ga naar", label: "Projecten", icon: "project", to: "/" },
+  { key: "home", group: "Ga naar", label: "Overzicht", icon: "project", to: "/" },
   { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
   { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "plus", to: "/projecten/nieuw" },
 ];
