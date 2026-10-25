@@ -16,7 +16,7 @@ test("standaardrollen", () => {
   assert.equal(canCreate(viewer, "t") || fieldAccess(viewer, "t", "prijs") !== "view", false);
 });
 
-test("per soort en per veld: niet zien, zien of wijzigen", () => {
+test("per lijst en per veld: niet zien, zien of wijzigen", () => {
   const rights: Rights = {
     manage: false,
     members: false,
@@ -29,9 +29,9 @@ test("per soort en per veld: niet zien, zien of wijzigen", () => {
   assert.equal(fieldAccess(rights, "wijn", "score"), "edit");
   assert.equal(fieldAccess(rights, "wijn", "prijs"), "none");
   assert.equal(fieldAccess(rights, "wijn", "notitie"), "view");
-  // Wie de soort niet ziet, ziet ook geen veld, zelfs met een uitzondering.
+  // Wie de lijst niet ziet, ziet ook geen veld, zelfs met een uitzondering.
   assert.equal(fieldAccess(rights, "geheim", "score"), "none");
-  // Toevoegen mag enkel als je de soort mag wijzigen.
+  // Toevoegen mag enkel als je de lijst mag wijzigen.
   assert.equal(canCreate(rights, "wijn"), false);
   assert.deepEqual(visibleData(rights, "wijn", fields, { prijs: 2000, score: 4, notitie: "lekker" }), { score: 4, notitie: "lekker" });
 });

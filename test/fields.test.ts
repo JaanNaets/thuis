@@ -23,7 +23,7 @@ import { descendantIds, flattenTree } from "../shared/tree.ts";
 const WINE: FieldDef[] = resolveTemplateFields(PROJECT_TEMPLATES.wine.types[0].fields, {}, {});
 const field = (key: string) => WINE.find((f) => f.key === key)!;
 
-test("sjablonen: elke soort heeft geldige velden en verwijzingen", () => {
+test("sjablonen: elke lijst heeft geldige velden en verwijzingen", () => {
   for (const t of Object.values(PROJECT_TEMPLATES)) {
     const ids = Object.fromEntries(t.types.map((ty) => [ty.key, `id-${ty.key}`]));
     for (const ty of t.types) {
@@ -49,7 +49,7 @@ test("velden nakijken", () => {
     /sleutel/,
   );
   assert.throws(() => cleanFields([{ key: "k", label: "Kleur", type: "select" }]), /keuze/);
-  assert.throws(() => cleanFields([{ key: "v", label: "Verkoper", type: "item" }]), /soort/);
+  assert.throws(() => cleanFields([{ key: "v", label: "Verkoper", type: "item" }]), /lijst/);
   assert.deepEqual(cleanFields([{ key: "km", label: " Km ", type: "number", unit: "km", column: true, filter: true, extra: 1 }]), [
     { key: "km", label: "Km", type: "number", unit: "km", column: true },
   ]);
