@@ -27,11 +27,13 @@ import {
   type Share,
 } from "../../shared/fields";
 import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
+import { splitCents } from "../../shared/totals";
+import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
 import { api, ApiError, apiUrl, useApi } from "../api";
 import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk } from "../device";
-import { centsToInput } from "../format";
+import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
 import { BarcodeScanner } from "./BarcodeScanner";
@@ -55,7 +57,8 @@ export function namesFrom(people: Person[], refs: ItemRef[]): Names {
 
 // ---------- waarden invullen ----------
 
-export type SharesDraft = { mode: "none" | "equal" | "percent"; people: string[]; values: Record<string, string> };
+/** Een verdeling terwijl je ze invult: gelijk, in procent of in bedragen (euro, als tekst). */
+export type SharesDraft = { mode: "none" | "equal" | "percent" | "amount"; people: string[]; values: Record<string, string> };
 
 type IntervalDraft = { n: string; unit: IntervalUnit };
 
@@ -78,14 +81,25 @@ const parsePercent = (s: string | undefined) => {
   return s?.trim() && Number.isFinite(n) ? n : NaN;
 };
 
-/** Van wat er staat naar aandelen; undefined = klopt nog niet. */
+/** Van wat er staat naar aandelen; undefined = klopt nog niet. Bedragen worden aandelen naar verhouding. */
 export function buildShares(draft: SharesDraft): Share[] | undefined {
   if (draft.mode === "none" || draft.people.length === 0) return [];
   if (draft.mode === "equal") return normalizeShares(draft.people.map((id) => ({ person_id: id })));
+  if (draft.mode === "amount") {
+    const cents = draft.people.map((id) => ({ person_id: id, share: parseEuro(draft.values[id] ?? "") ?? NaN }));
+    return cents.some((s) => !(s.share > 0)) ? undefined : normalizeShares(cents);
+  }
   const shares = draft.people.map((id) => ({ person_id: id, share: parsePercent(draft.values[id]) }));
   if (shares.some((s) => !(s.share > 0))) return undefined;
   const total = shares.reduce((sum, s) => sum + s.share, 0);
   return Math.abs(total - 100) > 0.05 ? undefined : shares;
+}
+
+/** Het eerste bedrag in het formulier (in cent), bv. het bedrag van een uitgave; null als het leeg is. */
+function moneyTotal(defs: FieldDef[], value: AttributeDraft): number | null {
+  const def = defs.find((d) => d.type === "money");
+  const cents = def ? parseEuro(String(value[def.key] ?? "")) : null;
+  return cents !== null && Number.isFinite(cents) ? cents : null;
 }
 
 export function attributesDraft(defs: FieldDef[], attributes: Attributes): AttributeDraft {
@@ -213,7 +227,7 @@ export function buildAttributes(defs: FieldDef[], draft: AttributeDraft): { data
 const WIDE: FieldType[] = ["text", "longtext", "address", "multi", "year_range", "date_range", "bool", "share", "code", "item", "items", "people", "checklist"];
 const PLACEHOLDERS: Partial<Record<FieldType, string>> = {
   year: "bv. 2019",
-  money: "€ 0,00",
+  money: "€ 0,00 of 45 USD",
   number: "0",
   url: "bv. colruyt.be",
   email: "naam@voorbeeld.be",
@@ -417,7 +431,14 @@ export function FieldInputs({
             return (
               <div key={def.key} className={`field ${wide}`}>
                 {label}
-                <SharesField people={people} meId={meId} value={raw as SharesDraft} onChange={(v) => set(def.key, v)} disabled={disabled} />
+                <SharesField
+                  people={people}
+                  meId={meId}
+                  value={raw as SharesDraft}
+                  onChange={(v) => set(def.key, v)}
+                  disabled={disabled}
+                  total={moneyTotal(defs, value)}
+                />
                 {hint}
               </div>
             );
@@ -515,6 +536,14 @@ export function FieldInputs({
                   placeholder={def.hint}
                   onChange={(e) => set(def.key, e.target.value)}
                 />
+              </label>
+            );
+          case "money":
+            return (
+              <label key={def.key} className={`field ${wide}`}>
+                {label}
+                <MoneyInput value={typeof raw === "string" ? raw : ""} onChange={(v) => set(def.key, v)} disabled={disabled} className={cls} />
+                {hint}
               </label>
             );
           default: {
@@ -796,6 +825,58 @@ function CodeInput({
   );
 }
 
+let rates: Promise<Rates> | undefined;
+/** De dagkoersen van de ECB, één keer per bezoek opgehaald. */
+const loadRates = () => (rates ??= api.get<Rates>("/rates").catch((err) => ((rates = undefined), Promise.reject(err))));
+
+/**
+ * Een bedrag in euro. Een bedrag in een andere munt ("45 USD", "$45", "£12,50") rekent het veld bij het verlaten om
+ * met de dagkoers van de ECB; eronder staat wat het was.
+ */
+function MoneyInput({ value, onChange, disabled, className }: { value: string; onChange: (v: string) => void; disabled: boolean; className?: string }) {
+  const [note, setNote] = useState<string>();
+  const foreign = parseForeign(value);
+
+  async function convert() {
+    if (!foreign || foreign.currency === "EUR") return;
+    try {
+      const found = await loadRates();
+      const cents = toEuroCents(foreign.amount, foreign.currency, found);
+      if (cents === null) return setNote(`Die munt kent de ECB niet (${foreign.currency}). Vul het bedrag in euro in.`);
+      onChange(centsToInput(cents));
+      setNote(`${value.trim()} = ${formatCents(cents)}, met de koers van ${formatDate(found.date)}.`);
+    } catch (err) {
+      setNote((err as Error).message);
+    }
+  }
+
+  const invalid = Boolean(value.trim()) && !foreign && !Number.isFinite(parseEuro(value) ?? NaN);
+  return (
+    <>
+      <input
+        className={className}
+        disabled={disabled}
+        inputMode="text"
+        placeholder={PLACEHOLDERS.money}
+        value={value}
+        aria-invalid={invalid}
+        onBlur={convert}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && foreign) {
+            e.preventDefault();
+            convert();
+          }
+        }}
+        onChange={(e) => {
+          setNote(undefined);
+          onChange(e.target.value);
+        }}
+      />
+      {note && <span className="hint">{note}</span>}
+    </>
+  );
+}
+
 /** Score op 5 met halve sterren: tik een ster, tik nog eens voor een halve. */
 export function ScoreInput({
   label,
@@ -850,9 +931,10 @@ export function ScoreStars({ value }: { value: number }) {
 }
 
 const SHARE_MODES = [
-  { value: "none" as const, label: "Niemand apart" },
+  { value: "none" as const, label: "Niemand" },
   { value: "equal" as const, label: "Gelijk" },
   { value: "percent" as const, label: "Procent" },
+  { value: "amount" as const, label: "Bedrag" },
 ];
 
 /** Personen met een aandeel: tik op een avatar om iemand erbij te zetten, gelijk of in procent. */
@@ -862,24 +944,33 @@ export function SharesField({
   value,
   onChange,
   disabled,
+  total,
 }: {
   people: Person[];
   meId: string;
   value: SharesDraft;
   onChange: (v: SharesDraft) => void;
   disabled?: boolean;
+  /** Het bedrag (in cent) als het formulier er een heeft: in bedragen moet de verdeling daarop uitkomen. */
+  total?: number | null;
 }) {
   const set = (patch: Partial<SharesDraft>) => !disabled && onChange({ ...value, ...patch });
   const toggle = (id: string) => set({ people: value.people.includes(id) ? value.people.filter((x) => x !== id) : [...value.people, id] });
   const built = buildShares(value);
+  // In bedragen: wat er samen staat, en wat er nog te verdelen is.
+  const entered = value.mode === "amount" ? value.people.reduce((sum, id) => sum + (parseEuro(value.values[id] ?? "") || 0), 0) : 0;
+  const choose = (mode: SharesDraft["mode"]) => {
+    const chosen = mode !== "none" && value.people.length === 0 ? [meId] : value.people;
+    // Naar bedragen met een gekend bedrag: begin met een gelijke verdeling (tot op de cent).
+    const values =
+      mode === "amount" && total && total > 0
+        ? Object.fromEntries([...splitCents(total, chosen.map((id) => ({ person_id: id, share: 1 })))].map(([id, c]) => [id, centsToInput(c)]))
+        : value.values;
+    set({ mode, people: chosen, values });
+  };
   return (
     <>
-      <Segmented
-        label="Verdeling"
-        value={value.mode}
-        options={SHARE_MODES}
-        onChange={(mode) => set({ mode, people: mode !== "none" && value.people.length === 0 ? [meId] : value.people })}
-      />
+      <Segmented label="Verdeling" value={value.mode} options={SHARE_MODES} onChange={choose} />
       {value.mode !== "none" && (
         <>
           <div className="split-rows">
@@ -902,15 +993,15 @@ export function SharesField({
                     </span>
                   </button>
                   <span className="split-name">{m.id === meId ? `${m.name} (ik)` : m.name}</span>
-                  {value.mode === "percent" && on && (
-                    <span className="split-input" data-unit="%">
+                  {(value.mode === "percent" || value.mode === "amount") && on && (
+                    <span className="split-input" data-unit={value.mode === "percent" ? "%" : "€"}>
                       <input
                         inputMode="decimal"
                         disabled={disabled}
                         placeholder="0"
                         value={value.values[m.id] ?? ""}
                         onChange={(e) => set({ values: { ...value.values, [m.id]: e.target.value } })}
-                        aria-label={`Deel van ${m.name} in procent`}
+                        aria-label={`Deel van ${m.name} ${value.mode === "percent" ? "in procent" : "in euro"}`}
                       />
                     </span>
                   )}
@@ -921,7 +1012,12 @@ export function SharesField({
           </div>
           {built === undefined && (
             <span className="hint split-status error" role="status">
-              Samen 100%, en elk een deel.
+              {value.mode === "amount" ? "Geef elk een bedrag." : "Samen 100%, en elk een deel."}
+            </span>
+          )}
+          {built !== undefined && value.mode === "amount" && total != null && total > 0 && entered !== total && (
+            <span className="hint split-status error" role="status">
+              Samen {formatCents(entered)}, het bedrag is {formatCents(total)}: {entered < total ? `nog ${formatCents(total - entered)} te verdelen` : `${formatCents(entered - total)} te veel`}. Anders wordt het naar verhouding verdeeld.
             </span>
           )}
         </>

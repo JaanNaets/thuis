@@ -433,7 +433,8 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `ItemsSelect` | Meerdere items uit een andere lijst: kleine tags met een kruisje (`.ref-chips`), een keuzelijst eronder |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
 | `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een ander project. Je kiest enkel uit items die je mag zien |
-| `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
+| `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
+| `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Boven de knoppen een optioneel veld "Uitleg voor de AI" ("ik at de helft"); pas je dat na het lezen aan, dan verschijnt "Opnieuw lezen met deze uitleg". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
@@ -605,7 +606,8 @@ Terugbetalingen zetten het klaar):
 
 - `BalanceCard` ("Wie moet wie") staat in de zijkolom van een project, met alles eronder. Per overschrijving één
   rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
-  en datum; minder mag). Niets open: "Alles is verrekend."
+  en datum; minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Ik**), dan staat daar een
+  betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Alles is verrekend."
 - Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
 - "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
 - Telt enkel wat je mag zien (de lijst en de velden van het totaal, per project); wat verborgen is, telt niet mee.

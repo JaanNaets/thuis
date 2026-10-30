@@ -212,6 +212,9 @@ en Gedeelde uitgaven zetten het klaar.
 
 Op het project staat dan **Wie moet wie**: zo weinig mogelijk overschrijvingen, met alles uit het project en zijn
 subprojecten (en uit lijsten in andere projecten als je die bij het totaal kiest). Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
+Vul je bij **Ik** je rekeningnummer in, dan ziet wie jou moet bij Terugbetaald een **betaal-QR**: scannen met de
+bank-app, en het bedrag en je IBAN staan al ingevuld. Een verdeling kan gelijk, in procent of in **bedragen**
+("Jaan € 12, Jana € 8"), en een bedrag in een andere munt ("45 USD") rekent de app om met de dagkoers van de ECB.
 Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar met één knop klaar. Wat je niet mag zien
 (een lijst, of het bedrag), telt voor jou niet mee.
 

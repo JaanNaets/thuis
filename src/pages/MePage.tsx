@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { formatIban, isValidIban } from "../../shared/payment";
 import type { Person, Tone } from "../../shared/types";
 import { api } from "../api";
 import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
@@ -15,6 +16,7 @@ export function MePage() {
   const toast = useToast();
   const [name, setName] = useState(person.name);
   const [color, setColor] = useState<Tone | null>(person.color);
+  const [iban, setIban] = useState(person.iban ? formatIban(person.iban) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const tops = childrenOf(
@@ -27,7 +29,7 @@ export function MePage() {
     setBusy(true);
     setError(undefined);
     try {
-      await api.put<Person>("/me", { name, color });
+      await api.put<Person>("/me", { name, color, iban });
       reloadMe();
       toast("Bewaard");
     } catch (err) {
@@ -50,6 +52,20 @@ export function MePage() {
           <span className="label">Kleur</span>
           <ToneSwatches value={color} onChange={setColor} />
         </div>
+        <label className="field">
+          <span className="label">
+            Rekeningnummer <span className="optional">· optioneel</span>
+          </span>
+          <input
+            value={iban}
+            maxLength={42}
+            autoCapitalize="characters"
+            placeholder="BE68 5390 0754 7034"
+            aria-invalid={Boolean(iban.trim()) && !isValidIban(iban)}
+            onChange={(e) => setIban(e.target.value)}
+          />
+          <span className="hint">Zo kan wie je nog moet, je terugbetalen met een betaal-QR. Enkel te zien voor wie met jou een project deelt.</span>
+        </label>
         <div className="field">
           <span className="label">Aangemeld als</span>
           <span className="muted">{person.email}</span>

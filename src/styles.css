@@ -2697,6 +2697,16 @@ dialog.sheet[open]::backdrop {
   padding: 0 8px;
 }
 
+/* Een betaal-QR bij Terugbetaald: niet te groot, gecentreerd, op wit (een bank-app leest zwart op wit). */
+.pay-qr .barcode {
+  justify-self: center;
+  width: min(220px, 70%);
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: var(--shadow-inset);
+}
+
 /* ---------- bestandsviewer & scanner (volledig scherm) ---------- */
 
 .viewer {

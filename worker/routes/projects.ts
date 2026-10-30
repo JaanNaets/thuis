@@ -730,8 +730,9 @@ projects.get("/:id/balance", async (c) => {
     }
   }
   const ids = [...net.keys()];
+  // Met hun rekeningnummer: wie moet, kan zo terugbetalen met een betaal-QR.
   const { results: people } = await db
-    .prepare("SELECT id, name, email, color FROM people WHERE id IN (SELECT value FROM json_each(?))")
+    .prepare("SELECT id, name, email, color, iban FROM people WHERE id IN (SELECT value FROM json_each(?))")
     .bind(JSON.stringify(ids))
     .all<Person>();
   // Zichtbaar als hier een lijst met uitgaven (een saldo tegenover een verdeling) is die je mag zien, of als er iets meetelt.

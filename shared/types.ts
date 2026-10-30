@@ -21,6 +21,8 @@ export type Person = {
   /** Leeg = meldt (nog) niet aan. */
   email: string | null;
   color: Tone | null;
+  /** Rekeningnummer, om terugbetaald te worden (enkel voor jezelf en in Wie moet wie). */
+  iban?: string | null;
 };
 
 // ---------- projecten ----------

@@ -14,7 +14,7 @@ import { ForbiddenError, NotFoundError } from "./validate";
 export const withPerson = createMiddleware<AppEnv>(async (c, next) => {
   const email = c.get("user").trim().toLowerCase();
   const db = c.env.DB;
-  let person = await db.prepare("SELECT id, name, email, color FROM people WHERE email = ?").bind(email).first<Person>();
+  let person = await db.prepare("SELECT id, name, email, color, iban FROM people WHERE email = ?").bind(email).first<Person>();
   if (!person) {
     const name =
       email

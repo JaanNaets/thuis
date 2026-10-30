@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { typeAccess } from "../../shared/access";
 import type { IconKey } from "../../shared/templates";
 import { isTone, type Me, type Overview, type Person } from "../../shared/types";
+import { isValidIban, normalizeIban } from "../../shared/payment";
 import { accessibleProjects } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, parseOrder, requiredString, ValidationError } from "../validate";
@@ -15,13 +16,15 @@ me.get("/", async (c) => {
   return c.json(result);
 });
 
-/** Je eigen naam en kleur. Je e-mailadres komt van je aanmelding en verandert hier niet. */
+/** Je eigen naam, kleur en rekeningnummer. Je e-mailadres komt van je aanmelding en verandert hier niet. */
 me.put("/", async (c) => {
   const obj = asObject(await c.req.json());
   const color = obj.color ?? null;
   if (color !== null && !isTone(color)) throw new ValidationError("Onbekende kleur");
-  const updated = await c.env.DB.prepare("UPDATE people SET name = ?, color = ? WHERE id = ? RETURNING id, name, email, color")
-    .bind(requiredString(obj, "name", 60), color, c.get("person").id)
+  const raw = typeof obj.iban === "string" ? obj.iban.trim() : "";
+  if (raw && !isValidIban(raw)) throw new ValidationError("Dat rekeningnummer klopt niet. Kijk het IBAN na (bv. BE68 5390 0754 7034).");
+  const updated = await c.env.DB.prepare("UPDATE people SET name = ?, color = ?, iban = ? WHERE id = ? RETURNING id, name, email, color, iban")
+    .bind(requiredString(obj, "name", 60), color, raw ? normalizeIban(raw) : null, c.get("person").id)
     .first<Person>();
   return c.json(updated);
 });

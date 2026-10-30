@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
+import { epcPayload, formatIban } from "../../shared/payment";
 import type { Transfer } from "../../shared/totals";
 import type { Balance, ItemInput, Person } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -8,6 +9,8 @@ import { Avatar, CardHead, SubmitButton } from "./Controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
+
+const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode })));
 
 /**
  * Wie wie nog hoeveel moet in een project (met alles eronder), uit de lijsten met de regel Kosten verdelen en
@@ -108,10 +111,14 @@ function SettleForm({
   to?: Person;
   onDone: () => void;
 }) {
+  const { person } = useSession();
   const [amount, setAmount] = useState(centsToInput(transfer.amount));
   const [date, setDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // Moet jij betalen en heeft de ander een rekeningnummer: een betaal-QR voor je bank-app.
+  const cents = parseEuro(amount);
+  const qr = transfer.from === person.id && to?.iban && cents && cents > 0 ? epcPayload({ name: to.name, iban: to.iban }, cents, "Thuis: terugbetaling") : null;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -144,6 +151,17 @@ function SettleForm({
         <input inputMode="decimal" required autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} />
         <span className="hint">Minder mag ook: dan blijft de rest openstaan.</span>
       </label>
+      {qr && (
+        <div className="field pay-qr">
+          <span className="label">Betaal met je bank-app</span>
+          <Suspense fallback={null}>
+            <Barcode format="qr_code" value={qr} />
+          </Suspense>
+          <span className="hint">
+            Scan met de app van je bank: {to!.name}, {formatIban(to!.iban!)}, {formatCents(cents!)}. Daarna bewaar je hier de terugbetaling.
+          </span>
+        </div>
+      )}
       {settle.date && (
         <label className="field">
           <span className="label">Datum</span>
