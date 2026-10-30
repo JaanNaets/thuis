@@ -14,6 +14,8 @@ import {
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { withCalcs } from "../compute";
+import { productByCode, productByName } from "../products";
+import { isProductCode, productData, productLabel } from "../../shared/product";
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
@@ -581,7 +583,10 @@ function describeField(f: FieldDef): string {
   return `- ${f.key}: ${f.label}${extra}${f.hint ? `. ${f.hint}` : ""}`;
 }
 
-/** Een foto van een etiket of typeplaatje lezen in de velden van een lijst (die je mag invullen). */
+/**
+ * Een foto lezen in de velden van een lijst (die je mag invullen): een etiket of typeplaatje, of bij een lijst met
+ * productinfo het product of gerecht dat erop staat (met de echte gegevens van een gekend product).
+ */
 projectItems.post("/:id/items/scan", async (c) => {
   const form = await c.req.formData();
   const db = c.env.DB;
@@ -594,28 +599,47 @@ projectItems.post("/:id/items/scan", async (c) => {
   if (!(image instanceof File)) return c.json({ error: "Geen foto ontvangen" }, 400);
   if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES)
     return c.json({ ...empty, message: "Deze foto kan niet automatisch gelezen worden." });
-  if (!(await useAiBudget(c.env))) return c.json({ ...empty, message: "De daglimiet voor automatisch lezen is bereikt. Vul het zelf in." });
+  const limit = await useAiBudget(c.env, c.get("person").id);
+  if (limit) return c.json({ ...empty, message: limit });
 
   const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
+  // Een lijst met velden uit productinfo (bv. kcal per 100 g): de AI herkent het product of gerecht en mag schatten;
+  // een gekend product zoeken we daarna op in Open Food Facts (echte gegevens). Anders: enkel lezen wat er staat.
+  const products = fields.some((f) => f.product);
+  const schema = labelSchema(fields);
+  if (products) {
+    Object.assign(schema.properties, {
+      kind: { type: "string", enum: ["product", "dish", "unknown"] },
+      brand: { type: ["string", "null"] },
+      barcode: { type: ["string", "null"] },
+    });
+    schema.required = Object.keys(schema.properties);
+  }
+  const prompt = products
+    ? `Je ziet een foto van eten of van een product. Herken wat het is.
+- kind: "product" voor een verpakt product van een merk (je ziet de verpakking of het is duidelijk een gekend merk), "dish" voor een gerecht, een maaltijd of los eten (fruit, brood), anders "unknown"
+- name: bij een product de naam zoals op de verpakking, in de taal van de verpakking, met de smaak of soort (bv. "Danio vanille", "Prince goût chocolat"); bij een gerecht de naam in het Nederlands
+- brand: het merk zoals op de verpakking, of null
+- barcode: de cijfers onder de barcode als je ze allemaal kan lezen, anders null
+${fields.map(describeField).join("\n")}
+Schat wat je niet kan lezen zo goed mogelijk (bv. hoeveel er op de foto ligt, of de voedingswaarde van een gerecht per 100 g). Gebruik null enkel als je het echt niet weet.`
+    : `Je leest een etiket of typeplaatje op een foto. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit.
+- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}, zoals op het etiket (zonder jaartal)
+${fields.map(describeField).join("\n")}`;
   try {
     const dataUrl = `data:${image.type};base64,${toBase64(await image.arrayBuffer())}`;
     const result = await c.env.AI.run(MODEL, {
       messages: [
-        {
-          role: "system",
-          content: `Je leest een etiket of typeplaatje op een foto. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit.
-- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}, zoals op het etiket (zonder jaartal)
-${fields.map(describeField).join("\n")}`,
-        },
+        { role: "system", content: prompt },
         {
           role: "user",
           content: [
-            { type: "text", text: "Lees dit etiket." },
+            { type: "text", text: products ? "Wat is dit?" : "Lees dit etiket." },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
       ],
-      response_format: { type: "json_schema", json_schema: { name: "label", schema: labelSchema(fields), strict: true } },
+      response_format: { type: "json_schema", json_schema: { name: "label", schema, strict: true } },
       chat_template_kwargs: { enable_thinking: false },
       temperature: 0,
       max_tokens: 500,
@@ -631,6 +655,23 @@ ${fields.map(describeField).join("\n")}`,
     }
     const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
     const scan: LabelScan = { name, data: cleanAttributes(fields, raw) };
+    if (products && scan.name) {
+      // Een gekend product: de echte gegevens (op de barcode die de AI las, anders op naam en merk). Lukt dat niet,
+      // dan blijft de schatting staan, en dat zeggen we ook.
+      const code = typeof parsed.barcode === "string" ? parsed.barcode.replace(/\D/g, "") : "";
+      const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : null;
+      const info =
+        parsed.kind === "product"
+          ? await (isProductCode(code) ? productByCode(db, code) : Promise.resolve(null))
+              .then((found) => found ?? productByName(db, scan.name!, brand))
+              .catch(() => null)
+          : null;
+      if (info) {
+        scan.name = productLabel(info);
+        Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
+        scan.source = { kind: "database", label: productLabel(info) };
+      } else scan.source = { kind: "estimate" };
+    }
     if (!scan.name && Object.keys(scan.data).length === 0) scan.message = "Niets herkend op deze foto. Vul het zelf in.";
     return c.json(scan);
   } catch (err) {

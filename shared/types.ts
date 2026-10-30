@@ -190,7 +190,16 @@ export type ItemInput = { type_id: string; name: string; data: Record<string, un
 export type ImportResult = { created: number; skipped: { row: number; error: string }[] };
 
 /** Wat de app van een etiket of foto las, in de velden van de lijst. */
-export type LabelScan = { name: string | null; data: Attributes; message?: string };
+export type LabelScan = {
+  name: string | null;
+  data: Attributes;
+  message?: string;
+  /**
+   * Bij een lijst met productinfo: kwamen de gegevens uit Open Food Facts (een herkend product, `label`: welk) of zijn
+   * ze geschat op basis van de foto?
+   */
+  source?: { kind: "database"; label: string } | { kind: "estimate" };
+};
 
 export type SearchResult = {
   projects: { id: string; name: string; icon: IconKey | null; color: Tone | null }[];

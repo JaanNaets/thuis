@@ -8,6 +8,7 @@
 
 /** Groepen in de keuzelijst van veldsoorten. */
 import type { CalcDef, CalcResult } from "./calc.ts";
+import { isProductKey, productFits, type ProductKey } from "./product.ts";
 
 export const FIELD_GROUPS = {
   text: "Tekst",
@@ -123,6 +124,8 @@ export type FieldDef = {
   fill?: boolean;
   /** De gewone verdeling bij `fill` (procenten, samen 100). */
   default_shares?: Share[];
+  /** Uit productinfo (een barcode of een herkend product): welk gegeven hier hoort (zie shared/product.ts). */
+  product?: ProductKey;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -218,6 +221,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.required === true && type !== "calc") def.required = true;
     if (f.today === true && type === "date") def.today = true;
     if (f.me === true && type === "person") def.me = true;
+    if (isProductKey(f.product) && productFits(f.product, type)) def.product = f.product;
     if (f.fill === true && type === "share") {
       def.fill = true;
       let shares: Share[] = [];
@@ -703,6 +707,20 @@ export function applyFieldDefaults(fields: FieldDef[], data: Attributes, members
       const shares = defaultShares(f.default_shares, members);
       if (shares.length) out[f.key] = shares;
     }
+  }
+  return out;
+}
+
+/**
+ * Opnieuw: de waarden van een vorig item als begin van een nieuw. Berekeningen rekent de app zelf; een datum die met
+ * vandaag begint, wordt `today`; een persoon die met jou begint, valt weg (die vult `applyFieldDefaults` in).
+ */
+export function repeatData(fields: FieldDef[], data: Attributes, today: string): Attributes {
+  const out: Attributes = {};
+  for (const f of fields) {
+    if (f.type === "calc" || (f.type === "person" && f.me)) continue;
+    if (f.type === "date" && f.today) out[f.key] = today;
+    else if (data[f.key] !== undefined) out[f.key] = data[f.key];
   }
   return out;
 }

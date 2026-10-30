@@ -26,9 +26,10 @@ import {
   type Names,
   type Share,
 } from "../../shared/fields";
+import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
-import { api, apiUrl, useApi } from "../api";
-import type { ScanResult } from "../barcode-detect";
+import { api, ApiError, apiUrl, useApi } from "../api";
+import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk } from "../device";
 import { centsToInput } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
@@ -1134,6 +1135,7 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.filter && FILTERABLE.includes(d.type) ? { filter: true } : {}),
       ...(d.required && d.type !== "calc" ? { required: true } : {}),
       ...(d.type === "date" && d.today ? { today: true } : {}),
+      ...(d.product && productFits(d.product, d.type) ? { product: d.product } : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1298,6 +1300,24 @@ export function FieldsEditor({
                       </select>
                     </label>
                   )}
+                  {(f.type === "text" || f.type === "number") && (
+                    <label className="field">
+                      <span className="label">
+                        Uit productinfo <span className="optional">· optioneel</span>
+                      </span>
+                      <select value={f.product ?? ""} onChange={(e) => update(i, { product: (e.target.value || undefined) as ProductKey | undefined })}>
+                        <option value="">Niets</option>
+                        {(Object.entries(PRODUCT_KEYS) as [ProductKey, { label: string }][])
+                          .filter(([key]) => productFits(key, f.type))
+                          .map(([key, p]) => (
+                            <option key={key} value={key}>
+                              {p.label}
+                            </option>
+                          ))}
+                      </select>
+                      <span className="hint">Een barcode of een foto van een gekend product vult dit in met echte gegevens uit Open Food Facts.</span>
+                    </label>
+                  )}
                   <label className="field">
                     <span className="label">
                       Uitleg <span className="optional">· optioneel</span>
@@ -1371,22 +1391,67 @@ export function FieldsEditor({
  * Foto van een etiket (of typeplaatje): de app leest naam en velden van de lijst.
  * `onResult` krijgt ook de foto, om bij het item te bewaren.
  */
-export function LabelScanner({ projectId, typeId, onResult }: { projectId: string; typeId: string; onResult: (scan: LabelScan, photo: File) => void }) {
+export function LabelScanner({
+  projectId,
+  typeId,
+  products,
+  onResult,
+  onProduct,
+}: {
+  projectId: string;
+  typeId: string;
+  /** De lijst heeft velden uit productinfo: barcode zoeken en opzoeken in Open Food Facts. */
+  products?: boolean;
+  onResult: (scan: LabelScan, photo: File) => void;
+  onProduct?: (info: ProductInfo, code: string | null, photo: File | null) => void;
+}) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "none"; text: string }>();
+  const [scanning, setScanning] = useState(false);
+  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string }>();
+  const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
   async function read(file: File | undefined) {
     if (!file) return;
-    setStatus({ tone: "busy", text: "Etiket lezen" });
+    setStatus({ tone: "busy", text: products ? "Product zoeken" : "Etiket lezen" });
     try {
       const [small, photo] = await Promise.all([prepareForReading(file), prepareUpload(file)]);
+      // Eerst een barcode op de foto zelf: gratis, zonder AI, en exact.
+      if (products && onProduct) {
+        const code = (await detectInImage(file).catch(() => null))?.rawValue;
+        const info = code && isProductCode(code) ? await findProduct(code) : null;
+        if (info) {
+          onProduct(info, code!, photo);
+          return found(info);
+        }
+      }
       const body = new FormData();
       body.set("image", small);
       body.set("type_id", typeId);
       const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
       onResult(scan, photo);
-      setStatus(scan.message ? { tone: "none", text: scan.message } : { tone: "ok", text: "Gelezen. Kijk de blauwe velden even na." });
+      setStatus(
+        scan.message
+          ? { tone: "none", text: scan.message }
+          : scan.source?.kind === "database"
+            ? { tone: "ok", text: `Herkend als ${scan.source.label}: de gegevens komen uit Open Food Facts. Kijk de hoeveelheid na.` }
+            : scan.source?.kind === "estimate"
+              ? { tone: "partial", text: "Geschat op basis van de foto (geen gekend product gevonden). Kijk de blauwe velden na." }
+              : { tone: "ok", text: "Gelezen. Kijk de blauwe velden even na." },
+      );
+    } catch (err) {
+      setStatus({ tone: "none", text: (err as Error).message });
+    }
+  }
+
+  async function scanned(code: string) {
+    setScanning(false);
+    setStatus({ tone: "busy", text: "Product opzoeken" });
+    try {
+      const info = isProductCode(code) ? await findProduct(code) : null;
+      if (!info) return setStatus({ tone: "none", text: "Dit product staat (nog) niet in Open Food Facts. Vul het zelf in, of trek een foto." });
+      onProduct?.(info, code, null);
+      found(info);
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
     }
@@ -1410,17 +1475,33 @@ export function LabelScanner({ projectId, typeId, onResult }: { projectId: strin
     <div className="scan-buttons">
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-          <Icon name="camera" /> Foto van het etiket
+          <Icon name="camera" /> {products ? "Foto" : "Foto van het etiket"}
         </button>
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
           <Icon name="image" /> Uit foto
         </button>
+        {products && (
+          <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
+            <Icon name="scan" /> Barcode
+          </button>
+        )}
       </div>
       {input(cameraRef, true)}
       {input(fileRef, false)}
+      {scanning && <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />}
       {status && <Alert tone={status.tone}>{status.text}</Alert>}
     </div>
   );
+}
+
+/** Een product op barcode in Open Food Facts; null als het er niet in staat. */
+export async function findProduct(code: string): Promise<ProductInfo | null> {
+  try {
+    return await api.get<ProductInfo>(`/products/${code}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 /** De foto van een item bovenaan de fiche: tonen, toevoegen, vervangen of weghalen. */

@@ -236,3 +236,21 @@ test("boom: volgorde, alles eronder, lussen breken niets", () => {
   ];
   assert.equal(flattenTree(loop).length, 0);
 });
+
+test("opnieuw: een vorig item als begin van een nieuw", async () => {
+  const { repeatData } = await import("../shared/fields.ts");
+  const fields: FieldDef[] = [
+    { key: "datum", label: "Datum", type: "date", today: true },
+    { key: "gekocht", label: "Gekocht op", type: "date" },
+    { key: "door", label: "Betaald door", type: "person", me: true },
+    { key: "voor", label: "Voor", type: "person" },
+    { key: "gram", label: "Hoeveel", type: "number" },
+    { key: "kcal", label: "Kcal", type: "calc", result: "number", calc: { kind: "math", op: "*", a: { field: "gram" }, b: { n: 2 } } },
+  ];
+  assert.deepEqual(repeatData(fields, { datum: "2026-10-01", gekocht: "2026-09-01", door: "jana", voor: "jaan", gram: 40, kcal: 80 }, "2026-10-30"), {
+    datum: "2026-10-30",
+    gekocht: "2026-09-01",
+    voor: "jaan",
+    gram: 40,
+  });
+});

@@ -112,11 +112,18 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
         description={`${type.name} · ${p.project.name}`}
         back={{ to: back, label: p.project.name }}
         actions={
-          canEditSome && (
-            <Link to={`/items/${item.id}/bewerken`} className="btn btn-outline btn-sm">
-              <Icon name="edit" size={15} /> Bewerken
-            </Link>
-          )
+          <>
+            {type.can_create && !p.project.archived && (
+              <Link to={`/projecten/${item.project_id}/nieuw?lijst=${type.id}&van=${item.id}`} className="btn btn-outline btn-sm">
+                <Icon name="repeat" size={15} /> Opnieuw
+              </Link>
+            )}
+            {canEditSome && (
+              <Link to={`/items/${item.id}/bewerken`} className="btn btn-outline btn-sm">
+                <Icon name="edit" size={15} /> Bewerken
+              </Link>
+            )}
+          </>
         }
       />
 

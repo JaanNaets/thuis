@@ -423,7 +423,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 
 | Component of hulpje | Wat |
 | --- | --- |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling) |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
 | `ChecklistInput`, `ChecklistView` | Takenlijst (`.checklist`): invullen met altijd een lege regel onderaan; op de fiche een eigen kaart waar je meteen afvinkt (bewaart zonder het formulier) |
@@ -433,7 +433,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een ander project. Je kiest enkel uit items die je mag zien |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto |
+| `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
 
@@ -450,6 +450,15 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   verrekent. Geen eigen code. Losse
   lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
   bij **Instellen → Lijsten → Uit sjabloon**.
+- **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
+  item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
+  (`datalist`); kies je er een, dan vult de app de rest in zoals de vorige keer. Een datum die met vandaag begint,
+  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`).
+- **Productinfo** (`shared/product.ts`): een tekst- of getalveld kan "Uit productinfo" krijgen (naam, merk, inhoud,
+  energie of een voedingswaarde per 100 g). Een barcode (gescand, op een foto of in een barcodeveld) of een product
+  dat de AI herkent, zoekt de app op in Open Food Facts (gratis, `/products`, 30 dagen bijgehouden in `products`).
+  Op barcode is het exact; op naam en merk enkel als bijna alle woorden kloppen (liever een eerlijke schatting dan
+  een verkeerd product). Toon altijd welk product gevonden werd.
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm.

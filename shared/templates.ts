@@ -169,6 +169,7 @@ const FOOD: TypeTemplate = {
       label: "kcal per 100 g",
       type: "number",
       unit: "kcal",
+      product: "kcal",
       hint: "energie uit de voedingstabel op de verpakking, per 100 g of 100 ml, in kcal (niet kJ)",
     },
     { key: "gram", label: "Hoeveel", type: "number", unit: "g", hint: "wat je at, in gram (niet de hele verpakking)" },

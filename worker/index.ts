@@ -3,6 +3,7 @@ import { requireAccess } from "./auth";
 import { withPerson } from "./context";
 import { files, items, projectItems, search } from "./routes/items";
 import { me } from "./routes/me";
+import { products } from "./routes/products";
 import { people, projects, roles, tags, types } from "./routes/projects";
 import type { AppEnv } from "./types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "./validate";
@@ -24,6 +25,7 @@ app.route("/tags", tags);
 app.route("/items", items);
 app.route("/files", files);
 app.route("/search", search);
+app.route("/products", products);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {

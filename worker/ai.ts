@@ -5,18 +5,29 @@
 export const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 
 const AI_DAILY_LIMIT = 50;
+/** Per persoon, zodat niemand de foto's van een ander opgebruikt. */
+const AI_PERSON_LIMIT = 25;
 
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 export const AI_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-/** Telt een AI-oproep; false als de daglimiet bereikt is. */
-export async function useAiBudget(env: Env): Promise<boolean> {
-  const usage = await env.DB.prepare(
-    `INSERT INTO ai_usage (day, calls) VALUES (date('now'), 1)
-     ON CONFLICT (day) DO UPDATE SET calls = calls + 1
-     RETURNING calls`,
-  ).first<{ calls: number }>();
-  return Boolean(usage && usage.calls <= AI_DAILY_LIMIT);
+/** Telt een AI-oproep; zegt wat er op is als een daglimiet bereikt is (voor iedereen samen, of voor jou). */
+export async function useAiBudget(env: Env, personId: string): Promise<string | null> {
+  const [all, mine] = (await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO ai_usage (day, calls) VALUES (date('now'), 1)
+       ON CONFLICT (day) DO UPDATE SET calls = calls + 1
+       RETURNING calls`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO ai_usage_people (day, person_id, calls) VALUES (date('now'), ?1, 1)
+       ON CONFLICT (day, person_id) DO UPDATE SET calls = calls + 1
+       RETURNING calls`,
+    ).bind(personId),
+  ])) as D1Result<{ calls: number }>[];
+  if ((mine.results[0]?.calls ?? Infinity) > AI_PERSON_LIMIT) return `Je hebt vandaag al ${AI_PERSON_LIMIT} foto's laten lezen. Vul het zelf in.`;
+  if ((all.results[0]?.calls ?? Infinity) > AI_DAILY_LIMIT) return "De daglimiet voor automatisch lezen is bereikt. Vul het zelf in.";
+  return null;
 }
 
 export function safeJson(text: string): unknown {
