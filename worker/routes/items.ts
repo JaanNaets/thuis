@@ -15,7 +15,7 @@ import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemT
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { withCalcs } from "../compute";
 import { productByCode, productByName } from "../products";
-import { isProductCode, productData, productLabel } from "../../shared/product";
+import { isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
@@ -602,16 +602,22 @@ projectItems.post("/:id/items/scan", async (c) => {
   const limit = await useAiBudget(c.env, c.get("person").id);
   if (limit) return c.json({ ...empty, message: limit });
 
-  const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
+  const readable = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
   // Een lijst met velden uit productinfo (bv. kcal per 100 g): de AI herkent het product of gerecht en mag schatten;
   // een gekend product zoeken we daarna op in Open Food Facts (echte gegevens). Anders: enkel lezen wat er staat.
-  const products = fields.some((f) => f.product);
+  // Bij herkennen geen datums: die staan niet op een foto van eten (en "vandaag" blijft dan staan).
+  const products = readable.some((f) => f.product);
+  const fields = products ? readable.filter((f) => f.type !== "date") : readable;
   const schema = labelSchema(fields);
+  // Bij herkennen moet de AI getallen schatten (kcal per 100 g, hoeveel er ligt): die mogen niet leeg blijven, ook
+  // zonder etiket (een kop cappuccino). Een gekend product krijgt daarna de echte gegevens.
+  const estimated = products ? fields.filter((f) => f.type === "number" && (f.product || f.unit)) : [];
   if (products) {
     Object.assign(schema.properties, {
       kind: { type: "string", enum: ["product", "dish", "unknown"] },
       brand: { type: ["string", "null"] },
       barcode: { type: ["string", "null"] },
+      ...Object.fromEntries(estimated.map((f) => [f.key, { type: "number" }])),
     });
     schema.required = Object.keys(schema.properties);
   }
@@ -621,8 +627,8 @@ projectItems.post("/:id/items/scan", async (c) => {
 - name: bij een product de naam zoals op de verpakking, in de taal van de verpakking, met de smaak of soort (bv. "Danio vanille", "Prince goût chocolat"); bij een gerecht de naam in het Nederlands
 - brand: het merk zoals op de verpakking, of null
 - barcode: de cijfers onder de barcode als je ze allemaal kan lezen, anders null
-${fields.map(describeField).join("\n")}
-Schat wat je niet kan lezen zo goed mogelijk (bv. hoeveel er op de foto ligt, of de voedingswaarde van een gerecht per 100 g). Gebruik null enkel als je het echt niet weet.`
+${fields.map((f) => describeField(f) + (f.product ? ` (${PRODUCT_KEYS[f.product].label})` : "")).join("\n")}
+${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in: lees het van de verpakking als dat kan, anders schat je het zoals een voedingstabel het zou geven voor wat je ziet (een cappuccino, een croissant, een bord pasta), en schat je hoeveel er op de foto staat (in g of ml; bij een gesloten verpakking één gewone portie).\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.`
     : `Je leest een etiket of typeplaatje op een foto. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit.
 - name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}, zoals op het etiket (zonder jaartal)
 ${fields.map(describeField).join("\n")}`;
@@ -653,6 +659,8 @@ ${fields.map(describeField).join("\n")}`;
       else if (f.type === "money") raw[f.key] = typeof parsed[f.key] === "number" ? Math.round((parsed[f.key] as number) * 100) : null;
       else raw[f.key] = parsed[f.key];
     }
+    // Niets eetbaars of herkenbaars op de foto: dan zijn de verplichte schattingen niets waard.
+    if (parsed.kind === "unknown") for (const f of estimated) raw[f.key] = null;
     const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
     const scan: LabelScan = { name, data: cleanAttributes(fields, raw) };
     if (products && scan.name) {
