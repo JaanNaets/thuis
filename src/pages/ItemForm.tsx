@@ -61,7 +61,15 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       fields,
       applyFieldDefaults(
         fields,
-        Object.fromEntries(fields.filter((f) => f.today && type.field_access[f.key] === "edit").map((f) => [f.key, today()])),
+        {
+          ...Object.fromEntries(fields.filter((f) => f.today && type.field_access[f.key] === "edit").map((f) => [f.key, today()])),
+          // Vanuit de agenda: de dag die je koos (?veld=datum&op=2026-11-03).
+          ...Object.fromEntries(
+            fields
+              .filter((f) => f.key === params.get("veld") && f.type === "date" && type.field_access[f.key] === "edit" && /^\d{4}-\d{2}-\d{2}$/.test(params.get("op") ?? ""))
+              .map((f) => [f.key, params.get("op")!]),
+          ),
+        },
         people.map((p) => p.id),
         person.id,
         true,

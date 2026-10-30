@@ -4093,6 +4093,91 @@ dialog.palette[open]::backdrop {
 }
 
 /* Velden van een lijst: elk een wit kaartje in de groep; naam en soort op één regel, de rest klapt open. */
+/* Filters (Filters.tsx): elke voorwaarde een wit kaartje, zoals de velden van een lijst. */
+.conditions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.condition {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-xl);
+  background: var(--background);
+  box-shadow: var(--shadow-inset);
+}
+
+.condition-head,
+.condition-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.condition-head > select,
+.condition-value > :not(.muted) {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.condition-head > select {
+  font-weight: 600;
+}
+
+/* Een voorwaarde die geldt, als pil met een kruisje (boven de lijst). */
+.condition-pill {
+  gap: 4px;
+  padding-right: 4px;
+  cursor: default;
+}
+
+.condition-pill-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.condition-pill-remove:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+
+/* Een kolomkop die sorteert. */
+.table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.table-sort:hover {
+  color: var(--foreground);
+}
+
+.view-save {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--divider);
+}
+
 .fields-editor {
   display: grid;
   gap: 6px;
@@ -5093,4 +5178,190 @@ dialog.palette[open]::backdrop {
 .total-group-value {
   font-variant-numeric: tabular-nums;
   font-weight: 550;
+}
+
+/* ---------- agenda (Calendar.tsx) ---------- */
+
+.calendar {
+  display: grid;
+  gap: 14px;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.calendar-title::first-letter {
+  text-transform: uppercase;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.calendar-weekday {
+  padding: 0 6px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.calendar-day {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.25s;
+}
+
+.calendar-day[data-out="true"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--divider);
+}
+
+.calendar-day[data-out="true"] .calendar-date {
+  color: var(--muted-foreground);
+}
+
+.calendar-day[aria-selected="true"] {
+  background: var(--background);
+  box-shadow: var(--shadow-inset), 0 6px 18px -10px rgb(16 24 40 / 0.22);
+}
+
+.calendar-date {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.calendar-day[data-today="true"] .calendar-date {
+  background: var(--primary);
+  color: var(--background);
+}
+
+.calendar-entries {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar-entry {
+  display: block;
+  overflow: hidden;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--tone-soft);
+  color: var(--tone-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-more {
+  padding: 0 7px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.calendar-dots {
+  display: none;
+  justify-content: center;
+  gap: 3px;
+}
+
+.calendar-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone-mid);
+}
+
+.calendar-daylist {
+  display: grid;
+  gap: 6px;
+}
+
+.calendar-daylist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.calendar-daylist-head h3 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+}
+
+.calendar-daylist-head h3::first-letter {
+  text-transform: uppercase;
+}
+
+.calendar-none {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Op een gsm: kleine vakjes met stipjes; wat op de dag valt, staat eronder. */
+@media (max-width: 767px) {
+  .calendar-grid {
+    gap: 2px;
+  }
+
+  .calendar-weekday {
+    padding: 0 0 4px;
+    text-align: center;
+  }
+
+  .calendar-day {
+    justify-items: center;
+    min-height: 50px;
+    padding: 4px 2px;
+    border-radius: var(--radius-md);
+  }
+
+  .calendar-entries {
+    display: none;
+  }
+
+  .calendar-dots {
+    display: flex;
+  }
 }

@@ -132,6 +132,8 @@ export type FieldDef = {
   remind?: number;
   /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
   yearly?: boolean;
+  /** Datum, periode of berekende datum: in de agenda van al je projecten (zie shared/agenda.ts). */
+  agenda?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -231,8 +233,9 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.counter === true && type === "number") def.counter = true;
     if (typeof f.remind === "number" && Number.isInteger(f.remind) && f.remind >= 0 && f.remind <= 365 && (type === "date" || type === "calc")) {
       def.remind = f.remind;
-      if (f.yearly === true && type === "date") def.yearly = true;
     }
+    if (f.yearly === true && type === "date" && (def.remind !== undefined || f.agenda === true)) def.yearly = true;
+    if (f.agenda === true && (type === "date" || type === "date_range" || type === "calc")) def.agenda = true;
     if (f.fill === true && type === "share") {
       def.fill = true;
       let shares: Share[] = [];

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   formatFieldValue,
   rangeStatus,
@@ -10,9 +10,15 @@ import {
   type Names,
 } from "../../shared/fields";
 import type { Item, ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
+import { EMPTY_VIEW, kindOf, matchesView, NAME, sortItems, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
 import { apiUrl, useApi } from "../api";
-import { Link } from "../router";
+import { today } from "../format";
+import { useSession } from "../session";
+import { Link, useNavigate } from "../router";
+import { occurrences } from "../../shared/agenda";
+import { CalendarMonth, gridRange, type CalendarEntry } from "./Calendar";
 import { FilterSelect, FilterToggle } from "./Controls";
+import { ConditionPills, ViewChips, ViewEditor, type Choices } from "./Filters";
 import { namesFrom, ScoreStars } from "./Fields";
 import { Icon, type IconName } from "./Icon";
 import { SkeletonRows, stagger } from "./Motion";
@@ -62,6 +68,29 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       toast((err as Error).message, "alert");
     }
   }
+  const { person } = useSession();
+  // Weergaven: filters, sortering en kolommen (shared/views.ts); wat je koos, blijft staan zolang de app openstaat.
+  const { data: savedViews, reload: reloadViews } = useApi<SavedView[]>(`/projects/${project.project.id}/views?type=${type.id}`);
+  const storeKey = `thuis:weergave:${project.project.id}:${type.id}`;
+  const [{ activeId, def }, setView] = useState<{ activeId: string | null; def: ViewDef }>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(storeKey) ?? "") as { activeId: string | null; def: ViewDef };
+    } catch {
+      return { activeId: null, def: EMPTY_VIEW };
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(storeKey, JSON.stringify({ activeId, def }));
+    } catch {
+      // Geen opslag (privévenster): dan enkel zolang je hier bent.
+    }
+  }, [storeKey, activeId, def]);
+  const setDef = (next: ViewDef) => setView((v) => ({ ...v, def: next }));
+  const [editing, setEditing] = useState(false);
+  const navigate = useNavigate();
+  const [month, setMonth] = useState(() => today().slice(0, 7));
+  const active = savedViews?.find((v) => v.id === activeId) ?? null;
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string | null>>({});
   const [now, setNow] = useState<Record<string, boolean>>({});
@@ -73,7 +102,11 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
   const fields = type.fields;
   // Het getal met − en + staat al rechts in de rij; dat hoeft geen kolom meer te zijn.
-  const columns = fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, 2);
+  const visibleFields = fields.filter((f) => type.field_access[f.key] !== "none");
+  const vfields = useMemo(() => viewFields(visibleFields, type.name_label ?? "Naam"), [fields, type]);
+  const columns = def.columns?.length
+    ? def.columns.flatMap((k) => visibleFields.filter((f) => f.key === k && !(f === counter && !archived)))
+    : fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, 2);
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
   // Een logboek (een datum die met vandaag begint: eten, gewicht, uitgaven): het nieuwste eerst.
@@ -99,7 +132,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
 
   const shown = useMemo(() => {
     const q = fold(query.trim());
-    return items.filter((item) => {
+    const list = items.filter((item) => {
       for (const def of filterFields) {
         const want = filters[def.key];
         if (want && !valueTexts(def, item.data[def.key], names).includes(want)) return false;
@@ -116,9 +149,53 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       }
       return true;
     });
-  }, [items, query, filters, now, tag, fields, filterFields, rangeFields, names, project.tags, year]);
+    const context = { today: today(), me: person.id, names };
+    return sortItems(
+      list.filter((item) => matchesView(item, def, vfields, context)),
+      def.sort,
+      vfields,
+      names,
+    );
+  }, [items, query, filters, now, tag, fields, filterFields, rangeFields, names, project.tags, year, def, vfields, person.id]);
 
-  const filtered = Boolean(query.trim() || tag || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
+  const filtered = Boolean(query.trim() || tag || def.conditions.length || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
+
+  // Waaruit je kiest bij "is een van": de keuzes, de mensen van het project (met jij), de verwijzingen in de lijst, de tags.
+  const choices: Choices = (f) => {
+    if (f.key === TAGS) return project.tags.map((t) => ({ value: t.id, label: t.name }));
+    const kind = kindOf(f);
+    if (kind === "select" || kind === "multi") {
+      const seen = f.options ?? [...new Set(items.flatMap((i) => (Array.isArray(i.data[f.key]) ? (i.data[f.key] as string[]) : [])))];
+      return seen.map((o) => ({ value: o, label: o }));
+    }
+    if (kind === "person" || kind === "people")
+      return [{ value: "me", label: "Jij" }, ...project.members.filter((m) => m.person.id !== person.id).map((m) => ({ value: m.person.id, label: m.person.name }))];
+    if (kind === "item" || kind === "items") return (data?.refs ?? []).filter((r) => r.type_id === f.ref_type).map((r) => ({ value: r.id, label: r.name }));
+    return [];
+  };
+  const exportFilter = def.conditions.length || def.sort ? `&filter=${encodeURIComponent(JSON.stringify(def))}` : "";
+
+  // Als agenda: elk item op zijn datum (de weergave kiest welk datumveld).
+  const agendaField = def.mode === "agenda" ? visibleFields.find((f) => f.key === def.date) : undefined;
+  const agendaEntries: CalendarEntry[] = useMemo(() => {
+    if (!agendaField) return [];
+    const [from, to] = gridRange(month);
+    return shown.flatMap((item) =>
+      occurrences(agendaField, item.data[agendaField.key], from, to).map((o, i) => ({
+        key: `${item.id}-${i}`,
+        title: item.name,
+        ...o,
+        href: `/items/${item.id}`,
+        tone: project.project.color ?? "sky",
+        icon: (type.icon ?? "calendar") as IconName,
+        meta: columns
+          .filter((c) => c.key !== agendaField.key)
+          .map((c) => formatFieldValue(c, item.data[c.key], names))
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    );
+  }, [agendaField, month, shown, project.project.color, type.icon, columns, names]);
   const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(counter && !archived ? ["auto"] : [])].join(" ");
   const icon = (type.icon ?? "folder") as IconName;
 
@@ -158,7 +235,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         {items.length > 0 && (
           // Een bestand, geen ander scherm: een gewone link met `download`.
           <a
-            href={apiUrl(`/projects/${project.project.id}/items/export?type=${type.id}${archived ? "&archived=1" : ""}`)}
+            href={apiUrl(`/projects/${project.project.id}/items/export?type=${type.id}${archived ? "&archived=1" : ""}${exportFilter}`)}
             download
             className="btn btn-outline btn-icon"
             aria-label={`${type.plural} exporteren`}
@@ -169,7 +246,30 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         )}
       </div>
 
+      {savedViews && (
+        <ViewChips
+          views={savedViews}
+          active={activeId}
+          onPick={(view) => setView({ activeId: view?.id ?? null, def: view?.def ?? EMPTY_VIEW })}
+        />
+      )}
+
       <div className="filters">
+        <button
+          type="button"
+          className={`filter ${def.conditions.length || def.sort || def.columns ? "active" : ""}`}
+          aria-haspopup="dialog"
+          onClick={() => setEditing(true)}
+        >
+          <Icon name="sliders" size={14} /> Filters{def.conditions.length ? ` · ${def.conditions.length}` : ""}
+        </button>
+        <ConditionPills
+          def={def}
+          fields={vfields}
+          names={names}
+          tags={project.tags}
+          onRemove={(i) => setDef({ ...def, conditions: def.conditions.filter((_, k) => k !== i) })}
+        />
         {rangeFields.map((def) => (
           <FilterToggle key={def.key} on={now[def.key] ?? false} onChange={(on) => setNow((n) => ({ ...n, [def.key]: on }))}>
             <Icon name="clock" size={14} /> {def.label}: nu
@@ -197,7 +297,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
 
       {error && <p className="error">{error}</p>}
       {!data && loading && <SkeletonRows rows={5} />}
-      {data && shown.length === 0 && (
+      {data && !agendaField && shown.length === 0 && (
         <EmptyState
           icon={icon}
           title={filtered || archived ? "Niets gevonden" : `Nog geen ${type.plural.toLowerCase()}`}
@@ -221,13 +321,29 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         </EmptyState>
       )}
 
-      {shown.length > 0 && (
+      {agendaField && data && (
+        <CalendarMonth
+          month={month}
+          onMonth={setMonth}
+          entries={agendaEntries}
+          addLabel={`${type.name} toevoegen`}
+          onAdd={
+            type.can_create && !project.project.archived
+              ? (day) => navigate(`/projecten/${project.project.id}/nieuw?lijst=${type.id}&veld=${agendaField.key}&op=${day}`)
+              : undefined
+          }
+        />
+      )}
+
+      {!agendaField && shown.length > 0 && (
         <div className="card table table-items" style={{ "--cols": cols } as CSSProperties}>
-          <div className="table-head" aria-hidden="true">
-            <span>{type.name_label ?? type.name}</span>
+          <div className="table-head">
+            <span>
+              <SortButton field={NAME} label={type.name_label ?? type.name} def={def} onSort={setDef} />
+            </span>
             {columns.map((c, k) => (
               <span key={c.key} className={isNumeric(c) || (k === columns.length - 1 && !counter) ? "end" : undefined}>
-                {c.label}
+                <SortButton field={c.key} label={c.label} def={def} onSort={setDef} />
               </span>
             ))}
             {counter && !archived && <span className="end">{counter.label}</span>}
@@ -257,6 +373,35 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
           </ul>
         </div>
       )}
+
+      <Sheet open={editing} title={active ? active.name : "Filters"} onClose={() => setEditing(false)}>
+        {editing && (
+          <ViewEditor
+            fields={vfields}
+            columnsFrom={visibleFields}
+            initial={def}
+            active={active}
+            choices={choices}
+            canShare={project.project.rights.manage}
+            projectId={project.project.id}
+            typeId={type.id}
+            onApply={(next) => {
+              setDef(next);
+              setEditing(false);
+            }}
+            onSaved={(view) => {
+              reloadViews();
+              setView({ activeId: view.id, def: view.def });
+              setEditing(false);
+            }}
+            onDeleted={() => {
+              reloadViews();
+              setView({ activeId: null, def: EMPTY_VIEW });
+              setEditing(false);
+            }}
+          />
+        )}
+      </Sheet>
 
       {counter && (
         <>
@@ -288,6 +433,23 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         </>
       )}
     </>
+  );
+}
+
+/** Een kolomkop sorteert: eerst oplopend, dan aflopend, dan weer zoals de lijst het doet. */
+function SortButton({ field, label, def, onSort }: { field: string; label: string; def: ViewDef; onSort: (def: ViewDef) => void }) {
+  const current = def.sort?.[0]?.field === field ? def.sort[0].dir : undefined;
+  return (
+    <button
+      type="button"
+      className="table-sort"
+      aria-label={`Sorteren op ${label.toLowerCase()}`}
+      aria-sort={current === "asc" ? "ascending" : current === "desc" ? "descending" : undefined}
+      onClick={() => onSort({ ...def, sort: current === "asc" ? [{ field, dir: "desc" }] : current === "desc" ? undefined : [{ field, dir: "asc" }] })}
+    >
+      {label}
+      {current && <Icon name={current === "asc" ? "up" : "down"} size={13} />}
+    </button>
   );
 }
 

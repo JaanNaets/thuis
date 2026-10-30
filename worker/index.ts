@@ -6,6 +6,8 @@ import { me } from "./routes/me";
 import { daily } from "./cron";
 import { products, rates } from "./routes/products";
 import { push } from "./routes/push";
+import { agenda } from "./routes/agenda";
+import { projectViews, views } from "./routes/views";
 import { people, projects, roles, tags, types } from "./routes/projects";
 import type { AppEnv } from "./types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "./validate";
@@ -20,6 +22,8 @@ app.use("*", withPerson);
 app.route("/me", me);
 app.route("/projects", projects);
 app.route("/projects", projectItems);
+app.route("/projects", projectViews);
+app.route("/views", views);
 app.route("/types", types);
 app.route("/roles", roles);
 app.route("/people", people);
@@ -30,6 +34,7 @@ app.route("/search", search);
 app.route("/products", products);
 app.route("/rates", rates);
 app.route("/push", push);
+app.route("/agenda", agenda);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {

@@ -350,6 +350,25 @@ Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als
 je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
 een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
 
+### Filteren en weergaven
+
+Boven elke lijst staat **Filters**: kies zoveel voorwaarden als je wil, op elk veld (en op de naam, de tags en
+wanneer iets toegevoegd werd). Getallen en bedragen (groter dan, tussen), keuzes en personen ("Wie is jij"), en
+datums: vandaag, deze week, vorige maand, de laatste 30 dagen, tussen twee datums, of als patroon (de eerste week van
+de maand, op een maandag). Alles moet kloppen, of één ervan. Sorteer op elk veld (of tik op een kolomkop) en kies
+welke kolommen je ziet.
+
+Bewaar dat als **weergave** ("Deze week", "Te kopen", "Van mij"): ze staan als knoppen boven de lijst. Een weergave
+is van jou, of (als je het project instelt) voor iedereen in het project. Exporteren volgt wat je ziet.
+
+### Agenda
+
+De **Agenda** (in het menu) toont per maand wat op een dag valt, uit al je projecten: elk datumveld waarbij **In de
+agenda** aanstaat (bij het veld, onder ⋯). Ook een berekende datum (het volgende onderhoud), een periode (een reis) en
+een verjaardag (elk jaar). De sjablonen zetten het al aan voor taken, onderhoud, abonnementen, verjaardagen, reizen
+en de maaltijdplanning. Elke lijst met een datum kan je ook zelf als agenda bekijken (Filters → Als agenda); daar
+voeg je ook iets toe op een dag (bv. een maaltijd op dinsdag).
+
 ### Exporteren
 
 Elke lijst heeft rechts van het zoekveld een knop om ze te **exporteren als CSV** (voor Excel, Numbers of Google

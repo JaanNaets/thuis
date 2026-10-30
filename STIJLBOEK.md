@@ -447,6 +447,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
   vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; de API vult niets stil in.
+  Een datum, periode of berekende datum kan **In de agenda** (`agenda`, schakelaar): ze staat dan in de Agenda.
   Een datum (of een berekende datum, zoals Volgende keer) kan **Herinneren** (`remind`, keuzelijst onder ⋯: Niet,
   Op de dag zelf, 1, 2, 3 dagen, 1 of 2 weken, 1 maand vooraf), met **Elk jaar** (`yearly`) voor een verjaardag.
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
@@ -515,6 +516,37 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 - Rechten: een berekening telt enkel wat jij mag zien. Mag je een veld waarvan ze afhangt niet zien, dan blijft
   ze leeg (ook een som over gelinkte items als je bij één ervan het veld niet ziet).
 - Opzoeken en samenvatten rekent de API uit (`worker/compute.ts`); in het formulier staan die er niet, op de fiche wel.
+
+### Filters en weergaven: `ViewEditor`, `ConditionPills`, `ViewChips`
+
+Een lijst filter, sorteer en toon je zoals je wil (`shared/views.ts`); dat bewaar je als **weergave**, voor jezelf of
+(wie het project instelt) voor iedereen. Generiek: elke veldsoort heeft zijn vergelijkingen (tekst: bevat, is, begint
+met; getal en bedrag: is, kleiner dan, minstens, tussen; datum: valt in een periode, in week … van de maand, op een
+maandag; keuze, persoon, verwijzing: is een van, met **jij** als keuze; ja/nee; leeg of ingevuld). Periodes zijn
+relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen twee datums. Ook op de naam, de tags en
+"Toegevoegd op".
+
+| Waar | Hoe |
+| --- | --- |
+| Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden en Archief |
+| Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting), Kolommen (`tag-picker`, leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen in dit project, Bijwerken / Als nieuwe bewaren / Verwijderen) |
+| Kolomkoppen (tablet) | Een kop sorteert (`.table-sort`): oplopend, aflopend, weer zoals de lijst; een pijltje `up`/`down` toont welke |
+
+- Wat je koos, blijft staan zolang de app openstaat (per lijst, `sessionStorage`). Exporteren volgt het filter.
+- Een voorwaarde op een veld dat iemand niet mag zien, telt voor hem niet mee; een weergave is geen beveiliging.
+
+### Agenda: `CalendarMonth`
+
+Een maandkalender (`Calendar.tsx`): bovenaan de maand ("November 2026") met Vandaag (`btn-ghost btn-sm`) en vorige en
+volgende (`btn-outline btn-icon btn-sm`), dan zeven kolommen (ma–zo). Een dag is een zacht vlak (`--muted`, afronding
+`--radius-lg`), de dagen van een andere maand enkel een lijntje, vandaag een zwart rondje, de gekozen dag wit en een
+beetje omhoog. Per dag hooguit drie pilletjes (`.calendar-entry`, in de toon van het project) en "+2"; op een gsm enkel
+stipjes. Onder de kalender wat op de gekozen dag valt, als gewone `rows`, met eventueel "+ Maaltijd toevoegen" (begint
+op die dag: `?veld=datum&op=2026-11-03`). Een periode (een reis) staat op elke dag ervan.
+
+- **Agenda** (`/agenda`, in de zijbalk en de onderbalk): elk veld met **In de agenda** (`agenda` op een datum, een
+  periode of een berekende datum) uit al je projecten, met jouw rechten per project. Filter op project.
+- Een lijst als agenda: de weergave **Als agenda** (volgens een datumveld naar keuze).
 
 ### Totalen: `TotalsEditor` en `TotalsCards`
 

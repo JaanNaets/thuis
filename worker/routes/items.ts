@@ -25,15 +25,17 @@ import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
+import { cleanView, matchesView, sortItems } from "../../shared/views";
+import { fieldsForViews } from "./views";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
 export const files = new Hono<AppEnv>();
 export const search = new Hono<AppEnv>();
 
-type ItemRow = Omit<Item, "data" | "tag_ids"> & { data: string; tag_json: string };
+export type ItemRow = Omit<Item, "data" | "tag_ids"> & { data: string; tag_json: string };
 
-const ITEM_SELECT = `SELECT i.*, (SELECT json_group_array(tag_id) FROM item_tags WHERE item_id = i.id) AS tag_json FROM items i`;
+export const ITEM_SELECT = `SELECT i.*, (SELECT json_group_array(tag_id) FROM item_tags WHERE item_id = i.id) AS tag_json FROM items i`;
 
 function parseData(json: string): Attributes {
   try {
@@ -44,7 +46,7 @@ function parseData(json: string): Attributes {
   }
 }
 
-function toItem(row: ItemRow, rights: Rights, type: ItemType): Item {
+export function toItem(row: ItemRow, rights: Rights, type: ItemType): Item {
   const { data, tag_json, ...rest } = row;
   return { ...rest, data: visibleData(rights, type.id, type.fields, parseData(data)), tag_ids: JSON.parse(tag_json) as string[] };
 }
@@ -321,12 +323,30 @@ projectItems.get("/:id/items/export", async (c) => {
     .prepare(`${ITEM_SELECT} WHERE i.project_id = ? AND i.archived = ? AND i.type_id = ? ORDER BY i.name COLLATE NOCASE LIMIT 5000`)
     .bind(access.project.id, c.req.query("archived") === "1" ? 1 : 0, type.id)
     .all<ItemRow>();
-  const list = results.map((r) => toItem(r, access.rights, type));
+  let list = results.map((r) => toItem(r, access.rights, type));
   await withCalcs(db, me, type, access.rights, list);
   const { people, refs } = await namesFor(db, me, access.chain, types, list);
   const person = new Map(people.map((p) => [p.id, p.name]));
   const ref = new Map(refs.map((r) => [r.id, r.name]));
   const names = { person: (id: string) => person.get(id) ?? "Onbekend", item: (id: string) => ref.get(id) ?? "Verborgen" };
+  // Zoals de lijst op het scherm gefilterd en gesorteerd is (?filter=, een weergave; zie shared/views.ts).
+  const filter = c.req.query("filter");
+  if (filter) {
+    let view;
+    try {
+      view = cleanView(JSON.parse(filter), fieldsForViews(access, type));
+    } catch (err) {
+      throw new ValidationError((err as Error).message);
+    }
+    const viewDefs = fieldsForViews(access, type);
+    const context = { today: brusselsToday(), me, names };
+    list = sortItems(
+      list.filter((i) => matchesView(i, view, viewDefs, context)),
+      view.sort,
+      viewDefs,
+      names,
+    );
+  }
   const { results: tags } = await db
     .prepare(`SELECT id, name FROM tags WHERE project_id IN (${placeholders(access.chain.length)})`)
     .bind(...access.chain)

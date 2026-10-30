@@ -1234,9 +1234,9 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.type === "date" && d.today ? { today: true } : {}),
       ...(d.product && productFits(d.product, d.type) ? { product: d.product } : {}),
       ...(d.type === "number" && d.counter ? { counter: true } : {}),
-      ...((d.type === "date" || d.type === "calc") && d.remind !== undefined
-        ? { remind: d.remind, ...(d.type === "date" && d.yearly ? { yearly: true } : {}) }
-        : {}),
+      ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind } : {}),
+      ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
+      ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1450,7 +1450,15 @@ export function FieldsEditor({
                       <span className="hint">'s Morgens een melding voor wie meldingen aanzette (bij Ik) en dit mag zien.</span>
                     </label>
                   )}
-                  {f.type === "date" && f.remind !== undefined && (
+                  {(f.type === "date" || f.type === "date_range" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
+                    <Switch
+                      checked={Boolean(f.agenda)}
+                      onChange={(on) => update(i, { agenda: on })}
+                      label="In de agenda"
+                      hint="Staat in de agenda van al je projecten (bv. een taak, het volgende onderhoud, een maaltijd)."
+                    />
+                  )}
+                  {f.type === "date" && (f.remind !== undefined || f.agenda) && (
                     <Switch
                       checked={Boolean(f.yearly)}
                       onChange={(on) => update(i, { yearly: on })}

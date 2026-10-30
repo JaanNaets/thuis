@@ -51,8 +51,8 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
   const session = useMemo(() => ({ person: me.person, projects: me.projects, reloadMe, openSearch: () => setSearching(true) }), [me, reloadMe]);
 
-  // De onderbalk op een gsm: projecten, zoeken en jij.
-  const tabIndex = pathname.startsWith("/ik") ? 2 : 0;
+  // De onderbalk op een gsm: projecten, agenda, zoeken en jij.
+  const tabIndex = pathname.startsWith("/ik") ? 3 : pathname.startsWith("/agenda") ? 1 : 0;
 
   return (
     <SessionContext value={session}>
@@ -63,11 +63,15 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
             <Sidebar onSearch={() => setSearching(true)} />
 
-            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 3 } as CSSProperties}>
+            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 4 } as CSSProperties}>
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
               <NavLink to="/" className={({ isActive }) => (isActive || pathname.startsWith("/projecten") || pathname.startsWith("/items") ? "active" : "")}>
                 <Icon name="project" size={21} />
                 <span>Overzicht</span>
+              </NavLink>
+              <NavLink to="/agenda">
+                <Icon name="calendar" size={21} />
+                <span>Agenda</span>
               </NavLink>
               <button type="button" className="tab-button" onClick={() => setSearching(true)}>
                 <Icon name="search" size={21} />

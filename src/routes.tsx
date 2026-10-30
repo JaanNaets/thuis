@@ -1,5 +1,6 @@
 import type { RouteObject } from "react-router";
 import { App } from "./App";
+import { AgendaPage } from "./pages/AgendaPage";
 import { Home } from "./pages/Home";
 import { ImportPage } from "./pages/ImportPage";
 import { ItemFormPage } from "./pages/ItemForm";
@@ -29,6 +30,7 @@ export const routes: RouteObject[] = [
       { path: "projecten/:id/importeren", element: <ImportPage /> },
       { path: "items/:itemId", element: <ItemPage /> },
       { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
+      { path: "agenda", element: <AgendaPage /> },
       { path: "ik", element: <MePage /> },
       { path: "*", element: <p className="page muted">Deze pagina bestaat niet.</p> },
     ],

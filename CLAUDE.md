@@ -50,6 +50,10 @@ commits en uitleg.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
+- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, als agenda) en de **agenda** (`shared/agenda.ts`,
+  velden met `agenda`) zijn generiek over alle veldsoorten. Een weergave is geen beveiliging: wat iemand niet mag zien,
+  krijgt hij niet, en een voorwaarde daarop telt voor hem niet mee. `/agenda` kijkt per item de rechten in zijn
+  project na. Wat binnenkomt, gaat door `cleanView`.
 - **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elke ochtend): een melding gaat enkel naar wie
   het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
   die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,
