@@ -1,7 +1,8 @@
 // Berekeningen: een veld dat de app zelf uitrekent. Bewust eenvoudig: een handvol soorten, elk met één duidelijke
 // vraag, en een berekening kan op een andere berekening verder bouwen (Totaal = Aantal × Prijs, Met btw = Totaal × 1,21).
 //
-// - Binnen het item: rekensom, vergelijking (ja/nee), dagen tot, tijd sinds, datum plus.
+// - Binnen het item: rekensom, formule (zelf geschreven, zie shared/formula.ts), vergelijking (ja/nee), dagen tot,
+//   tijd sinds, datum plus.
 // - Link-modules: een veld uit een gelinkt item (opzoeken), en samenvatten over gelinkte items: die in een
 //   Verwijzing(en)-veld staan, of die naar dit item verwijzen (bv. hoeveel je bij een verkoper uitgaf).
 //
@@ -9,6 +10,7 @@
 // het lezen; niets wordt bewaard. Opzoeken en samenvatten doet de Worker (die weet wat je mag zien).
 
 import type { Attributes, FieldDef, FieldType, FieldValue, Interval, IntervalUnit } from "./fields.ts";
+import { evalFormula, FORMULA_MAX, formulaRefs, inferFormula, mapRefs, parseFormula, printFormula, type FKind } from "./formula.ts";
 
 export type Operand = { field: string } | { value: number };
 export type MathOp = "+" | "-" | "*" | "/";
@@ -18,6 +20,7 @@ export type SinceUnit = "day" | "month" | "year";
 
 export type CalcDef =
   | { kind: "math"; op: MathOp; a: Operand; b: Operand }
+  | { kind: "formula"; expr: string }
   | { kind: "compare"; op: CompareOp; a: Operand; b: Operand }
   | { kind: "days_until"; field: string }
   | { kind: "since"; field: string; unit: SinceUnit }
@@ -31,6 +34,10 @@ export type CalcResult = FieldType;
 
 export const CALC_KINDS = {
   math: { label: "Rekensom", hint: "Twee velden (of een veld en een getal) optellen, aftrekken, vermenigvuldigen of delen. Bv. Aantal × Prijs per fles." },
+  formula: {
+    label: "Formule",
+    hint: "Een eigen som met velden tussen [ ], zoals [kcal per 100 g] × [Hoeveel] ÷ 100. Ook haakjes, afronden, min, max en als.",
+  },
   compare: { label: "Vergelijking (ja/nee)", hint: "Ja als de vergelijking klopt. Bv. Aantal ≤ Bijna op onder: dan weet je wat je moet kopen." },
   days_until: { label: "Dagen tot", hint: "Hoeveel dagen tot een datum; negatief als ze voorbij is. Bv. tot de garantie afloopt." },
   since: { label: "Tijd sinds", hint: "Hoe lang geleden een datum of jaar was. Bv. hoe oud een fiets of een wijn is." },
@@ -99,6 +106,8 @@ export function calcSources(calc: CalcDef): string[] {
     case "math":
     case "compare":
       return [calc.a, calc.b].flatMap((o) => ("field" in o ? [o.field] : []));
+    case "formula":
+      return formulaKeys(calc.expr);
     case "days_until":
     case "since":
       return [calc.field];
@@ -142,6 +151,12 @@ export function renameCalc(
     case "math":
     case "compare":
       return { ...calc, a: o(calc.a), b: o(calc.b) };
+    case "formula":
+      try {
+        return { kind: "formula", expr: printFormula(mapRefs(parseFormula(calc.expr), rename), keyRef) };
+      } catch {
+        return calc;
+      }
     case "days_until":
     case "since":
       return { ...calc, field: rename(calc.field) };
@@ -153,6 +168,37 @@ export function renameCalc(
       if (calc.from === "links") return { ...calc, via: rename(calc.via), ...(calc.field ? { field: remote(calc.via, calc.field) } : {}) };
       if (calc.list === selfId) return { ...calc, list: list(calc.list), via: rename(calc.via), ...(calc.field ? { field: rename(calc.field) } : {}) };
       return { ...calc, ...(calc.list ? { list: list(calc.list) } : {}) };
+  }
+}
+
+/** Zo staat een veld in een bewaarde formule: met zijn sleutel. */
+const keyRef = (key: string) => `[${key}]`;
+
+/** De sleutels in een bewaarde formule (leeg als ze niet te lezen is). */
+function formulaKeys(expr: string): string[] {
+  try {
+    return formulaRefs(parseFormula(expr));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Een formule zoals iemand ze typt (velden met hun naam) naar hoe ze bewaard wordt (velden met hun sleutel). Een
+ * naam die geen veld is, blijft staan (de controle zegt dan welk veld niet bestaat). Gooit een fout als de formule
+ * niet te lezen is.
+ */
+export function formulaFromLabels(text: string, fields: FieldDef[]): string {
+  const byLabel = (name: string) => fields.find((f) => f.label.toLowerCase() === name.toLowerCase())?.key ?? fields.find((f) => f.key === name)?.key ?? name;
+  return printFormula(mapRefs(parseFormula(text), byLabel), keyRef);
+}
+
+/** Een bewaarde formule zoals iemand ze leest en typt: [kcal per 100 g] × [Hoeveel] ÷ 100. */
+export function formulaToLabels(expr: string, fields: FieldDef[]): string {
+  try {
+    return printFormula(parseFormula(expr), (key) => `[${fields.find((f) => f.key === key)?.label ?? key}]`, true);
+  } catch {
+    return expr;
   }
 }
 
@@ -174,6 +220,11 @@ function cleanShape(raw: CalcDef): CalcDef {
     case "math":
       if (!Object.hasOwn(MATH_OPS, String(o.op))) throw new Error("kies een bewerking");
       return { kind: "math", op: o.op as MathOp, a: cleanOperand(o.a), b: cleanOperand(o.b) };
+    case "formula": {
+      if (typeof o.expr !== "string" || !o.expr.trim()) throw new Error("typ een formule");
+      if (o.expr.length > FORMULA_MAX) throw new Error(`een formule is hoogstens ${FORMULA_MAX} tekens`);
+      return { kind: "formula", expr: printFormula(parseFormula(o.expr), keyRef) };
+    }
     case "compare":
       if (!Object.hasOwn(COMPARE_OPS, String(o.op))) throw new Error("kies een vergelijking");
       return { kind: "compare", op: o.op as CompareOp, a: cleanOperand(o.a), b: cleanOperand(o.b) };
@@ -336,6 +387,21 @@ function resultOf(
       if (a === "duration" && b !== "duration") return "duration";
       return "number";
     }
+    case "formula": {
+      let kind: FKind | "wait";
+      try {
+        kind = inferFormula(parseFormula(calc.expr), (key) => {
+          const def = own(key);
+          if (waiting(def)) return "wait";
+          return formulaKind(def) ?? fail(`"${def.label}" is geen getal, bedrag, duur of ja/nee`);
+        });
+      } catch (err) {
+        // Een fout van `own` of `waiting` heeft de naam van het veld al; een fout in de formule nog niet.
+        const message = (err as Error).message;
+        throw new Error(message.startsWith(`${f.label}: `) ? message : `${f.label}: ${message}`);
+      }
+      return kind === "wait" ? "wait" : kind === "const" ? "number" : kind;
+    }
     case "compare": {
       if (numeric(calc.a) === "wait" || numeric(calc.b) === "wait") return "wait";
       return "bool";
@@ -381,6 +447,13 @@ function resultOf(
   }
 }
 
+/** Wat een veld in een formule is (zie shared/formula.ts); undefined als je het er niet in kan gebruiken. */
+function formulaKind(def: FieldDef | undefined): FKind | undefined {
+  const t = typeOf(def);
+  if (t === "money" || t === "duration" || t === "bool") return t;
+  return t && NUMERIC.includes(t) ? "number" : undefined;
+}
+
 // ---------- in woorden ----------
 
 const AGG_WORDS = { count: "Hoeveel", sum: "Som", avg: "Gemiddelde", min: "Kleinste", max: "Grootste" } as const satisfies Record<Agg, string>;
@@ -398,6 +471,12 @@ export function describeCalc(def: FieldDef, fields: FieldDef[], lists: CalcList[
   switch (calc.kind) {
     case "math":
       return `${operand(calc.a)} ${MATH_OPS[calc.op]} ${operand(calc.b)}`;
+    case "formula":
+      try {
+        return printFormula(parseFormula(calc.expr), (key) => label(key), true);
+      } catch {
+        return calc.expr;
+      }
     case "compare":
       return `Ja als ${operand(calc.a)} ${COMPARE_OPS[calc.op]} ${operand(calc.b)}`;
     case "days_until":
@@ -486,7 +565,7 @@ export function computeLocal(defs: FieldDef[], data: Attributes, today = new Dat
     let changed = false;
     for (const d of local) {
       if (out[d.key] !== undefined) continue;
-      const value = computeOne(d, out, today, operand);
+      const value = computeOne(d, out, today, operand, defs);
       if (value === undefined) continue;
       out[d.key] = value;
       changed = true;
@@ -501,9 +580,26 @@ function computeOne(
   data: Attributes,
   today: string,
   operand: (o: Operand, d: FieldDef, other: Operand) => number | undefined,
+  defs: FieldDef[],
 ): FieldValue | undefined {
   const calc = d.calc!;
   switch (calc.kind) {
+    case "formula": {
+      const defOf = (key: string) => defs.find((x) => x.key === key);
+      try {
+        const value = evalFormula(
+          parseFormula(calc.expr),
+          (key) => {
+            const v = data[key];
+            return typeof v === "number" || typeof v === "boolean" ? v : undefined;
+          },
+          (key) => formulaKind(defOf(key)) ?? "number",
+        );
+        return typeof value === "number" ? round(value, d.result) : value;
+      } catch {
+        return undefined;
+      }
+    }
     case "math": {
       const a = operand(calc.a, d, calc.b);
       const b = operand(calc.b, d, calc.a);

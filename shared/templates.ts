@@ -7,12 +7,14 @@
 import { previewCalcs, type CalcList } from "./calc.ts";
 import type { FieldDef } from "./fields.ts";
 import type { Rule } from "./rules.ts";
+import type { TotalDef } from "./totals.ts";
 
 /** Iconen voor projecten en lijsten (namen uit src/components/Icon.tsx). */
 export const ICONS = [
   "home",
   "project",
   "wine",
+  "food",
   "bike",
   "armchair",
   "package",
@@ -53,6 +55,8 @@ export type TypeTemplate = {
   fields: TemplateField[];
   /** Wat de app met de velden doet (zie shared/rules.ts). */
   rules?: Rule[];
+  /** Samenvattingen op het project (zie shared/totals.ts); wat niet bij de velden past, valt weg. */
+  totals?: TotalDef[];
   /**
    * Kwam mee in een gedeeld sjabloon omdat een andere lijst ernaar verwijst (bv. de Verkopers bij een Wijnkelder).
    * Staat er bij het importeren erboven al een lijst met dezelfde naam, dan wordt die gebruikt in plaats van een nieuwe.
@@ -146,6 +150,30 @@ export const SETTLEMENT: TypeTemplate = {
     NOTE,
   ],
   rules: [{ kind: "settle", amount: "bedrag", from: "van", to: "aan" }],
+};
+
+/** Wat je eet: een foto van de verpakking vult de naam en de kcal per 100 g in; de app rekent en telt per dag. */
+const FOOD: TypeTemplate = {
+  key: "eten",
+  name: "Eten",
+  plural: "Eten",
+  name_label: "Wat",
+  icon: "food",
+  fields: [
+    { key: "datum", label: "Datum", type: "date", required: true, today: true, column: true },
+    { key: "maaltijd", label: "Maaltijd", type: "select", options: ["Ontbijt", "Middag", "Avond", "Tussendoor"], column: true, filter: true },
+    {
+      key: "kcal_100",
+      label: "kcal per 100 g",
+      type: "number",
+      unit: "kcal",
+      hint: "energie uit de voedingstabel op de verpakking, per 100 g of 100 ml, in kcal (niet kJ)",
+    },
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g", hint: "wat je at, in gram (niet de hele verpakking)" },
+    { key: "kcal", label: "Kcal", type: "calc", unit: "kcal", column: true, calc: { kind: "formula", expr: "[kcal_100] * [gram] / 100" } },
+    NOTE,
+  ],
+  totals: [{ id: "dag", agg: "sum", field: "kcal", period: "day", date: "datum" }],
 };
 
 export const PROJECT_TEMPLATES = {
@@ -277,6 +305,12 @@ export const PROJECT_TEMPLATES = {
     description: "Een reis, verbouwing of feest: wie betaalde wat en hoe het verdeeld wordt",
     icon: "wallet",
     types: [EXPENSE, SETTLEMENT, VENDOR],
+  },
+  food: {
+    label: "Voeding",
+    description: "Wat je eet en hoeveel kcal, per dag opgeteld. Een foto van de verpakking vult de voedingswaarde in",
+    icon: "food",
+    types: [FOOD],
   },
   collection: {
     label: "Verzameling",

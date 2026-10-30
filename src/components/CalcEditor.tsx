@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AGGS,
   CALC_KINDS,
   COMPARE_OPS,
+  formulaFromLabels,
+  formulaToLabels,
   isLinkCalc,
   LOOKUP_TYPES,
   MATH_OPS,
@@ -33,6 +35,7 @@ type Draft = {
   from?: "links" | "backlinks";
   list?: string;
   agg?: Agg;
+  expr?: string;
 };
 
 const MATH_LABELS = { "+": "+ plus", "-": "− min", "*": "× maal", "/": "÷ gedeeld door" } as const satisfies Record<keyof typeof MATH_OPS, string>;
@@ -43,6 +46,8 @@ function start(kind: CalcKind, fields: FieldDef[]): Draft {
   switch (kind) {
     case "math":
       return { kind, op: "*", a: { field: "" }, b: { field: "" } };
+    case "formula":
+      return { kind, expr: "" };
     case "compare":
       return { kind, op: "<=", a: { field: "" }, b: { field: "" } };
     case "days_until":
@@ -122,6 +127,8 @@ export function CalcEditor({
         </div>
       )}
 
+      {calc.kind === "formula" && <FormulaInput expr={calc.expr ?? ""} fields={ofType([...NUMERIC, "bool"])} onChange={(expr) => set({ expr })} />}
+
       {calc.kind === "days_until" && <FieldPicker label="Tot welke datum" value={calc.field} fields={ofType(["date"])} onChange={(f) => set({ field: f })} />}
 
       {calc.kind === "since" && (
@@ -179,6 +186,63 @@ export function CalcEditor({
 }
 
 /** De velden van een andere lijst die je kan opzoeken of samenvatten (geen opzoeking op een opzoeking). */
+/**
+ * Een formule typen: velden tussen [ ] met hun naam (tik op een veld om het in te voegen). Bewaard wordt ze met de
+ * sleutels van de velden; wat niet te lezen is, blijft staan zoals getypt (de controle zegt wat er scheelt).
+ */
+function FormulaInput({ expr, fields, onChange }: { expr: string; fields: FieldDef[]; onChange: (expr: string) => void }) {
+  const [text, setText] = useState(() => formulaToLabels(expr, fields));
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const update = (next: string) => {
+    setText(next);
+    try {
+      onChange(formulaFromLabels(next, fields));
+    } catch {
+      onChange(next);
+    }
+  };
+  const insert = (label: string) => {
+    const el = ref.current;
+    const at = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? at;
+    const piece = `[${label}]`;
+    update(text.slice(0, at) + piece + text.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at + piece.length, at + piece.length);
+    });
+  };
+
+  return (
+    <div className="field">
+      <span className="label">
+        Formule
+        <Tip text="Velden tussen [ ], getallen met een komma, + − × ÷ en haakjes. Functies: afronden(x; 1), min(a; b), max(a; b) en als([Aantal] < 3; dan; anders). Een getal bij een bedrag telt in euro." />
+      </span>
+      <textarea
+        ref={ref}
+        className="formula-input"
+        rows={2}
+        value={text}
+        spellCheck={false}
+        placeholder="[kcal per 100 g] × [Hoeveel] ÷ 100"
+        aria-label="Formule"
+        onChange={(e) => update(e.target.value)}
+      />
+      {fields.length > 0 && (
+        <div className="formula-fields" aria-label="Veld invoegen">
+          {fields.map((f) => (
+            <button key={f.key} type="button" className="tag" onClick={() => insert(f.label)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function remoteFields(list: CalcList | undefined, types: FieldType[], self: string): FieldDef[] {
   return (list?.fields ?? []).filter((f) => f.key !== self && !isLinkCalc(f) && types.includes(typeOf(f)!));
 }

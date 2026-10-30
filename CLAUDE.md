@@ -34,7 +34,8 @@ commits en uitleg.
 - Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
   `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
 - Regels voor een use case (verdelen, voorraad, …) bouw je bovenop de kern, niet erin: als **regel op een lijst**
-  (`shared/rules.ts`: welke velden welke rol hebben, nagekeken met `cleanRules`), als sjabloon
+  (`shared/rules.ts`: welke velden welke rol hebben, nagekeken met `cleanRules`), als **totaal** op een lijst
+  (`shared/totals.ts`, nagekeken met `cleanTotals`, gefilterd met `visibleTotals`), als sjabloon
   (`shared/templates.ts`) of veldsoort (`shared/fields.ts`). Een regel telt enkel wat de gebruiker mag zien (de lijst
   én de velden van de regel), en vult bij bewaren enkel in wat leeg is (`applyRuleDefaults`).
 - Een **berekening** (veldsoort `calc`, `shared/calc.ts`) wordt nooit bewaard: de API kijkt ze na met `checkCalcs`

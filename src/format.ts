@@ -107,6 +107,14 @@ export function formatNumber(n: number): string {
   return number.format(n);
 }
 
+const big = new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 0 });
+const small = new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 1 });
+
+/** Een getal in een totaal: met duizendtallen, vanaf 100 zonder kommagetal ("1.050 kcal", "12,5 km"). */
+export function formatTotal(n: number): string {
+  return (Math.abs(n) >= 100 ? big : small).format(n);
+}
+
 /** "1 fles", "3 flessen", "1,5 kg". */
 export function formatQuantity(quantity: number, unit: string, plurals: Record<string, string>): string {
   const word = quantity === 1 ? unit : (plurals[unit] ?? unit);

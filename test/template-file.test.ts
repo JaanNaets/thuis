@@ -12,7 +12,14 @@ import {
 import { resolveTemplateLists } from "../shared/templates.ts";
 import type { ItemType } from "../shared/types.ts";
 
-const list = (id: string, project_id: string, name: string, fields: ItemType["fields"], rules: ItemType["rules"] = []): ItemType => ({
+const list = (
+  id: string,
+  project_id: string,
+  name: string,
+  fields: ItemType["fields"],
+  rules: ItemType["rules"] = [],
+  totals: ItemType["totals"] = [],
+): ItemType => ({
   id,
   project_id,
   name,
@@ -21,6 +28,7 @@ const list = (id: string, project_id: string, name: string, fields: ItemType["fi
   icon: "folder",
   fields,
   rules,
+  totals,
   sort_order: 0,
 });
 
@@ -41,6 +49,7 @@ const wine = list(
     { key: "elders", label: "Elders", type: "calc", result: "number", calc: { kind: "rollup", from: "backlinks", list: "ander", via: "wijn", agg: "count" } },
   ],
   [{ kind: "split", amount: "prijs", payer: "wie", for: "verdeling", default: [{ person_id: "p1", share: 100 }] }],
+  [{ id: "t1", agg: "sum", field: "waarde", period: "all", by: "wie", goal: 50000, goal_kind: "max" }],
 );
 const slot = list("x", "rek", "Vak", [{ key: "wijn", label: "Wijn", type: "item", ref_type: "w" }]);
 const tree: ExportProject[] = [
@@ -73,6 +82,8 @@ test("een project als sjabloon: lijsten, subprojecten, en wat erboven nodig is",
   // Geen mensen: de gewone verdeling gaat eruit.
   assert.deepEqual(w.rules, [{ kind: "split", amount: "prijs", payer: "wie", for: "verdeling" }]);
   assert.ok(!JSON.stringify(file).includes("p1"));
+  // Totalen gaan mee (zonder mensen: "apart per" noemt een veld, geen persoon).
+  assert.deepEqual(w.totals, [{ id: "t1", agg: "sum", field: "waarde", period: "all", by: "wie", goal: 50000, goal_kind: "max" }]);
   // Wat je inleest, is wat je deelde.
   assert.deepEqual(parseTemplateFile(JSON.parse(JSON.stringify(file))), file);
   assert.deepEqual(templateSummary(file), { lists: ["Wijns", "Verkopers", "Vaks"], projects: 1 });

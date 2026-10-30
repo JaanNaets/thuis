@@ -14,6 +14,7 @@ import {
 import { cleanFields, type Attributes, type FieldDef } from "../../shared/fields";
 import { checkCalcs } from "../../shared/calc";
 import { balances, cleanRules, movementOf, ruleFieldKeys, settleUp, type Rule } from "../../shared/rules";
+import { cleanTotals, MAX_TOTALS, visibleTotals, type TotalDef } from "../../shared/totals";
 import {
   buildTemplateFile,
   flatten,
@@ -139,6 +140,7 @@ function parseTypeInput(body: unknown) {
     icon: icon as string | null,
     fields: obj.fields,
     rules: obj.rules,
+    totals: obj.totals,
   };
 }
 
@@ -164,6 +166,26 @@ async function cleanTypeRules(db: D1Database, raw: unknown, fields: FieldDef[], 
     if (results.length !== new Set(people).size) throw new ValidationError("De gewone verdeling: kies enkel mensen uit dit project.");
   }
   return rules;
+}
+
+/** De totalen van een lijst nakijken tegen haar (nagekeken) velden. */
+function cleanTypeTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
+  try {
+    return cleanTotals(raw, fields);
+  } catch (err) {
+    throw new ValidationError((err as Error).message);
+  }
+}
+
+/** Totalen die je niet aanraakte: wat niet meer bij de velden past (een veld is weg), valt weg. */
+function keepTotals(totals: TotalDef[], fields: FieldDef[]): TotalDef[] {
+  return totals.flatMap((t) => {
+    try {
+      return cleanTotals([t], fields);
+    } catch {
+      return [];
+    }
+  });
 }
 
 /** Het bovenste project van de boom (waar de beheerders staan). */
@@ -238,12 +260,23 @@ function templateStatements(db: D1Database, nodes: { projectId: string; plans: T
     } catch {
       // Een regel waarvan de velden er niet (meer) zijn, valt weg.
     }
+    const totals = keepTotals(list.totals ?? [], fields[id]).slice(0, MAX_TOTALS);
     return db
       .prepare(
-        `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+        `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, totals, sort_order)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
       )
-      .bind(id, projectId, list.name, list.plural, list.name_label ?? null, list.icon, JSON.stringify(fields[id]), JSON.stringify(rules));
+      .bind(
+        id,
+        projectId,
+        list.name,
+        list.plural,
+        list.name_label ?? null,
+        list.icon,
+        JSON.stringify(fields[id]),
+        JSON.stringify(rules),
+        JSON.stringify(totals),
+      );
   });
 }
 
@@ -499,14 +532,19 @@ projects.get("/:id", async (c) => {
 
   const types = (await typesFor(db, chain))
     .filter((t) => canSeeType(rights, t.id))
-    .map((t) => ({
-      ...t,
-      fields: visibleFields(rights, t.id, t.fields),
-      access: typeAccess(rights, t.id),
-      field_access: fieldAccessMap(rights, t.id, t.fields),
-      can_create: canCreate(rights, t.id),
-      can_delete: canDelete(rights, t.id),
-    }));
+    .map((t) => {
+      const fields = visibleFields(rights, t.id, t.fields);
+      return {
+        ...t,
+        fields,
+        // Een totaal op een veld dat je niet ziet (of waarvan het afhangt), krijg je niet.
+        totals: visibleTotals(t.totals, fields),
+        access: typeAccess(rights, t.id),
+        field_access: fieldAccessMap(rights, t.id, t.fields),
+        can_create: canCreate(rights, t.id),
+        can_delete: canDelete(rights, t.id),
+      };
+    });
   const visible = new Set(types.map((t) => t.id));
 
   const detail: ProjectDetail = {
@@ -655,12 +693,23 @@ projects.post("/:id/types", async (c) => {
   const id = crypto.randomUUID();
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id, await calcListsFor(db, access));
   const rules = await cleanTypeRules(db, input.rules, fields, access.chain);
+  const totals = cleanTypeTotals(input.totals, fields);
   await db
     .prepare(
-      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, totals, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
     )
-    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules))
+    .bind(
+      id,
+      access.project.id,
+      input.name,
+      input.plural,
+      input.name_label,
+      input.icon,
+      JSON.stringify(fields),
+      JSON.stringify(rules),
+      JSON.stringify(totals),
+    )
     .run();
   return c.json({ id }, 201);
 });
@@ -748,9 +797,11 @@ types.put("/:id", async (c) => {
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id, await calcListsFor(db, access));
   // Zonder regels in de vraag blijven de huidige (als ze nog bij de velden passen).
   const rules = await cleanTypeRules(db, input.rules === undefined ? type.rules : input.rules, fields, access.chain);
+  // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
+  const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);
   await db
-    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, rules = ? WHERE id = ?")
-    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules), type.id)
+    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, rules = ?, totals = ? WHERE id = ?")
+    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules), JSON.stringify(totals), type.id)
     .run();
   return c.json({ id: type.id });
 });

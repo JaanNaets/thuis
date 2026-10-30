@@ -5,11 +5,13 @@ Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: 
 - **Projecten** en subprojecten: "Huishouden" is gewoon een project, met daaronder bv. "Wijnkelder" en "Fietsen".
 - **Mensen met een rol** per project: wat ze mogen zien en wijzigen, tot op het niveau van één veld.
 - **Lijsten** met eigen velden (Wijnen met jaargang en druiven, Klantenkaarten met een barcode), ook velden die de
-  app zelf uitrekent (de waarde van je kelder, wanneer het volgende onderhoud is).
+  app zelf uitrekent (de waarde van je kelder, wanneer het volgende onderhoud is, een eigen formule).
+- **Totalen** op een lijst: de som, het gemiddelde of het aantal, per dag, week, maand of jaar, met een doel (de kcal
+  van vandaag, wat je deze maand uitgaf).
 - **Items** in een lijst, met tags, een foto, bestanden en een logboek.
 
-Regels voor een bepaalde use case (kosten verdelen, voorraad, klantenkaarten offline, kastickets lezen) komen er
-bovenop, als sjabloon of als eigen onderdeel.
+Regels voor een bepaalde use case (kosten verdelen, voorraad, calorieën, klantenkaarten offline, kastickets lezen)
+komen er bovenop: als sjabloon met deze bouwstenen, of als eigen onderdeel.
 
 Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kioskmodus.
 
@@ -216,14 +218,14 @@ Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar me
 
 Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
 subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
-Koersfietsen, Gedeelde uitgaven, Verzameling) dat de lijsten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
+Koersfietsen, Gedeelde uitgaven, Voeding, Verzameling) dat de lijsten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
 Losse lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken, ...) voeg je toe bij **Instellen →
 Lijsten → Uit sjabloon**.
 
 ### Sjablonen delen
 
 Heb je een project goed ingericht, dan kan je het delen: **Instellen → Algemeen → Delen als sjabloon** bewaart een
-bestand (`.thuis.json`) met de lijsten, velden, berekeningen en regels van het project en zijn subprojecten. Er staan
+bestand (`.thuis.json`) met de lijsten, velden, berekeningen, regels en totalen van het project en zijn subprojecten. Er staan
 **geen** items, mensen, rollen, tags of verdelingen in. Eén lijst delen kan ook, onderaan het formulier van die lijst.
 
 Wie het bestand krijgt, kiest bij **Nieuw project → Uit een bestand**, of voegt de lijsten toe aan een bestaand
@@ -262,14 +264,18 @@ veld kan zijn:
 | Mensen en verwijzingen | persoon, personen, eigenaars (wie welk deel heeft), verwijzing en verwijzingen naar andere items |
 | Berekenen | een berekening (zie hieronder) |
 
-Een veld kan een kolom in de lijst zijn, een filter, of verplicht. Bij het kiezen van een veldsoort staat telkens
-wat ze doet. De lijsten van een project gelden ook in zijn subprojecten.
+Een veld kan een kolom in de lijst zijn, een filter, of verplicht. Een datum kan **beginnen met vandaag** (een nieuw
+item krijgt de datum van vandaag). Bij het kiezen van een veldsoort staat telkens wat ze doet. De lijsten van een project gelden ook in zijn subprojecten.
 
 ### Berekeningen
 
-Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn zeven soorten, elk met een voorbeeld in de app:
+Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn acht soorten, elk met een voorbeeld in de app:
 
 - **Rekensom**: Aantal × Prijs, of Totaal × 1,21 (op een andere berekening verder bouwen mag).
+- **Formule**: een eigen som met velden tussen [ ], zoals `[kcal per 100 g] × [Hoeveel] ÷ 100`. Ook haakjes,
+  `afronden(x; 1)`, `min(a; b)`, `max(a; b)` en `als([Aantal] < 3; dan; anders)`. Tik op een veld om het in te
+  voegen; de app bewaart de formule zo dat ze blijft kloppen als je een veld hernoemt. Een getal naast een bedrag telt
+  in euro (`[Prijs] + 2` is twee euro meer).
 - **Vergelijking**: ja als Aantal ≤ Bijna op onder (zo zie en filter je wat je moet kopen).
 - **Dagen tot** een datum ("over 12 dagen"), **tijd sinds** een datum of jaar ("10 jaar"), en **datum plus**
   een vaste tijd of een herhaling (laatst onderhouden + elk jaar = volgende keer).
@@ -279,6 +285,22 @@ Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn zeven soorte
 
 Een berekening telt enkel wat jij mag zien: mag je een veld waarvan ze afhangt niet zien, dan blijft ze leeg. De
 uitleg (i) naast een berekening zegt wat ze uitrekent.
+
+### Totalen
+
+Onderaan het formulier van een lijst stel je **totalen** in (hooguit vier): wat (de som, het gemiddelde, het
+kleinste, het grootste of hoeveel items), van welk getal, bedrag of duur (ook een berekening), en over welke periode:
+alles samen, of per dag, week, maand of jaar volgens een datumveld. Eventueel **apart per** persoon, eigenaar of keuze
+(een bedrag met een verdeling telt per persoon zijn deel), en met een **doel**: "niet meer dan" (een budget, je
+calorieën) of "minstens" (stappen, water).
+
+Op het project staan ze boven de lijst die openstaat: het getal van vandaag (of deze week, maand, jaar), een balk
+naar het doel, staafjes voor de vorige periodes en per persoon of keuze. Ze tellen de items van dat project zoals jij
+ze ziet: een totaal op een veld dat je niet mag zien, krijg je niet.
+
+Het sjabloon **Voeding** zet dit klaar voor calorieën: een lijst Eten met de datum (begint met vandaag), de maaltijd,
+kcal per 100 g, hoeveel gram, en Kcal als formule, met het totaal "Kcal per dag". Een foto van de verpakking vult de
+naam en de kcal per 100 g in (zie hieronder); een doel stel je zelf in bij het totaal.
 
 ### Items
 
@@ -301,7 +323,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`) en regels (`rules`, zie `shared/rules.ts`), als JSON. |
+| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`), regels (`rules`, zie `shared/rules.ts`) en totalen (`totals`, zie `shared/totals.ts`), als JSON. |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
 | `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |

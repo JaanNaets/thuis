@@ -7,6 +7,7 @@
 
 import { cleanFields, fieldKey, MAX_FIELDS, type FieldDef } from "./fields.ts";
 import type { Rule } from "./rules.ts";
+import { MAX_TOTALS, type TotalDef } from "./totals.ts";
 import { isIconKey, type IconKey, type TemplateField, type TemplatePlan, type TypeTemplate } from "./templates.ts";
 import { isTone, type ItemType, type Tone } from "./types.ts";
 
@@ -35,6 +36,11 @@ function withoutPeople(rules: unknown): Rule[] {
     .filter(isObject)
     .slice(0, LIMITS.rules)
     .map(({ default: _people, ...rule }) => rule as Rule);
+}
+
+/** Totalen: enkel de vorm; de API kijkt ze na tegen de velden zodra de lijst er is. */
+function totalsOf(totals: unknown): TotalDef[] {
+  return Array.isArray(totals) ? (totals.filter(isObject).slice(0, MAX_TOTALS) as TotalDef[]) : [];
 }
 
 /** Een sjabloon nakijken (uit een bestand of van de API). Gooit een fout met uitleg. */
@@ -71,6 +77,7 @@ export function parseTemplateFile(raw: unknown): TemplateFile {
       icon: isIconKey(l.icon) ? l.icon : "folder",
       fields: fields.map(({ ref_type, ...f }): TemplateField => (ref_type ? { ...f, ref: ref_type } : f)),
       rules: withoutPeople(l.rules),
+      totals: totalsOf(l.totals),
       ...(l.linked === true ? { linked: true } : {}),
     };
   };
@@ -157,6 +164,7 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
       icon: isIconKey(l.icon) ? l.icon : "folder",
       fields,
       rules: withoutPeople(l.rules),
+      totals: l.totals,
       ...(isLinked ? { linked: true } : {}),
     };
   };

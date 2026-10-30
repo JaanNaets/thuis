@@ -19,6 +19,7 @@ const NAME_PLACEHOLDERS: Record<TemplateKey, string> = {
   wine: "bv. Wijnkelder",
   bikes: "bv. Koersfietsen",
   expenses: "bv. Skireis 2027, Verbouwing badkamer",
+  food: "bv. Voeding, Wat ik eet",
   collection: "bv. Platen, Strips, Gereedschap",
 };
 

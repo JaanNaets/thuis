@@ -115,6 +115,8 @@ export type FieldDef = {
   filter?: boolean;
   /** Moet ingevuld zijn. */
   required?: boolean;
+  /** Datum: een nieuw item begint met vandaag (bv. wat je at). */
+  today?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -208,6 +210,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.column === true) def.column = true;
     if (f.filter === true && FILTERABLE.includes(type)) def.filter = true;
     if (f.required === true && type !== "calc") def.required = true;
+    if (f.today === true && type === "date") def.today = true;
     if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
     return def;
   });

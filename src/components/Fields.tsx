@@ -1295,6 +1295,14 @@ export function FieldsEditor({
                     <input value={f.hint ?? ""} maxLength={160} placeholder="Wat hier hoort" onChange={(e) => update(i, { hint: e.target.value })} />
                   </label>
                   {f.type !== "calc" && <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />}
+                  {f.type === "date" && (
+                    <Switch
+                      checked={Boolean(f.today)}
+                      onChange={(on) => update(i, { today: on })}
+                      label="Begint met vandaag"
+                      hint="Een nieuw item krijgt de datum van vandaag; je kan ze aanpassen."
+                    />
+                  )}
                   <Switch checked={Boolean(f.column)} onChange={(on) => update(i, { column: on })} label="Als kolom in de lijst" />
                   {FILTERABLE.includes(f.type) && (
                     <Switch checked={Boolean(f.filter)} onChange={(on) => update(i, { filter: on })} label="Als filter boven de lijst" />

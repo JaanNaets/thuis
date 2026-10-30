@@ -440,9 +440,13 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
 - Herhaling (`.interval-input`): "elke [3] [maanden]". Duur typ je vrij ("1u30", "90", "1,5 uur"); onder het veld
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
+- Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
+  vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; de API vult niets stil in.
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
   lijsten met hun velden. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
-  met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon. Losse
+  met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
+  uit de bouwstenen (velden, formule, totalen, regels): **Voeding** is een lijst Eten met kcal per 100 g × Hoeveel als
+  formule en het totaal "Kcal per dag", geen eigen code. Losse
   lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
   bij **Instellen → Lijsten → Uit sjabloon**.
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
@@ -457,6 +461,7 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 | Soort | Voorbeeld |
 | --- | --- |
 | Rekensom | Aantal × Prijs; Totaal × 1,21 (een berekening op een berekening mag) |
+| Formule | `[kcal per 100 g] × [Hoeveel] ÷ 100`; met haakjes, `afronden`, `min`, `max` en `als` (`shared/formula.ts`) |
 | Vergelijking (ja/nee) | Aantal ≤ Bijna op onder → "Kopen" |
 | Dagen tot | Garantie tot → "over 138 dagen", "vandaag", "3 dagen geleden" |
 | Tijd sinds | Jaargang → "10 jaar" |
@@ -465,13 +470,39 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 | Samenvatten | Hoeveel, som, gemiddelde, kleinste, grootste: van de items in een Verwijzing(en)-veld, of van de items die hiernaar verwijzen (wat je bij een verkoper uitgaf) |
 
 - `CalcEditor` staat onder ⋯ van het veld: eerst de soort (met de uitleg eronder), dan per soort de velden. Elke
-  keuzelijst toont enkel velden die passen. Wat nog niet klopt, staat er meteen onder in rood (`previewCalcs`);
+  keuzelijst toont enkel velden die passen.
+- Een formule typ je zoals je ze leest (`.formula-input`): velden tussen [ ] met hun **naam**, × en ÷ mogen. Onder
+  het vak staan de velden als kleine tags (`.formula-fields`): een tik voegt `[Naam]` in waar de cursor staat. Bewaard
+  wordt ze met de sleutels (hernoemen breekt niets). Nooit `eval`: een eigen ontleder, met fouten in gewone woorden
+  ("de formule stopt te vroeg", "gebruik ; tussen de delen"). Wat nog niet klopt, staat er meteen onder in rood (`previewCalcs`);
   de API kijkt hetzelfde na (`checkCalcs`) en weigert een kring.
 - De uitkomst toont zoals een veld van die soort (bedrag, datum, ja/nee, getal met eenheid); een opgezocht webadres
   is een link. Ze kan een kolom of filter zijn.
 - Rechten: een berekening telt enkel wat jij mag zien. Mag je een veld waarvan ze afhangt niet zien, dan blijft
   ze leeg (ook een som over gelinkte items als je bij één ervan het veld niet ziet).
 - Opzoeken en samenvatten rekent de API uit (`worker/compute.ts`); in het formulier staan die er niet, op de fiche wel.
+
+### Totalen: `TotalsEditor` en `TotalsCards`
+
+Een **totaal** vat de items van een lijst samen (`shared/totals.ts`): de som, het gemiddelde, het kleinste, het
+grootste of hoeveel, van een getal, bedrag of duur (ook een berekening), alles samen of per dag, week (vanaf
+maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eigenaar of keuze, en met een doel
+("niet meer dan" of "minstens"). Hooguit vier per lijst. Het is een bouwsteen, geen regel: "Kcal per dag",
+"Uitgaven per maand per persoon" en "Gemiddelde score" zijn hetzelfde onderdeel.
+
+| Waar | Hoe |
+| --- | --- |
+| Formulier van een lijst, groep "Totalen" (onder de regel) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode (`Segmented`: Alles · Dag · Week · Maand · Jaar), Volgens, Apart per, Doel (soort + getal). "Totaal toevoegen" als `btn-outline btn-sm` |
+| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per totaal een sectie. Titel = naam, uitleg = de periode ("Vandaag", "Deze week"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`) |
+
+- Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
+- Telt de items van het project zelf (zonder archief), zoals de lezer ze ziet. Een totaal op een veld dat je niet
+  mag zien (of waarvan het afhangt), stuurt de API niet mee (`visibleTotals`).
+- Kleur: zwart is gewoon; rood (`--danger-solid`) enkel boven een "niet meer dan"; groen (`--success-solid`) als
+  "minstens" gehaald is. De tekst eronder zegt het ook ("Nog 307 kcal tot 1.800 kcal", "120 kcal boven 1.800 kcal").
+- Getallen via `formatTotal` (`src/format.ts`): duizendtallen, vanaf 100 zonder kommagetal. Bedragen en duur zoals
+  overal (`formatCents`, `formatDuration`).
+- Bij een bedrag met een verdeling ("apart per Verdeling") telt per persoon zijn deel.
 
 ### Uitleg: `Tip`
 
@@ -486,7 +517,7 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
 ### Sjablonen delen: `ShareTemplate` en `TemplateFilePicker` (`TemplateShare.tsx`)
 
 Een project (met zijn subprojecten) of één lijst kan je delen als bestand (`.thuis.json`, `shared/template-file.ts`):
-de lijsten, velden, berekeningen en regels, **zonder** items, mensen, rollen, tags of standaardverdelingen.
+de lijsten, velden, berekeningen, regels en totalen, **zonder** items, mensen, rollen, tags of standaardverdelingen.
 
 | Waar | Wat |
 | --- | --- |
@@ -673,7 +704,7 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 | Boom klapt open | rij groeit (`grid-template-rows`), kinderen schuiven één voor één in, pijltje draait | 0,4 s |
 | Getal verandert | rolt in de richting van de verandering (`Num`) | 0,38 s |
 | Totaal verschijnt | telt op (`useCountUp`) | 0,9 s |
-| Balk of meter | groeit vanaf links / van onder (`.bar`, `LevelMeter`) | 0,5–1 s |
+| Balk of meter | groeit vanaf links / van onder (`.total-bar`, `.total-history`, `LevelMeter`) | 0,5–1 s |
 | Onderblad, venster, zoekpalet | glijdt (onderblad) of veert (venster, palet) in en uit (`@starting-style`) | 0,4–0,6 s |
 | Toast | veert omhoog, glijdt weg | 0,55 / 0,25 s |
 | Vinkje | tekent zichzelf (`draw`) | 0,4 s |

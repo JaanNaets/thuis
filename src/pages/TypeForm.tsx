@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useParams } from "react-router";
+import { previewCalcs } from "../../shared/calc";
 import type { IconKey } from "../../shared/templates";
 import type { ItemType, ItemTypeInput, ProjectDetail } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -12,6 +13,7 @@ import { PageHead } from "../components/Page";
 import { buildRules, ruleDraft, RulesEditor, type RuleDraft } from "../components/RulesEditor";
 import { ShareTemplate } from "../components/TemplateShare";
 import { useToast } from "../components/Toast";
+import { buildTotals, totalsDraft, TotalsEditor, type TotalDraft } from "../components/TotalsEditor";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
 
@@ -45,6 +47,18 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
   const [icon, setIcon] = useState<IconKey | null>(existing?.icon ?? "folder");
   const [fields, setFields] = useState<FieldDraft[]>(() => fieldsDraft(existing?.fields ?? []));
   const [rule, setRule] = useState<RuleDraft>(() => ruleDraft(existing?.rules ?? []));
+  const [totals, setTotals] = useState<TotalDraft[]>(() => totalsDraft(existing?.totals ?? [], existing?.fields ?? []));
+  // De velden met de uitkomst van hun berekeningen (welke je kan optellen).
+  const self = existing?.id ?? "self";
+  const preview = useMemo(
+    () =>
+      previewCalcs(
+        fields.map((f) => ({ ...f, label: f.label.trim() || "Naamloos veld" })),
+        calcLists.filter((l) => l.id !== self),
+        self,
+      ).fields,
+    [fields, calcLists, self],
+  );
   const { person } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -54,9 +68,20 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
     e.preventDefault();
     const built = buildFields(fields, existing?.id);
     if ("error" in built) return setError(built.error);
-    const rules = buildRules(rule, fields, (key) => built.fields[fields.findIndex((f) => f.key === key)]?.key);
+    const keyOf = (key: string) => built.fields[fields.findIndex((f) => f.key === key)]?.key;
+    const rules = buildRules(rule, fields, keyOf);
     if ("error" in rules) return setError(rules.error);
-    const input: ItemTypeInput = { name, plural: plural || name, name_label: nameLabel || null, icon, fields: built.fields, rules: rules.rules };
+    const sums = buildTotals(totals, preview, keyOf);
+    if ("error" in sums) return setError(sums.error);
+    const input: ItemTypeInput = {
+      name,
+      plural: plural || name,
+      name_label: nameLabel || null,
+      icon,
+      fields: built.fields,
+      rules: rules.rules,
+      totals: sums.totals,
+    };
     setBusy(true);
     setError(undefined);
     try {
@@ -128,6 +153,8 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
         people={p.members.map((m) => m.person)}
         meId={person.id}
       />
+
+      <TotalsEditor value={totals} onChange={setTotals} fields={preview} />
 
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">

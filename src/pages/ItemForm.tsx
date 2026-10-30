@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import { applyRuleDefaults } from "../../shared/rules";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
+import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
 import { attributesDraft, buildAttributes, FieldInputs, fieldSuggestions, LabelScanner, type AttributeDraft } from "../components/Fields";
 import { PageHead } from "../components/Page";
@@ -50,13 +51,14 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const fields = type.fields;
   const people = project.members.map((m) => m.person);
   const editsType = type.access === "edit";
-  // Een nieuw item begint met wat de regels invullen (bij een uitgave: jij betaalde, de gewone verdeling).
+  // Een nieuw item begint met wat de regels invullen (bij een uitgave: jij betaalde, de gewone verdeling) en met
+  // vandaag in een datum die zo ingesteld is.
   const fresh = () =>
     attributesDraft(
       fields,
       applyRuleDefaults(
         type.rules,
-        {},
+        Object.fromEntries(fields.filter((f) => f.today && type.field_access[f.key] === "edit").map((f) => [f.key, today()])),
         people.map((p) => p.id),
         person.id,
         true,

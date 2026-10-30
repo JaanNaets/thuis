@@ -3,6 +3,7 @@
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef } from "./fields";
 import type { Rule, Transfer } from "./rules";
+import type { TotalDef } from "./totals";
 import type { IconKey } from "./templates";
 
 /** Pastelkleuren voor personen, projecten en tags. */
@@ -95,13 +96,23 @@ export type ItemType = {
   fields: FieldDef[];
   /** Wat de app met de velden doet (Kosten verdelen, Terugbetalingen). */
   rules: Rule[];
+  /** Samenvattingen op het project (Kcal per dag, Uitgaven per maand). */
+  totals: TotalDef[];
   sort_order: number;
 };
 
 /** Een lijst zoals jij ze ziet: enkel de velden die je mag zien, en wat je per veld mag. */
 export type ItemTypeView = ItemType & { access: Access; field_access: Record<string, Access>; can_create: boolean; can_delete: boolean };
 
-export type ItemTypeInput = { name: string; plural: string; name_label: string | null; icon: IconKey | null; fields: FieldDef[]; rules: Rule[] };
+export type ItemTypeInput = {
+  name: string;
+  plural: string;
+  name_label: string | null;
+  icon: IconKey | null;
+  fields: FieldDef[];
+  rules: Rule[];
+  totals: TotalDef[];
+};
 
 /**
  * Wie wie nog hoeveel moet in een project (met alles eronder), uit de lijsten met de regel Kosten verdelen of
