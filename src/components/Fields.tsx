@@ -1414,6 +1414,9 @@ export function LabelScanner({
   const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string }>();
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
+  // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
+  const [note, setNote] = useState("");
+  const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
   async function read(chosen: File | undefined) {
@@ -1425,10 +1428,13 @@ export function LabelScanner({
       const pdf = chosen.type === "application/pdf" ? chosen : null;
       const file = pdf ? await (await import("../pdf")).pdfFirstPage(pdf) : chosen;
       const [small, photo] = await Promise.all([prepareForReading(file), prepareUpload(file)]);
-      // Eerst een barcode op de foto zelf: gratis, zonder AI, en exact.
+      // Eerst een barcode op de foto zelf: gratis, zonder AI, en exact. Met uitleg ("ik at de helft") leest de AI
+      // toch de rest, met die barcode erbij.
+      let code: string | undefined;
       if (products && onProduct) {
-        const code = (await detectInImage(file).catch(() => null))?.rawValue;
-        const info = code && isProductCode(code) ? await findProduct(code) : null;
+        const read = (await detectInImage(file).catch(() => null))?.rawValue;
+        code = read && isProductCode(read) ? read : undefined;
+        const info = code && !note.trim() ? await findProduct(code) : null;
         if (info) {
           onProduct(info, code!, photo);
           return found(info);
@@ -1437,6 +1443,9 @@ export function LabelScanner({
       const body = new FormData();
       body.set("image", small);
       body.set("type_id", typeId);
+      if (note.trim()) body.set("note", note.trim());
+      if (code) body.set("code", code);
+      setLast({ file: chosen, note: note.trim() });
       const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
       onResult(scan, photo, pdf);
       setSuggestions(onCreate ? (scan.create ?? []) : []);
@@ -1487,6 +1496,17 @@ export function LabelScanner({
 
   return (
     <div className="scan-buttons">
+      <label className="field">
+        <span className="label">
+          Uitleg voor de AI <span className="optional">· optioneel</span>
+        </span>
+        <input
+          value={note}
+          maxLength={200}
+          placeholder={products ? "bv. ik at de helft, met havermelk" : "bv. enkel de boodschappen, niet de tankbeurt"}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto
@@ -1504,6 +1524,11 @@ export function LabelScanner({
       {input(fileRef, false)}
       {scanning && <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />}
       {status && <Alert tone={status.tone}>{status.text}</Alert>}
+      {last && status?.tone !== "busy" && note.trim() !== last.note && (
+        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => read(last.file)}>
+          <Icon name="repeat" size={15} /> Opnieuw lezen met deze uitleg
+        </button>
+      )}
       {suggestions.map((s) => (
         <div key={s.key} className="scan-suggestion">
           <span className="hint">

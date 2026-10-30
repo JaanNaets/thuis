@@ -637,6 +637,10 @@ projectItems.post("/:id/items/scan", async (c) => {
   const type = (await typesFor(db, access.chain)).find((t) => t.id === typeId);
   if (!type || !canEditType(access.rights, type.id)) throw new ValidationError("Die lijst bestaat hier niet.");
   const image = form.get("image");
+  // Wat wie de foto nam erbij vertelt (bv. "ik at de helft"); kort, en enkel als uitleg bij deze foto.
+  const note = typeof form.get("note") === "string" ? (form.get("note") as string).trim().replace(/\s+/g, " ").slice(0, 200) : "";
+  // Een barcode die de app zelf al op de foto vond (dan zoekt de AI enkel de rest, zoals hoeveel je at).
+  const found = typeof form.get("code") === "string" && isProductCode(form.get("code") as string) ? (form.get("code") as string) : "";
   const empty: LabelScan = { name: null, data: {} };
   if (!(image instanceof File)) return c.json({ error: "Geen foto ontvangen" }, 400);
   if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES)
@@ -685,6 +689,14 @@ ${fields.map(describeField).join("\n")}`;
           role: "user",
           content: [
             { type: "text", text: products ? "Wat is dit?" : "Lees dit." },
+            ...(note
+              ? [
+                  {
+                    type: "text" as const,
+                    text: `Extra uitleg van wie de foto nam (enkel om de velden hierboven juist in te vullen): "${note.replace(/"/g, "'")}"`,
+                  },
+                ]
+              : []),
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
@@ -713,10 +725,10 @@ ${fields.map(describeField).join("\n")}`;
     if (products && scan.name) {
       // Een gekend product: de echte gegevens (op de barcode die de AI las, anders op naam en merk). Lukt dat niet,
       // dan blijft de schatting staan, en dat zeggen we ook.
-      const code = typeof parsed.barcode === "string" ? parsed.barcode.replace(/\D/g, "") : "";
+      const code = found || (typeof parsed.barcode === "string" ? parsed.barcode.replace(/\D/g, "") : "");
       const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : null;
       const info =
-        parsed.kind === "product"
+        parsed.kind === "product" || found
           ? await (isProductCode(code) ? productByCode(db, code) : Promise.resolve(null))
               .then((found) => found ?? productByName(db, scan.name!, brand))
               .catch(() => null)
