@@ -694,10 +694,14 @@ kbd {
   opacity: 0;
 }
 
-/* Ruimte voor de zwevende terugknop. */
+/* Ruimte voor de zwevende terugknop; de offline-melding komt eronder (en de pagina schuift niet verder op). */
 @media (max-width: 767px) {
   .page:has(> .crumb) {
     padding-top: 58px;
+  }
+
+  main:has(.crumb) > .offline-note {
+    margin: 58px 0 -42px;
   }
 }
 

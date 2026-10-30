@@ -24,6 +24,7 @@ import { accessibleProjects, placeholders, projectAccess, requireProject, toItem
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
+import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -303,6 +304,50 @@ projectItems.post("/:id/items", async (c) => {
     ...tagStatements(db, id, input.tag_ids),
   ]);
   return c.json(await loadDetail(c, id), 201);
+});
+
+/**
+ * Een lijst als CSV (?type=), zoals jij ze ziet: de velden die je mag zien, met de berekeningen, de namen van personen
+ * en verwijzingen, en de tags. Zonder archief (?archived=1: enkel het archief).
+ */
+projectItems.get("/:id/items/export", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const types = await typesFor(db, access.chain);
+  const type = types.find((t) => t.id === c.req.query("type") && typeAccess(access.rights, t.id) !== "none");
+  if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
+  const { results } = await db
+    .prepare(`${ITEM_SELECT} WHERE i.project_id = ? AND i.archived = ? AND i.type_id = ? ORDER BY i.name COLLATE NOCASE LIMIT 5000`)
+    .bind(access.project.id, c.req.query("archived") === "1" ? 1 : 0, type.id)
+    .all<ItemRow>();
+  const list = results.map((r) => toItem(r, access.rights, type));
+  await withCalcs(db, me, type, access.rights, list);
+  const { people, refs } = await namesFor(db, me, access.chain, types, list);
+  const person = new Map(people.map((p) => [p.id, p.name]));
+  const ref = new Map(refs.map((r) => [r.id, r.name]));
+  const names = { person: (id: string) => person.get(id) ?? "Onbekend", item: (id: string) => ref.get(id) ?? "Verborgen" };
+  const { results: tags } = await db
+    .prepare(`SELECT id, name FROM tags WHERE project_id IN (${placeholders(access.chain.length)})`)
+    .bind(...access.chain)
+    .all<{ id: string; name: string }>();
+  const tagName = new Map(tags.map((t) => [t.id, t.name]));
+  const fields = type.fields.filter((f) => fieldAccess(access.rights, type.id, f.key) !== "none");
+  const withTags = list.some((i) => i.tag_ids.length);
+  const csv = toCsv([
+    [type.name_label ?? "Naam", ...fields.map((f) => (f.unit ? `${f.label} (${f.unit})` : f.label)), ...(withTags ? ["Tags"] : [])],
+    ...list.map((i) => [
+      i.name,
+      ...fields.map((f) => exportValue(f, i.data[f.key], names)),
+      ...(withTags ? [i.tag_ids.flatMap((id) => tagName.get(id) ?? []).join(", ")] : []),
+    ]),
+  ]);
+  const filename = csvFilename(type.plural, brusselsToday());
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+  });
 });
 
 // ---------- één item ----------

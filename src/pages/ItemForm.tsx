@@ -12,6 +12,7 @@ import { PageHead } from "../components/Page";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
+import { enqueue, isOffline } from "../outbox";
 import { useSession } from "../session";
 
 /** Velden die de app van een foto kan lezen (zie de API). */
@@ -238,6 +239,20 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       }
       navigate(`/items/${saved.id}`, { replace: true });
     } catch (err) {
+      // Geen internet: een nieuw item wacht op dit toestel en gaat mee zodra er internet is (zie outbox.ts).
+      if (!item && isOffline(err)) {
+        await enqueue(project.project.id, input, photo);
+        toast("Bewaard op dit toestel; het gaat mee zodra je internet hebt");
+        if (!next) return navigate(`/projecten/${project.project.id}?lijst=${type.id}`, { replace: true });
+        setName("");
+        setAttrs(fresh());
+        setAuto(new Set());
+        touched.current.clear();
+        setPhoto(null);
+        setOriginal(null);
+        setSaving(false);
+        return;
+      }
       setError((err as Error).message);
       setSaving(false);
     }

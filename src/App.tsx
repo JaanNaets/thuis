@@ -8,6 +8,7 @@ import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ToastProvider } from "./components/Toast";
 import { isKiosk, useIdleReset, useOnline } from "./device";
+import { useOutbox } from "./outbox";
 import { NavLink } from "./router";
 import { SessionContext } from "./session";
 
@@ -23,6 +24,7 @@ export function App() {
 
 function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   const online = useOnline();
+  const outbox = useOutbox(online);
   const { pathname } = useLocation();
   const navigation = useNavigation();
   const [searching, setSearching] = useState(false);
@@ -80,7 +82,9 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
             <main>
               {!online && (
                 <p className="offline-note" role="status">
-                  Offline · wat je bewaart, lukt pas weer met internet
+                  {outbox
+                    ? `Offline · ${outbox === 1 ? "1 nieuw item wacht" : `${outbox} nieuwe items wachten`} op internet`
+                    : "Offline · nieuwe items wachten op dit toestel tot je internet hebt"}
                 </p>
               )}
               <Outlet />

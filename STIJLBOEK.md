@@ -167,7 +167,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 ```
 PageHead                 paneelbalk (kruimelpad, primary, avatar) + kop (titel, badge, uitleg, actions)
 Tabs                     als er weergaves zijn (Wijnen 12 · Wijnhuizen 3 · …)
-toolbar                  zoeken (+ iconknop, bv. importeren)
+toolbar                  zoeken (+ iconknoppen: importeren, exporteren als CSV)
 filters                  filterpillen
 card / card table        de inhoud — of .split met zijkolom en secties
 fab                      + knop (enkel gsm, zelfde actie als primary)
@@ -478,7 +478,11 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   een verkeerd product). Toon altijd welk product gevonden werd.
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
-  lange tekst) is een eigen scherm.
+  lange tekst) is een eigen scherm. Exporteren is een iconknop `download` in de toolbar: een gewone `<a download>`
+  naar `/items/export` (CSV met ; en een komma in getallen, voor Excel; `shared/csv.ts`), met enkel wat jij mag zien.
+- **Offline**: zonder internet staat bovenaan `.offline-note` (op gsm onder de terugknop). Een nieuw item bewaren
+  lukt toch: het wacht op het toestel (`src/outbox.ts`, IndexedDB) en de melding zegt hoeveel er wacht; met internet
+  gaat het vanzelf mee (toast "2 items van offline verstuurd"). Wijzigen en verwijderen vragen internet.
 
 ### Berekeningen: `CalcEditor`
 

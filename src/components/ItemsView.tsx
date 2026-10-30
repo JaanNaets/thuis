@@ -155,6 +155,18 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             <Icon name="table" />
           </Link>
         )}
+        {items.length > 0 && (
+          // Een bestand, geen ander scherm: een gewone link met `download`.
+          <a
+            href={apiUrl(`/projects/${project.project.id}/items/export?type=${type.id}${archived ? "&archived=1" : ""}`)}
+            download
+            className="btn btn-outline btn-icon"
+            aria-label={`${type.plural} exporteren`}
+            title="Exporteren als CSV (voor Excel)"
+          >
+            <Icon name="download" />
+          </a>
+        )}
       </div>
 
       <div className="filters">

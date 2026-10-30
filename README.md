@@ -172,8 +172,9 @@ code, controleer dan:
 - **iPhone**: open de app in Safari → deelknop → **Zet op beginscherm**.
 - **Android**: open de app in Chrome → ⋮ → **App installeren**.
 
-Open de app één keer met internet. Daarna opent ze ook zonder bereik, maar je gegevens laden pas met
-internet. Klantenkaarten offline tonen komt terug als regel bovenop de kern.
+Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je projecten, hun
+lijsten, een item) blijft op het toestel bewaard. Een **nieuw item** bewaren lukt ook offline: het wacht op je
+toestel en gaat vanzelf mee zodra je weer internet hebt. Wijzigen en verwijderen vragen internet.
 
 Wil je **meldingen** (een herinnering 's morgens, zie Herinneren en herhalen): zet ze aan bij **Ik → Meldingen**,
 op elk toestel apart. Op een iPhone of iPad kan dat enkel vanuit de app op je beginscherm (iOS 16.4 of later).
@@ -348,6 +349,12 @@ filter **Kopen: Ja**.
 Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):
 je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
 een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
+
+### Exporteren
+
+Elke lijst heeft rechts van het zoekveld een knop om ze te **exporteren als CSV** (voor Excel, Numbers of Google
+Sheets): de velden die jij mag zien, met de berekeningen, namen van personen en verwijzingen, en de tags. Getallen
+en bedragen zonder eenheid, zodat je ermee kan rekenen. In het archief exporteer je het archief.
 
 ### Opnieuw
 

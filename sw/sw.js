@@ -7,8 +7,17 @@ const PRECACHE = __PRECACHE__;
 const SHELL_CACHE = `shell-${VERSION}`;
 const DATA_CACHE = "data-v1";
 
-// API-routes die offline beschikbaar moeten blijven (jij en je projecten). Al de rest vraagt internet.
-const OFFLINE_API = ["/api/me"];
+// API-routes die offline beschikbaar blijven: jij, je overzicht, een project, zijn lijsten en totalen en een item
+// (wat je eerder bekeek). Zo opent ook het formulier offline; een nieuw item wacht dan in de app (src/outbox.ts).
+// Al de rest vraagt internet.
+const OFFLINE_API = [
+  /^\/api\/me$/,
+  /^\/api\/me\/overview$/,
+  /^\/api\/projects\/[\w-]+$/,
+  /^\/api\/projects\/[\w-]+\/items$/,
+  /^\/api\/projects\/[\w-]+\/totals$/,
+  /^\/api\/items\/[\w-]+$/,
+];
 const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener("install", (event) => {
@@ -45,7 +54,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Netwerk met korte time-out, anders de laatst bewaarde versie.
-  if (OFFLINE_API.includes(url.pathname)) {
+  if (OFFLINE_API.some((pattern) => pattern.test(url.pathname))) {
     event.respondWith(networkFirst(request));
     return;
   }
