@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { cleanRights, NO_RIGHTS, type Rights } from "../shared/access";
+import { canSeeType, cleanRights, NO_RIGHTS, visibleFields, type Rights } from "../shared/access";
 import type { FieldDef } from "../shared/fields";
 import type { TotalDef } from "../shared/totals";
 import type { ItemType, Person, Project, ProjectNode, Tone } from "../shared/types";
@@ -175,6 +175,26 @@ export function toItemType(row: TypeRow): ItemType {
   // De kolom rules (van voor de totalen, zie migratie 0013) gaat niet mee.
   const { rules: _rules, ...rest } = row as TypeRow & { rules?: unknown };
   return { ...rest, fields: parseList<FieldDef>(row.fields), totals: parseList<TotalDef>(row.totals) };
+}
+
+/**
+ * Alle lijsten die je ergens mag zien (hun project is een van jouw projecten), met enkel de velden die je er mag zien:
+ * om naar te verwijzen of uit te tellen vanuit een ander project.
+ */
+export async function visibleLists(db: D1Database, personId: string): Promise<(ItemType & { project_name: string })[]> {
+  const nodes = await accessibleProjects(db, personId);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const { results } = await db
+    .prepare("SELECT * FROM item_types WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, created_at")
+    .bind(JSON.stringify(nodes.map((n) => n.id)))
+    .all<TypeRow>();
+  return results
+    .map(toItemType)
+    .filter((t) => canSeeType(byId.get(t.project_id)!.rights, t.id))
+    .map((t) => {
+      const node = byId.get(t.project_id)!;
+      return { ...t, fields: visibleFields(node.rights, t.id, t.fields), project_name: node.name };
+    });
 }
 
 /** De lijsten die in een project te gebruiken zijn: die van het project zelf en erboven. */

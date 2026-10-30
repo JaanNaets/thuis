@@ -430,7 +430,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `PeoplePicker` | Personen aanvinken: `tag person-chip` (een tag met avatar) |
 | `ItemsSelect` | Meerdere items uit een andere lijst: kleine tags met een kruisje (`.ref-chips`), een keuzelijst eronder |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
-| `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis) |
+| `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een ander project. Je kiest enkel uit items die je mag zien |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto |
@@ -479,6 +479,9 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
   de API kijkt hetzelfde na (`checkCalcs`) en weigert een kring.
 - De uitkomst toont zoals een veld van die soort (bedrag, datum, ja/nee, getal met eenheid); een opgezocht webadres
   is een link. Ze kan een kolom of filter zijn.
+- Een verwijzing en een samenvatting kunnen ook naar een lijst in een ander project dat je ziet; in de keuzelijst
+  staat dan het project erbij ("Verkopers · Slachterijstraat 1"). Wie dat project niet ziet, krijgt op de fiche
+  "Verborgen", en opzoeken of samenvatten blijft voor hem leeg.
 - Rechten: een berekening telt enkel wat jij mag zien. Mag je een veld waarvan ze afhangt niet zien, dan blijft
   ze leeg (ook een som over gelinkte items als je bij één ervan het veld niet ziet).
 - Opzoeken en samenvatten rekent de API uit (`worker/compute.ts`); in het formulier staan die er niet, op de fiche wel.

@@ -41,13 +41,16 @@ function toItem(row: ItemRow, rights: Rights, type: ItemType): Item {
   return { ...rest, data: visibleData(rights, type.id, type.fields, parseData(data)), tag_ids: JSON.parse(tag_json) as string[] };
 }
 
-/** Wat je overal mag zien: per project je rechten, om verwijzingen naar items elders te tonen (of niet). */
+/**
+ * Wat je overal mag zien: per project je rechten, om verwijzingen naar items elders te tonen (of niet). Met `key`:
+ * ook dat veld van het item moet je mogen zien.
+ */
 async function visibility(db: D1Database, personId: string) {
   const nodes = await accessibleProjects(db, personId);
   const rights = new Map(nodes.map((n) => [n.id, n.rights]));
-  return (row: { project_id: string; type_id: string }) => {
+  return (row: { project_id: string; type_id: string }, key?: string) => {
     const r = rights.get(row.project_id);
-    return Boolean(r && typeAccess(r, row.type_id) !== "none");
+    return Boolean(r && typeAccess(r, row.type_id) !== "none" && (!key || fieldAccess(r, row.type_id, key) !== "none"));
   };
 }
 
@@ -78,7 +81,7 @@ async function namesFor(db: D1Database, personId: string, chain: string[], types
       .bind(JSON.stringify([...itemIds]))
       .all<ItemRef>();
     const canSee = await visibility(db, personId);
-    refs = results.filter(canSee);
+    refs = results.filter((r) => canSee(r));
   }
   return { people: members, refs };
 }
@@ -205,15 +208,17 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
   const canSee = candidates.length ? await visibility(db, me) : () => false;
   const allTypes = new Map<string, ItemType>();
   const backlinks: ItemDetail["backlinks"] = [];
-  for (const cand of candidates.filter(canSee)) {
+  for (const cand of candidates.filter((cand) => canSee(cand))) {
     if (!allTypes.has(cand.type_id)) {
       const t = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(cand.type_id).first<TypeRow>();
       if (t) allTypes.set(t.id, toItemType(t));
     }
     const data = parseData(cand.data);
+    // Via een veld dat je daar mag zien.
     const field = allTypes.get(cand.type_id)?.fields.find((f) => {
       const v = data[f.key];
-      return (f.type === "item" && v === id) || (f.type === "items" && Array.isArray(v) && (v as string[]).includes(id));
+      const points = (f.type === "item" && v === id) || (f.type === "items" && Array.isArray(v) && (v as string[]).includes(id));
+      return points && canSee(cand, f.key);
     });
     if (field) backlinks.push({ id: cand.id, name: cand.name, type_id: cand.type_id, project_id: cand.project_id, field_label: field.label });
   }

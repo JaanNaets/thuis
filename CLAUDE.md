@@ -30,7 +30,9 @@ commits en uitleg.
 - Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
   (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
   terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van lijsten, tags, rollen, personen) controleer je
-  tegen de keten van het project (`access.chain`).
+  tegen de keten van het project (`access.chain`). Uitzondering: een verwijzing of samenvatting mag ook naar een lijst
+  in een ander project die de bewerker ziet (`fieldListsFor` → `visibleLists`); wie de items leest, ziet er enkel
+  van wat hij in dat project mag zien (namen, opzoeken, samenvatten en "verwijst hiernaar" kijken per item na).
 - Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
   `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
 - Een use case (verdelen, voorraad, calorieën, …) bouw je bovenop de kern, niet erin: uit velden (die zelf invullen

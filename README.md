@@ -266,7 +266,12 @@ veld kan zijn:
 | Berekenen | een berekening (zie hieronder) |
 
 Een veld kan een kolom in de lijst zijn, een filter, of verplicht. Een datum kan **beginnen met vandaag** (een nieuw
-item krijgt de datum van vandaag). Bij het kiezen van een veldsoort staat telkens wat ze doet. De lijsten van een project gelden ook in zijn subprojecten.
+item krijgt de datum van vandaag), een persoon kan **beginnen met jou**, en een verdeling kan zich **zelf invullen**
+(de gewone verdeling, of gelijk over iedereen). Bij het kiezen van een veldsoort staat telkens wat ze doet. De
+lijsten van een project gelden ook in zijn subprojecten.
+
+Een verwijzing kan ook naar een lijst in een **ander project** wijzen (bv. de Verkopers van Huishouden vanuit een los
+project), als je dat project ziet. Wie er niet in zit, ziet bij dat veld "Verborgen" en kan er niets kiezen.
 
 ### Berekeningen
 
@@ -282,7 +287,8 @@ Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn acht soorten
   een vaste tijd of een herhaling (laatst onderhouden + elk jaar = volgende keer).
 - **Uit een gelinkt item**: een veld van het item waarnaar een verwijzing wijst (het land van het wijnhuis).
 - **Samenvatten**: hoeveel, de som, het gemiddelde, het kleinste of het grootste van gelinkte items, of van de
-  items die naar dit item verwijzen (wat je bij een verkoper uitgaf, en wanneer het laatst).
+  items die naar dit item verwijzen (wat je bij een verkoper uitgaf, en wanneer het laatst), ook vanuit een
+  subproject of een ander project.
 
 Een berekening telt enkel wat jij mag zien: mag je een veld waarvan ze afhangt niet zien, dan blijft ze leeg. De
 uitleg (i) naast een berekening zegt wat ze uitrekent.

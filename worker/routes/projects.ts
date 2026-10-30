@@ -49,6 +49,7 @@ import {
   requireProject,
   toItemType,
   typesFor,
+  visibleLists,
   type ProjectAccess,
   type TypeRow,
 } from "../context";
@@ -88,8 +89,8 @@ function parseProjectInput(body: unknown) {
 }
 
 /**
- * Velden van een lijst nakijken, met verwijzingen naar lijsten die in dit project bestaan (van het project zelf of
- * erboven). "self" verwijst naar de lijst zelf (een plaats die in een andere plaats ligt).
+ * Velden van een lijst nakijken, met verwijzingen naar lijsten die je kan kiezen (zie `fieldListsFor`). "self" verwijst
+ * naar de lijst zelf (een plaats die in een andere plaats ligt).
  */
 function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available): FieldDef[] {
   let fields: FieldDef[];
@@ -113,7 +114,7 @@ function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, ca
   const ids = new Set([...available.map((t) => t.id), selfId]);
   for (const f of fields) {
     if ((f.type === "item" || f.type === "items") && !ids.has(f.ref_type!))
-      throw new ValidationError(`"${f.label}" verwijst naar een lijst die hier niet bestaat`);
+      throw new ValidationError(`"${f.label}" verwijst naar een lijst die niet (meer) bestaat, of die je niet ziet`);
   }
   try {
     return checkCalcs(
@@ -127,8 +128,20 @@ function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, ca
 }
 
 /**
- * De lijsten waarmee een berekening kan werken: van dit project, erboven (zoals bij verwijzingen) en eronder (om
- * te tellen wat naar een lijst verwijst, bv. de wijnen in een subproject bij een verkoper erboven).
+ * De lijsten waar een veld naar kan wijzen of uit kan tellen: van dit project en erboven, eronder (om te tellen wat
+ * naar een lijst verwijst, bv. de wijnen in een subproject bij een verkoper erboven), en elke lijst die je in een
+ * ander project mag zien (met enkel de velden die je daar ziet). Wie de items leest, ziet er enkel van wat hij zelf
+ * mag zien (zie worker/compute.ts en de namen bij een item).
+ */
+async function fieldListsFor(db: D1Database, personId: string, access: ProjectAccess): Promise<{ refs: ItemType[]; calcs: ItemType[] }> {
+  const [chain, tree, elsewhere] = await Promise.all([typesFor(db, access.chain), calcListsFor(db, access), visibleLists(db, personId)]);
+  const add = (lists: ItemType[]) => [...lists, ...elsewhere.filter((l) => !lists.some((x) => x.id === l.id))];
+  return { refs: add(chain), calcs: add(tree) };
+}
+
+/**
+ * De lijsten waarmee een berekening kan werken binnen de boom: van dit project, erboven (zoals bij verwijzingen) en
+ * eronder.
  */
 async function calcListsFor(db: D1Database, access: ProjectAccess): Promise<ItemType[]> {
   const { results } = await db
@@ -781,7 +794,8 @@ projects.post("/:id/types", async (c) => {
   const access = await requireProject(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const id = crypto.randomUUID();
-  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id, await calcListsFor(db, access));
+  const lists = await fieldListsFor(db, c.get("person").id, access);
+  const fields = cleanTypeFields(input.fields, lists.refs, id, lists.calcs);
   await checkDefaultShares(db, fields, access.chain);
   const totals = cleanTypeTotals(input.totals, fields);
   await checkSources(db, c.get("person").id, totals, fields, id);
@@ -853,27 +867,10 @@ projects.get("/:id/all-types", async (c) => {
 
 export const types = new Hono<AppEnv>();
 
-/**
- * Alle lijsten die je ergens mag zien (in elk project waar je in zit), met de velden die je er mag zien: om ook
- * uit een lijst in een ander project te tellen. Een lijst telt als je haar project zelf mag zien.
- */
+/** Alle lijsten die je ergens mag zien, met de velden die je er mag zien (om naar te verwijzen of uit te tellen). */
 types.get("/", async (c) => {
-  const db = c.env.DB;
-  const nodes = await accessibleProjects(db, c.get("person").id);
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const { results } = await db
-    .prepare("SELECT * FROM item_types WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, created_at")
-    .bind(JSON.stringify(nodes.map((n) => n.id)))
-    .all<TypeRow>();
-  return c.json(
-    results
-      .map(toItemType)
-      .filter((t) => canSeeType(byId.get(t.project_id)!.rights, t.id))
-      .map((t) => {
-        const rights = byId.get(t.project_id)!.rights;
-        return { ...t, fields: visibleFields(rights, t.id, t.fields), totals: [], project_name: byId.get(t.project_id)!.name };
-      }),
-  );
+  const lists = await visibleLists(c.env.DB, c.get("person").id);
+  return c.json(lists.map((t) => ({ ...t, totals: [] })));
 });
 
 async function requireType(db: D1Database, personId: string, typeId: string) {
@@ -898,7 +895,8 @@ types.put("/:id", async (c) => {
   const db = c.env.DB;
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
-  const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id, await calcListsFor(db, access));
+  const lists = await fieldListsFor(db, c.get("person").id, access);
+  const fields = cleanTypeFields(input.fields, lists.refs, type.id, lists.calcs);
   await checkDefaultShares(db, fields, access.chain);
   // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
   const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);
@@ -917,10 +915,15 @@ types.delete("/:id", async (c) => {
   const used = await db.prepare("SELECT COUNT(*) AS n FROM items WHERE type_id = ?").bind(type.id).first<{ n: number }>();
   if (used && used.n > 0) throw new ConflictError(`Er staan nog ${used.n} items in deze lijst. Verwijder of verplaats ze eerst.`);
   const { results } = await db
-    .prepare("SELECT name, fields FROM item_types WHERE id != ? AND fields LIKE ?")
+    .prepare("SELECT id, name, fields FROM item_types WHERE id != ? AND fields LIKE ?")
     .bind(type.id, `%${type.id}%`)
-    .all<{ name: string; fields: string }>();
-  const referring = results.filter((r) => (JSON.parse(r.fields) as FieldDef[]).some((f) => f.ref_type === type.id)).map((r) => r.name);
+    .all<{ id: string; name: string; fields: string }>();
+  // Enkel lijsten die je zelf ziet, houden dit tegen (die kan je aanpassen). Een verwijzing uit een project dat je niet
+  // ziet, wijst daarna nergens meer heen: daar kan je niets meer kiezen, en dat project ziet het bij het aanpassen.
+  const seen = new Set((await visibleLists(db, c.get("person").id)).map((l) => l.id));
+  const referring = results
+    .filter((r) => seen.has(r.id) && (JSON.parse(r.fields) as FieldDef[]).some((f) => f.ref_type === type.id))
+    .map((r) => r.name);
   if (referring.length) throw new ConflictError(`${referring.join(", ")} verwijst nog naar deze lijst. Haal dat veld eerst weg.`);
   await db.prepare("DELETE FROM item_types WHERE id = ?").bind(type.id).run();
   return c.body(null, 204);

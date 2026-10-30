@@ -24,17 +24,19 @@ export function TypeFormPage() {
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
   // Alle lijsten met al hun velden (de projectfiche toont enkel wat jij mag zien).
   const { data: all, error: allError } = useApi<FullType[]>(`/projects/${id}/all-types`);
-  // Lijsten in andere projecten die je mag zien (om ook daaruit te tellen).
-  const { data: visible } = useApi<OtherList[]>("/types");
+  // Alle lijsten die je ergens mag zien (om naar te verwijzen of uit te tellen), met de velden die je er ziet.
+  const { data: visible } = useApi<FullType[]>("/types");
   if (error || allError) return <p className="error page">{error ?? allError}</p>;
   if (!p || !all || !visible) return null;
   const existing = typeId ? all.find((t) => t.id === typeId) : undefined;
   if (typeId && !existing) return <p className="error page">Die lijst bestaat niet (meer).</p>;
-  // Verwijzen kan naar lijsten van dit project en erboven.
+  // Verwijzen kan naar lijsten van dit project en erboven, en naar lijsten in andere projecten (met hun project erbij).
   const chain = new Set([p.project.id, ...p.path.map((x) => x.id)]);
-  const refTypes = all.filter((t) => chain.has(t.project_id) && t.id !== typeId);
-  // Een berekening kan ook tellen wat in een subproject naar deze lijst verwijst.
-  const calcLists = all.filter((t) => t.id !== typeId);
+  const inTree = new Set(all.map((t) => t.id));
+  const elsewhere = visible.filter((t) => !inTree.has(t.id)).map((t) => ({ ...t, plural: `${t.plural} · ${t.project_name}` }));
+  const refTypes = [...all.filter((t) => chain.has(t.project_id) && t.id !== typeId), ...elsewhere];
+  // Een berekening kan ook tellen wat in een subproject of een ander project naar deze lijst verwijst.
+  const calcLists = [...all.filter((t) => t.id !== typeId), ...elsewhere];
   return <TypeForm project={p} existing={existing} refTypes={refTypes} calcLists={calcLists} others={visible.filter((t) => t.id !== typeId)} />;
 }
 
