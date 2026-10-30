@@ -66,7 +66,7 @@ export function MePage() {
 
       {tops.length > 1 && (
         <section className="card">
-          <CardHead icon="sliders" title="Volgorde op je overzicht" description="Sleep aan de greep. Dit is enkel jouw volgorde; ze wordt meteen bewaard." />
+          <CardHead title="Volgorde op je overzicht" description="Sleep aan de greep. Dit is enkel jouw volgorde; ze wordt meteen bewaard." />
           <ProjectOrder nodes={tops} />
         </section>
       )}

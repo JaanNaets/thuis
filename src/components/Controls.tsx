@@ -251,17 +251,12 @@ export function LevelMeter({ quantity, min }: { quantity: number; min: number })
   );
 }
 
-/** Kop van een kaart: blauw icoontegeltje, titel, korte uitleg en eventueel een actie rechts. */
-export function CardHead({ icon, title, description, action }: { icon: IconName; title: string; description?: ReactNode; action?: ReactNode }) {
+/** Kop van een kaart of sectie: titel, korte uitleg en eventueel een actie rechts. */
+export function CardHead({ title, description, action }: { title: string; description?: ReactNode; action?: ReactNode }) {
   return (
     <header className="card-head">
       <div style={{ minWidth: 0 }}>
-        <h2 className="card-title">
-          <span className="icon-tile">
-            <Icon name={icon} size={13} />
-          </span>
-          {title}
-        </h2>
+        <h2 className="card-title">{title}</h2>
         {description && <p className="card-desc">{description}</p>}
       </div>
       {action}

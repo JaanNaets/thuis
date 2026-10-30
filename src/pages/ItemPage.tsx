@@ -147,7 +147,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
 
           {texts.map((f) => (
             <section key={f.key} className="card">
-              <CardHead icon="note" title={f.label} />
+              <CardHead title={f.label} />
               <p className="tips-block">{item.data[f.key] as string}</p>
             </section>
           ))}
@@ -158,7 +158,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
             const list = item.data[f.key] as ChecklistEntry[];
             return (
               <section key={f.key} className="card">
-                <CardHead icon="listLines" title={f.label} description={`${list.filter((e) => e.done).length} van ${list.length} klaar`} />
+                <CardHead title={f.label} description={`${list.filter((e) => e.done).length} van ${list.length} klaar`} />
                 <div className="card-body">
                   <ChecklistView value={list} onToggle={item.field_access[f.key] === "edit" ? (next) => saveChecklist(f.key, next) : undefined} />
                 </div>
@@ -168,7 +168,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
 
           {codes.map((f) => (
             <section key={f.key} className="card">
-              <CardHead icon="scan" title={f.label} description="Laat scannen aan de kassa of de balie" />
+              <CardHead title={f.label} description="Laat scannen aan de kassa of de balie" />
               <div className="card-body">
                 <CodeView value={item.data[f.key] as CodeValue} />
               </div>
@@ -177,7 +177,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
 
           {item.backlinks.length > 0 && (
             <section className="card">
-              <CardHead icon="sparkles" title="Verwijst hiernaar" />
+              <CardHead title="Verwijst hiernaar" />
               <ul className="rows">
                 {item.backlinks.map((b) => (
                   <li key={b.id}>
@@ -198,7 +198,6 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
 
           <section className="card">
             <CardHead
-              icon="clock"
               title="Logboek"
               description={item.log.length === 0 ? "Wat er gebeurde, op datum" : undefined}
               action={
@@ -229,7 +228,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
           </section>
 
           <section className="card">
-            <CardHead icon="file" title="Bestanden" description={item.files.length === 0 ? "Factuur, handleiding, garantiebewijs" : undefined} />
+            <CardHead title="Bestanden" description={item.files.length === 0 ? "Factuur, handleiding, garantiebewijs" : undefined} />
             {item.files.length > 0 && (
               <ul className="rows">
                 {item.files.map((f) => (

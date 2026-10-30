@@ -1419,7 +1419,7 @@ export function ItemPhoto({
 
   if (!item.photo_version && !canEdit) return null;
   return (
-    <div className="item-photo">
+    <div className="item-photo" data-empty={!item.photo_version && canEdit}>
       {item.photo_version ? <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt={`Foto van ${item.name}`} /> : null}
       {canEdit && (
         <div className="btn-row">

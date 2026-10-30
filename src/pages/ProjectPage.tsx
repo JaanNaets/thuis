@@ -74,7 +74,6 @@ export function ProjectPage() {
           <BalanceCard key={project.id} projectId={project.id} className="split-lead" />
           <section className="card">
             <CardHead
-              icon="project"
               title="Subprojecten"
               description={p.children.length === 0 ? "Een deel van dit project, met eigen lijsten en mensen" : undefined}
               action={
@@ -113,7 +112,6 @@ export function ProjectPage() {
 
           <section className="card">
             <CardHead
-              icon="users"
               title="Wie"
               action={
                 rights.members && (

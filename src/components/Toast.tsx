@@ -31,8 +31,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toaster" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.leaving ? "leaving" : ""}`}>
-            <Icon name={t.icon} size={16} className="toast-icon" />
+          <div key={t.id} className={`toast ${t.leaving ? "leaving" : ""}`} data-icon={t.icon}>
+            <span className="toast-badge">
+              <Icon name={t.icon} size={12} className="toast-icon" />
+            </span>
             {t.message}
             <button type="button" className="toast-close" onClick={() => dismiss(t.id)} aria-label="Sluiten">
               <Icon name="close" size={14} />

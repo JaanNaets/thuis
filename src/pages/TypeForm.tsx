@@ -136,7 +136,6 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
       {existing && (
         <section className="card">
           <CardHead
-            icon="copy"
             title="Deze lijst delen"
             description="Een bestand met deze lijst en haar velden (en de lijsten waarnaar ze verwijst), zonder items. Iemand anders voegt ze toe met Lijsten → Uit sjabloon."
           />

@@ -129,7 +129,6 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
       {children.length > 1 && (
         <section className="card">
           <CardHead
-            icon="sliders"
             title="Volgorde van de subprojecten"
             description="Sleep aan de greep. Geldt voor iedereen in het project; wordt meteen bewaard."
           />
@@ -138,7 +137,6 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
       )}
       <section className="card">
         <CardHead
-          icon="copy"
           title="Delen als sjabloon"
           description="Een bestand met de lijsten en velden van dit project en zijn subprojecten, zonder items, mensen of rollen. Iemand anders maakt er een nieuw project mee."
         />
@@ -186,7 +184,6 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
   return (
     <section className="card">
       <CardHead
-        icon="folder"
         title="Lijsten"
         description="Elke lijst heeft eigen velden. Ze gelden ook in de subprojecten."
         action={
@@ -363,7 +360,6 @@ function RolesTab({ project: p }: { project: ProjectDetail }) {
   return (
     <section className="card">
       <CardHead
-        icon="users"
         title="Rollen"
         description="Wat iemand mag: het project instellen, mensen beheren, toevoegen, verwijderen, en per lijst en veld niet zien, zien of wijzigen."
         action={
@@ -442,7 +438,6 @@ function PeopleTab({ project: p, onChanged }: { project: ProjectDetail; onChange
   return (
     <section className="card">
       <CardHead
-        icon="users"
         title="Mensen"
         description="Wie erboven zit, zit ook hier, met dezelfde rol, tenzij je hier een andere rol geeft."
         action={
@@ -674,7 +669,6 @@ function TagsTab({ project: p, onChanged }: { project: ProjectDetail; onChanged:
   return (
     <section className="card">
       <CardHead
-        icon="tag"
         title="Tags"
         description="Vrije labels op items, over lijsten heen. Ze gelden ook in de subprojecten."
         action={

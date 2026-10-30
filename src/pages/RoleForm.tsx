@@ -106,7 +106,7 @@ function RoleForm({ project: p, types, existing }: { project: ProjectDetail; typ
 
       {types.length > 0 && (
         <section className="card">
-          <CardHead icon="folder" title="Per lijst en per veld" description="Niet zien: de items van die lijst (of dat veld) blijven verborgen." />
+          <CardHead title="Per lijst en per veld" description="Niet zien: de items van die lijst (of dat veld) blijven verborgen." />
           <ul className="rows role-types">
             {types.map((t) => {
               const entry = rights.types[t.id];

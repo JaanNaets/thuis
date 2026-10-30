@@ -9,17 +9,17 @@ export type { Tone };
 
 type Back = { to: string | -1; label: string };
 
-function BackLink({ back, className, children }: { back: Back; className?: string; children: ReactNode }) {
+function BackLink({ back, className, compact, children }: { back: Back; className?: string; compact?: boolean; children: ReactNode }) {
   const navigate = useNavigate();
   if (back.to === -1) {
     return (
-      <button type="button" className={className} onClick={() => navigate(-1)}>
+      <button type="button" className={className} data-compact={compact} aria-label={compact ? back.label : undefined} onClick={() => navigate(-1)}>
         {children}
       </button>
     );
   }
   return (
-    <Link to={back.to} className={className}>
+    <Link to={back.to} className={className} data-compact={compact} aria-label={compact ? back.label : undefined}>
       {children}
     </Link>
   );
@@ -34,7 +34,8 @@ function BackLink({ back, className, children }: { back: Back; className?: strin
  * - `actions`: acties op het item zelf (bv. Bewerken), rechts naast de titel;
  * - `primary`: de hoofdactie van het scherm. Op tablet rechtsboven in de paneelbalk; op een gsm doet de zwevende + knop dat.
  *
- * Op een gsm verschijnt bovenaan een kleine titelbalk zodra de grote titel uit beeld schuift.
+ * Op een gsm zweeft "terug" als glazen pil linksboven. Zodra de grote titel uit beeld schuift, krimpt die pil tot
+ * een rondje en verschijnt de titel in een glazen pilletje in het midden.
  */
 export function PageHead({
   title,
@@ -101,8 +102,9 @@ export function PageHead({
       </div>
 
       {back && (
-        <BackLink back={back} className="crumb">
-          <Icon name="back" size={16} /> {back.label}
+        <BackLink back={back} className="crumb" compact={compact}>
+          <Icon name="back" size={18} />
+          <span className="crumb-label">{back.label}</span>
         </BackLink>
       )}
       <header className="page-head">
@@ -116,16 +118,8 @@ export function PageHead({
         {actions && <div className="page-actions">{actions}</div>}
       </header>
 
-      <div className="topbar" data-visible={compact} aria-hidden={!compact}>
-        <div className="topbar-side">
-          {back && (
-            <BackLink back={back} className="btn btn-ghost btn-icon btn-sm">
-              <Icon name="back" />
-            </BackLink>
-          )}
-        </div>
+      <div className="topbar" data-visible={compact} aria-hidden="true">
         <span className="topbar-title">{title}</span>
-        <div className="topbar-side" />
       </div>
     </>
   );

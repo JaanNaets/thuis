@@ -37,7 +37,7 @@ export function BalanceCard({ projectId, className }: { projectId: string; class
 
   return (
     <section className={className ? `card ${className}` : "card"}>
-      <CardHead icon="transfer" title="Wie moet wie" />
+      <CardHead title="Wie moet wie" />
       {data.transfers.length > 0 ? (
         <ul className="rows">
           {data.transfers.map((t) => (
