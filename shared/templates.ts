@@ -281,8 +281,8 @@ export const PROJECT_TEMPLATES = {
     icon: "home",
     types: [
       {
-        key: "ding",
-        name: "Ding",
+        key: "item",
+        name: "Item",
         plural: "Bezit",
         icon: "armchair",
         fields: [
