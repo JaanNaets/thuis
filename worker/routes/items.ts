@@ -5,12 +5,15 @@ import {
   applyFieldDefaults,
   cleanAttributes,
   fillsDefaults,
+  INTERVAL_UNITS,
   matchName,
   missingRequired,
   referencedItems,
   referencedPeople,
+  repeatData,
   type Attributes,
   type FieldDef,
+  type IntervalUnit,
 } from "../../shared/fields";
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, ReceiptLines, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
@@ -20,6 +23,7 @@ import { isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../sh
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
+import { brusselsToday } from "../today";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -205,7 +209,7 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
   const { row, access, type, types } = await requireItem(c, id);
   const item = toItem(row, access.rights, type);
   await withCalcs(db, me, type, access.rights, [item]);
-  const [fileRows, logRows] = await db.batch([
+  const [fileRows, logRows, repeatRows] = await db.batch([
     db.prepare("SELECT id, item_id, filename, content_type, size_bytes, created_at FROM item_files WHERE item_id = ? ORDER BY created_at").bind(id),
     db
       .prepare(
@@ -213,7 +217,9 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
          WHERE l.item_id = ? ORDER BY l.happened_on DESC, l.created_at DESC`,
       )
       .bind(id),
+    db.prepare("SELECT every_n, every_unit, next_on FROM repeats WHERE item_id = ?").bind(id),
   ]);
+  const repeat = (repeatRows.results as { every_n: number; every_unit: IntervalUnit; next_on: string }[])[0];
   const names = await namesFor(db, me, access.chain, types, [item]);
   // Wat naar dit item verwijst (de wijnen van een verkoper), enkel wat je mag zien.
   const { results: candidates } = await db
@@ -247,6 +253,8 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
     access: typeAccess(access.rights, type.id),
     field_access: fieldAccessMap(access.rights, type.id, type.fields),
     can_delete: canDelete(access.rights, type.id),
+    repeat: repeat ? { every: { n: repeat.every_n, unit: repeat.every_unit }, next_on: repeat.next_on } : null,
+    can_repeat: canCreate(access.rights, type.id),
   };
 }
 
@@ -925,3 +933,65 @@ search.get("/", async (c) => {
   out.items = results.filter((r) => typeAccess(rights.get(r.project_id)!, r.type_id) !== "none").slice(0, 30);
   return c.json(out);
 });
+
+// ---------- herhalen ----------
+
+/** Dit item herhalen (de huur, elke maand): vanaf `next_on` maakt de app elke keer een nieuw item zoals dit. */
+items.put("/:id/repeat", async (c) => {
+  const { access, type } = await requireItem(c, c.req.param("id"));
+  if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
+  const body = asObject(await c.req.json());
+  const every = asObject(body.every ?? {});
+  const n = every.n;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 100 || typeof every.unit !== "string" || !Object.hasOwn(INTERVAL_UNITS, every.unit))
+    throw new ValidationError("Kies hoe vaak: elke dag, week, maand of jaar.");
+  const next = requiredDate(body, "next_on");
+  // Niet in het verleden: dan zou de app meteen een hele reeks items inhalen.
+  if (next < brusselsToday()) throw new ValidationError("De eerste keer is vandaag of later.");
+  await c.env.DB.prepare(
+    `INSERT INTO repeats (item_id, every_n, every_unit, next_on, created_by) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (item_id) DO UPDATE SET every_n = excluded.every_n, every_unit = excluded.every_unit, next_on = excluded.next_on, created_by = excluded.created_by`,
+  )
+    .bind(c.req.param("id"), n, every.unit, next, c.get("person").id)
+    .run();
+  return c.json(await loadDetail(c, c.req.param("id")));
+});
+
+items.delete("/:id/repeat", async (c) => {
+  const { access, type } = await requireItem(c, c.req.param("id"));
+  if (!canCreate(access.rights, type.id)) throw new ForbiddenError("Je mag deze herhaling niet stoppen.");
+  await c.env.DB.prepare("DELETE FROM repeats WHERE item_id = ?").bind(c.req.param("id")).run();
+  return c.json(await loadDetail(c, c.req.param("id")));
+});
+
+/**
+ * Een herhaling uitvoeren (worker/cron.ts): een nieuw item zoals `source` op `day`, met de rechten die wie de
+ * herhaling instelde nu heeft (mag dat niet meer: een ForbiddenError). Gaat door `prepareData` zoals elk nieuw item.
+ */
+export async function createRepeated(db: D1Database, personId: string, sourceId: string, day: string): Promise<string> {
+  const row = await db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).bind(sourceId).first<ItemRow>();
+  const access = row && (await projectAccess(db, personId, row.project_id));
+  const type = access && (await typesFor(db, access.chain)).find((t) => t.id === row!.type_id);
+  if (!row || !access || !type || !canCreate(access.rights, type.id)) throw new ForbiddenError("Herhalen mag niet meer");
+  // Zoals Opnieuw (`repeatData`), en elke ingevulde datum wordt de dag van de herhaling (de huur van november, een
+  // taak tegen die dag).
+  const source = visibleData(access.rights, type.id, type.fields, parseData(row.data));
+  const copy = repeatData(type.fields, source, day);
+  for (const f of type.fields) if (f.type === "date" && typeof source[f.key] === "string") copy[f.key] = day;
+  const data = await prepareData(db, personId, access, type, copy, {}, true);
+  // Een naam die de app gaf in een logboek ("Water 30/10/2026"): opnieuw met de nieuwe datum.
+  const given = type.fields.some((f) => f.type === "date" && f.today) && /^.+ \d{2}\/\d{2}\/\d{4}$/.test(row.name) && row.name.startsWith(`${type.name} `);
+  const { results: tags } = await db.prepare("SELECT tag_id FROM item_tags WHERE item_id = ?").bind(sourceId).all<{ tag_id: string }>();
+  const id = crypto.randomUUID();
+  await db.batch([
+    db
+      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, row.project_id, type.id, nameOrDefault(type, given ? "" : row.name, data), JSON.stringify(data), personId),
+    ...tagStatements(
+      db,
+      id,
+      tags.map((t) => t.tag_id),
+    ),
+  ]);
+  return id;
+}

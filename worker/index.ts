@@ -3,7 +3,9 @@ import { requireAccess } from "./auth";
 import { withPerson } from "./context";
 import { files, items, projectItems, search } from "./routes/items";
 import { me } from "./routes/me";
+import { daily } from "./cron";
 import { products, rates } from "./routes/products";
+import { push } from "./routes/push";
 import { people, projects, roles, tags, types } from "./routes/projects";
 import type { AppEnv } from "./types";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "./validate";
@@ -27,6 +29,7 @@ app.route("/files", files);
 app.route("/search", search);
 app.route("/products", products);
 app.route("/rates", rates);
+app.route("/push", push);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {
@@ -43,4 +46,8 @@ app.onError((err, c) => {
   return c.json({ error: "Er ging iets mis" }, 500);
 });
 
-export default { fetch: app.fetch } satisfies ExportedHandler<AppEnv["Bindings"]>;
+export default {
+  fetch: app.fetch,
+  // Elke ochtend: herhalen en herinneren (zie cron.ts en de cron in wrangler.jsonc).
+  scheduled: (_event, env, ctx) => ctx.waitUntil(daily(env.DB)),
+} satisfies ExportedHandler<AppEnv["Bindings"]>;

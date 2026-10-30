@@ -50,6 +50,10 @@ commits en uitleg.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
+- **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elke ochtend): een melding gaat enkel naar wie
+  het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
+  die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,
+  `shared/webpush.ts`) gaan enkel naar de pushdiensten van de browsers (`isPushEndpoint`).
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

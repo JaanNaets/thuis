@@ -27,6 +27,7 @@ import {
   type Share,
 } from "../../shared/fields";
 import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
+import { REMIND_DAYS } from "../../shared/remind";
 import { splitCents } from "../../shared/totals";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
@@ -1233,6 +1234,9 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.type === "date" && d.today ? { today: true } : {}),
       ...(d.product && productFits(d.product, d.type) ? { product: d.product } : {}),
       ...(d.type === "number" && d.counter ? { counter: true } : {}),
+      ...((d.type === "date" || d.type === "calc") && d.remind !== undefined
+        ? { remind: d.remind, ...(d.type === "date" && d.yearly ? { yearly: true } : {}) }
+        : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1428,6 +1432,30 @@ export function FieldsEditor({
                       onChange={(on) => update(i, { today: on })}
                       label="Begint met vandaag"
                       hint="Een nieuw item krijgt de datum van vandaag; je kan ze aanpassen."
+                    />
+                  )}
+                  {(f.type === "date" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
+                    <label className="field">
+                      <span className="label">
+                        Herinneren <span className="optional">· met een melding</span>
+                      </span>
+                      <select value={f.remind ?? ""} onChange={(e) => update(i, { remind: e.target.value === "" ? undefined : Number(e.target.value) })}>
+                        <option value="">Niet</option>
+                        {REMIND_DAYS.map((n) => (
+                          <option key={n} value={n}>
+                            {n === 0 ? "Op de dag zelf" : n === 1 ? "1 dag vooraf" : n === 7 ? "1 week vooraf" : n === 14 ? "2 weken vooraf" : n === 30 ? "1 maand vooraf" : `${n} dagen vooraf`}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="hint">'s Morgens een melding voor wie meldingen aanzette (bij Ik) en dit mag zien.</span>
+                    </label>
+                  )}
+                  {f.type === "date" && f.remind !== undefined && (
+                    <Switch
+                      checked={Boolean(f.yearly)}
+                      onChange={(on) => update(i, { yearly: on })}
+                      label="Elk jaar"
+                      hint="Een verjaardag: elk jaar op dezelfde dag, niet enkel die ene datum."
                     />
                   )}
                   {f.type === "number" && (

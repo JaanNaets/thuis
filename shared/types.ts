@@ -1,7 +1,7 @@
 // Gedeelde types tussen de Worker (API) en de React-app.
 
 import type { Access, Rights } from "./access";
-import type { Attributes, FieldDef } from "./fields";
+import type { Attributes, FieldDef, Interval } from "./fields";
 import type { TotalDef, Transfer } from "./totals";
 import type { IconKey } from "./templates";
 
@@ -185,6 +185,9 @@ export type ItemDetail = Item & {
   access: Access;
   field_access: Record<string, Access>;
   can_delete: boolean;
+  /** Herhaalt dit item zich (de huur, elke maand)? `can_repeat`: mag je dat instellen (je mag hier iets toevoegen). */
+  repeat: { every: Interval; next_on: string } | null;
+  can_repeat: boolean;
 };
 
 export type ItemInput = { type_id: string; name: string; data: Record<string, unknown>; tag_ids: string[] };

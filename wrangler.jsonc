@@ -31,6 +31,9 @@
   // Workers AI, om een foto van een etiket te lezen.
   "ai": { "binding": "AI" },
 
+  // Elke ochtend om 6 uur (UTC; 7 of 8 uur in België): herhalingen maken en herinneringen sturen (worker/cron.ts).
+  "triggers": { "crons": ["0 6 * * *"] },
+
   // Cloudflare Access (zie README, stap 3). Geen geheimen: de Worker gebruikt ze enkel
   // om te controleren dat een aanvraag echt via jullie Access-login kwam.
   "vars": {

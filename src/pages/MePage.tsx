@@ -3,6 +3,7 @@ import { formatIban, isValidIban } from "../../shared/payment";
 import type { Person, Tone } from "../../shared/types";
 import { api } from "../api";
 import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
+import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
 import { ProjectOrder } from "../components/ProjectOrder";
 import { useToast } from "../components/Toast";
@@ -79,6 +80,8 @@ export function MePage() {
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
         {busy ? "Opslaan…" : "Opslaan"}
       </SubmitButton>
+
+      <NotificationsCard />
 
       {tops.length > 1 && (
         <section className="card">

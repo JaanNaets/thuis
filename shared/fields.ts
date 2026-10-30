@@ -128,6 +128,10 @@ export type FieldDef = {
   product?: ProductKey;
   /** Getal: met − en + in de lijst (een voorraad), en op te tellen met scannen of een kasticket. */
   counter?: boolean;
+  /** Datum (ook berekend): zoveel dagen vooraf een melding voor wie het mag zien (zie shared/remind.ts). */
+  remind?: number;
+  /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
+  yearly?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -225,6 +229,10 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.me === true && type === "person") def.me = true;
     if (isProductKey(f.product) && productFits(f.product, type)) def.product = f.product;
     if (f.counter === true && type === "number") def.counter = true;
+    if (typeof f.remind === "number" && Number.isInteger(f.remind) && f.remind >= 0 && f.remind <= 365 && (type === "date" || type === "calc")) {
+      def.remind = f.remind;
+      if (f.yearly === true && type === "date") def.yearly = true;
+    }
     if (f.fill === true && type === "share") {
       def.fill = true;
       let shares: Share[] = [];

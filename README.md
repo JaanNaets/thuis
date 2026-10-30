@@ -175,6 +175,9 @@ code, controleer dan:
 Open de app één keer met internet. Daarna opent ze ook zonder bereik, maar je gegevens laden pas met
 internet. Klantenkaarten offline tonen komt terug als regel bovenop de kern.
 
+Wil je **meldingen** (een herinnering 's morgens, zie Herinneren en herhalen): zet ze aan bij **Ik → Meldingen**,
+op elk toestel apart. Op een iPhone of iPad kan dat enkel vanuit de app op je beginscherm (iOS 16.4 of later).
+
 ## 5. Tablet in kioskmodus
 
 1. Open op de tablet één keer `https://thuis.<jouw-subdomein>.workers.dev/?kiosk=1` en meld je aan.
@@ -353,6 +356,24 @@ fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt
 staat **Vaak**: wat je het vaakst toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
 Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
 
+### Herinneren en herhalen
+
+Elke ochtend om 7 uur (8 uur in de zomer) doet de app twee dingen (`worker/cron.ts`, de cron in `wrangler.jsonc`):
+
+- **Herinneren**: een datum kan bij het veld (onder ⋯) **Herinneren** krijgen: op de dag zelf, of 1 dag tot 1 maand
+  vooraf. Ook een berekende datum, zoals de volgende onderhoudsbeurt. Met **Elk jaar** voor een verjaardag. Wie het
+  item en die datum mag zien en meldingen aanzette (bij Ik), krijgt een melding ("Verwarming · Volgende keer: over 7
+  dagen (6/11)"). Hooguit vijf per ochtend, de rest samen in één. De sjablonen zetten het al aan voor onderhoud,
+  opzeggen, verjaardagen, taken en het einde van de garantie.
+- **Herhalen**: op de fiche van een item zet **Herhalen** het om de zoveel dagen, weken, maanden of jaren opnieuw
+  klaar (de huur, elke maand). Op die dag maakt de app een nieuw item zoals dit, met de datum van die dag in elke
+  ingevulde datum, met de rechten van wie het instelde. Mag die daar niets meer toevoegen, dan stopt het. Liep de app
+  een tijd niet, dan haalt ze in (hooguit een maand dagelijks).
+
+Meldingen gaan via de pushdienst van je browser (Google, Apple, Mozilla, Microsoft), versleuteld zodat enkel je
+toestel ze kan lezen (RFC 8291, `shared/webpush.ts`). De sleutels van de app maakt de Worker de eerste keer zelf en
+bewaart ze in de database (`settings`); er is niets in te stellen.
+
 ### Een foto lezen: etiket, kasticket, factuur, product
 
 Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de
@@ -395,6 +416,9 @@ dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en
 | `item_log` | Het logboek van een item. |
 | `ai_usage`, `ai_usage_people` | Hoeveel AI-lezingen er vandaag al waren, samen en per persoon. |
 | `products` | Productinfo uit Open Food Facts (op barcode of naam), 30 dagen bijgehouden. |
+| `settings` | Gegevens van de app zelf: de dagkoersen van de ECB, de sleutels voor meldingen. |
+| `push_subscriptions` | Toestellen die meldingen willen: het adres bij hun pushdienst en hun sleutels. Uitzetten verwijdert de rij. |
+| `repeats` | Items die zich herhalen: om de hoeveel, de volgende keer, en wie het instelde. |
 
 Velden en rechten controleert de Worker, niet de database (`shared/fields.ts` en `shared/access.ts`). Zo kan er
 later een veldsoort of recht bij zonder de tabellen te herbouwen.

@@ -56,6 +56,39 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// Meldingen (web push): de Worker stuurt ze versleuteld; de browser ontsleutelt en geeft ons de tekst.
+self.addEventListener("push", (event) => {
+  let message = { title: "Thuis", body: "", url: "/" };
+  try {
+    message = { ...message, ...event.data.json() };
+  } catch {
+    // Geen leesbare inhoud: toon dan gewoon dat er iets is.
+  }
+  event.waitUntil(
+    self.registration.showNotification(message.title, {
+      body: message.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: message.tag,
+      data: { url: message.url },
+    }),
+  );
+});
+
+// Een tik op een melding: de app openen op die plaats (een open venster hergebruiken).
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = new URL(event.notification.data?.url ?? "/", self.location.origin);
+  if (url.origin !== self.location.origin) return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((w) => new URL(w.url).origin === url.origin);
+      if (open) return open.focus().then((w) => w.navigate(url.href));
+      return self.clients.openWindow(url.href);
+    }),
+  );
+});
+
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;

@@ -11,6 +11,7 @@ import { FileViewer } from "../components/FileViewer";
 import { Icon } from "../components/Icon";
 import { stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
+import { RepeatCard, RepeatForm } from "../components/Repeat";
 import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { formatBytes, formatDate, today } from "../format";
@@ -36,6 +37,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
   const toast = useToast();
   const [viewing, setViewing] = useState<ItemFile>();
   const [logging, setLogging] = useState<LogEntry | "new">();
+  const [repeating, setRepeating] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   if (!p) return null;
@@ -118,6 +120,11 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
                 <Icon name="repeat" size={15} /> Opnieuw
               </Link>
             )}
+            {item.can_repeat && !item.repeat && !item.archived && !p.project.archived && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setRepeating(true)}>
+                <Icon name="clock" size={15} /> Herhalen
+              </button>
+            )}
             {canEditSome && (
               <Link to={`/items/${item.id}/bewerken`} className="btn btn-outline btn-sm">
                 <Icon name="edit" size={15} /> Bewerken
@@ -151,6 +158,8 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
               </p>
             )}
           </section>
+
+          {item.repeat && <RepeatCard repeat={item.repeat} onEdit={item.can_repeat ? () => setRepeating(true) : undefined} />}
 
           {texts.map((f) => (
             <section key={f.key} className="card">
@@ -292,6 +301,19 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
       </div>
 
       {viewing && <FileViewer file={viewing} onClose={() => setViewing(undefined)} />}
+
+      <Sheet open={repeating} title="Herhalen" onClose={() => setRepeating(false)}>
+        {repeating && (
+          <RepeatForm
+            item={item}
+            onDone={(next, message) => {
+              setRepeating(false);
+              mutate(next);
+              toast(message);
+            }}
+          />
+        )}
+      </Sheet>
 
       <Sheet open={Boolean(logging)} title={logging === "new" ? "Nieuwe notitie" : "Notitie"} onClose={() => setLogging(undefined)}>
         {logging && (

@@ -439,12 +439,16 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Boven de knoppen een optioneel veld "Uitleg voor de AI" ("ik at de helft"); pas je dat na het lezen aan, dan verschijnt "Opnieuw lezen met deze uitleg". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
+| `NotificationsCard` (`Notifications.tsx`) | Bij Ik: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
+| `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
 - Herhaling (`.interval-input`): "elke [3] [maanden]". Duur typ je vrij ("1u30", "90", "1,5 uur"); onder het veld
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
   vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; de API vult niets stil in.
+  Een datum (of een berekende datum, zoals Volgende keer) kan **Herinneren** (`remind`, keuzelijst onder ⋯: Niet,
+  Op de dag zelf, 1, 2, 3 dagen, 1 of 2 weken, 1 maand vooraf), met **Elk jaar** (`yearly`) voor een verjaardag.
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
   lijst toont het nieuwste eerst.
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
