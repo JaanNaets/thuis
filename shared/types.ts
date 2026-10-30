@@ -192,6 +192,9 @@ export type ItemInput = { type_id: string; name: string; data: Record<string, un
 export type ImportResult = { created: number; skipped: { row: number; error: string }[] };
 
 /** Wat de app van een etiket of foto las, in de velden van de lijst. */
+/** De lijnen van een kasticket voor een voorraad: per lijn het aantal, en het item waarbij het hoort (als gekend). */
+export type ReceiptLines = { lines: { name: string; quantity: number; item_id: string | null; item_name: string | null }[]; message?: string };
+
 export type LabelScan = {
   name: string | null;
   data: Attributes;

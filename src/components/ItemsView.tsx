@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   formatFieldValue,
   rangeStatus,
@@ -17,6 +17,9 @@ import { namesFrom, ScoreStars } from "./Fields";
 import { Icon, type IconName } from "./Icon";
 import { SkeletonRows, stagger } from "./Motion";
 import { EmptyState } from "./Page";
+import { Sheet } from "./Sheet";
+import { adjust, ReceiptToStock, RowStepper, StockScanner } from "./Stock";
+import { useToast } from "./Toast";
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
 export function fold(s: string): string {
@@ -47,15 +50,30 @@ const isRange = (def: FieldDef) => def.type === "year_range" || def.type === "da
  */
 export function ItemsView({ project, type }: { project: ProjectDetail; type: ItemTypeView }) {
   const [archived, setArchived] = useState(false);
-  const { data, error, loading } = useApi<ItemList>(`/projects/${project.project.id}/items?type=${type.id}${archived ? "&archived=1" : ""}`);
+  const { data, error, loading, reload } = useApi<ItemList>(`/projects/${project.project.id}/items?type=${type.id}${archived ? "&archived=1" : ""}`);
+  const toast = useToast();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [sheet, setSheet] = useState<"scan" | "receipt">();
+  async function step(id: string, delta: number) {
+    try {
+      const value = await adjust(id, counter!.key, delta);
+      setCounts((c) => ({ ...c, [id]: value }));
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string | null>>({});
   const [now, setNow] = useState<Record<string, boolean>>({});
   const [tag, setTag] = useState<string | null>(null);
 
+  // Een voorraad: een getal met − en + dat je mag wijzigen, eventueel met een barcode om te scannen.
+  const counter = type.fields.find((f) => f.type === "number" && f.counter && type.field_access[f.key] === "edit");
+  const codeField = type.fields.find((f) => f.type === "code");
   const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
   const fields = type.fields;
-  const columns = fields.filter((f) => f.column).slice(0, 2);
+  // Het getal met − en + staat al rechts in de rij; dat hoeft geen kolom meer te zijn.
+  const columns = fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, 2);
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
   const items = data?.items ?? [];
@@ -94,7 +112,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   }, [items, query, filters, now, tag, fields, filterFields, rangeFields, names, project.tags, year]);
 
   const filtered = Boolean(query.trim() || tag || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
-  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)"))].join(" ");
+  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(counter && !archived ? ["auto"] : [])].join(" ");
   const icon = (type.icon ?? "folder") as IconName;
 
   return (
@@ -110,6 +128,16 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
+        {counter && codeField && !archived && (
+          <button type="button" className="btn btn-outline btn-icon" aria-label="Scannen" title="Scannen: bijtellen of aftrekken" onClick={() => setSheet("scan")}>
+            <Icon name="scan" />
+          </button>
+        )}
+        {counter && type.can_create && !project.project.archived && (
+          <button type="button" className="btn btn-outline btn-icon" aria-label="Kasticket" title="Een kasticket bijtellen" onClick={() => setSheet("receipt")}>
+            <Icon name="receipt" />
+          </button>
+        )}
         {type.can_create && !project.project.archived && (
           <Link
             to={`/projecten/${project.project.id}/importeren?lijst=${type.id}`}
@@ -179,10 +207,11 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
           <div className="table-head" aria-hidden="true">
             <span>{type.name_label ?? type.name}</span>
             {columns.map((c, k) => (
-              <span key={c.key} className={isNumeric(c) || k === columns.length - 1 ? "end" : undefined}>
+              <span key={c.key} className={isNumeric(c) || (k === columns.length - 1 && !counter) ? "end" : undefined}>
                 {c.label}
               </span>
             ))}
+            {counter && !archived && <span className="end">{counter.label}</span>}
           </div>
           <ul className="rows stagger">
             {shown.map((item, i) => (
@@ -194,11 +223,50 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
                   columns={columns}
                   names={names}
                   tags={project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name)}
+                  stepper={
+                    counter && !archived ? (
+                      <RowStepper
+                        value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
+                        label={item.name}
+                        onStep={(d) => step(item.id, d)}
+                      />
+                    ) : undefined
+                  }
                 />
               </li>
             ))}
           </ul>
         </div>
+      )}
+
+      {counter && (
+        <>
+          <Sheet open={sheet === "scan"} title="Scannen" onClose={() => setSheet(undefined)}>
+            {sheet === "scan" && codeField && (
+              <StockScanner
+                items={items}
+                code={codeField}
+                counter={counter}
+                onChanged={(id, value) => setCounts((c) => ({ ...c, [id]: value }))}
+                onClose={() => setSheet(undefined)}
+              />
+            )}
+          </Sheet>
+          <Sheet open={sheet === "receipt"} title="Kasticket bijtellen" onClose={() => setSheet(undefined)}>
+            {sheet === "receipt" && (
+              <ReceiptToStock
+                projectId={project.project.id}
+                typeId={type.id}
+                counter={counter}
+                onDone={() => {
+                  setSheet(undefined);
+                  setCounts({});
+                  reload();
+                }}
+              />
+            )}
+          </Sheet>
+        </>
       )}
     </>
   );
@@ -211,6 +279,7 @@ function ItemRow({
   columns,
   names,
   tags,
+  stepper,
 }: {
   item: { id: string; name: string; data: Attributes; photo_version: number | null };
   icon: IconName;
@@ -218,34 +287,38 @@ function ItemRow({
   columns: FieldDef[];
   names: Names;
   tags: string[];
+  /** Een voorraad: − en + rechts; de rij is dan geen link, enkel het deel met de naam. */
+  stepper?: ReactNode;
 }) {
   const meta = [...columns.map((c) => formatFieldValue(c, item.data[c.key], names)), ...tags].filter(Boolean).join(" · ");
-  return (
-    <Link to={`/items/${item.id}`} className="row">
-      <span className="cell-main">
-        {item.photo_version ? (
-          <span className="row-media">
-            <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt="" loading="lazy" />
-          </span>
-        ) : (
-          <span className={`row-media tone-${tone}`}>
-            <Icon name={icon} size={16} />
+  const main = (
+    <>
+      {item.photo_version ? (
+        <span className="row-media">
+          <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt="" loading="lazy" />
+        </span>
+      ) : (
+        <span className={`row-media tone-${tone}`}>
+          <Icon name={icon} size={16} />
+        </span>
+      )}
+      <span className="row-main">
+        <span className="row-title">{item.name}</span>
+        {meta && (
+          <span className="row-meta narrow-only">
+            <span>{meta}</span>
           </span>
         )}
-        <span className="row-main">
-          <span className="row-title">{item.name}</span>
-          {meta && (
-            <span className="row-meta narrow-only">
-              <span>{meta}</span>
-            </span>
-          )}
-          {tags.length > 0 && (
-            <span className="row-meta wide-only">
-              <span>{tags.join(" · ")}</span>
-            </span>
-          )}
-        </span>
+        {tags.length > 0 && (
+          <span className="row-meta wide-only">
+            <span>{tags.join(" · ")}</span>
+          </span>
+        )}
       </span>
+    </>
+  );
+  const values = (
+    <>
       {columns.map((c) => {
         const v = item.data[c.key];
         const end = isNumeric(c) ? "col col-end" : "col";
@@ -261,6 +334,22 @@ function ItemRow({
           </span>
         );
       })}
-    </Link>
+    </>
+  );
+  if (!stepper)
+    return (
+      <Link to={`/items/${item.id}`} className="row">
+        <span className="cell-main">{main}</span>
+        {values}
+      </Link>
+    );
+  return (
+    <div className="row">
+      <Link to={`/items/${item.id}`} className="row-link">
+        {main}
+      </Link>
+      {values}
+      {stepper}
+    </div>
   );
 }

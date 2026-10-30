@@ -2042,6 +2042,66 @@ input[type="checkbox"] {
   gap: 10px;
 }
 
+/* Voorraad: − aantal + rechts in een rij (de rij zelf is geen link, enkel de naam). */
+.row-stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.row-stepper-value {
+  min-width: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* Lijnen van een kasticket: aanvinken, naam (met wat erop stond), en hoeveel erbij komt. */
+.receipt-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.receipt-lines li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.receipt-lines li:first-child {
+  border-top: 0;
+}
+
+.receipt-lines li[data-off="true"] .receipt-line-name {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.receipt-line-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-line-check > span {
+  display: grid;
+  min-width: 0;
+}
+
+.receipt-line-name {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Een naam van de foto die nog niet bestaat (een nieuwe winkel): uitleg links, "Toevoegen" rechts. */
 .scan-suggestion {
   display: flex;

@@ -318,6 +318,14 @@ Het sjabloon **Voeding** zet dit klaar voor calorieën: een lijst Eten met de da
 kcal per 100 g, hoeveel gram, en Kcal als formule, met het totaal "Kcal per dag". Een foto van de verpakking vult de
 naam en de kcal per 100 g in (zie hieronder); een doel stel je zelf in bij het totaal.
 
+### Voorraad
+
+Een getal kan **− en + in de lijst** krijgen (in Voorraad: Aantal). Dan tel je bij of af met één tik in de lijst, of
+met **Scannen**: scan de ene barcode na de andere, en de voorraad gaat erbij (gekocht) of eraf (opgebruikt). Met
+**Kasticket** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →
+Melk), jij kiest wat erbij komt, en wat nog niet bestaat, wordt een nieuw product. Wat je moet kopen, zie je met de
+filter **Kopen: Ja**.
+
 ### Items
 
 Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):

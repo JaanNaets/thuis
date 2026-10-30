@@ -126,6 +126,8 @@ export type FieldDef = {
   default_shares?: Share[];
   /** Uit productinfo (een barcode of een herkend product): welk gegeven hier hoort (zie shared/product.ts). */
   product?: ProductKey;
+  /** Getal: met − en + in de lijst (een voorraad), en op te tellen met scannen of een kasticket. */
+  counter?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -222,6 +224,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.today === true && type === "date") def.today = true;
     if (f.me === true && type === "person") def.me = true;
     if (isProductKey(f.product) && productFits(f.product, type)) def.product = f.product;
+    if (f.counter === true && type === "number") def.counter = true;
     if (f.fill === true && type === "share") {
       def.fill = true;
       let shares: Share[] = [];

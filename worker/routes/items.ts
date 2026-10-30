@@ -12,7 +12,7 @@ import {
   type Attributes,
   type FieldDef,
 } from "../../shared/fields";
-import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, SearchResult, Tag } from "../../shared/types";
+import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, ReceiptLines, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { withCalcs } from "../compute";
 import { productByCode, productByName } from "../products";
@@ -310,6 +310,27 @@ items.get("/:id", async (c) => c.json(await loadDetail(c, c.req.param("id"))));
  * Bewaren: wie de lijst mag wijzigen, past naam en tags aan; per veld enkel wat je mag wijzigen. Wie enkel enkele
  * velden mag wijzigen (bv. de score), past enkel die aan.
  */
+/**
+ * Een getal met − of + aanpassen (een voorraad): enkel een getal met `counter` dat je mag wijzigen, nooit onder 0,
+ * in één keer in de database (twee mensen tegelijk overschrijven elkaar niet). Geeft de nieuwe waarde.
+ */
+items.post("/:id/adjust", async (c) => {
+  const { row, access, type } = await requireItem(c, c.req.param("id"), "edit");
+  const obj = asObject(await c.req.json());
+  const def = type.fields.find((f) => f.key === obj.key && f.type === "number" && f.counter);
+  if (!def || fieldAccess(access.rights, type.id, def.key) !== "edit") throw new ForbiddenError("Dit getal mag je hier niet aanpassen.");
+  const delta = obj.delta;
+  if (typeof delta !== "number" || !Number.isFinite(delta) || Math.abs(delta) > 100_000) throw new ValidationError("Geef een aantal om bij te tellen of af te trekken.");
+  const path = `$.${def.key}`;
+  const updated = await c.env.DB.prepare(
+    `UPDATE items SET data = json_set(data, ?2, max(0, round(coalesce(json_extract(data, ?2), 0) + ?3, 3))), updated_at = datetime('now')
+     WHERE id = ?1 RETURNING json_extract(data, ?2) AS value`,
+  )
+    .bind(row.id, path, delta)
+    .first<{ value: number }>();
+  return c.json({ value: updated?.value ?? 0 });
+});
+
 items.put("/:id", async (c) => {
   const input = parseItemInput(await c.req.json());
   const db = c.env.DB;
@@ -744,6 +765,97 @@ ${fields.map(describeField).join("\n")}`;
   } catch (err) {
     console.error("AI kon het etiket niet lezen", err);
     return c.json({ ...empty, message: "Automatisch lezen lukte niet. Vul het zelf in." });
+  }
+});
+
+/**
+ * De lijnen van een kasticket lezen voor een voorraad (een lijst met een getal met − en +): per lijn de naam en het
+ * aantal, gekoppeld aan een item van die lijst in dit project (`matchName`). Er wordt niets bewaard: je kiest daarna
+ * zelf wat erbij komt.
+ */
+projectItems.post("/:id/items/scan-lines", async (c) => {
+  const form = await c.req.formData();
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === form.get("type_id"));
+  const counter = type?.fields.find((f) => f.type === "number" && f.counter && fieldAccess(access.rights, type.id, f.key) === "edit");
+  if (!type || !counter || !canEditType(access.rights, type.id)) throw new ValidationError("In deze lijst kan je geen voorraad bijtellen.");
+  const image = form.get("image");
+  const none: ReceiptLines = { lines: [] };
+  if (!(image instanceof File)) return c.json({ error: "Geen foto ontvangen" }, 400);
+  if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES) return c.json({ ...none, message: "Deze foto kan niet gelezen worden." });
+  const limit = await useAiBudget(c.env, c.get("person").id);
+  if (limit) return c.json({ ...none, message: limit });
+
+  try {
+    const result = await c.env.AI.run(MODEL, {
+      messages: [
+        {
+          role: "system",
+          content: `Je leest een kasticket. Geef elke gekochte lijn:
+- name: de productnaam zoals op het ticket (zonder prijs, code of gewicht)
+- quantity: het aantal stuks (1 als er geen aantal staat, ook bij iets dat per gewicht verkocht wordt)
+Sla totalen, kortingen, statiegeld, zakjes en betaalgegevens over. Geef enkel wat je echt ziet.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Lees de lijnen van dit kasticket." },
+            { type: "image_url", image_url: { url: `data:${image.type};base64,${toBase64(await image.arrayBuffer())}` } },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "lines",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              lines: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: { name: { type: "string" }, quantity: { type: "number" } },
+                  required: ["name", "quantity"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["lines"],
+            additionalProperties: false,
+          },
+        },
+      },
+      chat_template_kwargs: { enable_thinking: false },
+      temperature: 0,
+      max_tokens: 1500,
+    });
+    const content = result.choices?.[0]?.message?.content;
+    const parsed = ((typeof content === "string" ? safeJson(content) : content) ?? {}) as { lines?: unknown };
+    const { results: known } = await db
+      .prepare("SELECT id, name FROM items WHERE project_id = ? AND type_id = ? AND archived = 0")
+      .bind(access.project.id, type.id)
+      .all<{ id: string; name: string }>();
+    // Per item één lijn (twee keer melk op het ticket: 2), wat niet gekend is per naam.
+    const lines = new Map<string, ReceiptLines["lines"][number]>();
+    for (const raw of Array.isArray(parsed.lines) ? parsed.lines.slice(0, 60) : []) {
+      const l = (raw ?? {}) as { name?: unknown; quantity?: unknown };
+      const name = typeof l.name === "string" ? l.name.trim().slice(0, 120) : "";
+      if (!name) continue;
+      const quantity = typeof l.quantity === "number" && l.quantity > 0 ? Math.min(99, Math.round(l.quantity)) || 1 : 1;
+      const id = matchName(known, name);
+      const key = id ?? `nieuw:${name.toLowerCase()}`;
+      const prev = lines.get(key);
+      lines.set(key, { name: prev?.name ?? name, quantity: (prev?.quantity ?? 0) + quantity, item_id: id, item_name: known.find((k) => k.id === id)?.name ?? null });
+    }
+    const out: ReceiptLines = { lines: [...lines.values()] };
+    if (!out.lines.length) out.message = "Geen lijnen gevonden op deze foto.";
+    return c.json(out);
+  } catch (err) {
+    console.error("AI kon het kasticket niet lezen", err);
+    return c.json({ ...none, message: "Automatisch lezen lukte niet." });
   }
 });
 

@@ -1232,6 +1232,7 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.required && d.type !== "calc" ? { required: true } : {}),
       ...(d.type === "date" && d.today ? { today: true } : {}),
       ...(d.product && productFits(d.product, d.type) ? { product: d.product } : {}),
+      ...(d.type === "number" && d.counter ? { counter: true } : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1427,6 +1428,14 @@ export function FieldsEditor({
                       onChange={(on) => update(i, { today: on })}
                       label="Begint met vandaag"
                       hint="Een nieuw item krijgt de datum van vandaag; je kan ze aanpassen."
+                    />
+                  )}
+                  {f.type === "number" && (
+                    <Switch
+                      checked={Boolean(f.counter)}
+                      onChange={(on) => update(i, { counter: on })}
+                      label="Met − en + in de lijst"
+                      hint="Een voorraad: tel bij of af in de lijst, met scannen of met een kasticket."
                     />
                   )}
                   {f.type === "person" && (

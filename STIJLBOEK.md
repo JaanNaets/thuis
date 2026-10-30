@@ -614,6 +614,19 @@ Terugbetalingen zetten het klaar):
 - Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
   echt niet gaat, een eigen onderdeel bovenop de kern.
 
+### Voorraad: `RowStepper`, `StockScanner`, `ReceiptToStock` (`Stock.tsx`)
+
+Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) maakt van een lijst een voorraad:
+
+- In elke rij rechts `− 3 +` (`.row-stepper`); de rij is dan een `div.row` met de naam als `.row-link`. Dat getal is
+  geen kolom meer (het staat al rechts). Elke tik gaat in één keer naar de database (`/items/:id/adjust`, nooit
+  onder 0), zonder toast: het getal zelf is de bevestiging.
+- In de werkbalk twee iconknoppen: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
+  Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
+  resultaat onderaan in beeld. En **Kasticket** (`receipt`): een foto, de lijnen worden gekoppeld aan je items
+  (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij), daarna "Bijtellen".
+- Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
+
 ### Een lijst tonen: `ItemsView`
 
 `<ItemsView project={detail} type={type} />` is één lijst in een project: zoeken, filters uit de velden,

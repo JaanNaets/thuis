@@ -8,10 +8,13 @@ export function BarcodeScanner({
   onResult,
   onClose,
   hint = "Richt de camera op de barcode",
+  continuous = false,
 }: {
   onResult: (r: ScanResult) => void;
   onClose: () => void;
   hint?: string;
+  /** Blijven scannen na een barcode (dezelfde code pas opnieuw na een paar seconden). */
+  continuous?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string>();
@@ -38,13 +41,17 @@ export function BarcodeScanner({
         await video.play();
 
         const detector = await getDetector();
+        let last = { code: "", at: 0 };
         const tick = async () => {
           if (stopped) return;
           try {
             const [hit] = await detector.detect(video);
-            if (hit) {
+            if (hit && !(continuous && hit.rawValue === last.code && Date.now() - last.at < 2500)) {
               navigator.vibrate?.(50);
+              last = { code: hit.rawValue, at: Date.now() };
               onResultRef.current({ rawValue: hit.rawValue, format: hit.format });
+              if (!continuous) return;
+              timer = window.setTimeout(tick, 900);
               return;
             }
           } catch {

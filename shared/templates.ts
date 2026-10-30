@@ -214,7 +214,7 @@ export const PROJECT_TEMPLATES = {
         plural: "Voorraad",
         icon: "package",
         fields: [
-          { key: "aantal", label: "Aantal", type: "number", column: true },
+          { key: "aantal", label: "Aantal", type: "number", column: true, counter: true },
           { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "fles", "pak", "doos", "zak", "pot", "blik", "kg", "l"] },
           { key: "bijna_op", label: "Bijna op onder", type: "number" },
           {
