@@ -1,8 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkCalcs } from "../shared/calc.ts";
-import type { FieldDef } from "../shared/fields.ts";
-import { cleanTotals, computeTotal, periodKey, recentPeriods, renameTotals, totalLabel, visibleTotals } from "../shared/totals.ts";
+import { applyFieldDefaults, cleanFields, type Attributes, type FieldDef } from "../shared/fields.ts";
+import {
+  cleanTotals,
+  computeTotal,
+  isPayments,
+  itemNet,
+  periodKey,
+  recentPeriods,
+  renameTotals,
+  settleUp,
+  sourceMisfit,
+  splitCents,
+  totalLabel,
+  visibleTotals,
+  type TotalDef,
+} from "../shared/totals.ts";
 
 const fields: FieldDef[] = checkCalcs(
   [
@@ -121,10 +135,10 @@ test("totalen: een bedrag verdeeld volgens aandeel", () => {
   const t = computeTotal({ id: "a", agg: "sum", field: "bedrag", period: "all", by: "wie" }, fields, items, "2026-10-30");
   assert.equal(t.current, 4501);
   assert.equal(t.result, "money");
-  // In cent afgerond.
+  // Tot op de cent: samen precies het bedrag (de cent die overschiet, gaat naar wie het dichtst bij zat).
   assert.deepEqual(t.groups, [
     { key: "an", value: 2501 },
-    { key: "jan", value: 1501 },
+    { key: "jan", value: 1500 },
   ]);
 });
 
@@ -138,4 +152,145 @@ test("sjabloon Voeding: formule en totaal kloppen", async () => {
   assert.deepEqual(cleanTotals(list.totals, fields), [{ id: "dag", agg: "sum", field: "kcal", period: "day", date: "datum" }]);
   assert.equal(totalLabel(list.totals![0], fields), "Kcal per dag");
   assert.equal(fields.find((f) => f.key === "datum")?.today, true);
+});
+
+// ---------- saldo en verrekenen (de kostenverdeling) ----------
+
+const costs: FieldDef[] = [
+  { key: "bedrag", label: "Bedrag", type: "money" },
+  { key: "datum", label: "Datum", type: "date" },
+  { key: "door", label: "Betaald door", type: "person", me: true },
+  { key: "voor", label: "Verdeling", type: "share", fill: true },
+  { key: "van", label: "Van", type: "person" },
+  { key: "aan", label: "Aan", type: "person" },
+  { key: "cat", label: "Categorie", type: "select", options: ["Eten", "Huis"] },
+  { key: "dubbel", label: "Dubbel", type: "calc", result: "money", calc: { kind: "math", op: "*", a: { field: "bedrag" }, b: { n: 2 } } },
+];
+const saldo: TotalDef = { id: "saldo", agg: "sum", field: "bedrag", period: "all", by: "door", against: "voor", settle: true, scope: "tree" };
+const terug: TotalDef = { id: "saldo", agg: "sum", field: "bedrag", period: "all", by: "van", against: "aan", settle: true, scope: "tree" };
+const half = [
+  { person_id: "jaan", share: 50 },
+  { person_id: "jana", share: 50 },
+];
+const netOf = (t: TotalDef, rows: Attributes[]) => {
+  const net = new Map<string, number>();
+  for (const data of rows) for (const [k, v] of itemNet(t, costs, data) ?? []) net.set(k, (net.get(k) ?? 0) + v);
+  return net;
+};
+
+test("saldo en verrekenen nakijken", () => {
+  const clean = (raw: unknown) => cleanTotals([raw], costs)[0];
+  assert.deepEqual(clean({ ...saldo, scope: undefined }), saldo);
+  assert.equal(totalLabel(saldo, costs), "Wie moet wie");
+  assert.equal(totalLabel({ id: "a", agg: "sum", field: "bedrag", period: "month", date: "datum", by: "door", against: "voor" }, costs), "Saldo bedrag per maand");
+  assert.ok(isPayments(terug, costs));
+  assert.ok(!isPayments(saldo, costs));
+  const bad = (raw: unknown) => () => clean(raw);
+  assert.throws(bad({ ...saldo, agg: "avg" }), /tegenover: enkel bij een som/);
+  assert.throws(bad({ ...saldo, by: undefined }), /tegenover: enkel bij een som/);
+  assert.throws(bad({ ...saldo, against: "door" }), /ander veld/);
+  assert.throws(bad({ ...saldo, against: "datum" }), /tegenover: kies/);
+  assert.throws(bad({ ...saldo, against: undefined }), /verrekenen: kies apart per/);
+  assert.throws(bad({ ...saldo, field: "dubbel" }), /verrekenen: kies een bedrag/);
+  assert.throws(bad({ ...saldo, by: "cat", against: "voor" }), /persoon of een verdeling/);
+  assert.throws(bad({ ...saldo, period: "month", date: "datum" }), /alles samen/);
+  assert.throws(() => cleanTotals([saldo, { ...terug, id: "b" }], costs), /hooguit één/);
+  // Verrekenen telt altijd ook in de subprojecten.
+  assert.equal(clean({ ...saldo, scope: "project" }).scope, "tree");
+  // Ook uit andere lijsten: ids, hooguit vijf, zonder dubbels.
+  assert.deepEqual(clean({ id: "a", agg: "count", period: "all", sources: ["x", "x", "y"] }).sources, ["x", "y"]);
+  assert.throws(bad({ id: "a", agg: "count", period: "all", sources: ["a", "b", "c", "d", "e", "f"] }), /hooguit 5/);
+  assert.throws(bad({ id: "a", agg: "count", period: "all", sources: [3] }), /ook uit/);
+});
+
+test("een bedrag verdelen tot op de cent", () => {
+  const three = [
+    { person_id: "a", share: 33.33 },
+    { person_id: "b", share: 33.33 },
+    { person_id: "c", share: 33.34 },
+  ];
+  const sum = (m: Map<string, number>) => [...m.values()].reduce((s, v) => s + v, 0);
+  // € 10,00 over drie: wie betaalde, draagt de cent die overschiet.
+  assert.deepEqual(Object.fromEntries(splitCents(1000, three, "a")), { a: 334, b: 333, c: 333 });
+  assert.equal(sum(splitCents(1001, three, "b")), 1001);
+  // Een terugbetaling of korting (negatief) verdeelt net zo.
+  assert.deepEqual(Object.fromEntries(splitCents(-1000, three, "a")), { a: -334, b: -333, c: -333 });
+  assert.equal(splitCents(1000, []).size, 0);
+});
+
+test("wie moet wie: een saldo dat verrekent", () => {
+  // Jaan betaalt € 100 voor twee, Jana € 30 voor twee: Jana moet Jaan € 35.
+  const spent = [
+    { bedrag: 10000, door: "jaan", voor: half },
+    { bedrag: 3000, door: "jana", voor: half },
+  ];
+  const net = netOf(saldo, spent);
+  assert.deepEqual(Object.fromEntries(net), { jaan: 3500, jana: -3500 });
+  assert.deepEqual(settleUp(net), [{ from: "jana", to: "jaan", amount: 3500 }]);
+  // Jana betaalt € 35 terug (Van Jana, Aan Jaan): alles verrekend.
+  for (const [k, v] of itemNet(terug, costs, { bedrag: 3500, van: "jana", aan: "jaan" })!) net.set(k, net.get(k)! + v);
+  assert.deepEqual(settleUp(net), []);
+  // Met drie: wie betaalde draagt de cent, samen altijd 0, zo weinig mogelijk overschrijvingen.
+  const three = netOf(saldo, [
+    { bedrag: 9001, door: "a", voor: [{ person_id: "a", share: 1 }, { person_id: "b", share: 1 }, { person_id: "c", share: 1 }] },
+    { bedrag: 3000, door: "b", voor: [{ person_id: "c", share: 100 }] },
+  ]);
+  assert.equal([...three.values()].reduce((s, v) => s + v, 0), 0);
+  assert.deepEqual(settleUp(three), [{ from: "c", to: "a", amount: 6000 }]);
+  // Een item telt enkel mee als beide kanten iemand hebben (anders kwam het niet op 0 uit).
+  assert.equal(itemNet(saldo, costs, { bedrag: 500, door: "a" }), null);
+  assert.equal(itemNet(saldo, costs, { door: "a", voor: half }), null);
+  assert.equal(itemNet(saldo, costs, { bedrag: 0, door: "a", voor: half }), null);
+  // Op het project: het saldo per persoon (+ krijgt, − moet), zonder wie op 0 staat.
+  const r = computeTotal({ ...saldo, settle: undefined }, costs, spent.map((data) => ({ data })), "2026-10-30");
+  assert.equal(r.current, 13000);
+  assert.deepEqual(r.groups, [
+    { key: "jaan", value: 3500 },
+    { key: "jana", value: -3500 },
+  ]);
+});
+
+test("velden die zelf invullen: jij betaalde, de gewone verdeling", () => {
+  const members = ["jaan", "jana"];
+  assert.deepEqual(applyFieldDefaults(costs, { bedrag: 1000 }, members, "jaan", true), { bedrag: 1000, door: "jaan", voor: half });
+  // Bewerken: wie betaalde blijft leeg als je het leegmaakt; een lege verdeling wordt wel gevuld.
+  assert.deepEqual(applyFieldDefaults(costs, { bedrag: 1000 }, members, "jaan", false), { bedrag: 1000, voor: half });
+  // Wat ingevuld is, blijft; wie niet in het project zit, wordt niet ingevuld.
+  assert.deepEqual(applyFieldDefaults(costs, { door: "jana" }, members, "iemand", true).door, "jana");
+  assert.equal(applyFieldDefaults(costs, {}, members, "iemand", true).door, undefined);
+  // De gewone verdeling, met enkel wie nog in het project zit.
+  const sixty = costs.map((f) => (f.key === "voor" ? { ...f, default_shares: [{ person_id: "jaan", share: 60 }, { person_id: "weg", share: 40 }] } : f));
+  assert.deepEqual(applyFieldDefaults(sixty, {}, members, "jaan", true).voor, [{ person_id: "jaan", share: 100 }]);
+  // Nakijken: enkel bij de juiste soort, en de verdeling in procenten.
+  const [door, voor, tekst] = cleanFields([
+    { key: "door", label: "Door", type: "person", me: true },
+    { key: "voor", label: "Voor", type: "share", fill: true, default_shares: [{ person_id: "a", share: 3 }, { person_id: "b", share: 2 }] },
+    { key: "t", label: "T", type: "text", me: true, fill: true },
+  ]);
+  assert.equal(door.me, true);
+  assert.deepEqual(voor.default_shares, [{ person_id: "a", share: 60 }, { person_id: "b", share: 40 }]);
+  assert.equal(tekst.me, undefined);
+  assert.equal(tekst.fill, undefined);
+});
+
+test("ook uit een lijst in een ander project: dezelfde velden", () => {
+  const t: TotalDef = { id: "a", agg: "sum", field: "bedrag", period: "month", date: "datum", by: "door" };
+  assert.equal(sourceMisfit(t, costs, costs), null);
+  assert.match(sourceMisfit(t, costs, costs.filter((f) => f.key !== "datum"))!, /geen veld "Datum"/);
+  assert.match(sourceMisfit(t, costs, costs.map((f) => (f.key === "bedrag" ? { ...f, type: "number" as const } : f)))!, /ander soort/);
+  assert.match(sourceMisfit(t, costs, costs.map((f) => (f.key === "door" ? { ...f, type: "people" as const } : f)))!, /ander soort/);
+});
+
+test("sjablonen: hun totalen passen bij hun velden", async () => {
+  const { listTemplates, resolveTemplateLists, typeTemplate } = await import("../shared/templates.ts");
+  for (const list of listTemplates()) {
+    if (!list.totals) continue;
+    // Verwijzingen naar andere lijsten doen hier niet ter zake (een totaal telt geen verwijzing).
+    const plans = [{ id: "x", list: { ...list, fields: list.fields.filter((f) => !f.ref) }, refs: {}, calcs: {} }];
+    const fields = resolveTemplateLists(plans, {})["x"];
+    assert.deepEqual(cleanTotals(list.totals, fields), list.totals, list.name);
+  }
+  const settle = typeTemplate("terugbetaling")!;
+  assert.ok(isPayments(settle.totals![0], settle.fields as FieldDef[]));
+  assert.equal(typeTemplate("bestaat-niet"), undefined);
 });

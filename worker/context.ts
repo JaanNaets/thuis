@@ -1,7 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { cleanRights, NO_RIGHTS, type Rights } from "../shared/access";
 import type { FieldDef } from "../shared/fields";
-import type { Rule } from "../shared/rules";
 import type { TotalDef } from "../shared/totals";
 import type { ItemType, Person, Project, ProjectNode, Tone } from "../shared/types";
 import { TONES } from "../shared/types";
@@ -161,7 +160,7 @@ export async function accessibleProjects(db: D1Database, personId: string): Prom
   return nodes;
 }
 
-export type TypeRow = Omit<ItemType, "fields" | "rules" | "totals"> & { fields: string; rules?: string; totals?: string };
+export type TypeRow = Omit<ItemType, "fields" | "totals"> & { fields: string; totals?: string };
 
 function parseList<T>(json: string | undefined): T[] {
   try {
@@ -173,7 +172,9 @@ function parseList<T>(json: string | undefined): T[] {
 }
 
 export function toItemType(row: TypeRow): ItemType {
-  return { ...row, fields: parseList<FieldDef>(row.fields), rules: parseList<Rule>(row.rules), totals: parseList<TotalDef>(row.totals) };
+  // De kolom rules (van voor de totalen, zie migratie 0013) gaat niet mee.
+  const { rules: _rules, ...rest } = row as TypeRow & { rules?: unknown };
+  return { ...rest, fields: parseList<FieldDef>(row.fields), totals: parseList<TotalDef>(row.totals) };
 }
 
 /** De lijsten die in een project te gebruiken zijn: die van het project zelf en erboven. */

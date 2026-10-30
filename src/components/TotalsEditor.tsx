@@ -1,9 +1,24 @@
 import { AGGS, type Agg, NUMERIC, typeOf } from "../../shared/calc";
 import { formatDuration, parseDuration, type FieldDef } from "../../shared/fields";
-import { cleanTotals, GOAL_KINDS, GROUP_TYPES, MAX_TOTALS, renameTotals, totalLabel, type Period, type TotalDef } from "../../shared/totals";
+import {
+  cleanTotals,
+  GOAL_KINDS,
+  GROUP_TYPES,
+  MAX_SOURCES,
+  MAX_TOTALS,
+  renameTotals,
+  SETTLE_TYPES,
+  sourceMisfit,
+  totalLabel,
+  type Period,
+  type TotalDef,
+} from "../../shared/totals";
 import { centsToInput, parseEuro } from "../format";
-import { Segmented } from "./Controls";
+import { Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+
+/** Een lijst uit een ander project (voor "ook uit"). */
+export type OtherList = { id: string; plural: string; project_name: string; fields: FieldDef[] };
 
 /** Een totaal terwijl je het instelt: sleutels van de velden in het formulier, het doel als tekst. */
 export type TotalDraft = {
@@ -16,7 +31,16 @@ export type TotalDraft = {
   by: string;
   goalText: string;
   goal_kind: "max" | "min";
+  scope: "project" | "tree";
+  sources: string[];
+  against: string;
+  settle: boolean;
 };
+
+const SCOPE_OPTIONS = [
+  { value: "project" as const, label: "Dit project" },
+  { value: "tree" as const, label: "Met subprojecten" },
+];
 
 const PERIOD_OPTIONS = [
   { value: "all" as const, label: "Alles" },
@@ -57,7 +81,31 @@ export function totalsDraft(totals: TotalDef[], fields: FieldDef[]): TotalDraft[
     by: t.by ?? "",
     goalText: goalText(t.goal, fields.find((f) => f.key === (t.agg === "count" ? undefined : t.field))),
     goal_kind: t.goal_kind ?? "max",
+    scope: t.scope ?? "project",
+    sources: t.sources ?? [],
+    against: t.against ?? "",
+    settle: Boolean(t.settle),
   }));
+}
+
+/** Van een ontwerp naar een totaal (met de sleutels in het formulier), zonder het na te kijken. */
+function rawTotal(d: TotalDraft, goal?: number): Record<string, unknown> {
+  const sum = d.agg === "sum" && Boolean(d.by);
+  return {
+    id: d.id,
+    label: d.label,
+    agg: d.agg,
+    field: d.agg === "count" ? undefined : d.field,
+    period: d.period,
+    date: d.period === "all" ? undefined : d.date,
+    by: d.by || undefined,
+    against: sum ? d.against || undefined : undefined,
+    settle: sum && Boolean(d.against) && d.settle,
+    scope: d.scope,
+    sources: d.sources,
+    goal,
+    goal_kind: d.goal_kind,
+  };
 }
 
 /**
@@ -74,17 +122,7 @@ export function buildTotals(
     const def = d.agg === "count" ? undefined : fields.find((f) => f.key === d.field);
     const goal = parseGoal(d.goalText, def);
     if (goal !== undefined && !Number.isFinite(goal)) return { error: `${d.label.trim() || `Totaal ${i + 1}`}: het doel is geen getal.` };
-    raw.push({
-      id: d.id,
-      label: d.label,
-      agg: d.agg,
-      field: d.agg === "count" ? undefined : d.field,
-      period: d.period,
-      date: d.period === "all" ? undefined : d.date,
-      by: d.by || undefined,
-      goal,
-      goal_kind: d.goal_kind,
-    });
+    raw.push(rawTotal(d, goal));
   }
   try {
     return { totals: renameTotals(cleanTotals(raw, fields), keyOf) };
@@ -95,9 +133,21 @@ export function buildTotals(
 
 /**
  * Totalen van een lijst: wat de app op het project samenvat (de kcal per dag, wat je per maand uitgaf), eventueel
- * apart per persoon of keuze en met een doel. `fields`: de velden in het formulier, met hun uitkomsten.
+ * apart per persoon of keuze, met een doel, met de subprojecten of ook uit lijsten in andere projecten. Een saldo
+ * (betaald door tegenover de verdeling) kan verrekenen: dat is Wie moet wie. `fields`: de velden in het formulier,
+ * met hun uitkomsten; `others`: de andere lijsten die je mag zien.
  */
-export function TotalsEditor({ value, onChange, fields }: { value: TotalDraft[]; onChange: (v: TotalDraft[]) => void; fields: FieldDef[] }) {
+export function TotalsEditor({
+  value,
+  onChange,
+  fields,
+  others,
+}: {
+  value: TotalDraft[];
+  onChange: (v: TotalDraft[]) => void;
+  fields: FieldDef[];
+  others: OtherList[];
+}) {
   const numbers = fields.filter(countable);
   const dates = fields.filter((f) => typeOf(f) === "date");
   const groups = fields.filter((f) => GROUP_TYPES.includes(f.type));
@@ -120,6 +170,10 @@ export function TotalsEditor({ value, onChange, fields }: { value: TotalDraft[];
         by: "",
         goalText: "",
         goal_kind: "max",
+        scope: "project",
+        sources: [],
+        against: "",
+        settle: false,
       },
     ]);
   };
@@ -137,10 +191,20 @@ export function TotalsEditor({ value, onChange, fields }: { value: TotalDraft[];
         <ul className="fields-editor">
           {value.map((t, i) => {
             const def = fields.find((f) => f.key === t.field);
+            const draft = rawTotal(t) as TotalDef;
             const auto = totalLabel(
-              { id: t.id, agg: t.agg, field: t.agg === "count" ? undefined : t.field, period: t.period, date: t.date },
+              { ...draft, label: undefined },
               fields.map((f) => ({ ...f, label: f.label.trim() || "Naamloos veld" })),
             );
+            // Lijsten met dezelfde velden (op sleutel) die mee kunnen tellen.
+            const fitting = others.filter((l) => t.sources.includes(l.id) || !sourceMisfit(draft, fields, l.fields));
+            const canNet = t.agg === "sum" && Boolean(t.by);
+            const settleable =
+              canNet &&
+              Boolean(t.against) &&
+              def?.type === "money" &&
+              SETTLE_TYPES.includes(fields.find((f) => f.key === t.by)?.type ?? "text") &&
+              SETTLE_TYPES.includes(fields.find((f) => f.key === t.against)?.type ?? "text");
             return (
               <li key={t.id} className="fields-editor-row">
                 <div className="fields-editor-main totals-editor-main">
@@ -186,10 +250,18 @@ export function TotalsEditor({ value, onChange, fields }: { value: TotalDraft[];
                       </label>
                     )}
                   </div>
-                  <div className="field">
-                    <span className="label">Periode</span>
-                    <Segmented label="Periode" value={t.period} onChange={(period) => update(i, { period })} options={PERIOD_OPTIONS} />
-                  </div>
+                  {!t.settle && (
+                    <div className="field">
+                      <span className="label">Periode</span>
+                      <Segmented label="Periode" value={t.period} onChange={(period) => update(i, { period })} options={PERIOD_OPTIONS} />
+                    </div>
+                  )}
+                  {!t.settle && (
+                    <div className="field">
+                      <span className="label">Waar</span>
+                      <Segmented label="Waar" value={t.scope} onChange={(scope) => update(i, { scope })} options={SCOPE_OPTIONS} />
+                    </div>
+                  )}
                   <div className="attr-fields">
                     {t.period !== "all" && (
                       <label className="field">
@@ -217,32 +289,85 @@ export function TotalsEditor({ value, onChange, fields }: { value: TotalDraft[];
                         ))}
                       </select>
                     </label>
+                    {canNet && (
+                      <label className="field">
+                        <span className="label">
+                          Tegenover <span className="optional">· optioneel</span>
+                        </span>
+                        <select value={t.against} onChange={(e) => update(i, { against: e.target.value, settle: e.target.value ? t.settle : false })}>
+                          <option value="">Niets</option>
+                          {groups
+                            .filter((f) => f.key !== t.by)
+                            .map((f) => (
+                              <option key={f.key} value={f.key}>
+                                {f.label || "Nieuw veld"}
+                              </option>
+                            ))}
+                        </select>
+                        <span className="hint">Een saldo: per persoon wat bij Apart per staat, min wat hier staat (betaald door − verdeling).</span>
+                      </label>
+                    )}
+                    {!t.settle && (
+                      <div className="field">
+                        <span className="label">
+                          Doel <span className="optional">· optioneel</span>
+                        </span>
+                        <span className="goal-input">
+                          <select
+                            value={t.goal_kind}
+                            aria-label="Soort doel"
+                            onChange={(e) => update(i, { goal_kind: e.target.value as TotalDraft["goal_kind"] })}
+                          >
+                            {Object.entries(GOAL_KINDS).map(([kind, label]) => (
+                              <option key={kind} value={kind}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            value={t.goalText}
+                            inputMode={typeOf(def) === "duration" ? "text" : "decimal"}
+                            placeholder={typeOf(def) === "money" ? "bv. 400" : typeOf(def) === "duration" ? "bv. 1u30" : "bv. 1800"}
+                            aria-label="Doel"
+                            onChange={(e) => update(i, { goalText: e.target.value })}
+                          />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {settleable && (
+                    <Switch
+                      checked={t.settle}
+                      onChange={(on) => update(i, { settle: on, ...(on ? { period: "all" as const, scope: "tree" as const, goalText: "" } : {}) })}
+                      label="Verrekenen: Wie moet wie"
+                      hint="Op het project: zo weinig mogelijk overschrijvingen, met de subprojecten en de andere lijsten die verrekenen."
+                    />
+                  )}
+                  {fitting.length > 0 && (
                     <div className="field">
                       <span className="label">
-                        Doel <span className="optional">· optioneel</span>
+                        Ook uit <span className="optional">· lijsten met dezelfde velden</span>
                       </span>
-                      <span className="goal-input">
-                        <select
-                          value={t.goal_kind}
-                          aria-label="Soort doel"
-                          onChange={(e) => update(i, { goal_kind: e.target.value as TotalDraft["goal_kind"] })}
-                        >
-                          {Object.entries(GOAL_KINDS).map(([kind, label]) => (
-                            <option key={kind} value={kind}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={t.goalText}
-                          inputMode={typeOf(def) === "duration" ? "text" : "decimal"}
-                          placeholder={typeOf(def) === "money" ? "bv. 400" : typeOf(def) === "duration" ? "bv. 1u30" : "bv. 1800"}
-                          aria-label="Doel"
-                          onChange={(e) => update(i, { goalText: e.target.value })}
-                        />
-                      </span>
+                      <div className="tag-picker">
+                        {fitting.map((l) => {
+                          const on = t.sources.includes(l.id);
+                          return (
+                            <button
+                              key={l.id}
+                              type="button"
+                              className="tag"
+                              aria-pressed={on}
+                              disabled={!on && t.sources.length >= MAX_SOURCES}
+                              onClick={() => update(i, { sources: on ? t.sources.filter((x) => x !== l.id) : [...t.sources, l.id] })}
+                            >
+                              {on && <Icon name="check" size={13} />} {l.plural} · {l.project_name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="hint">Telt ook hun items mee, voor wie die mag zien.</span>
                     </div>
-                  </div>
+                  )}
                 </div>
               </li>
             );

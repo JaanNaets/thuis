@@ -33,11 +33,12 @@ commits en uitleg.
   tegen de keten van het project (`access.chain`).
 - Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
   `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
-- Regels voor een use case (verdelen, voorraad, …) bouw je bovenop de kern, niet erin: als **regel op een lijst**
-  (`shared/rules.ts`: welke velden welke rol hebben, nagekeken met `cleanRules`), als **totaal** op een lijst
-  (`shared/totals.ts`, nagekeken met `cleanTotals`, gefilterd met `visibleTotals`), als sjabloon
-  (`shared/templates.ts`) of veldsoort (`shared/fields.ts`). Een regel telt enkel wat de gebruiker mag zien (de lijst
-  én de velden van de regel), en vult bij bewaren enkel in wat leeg is (`applyRuleDefaults`).
+- Een use case (verdelen, voorraad, calorieën, …) bouw je bovenop de kern, niet erin: uit velden (die zelf invullen
+  wat leeg is: `applyFieldDefaults`), berekeningen en **totalen** op een lijst (`shared/totals.ts`, nagekeken met
+  `cleanTotals`, gefilterd met `visibleTotals`), als sjabloon (`shared/templates.ts`). Kosten verdelen is zo een
+  totaal dat verrekent (`settle`: Wie moet wie). Een totaal rekent de API uit per lezer (`itemsAsSeen` in
+  `worker/compute.ts`): elk item met de rechten van de lezer in zijn eigen project, ook bij subprojecten en lijsten
+  uit andere projecten ("ook uit", nagekeken met `checkSources`).
 - Een **berekening** (veldsoort `calc`, `shared/calc.ts`) wordt nooit bewaard: de API kijkt ze na met `checkCalcs`
   en rekent ze uit bij het lezen (`withCalcs` in `worker/compute.ts`), enkel op wat de lezer mag zien. Opzoeken en
   samenvatten halen andere items op en kijken per item project, lijst en veld na.

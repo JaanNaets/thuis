@@ -10,23 +10,24 @@ import { buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../comp
 import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
-import { buildRules, ruleDraft, RulesEditor, type RuleDraft } from "../components/RulesEditor";
 import { ShareTemplate } from "../components/TemplateShare";
 import { useToast } from "../components/Toast";
-import { buildTotals, totalsDraft, TotalsEditor, type TotalDraft } from "../components/TotalsEditor";
+import { buildTotals, totalsDraft, TotalsEditor, type OtherList, type TotalDraft } from "../components/TotalsEditor";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
 
 type FullType = ItemType & { project_name: string };
 
-/** Een lijst samenstellen: naam, hoe één item heet, icoon, velden en wat de app ermee doet (de regel). */
+/** Een lijst samenstellen: naam, hoe één item heet, icoon, velden en wat de app samenvat (de totalen). */
 export function TypeFormPage() {
   const { id, typeId } = useParams();
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
   // Alle lijsten met al hun velden (de projectfiche toont enkel wat jij mag zien).
   const { data: all, error: allError } = useApi<FullType[]>(`/projects/${id}/all-types`);
+  // Lijsten in andere projecten die je mag zien (om ook daaruit te tellen).
+  const { data: visible } = useApi<OtherList[]>("/types");
   if (error || allError) return <p className="error page">{error ?? allError}</p>;
-  if (!p || !all) return null;
+  if (!p || !all || !visible) return null;
   const existing = typeId ? all.find((t) => t.id === typeId) : undefined;
   if (typeId && !existing) return <p className="error page">Die lijst bestaat niet (meer).</p>;
   // Verwijzen kan naar lijsten van dit project en erboven.
@@ -34,10 +35,22 @@ export function TypeFormPage() {
   const refTypes = all.filter((t) => chain.has(t.project_id) && t.id !== typeId);
   // Een berekening kan ook tellen wat in een subproject naar deze lijst verwijst.
   const calcLists = all.filter((t) => t.id !== typeId);
-  return <TypeForm project={p} existing={existing} refTypes={refTypes} calcLists={calcLists} />;
+  return <TypeForm project={p} existing={existing} refTypes={refTypes} calcLists={calcLists} others={visible.filter((t) => t.id !== typeId)} />;
 }
 
-function TypeForm({ project: p, existing, refTypes, calcLists }: { project: ProjectDetail; existing?: FullType; refTypes: ItemType[]; calcLists: ItemType[] }) {
+function TypeForm({
+  project: p,
+  existing,
+  refTypes,
+  calcLists,
+  others,
+}: {
+  project: ProjectDetail;
+  existing?: FullType;
+  refTypes: ItemType[];
+  calcLists: ItemType[];
+  others: OtherList[];
+}) {
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
@@ -46,7 +59,6 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
   const [nameLabel, setNameLabel] = useState(existing?.name_label ?? "");
   const [icon, setIcon] = useState<IconKey | null>(existing?.icon ?? "folder");
   const [fields, setFields] = useState<FieldDraft[]>(() => fieldsDraft(existing?.fields ?? []));
-  const [rule, setRule] = useState<RuleDraft>(() => ruleDraft(existing?.rules ?? []));
   const [totals, setTotals] = useState<TotalDraft[]>(() => totalsDraft(existing?.totals ?? [], existing?.fields ?? []));
   // De velden met de uitkomst van hun berekeningen (welke je kan optellen).
   const self = existing?.id ?? "self";
@@ -69,8 +81,6 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
     const built = buildFields(fields, existing?.id);
     if ("error" in built) return setError(built.error);
     const keyOf = (key: string) => built.fields[fields.findIndex((f) => f.key === key)]?.key;
-    const rules = buildRules(rule, fields, keyOf);
-    if ("error" in rules) return setError(rules.error);
     const sums = buildTotals(totals, preview, keyOf);
     if ("error" in sums) return setError(sums.error);
     const input: ItemTypeInput = {
@@ -79,7 +89,6 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
       name_label: nameLabel || null,
       icon,
       fields: built.fields,
-      rules: rules.rules,
       totals: sums.totals,
     };
     setBusy(true);
@@ -142,19 +151,19 @@ function TypeForm({ project: p, existing, refTypes, calcLists }: { project: Proj
       </section>
 
       <section className="card form-section">
-        <FieldsEditor value={fields} onChange={setFields} types={refTypes} lists={calcLists} selfLabel={plural || name || "Deze lijst"} selfId={existing?.id} />
+        <FieldsEditor
+          value={fields}
+          onChange={setFields}
+          types={refTypes}
+          lists={calcLists}
+          selfLabel={plural || name || "Deze lijst"}
+          selfId={existing?.id}
+          people={p.members.map((m) => m.person)}
+          meId={person.id}
+        />
       </section>
 
-      <RulesEditor
-        value={rule}
-        onChange={setRule}
-        fields={fields}
-        onAddFields={(added) => setFields((f) => [...f, ...added])}
-        people={p.members.map((m) => m.person)}
-        meId={person.id}
-      />
-
-      <TotalsEditor value={totals} onChange={setTotals} fields={preview} />
+      <TotalsEditor value={totals} onChange={setTotals} fields={preview} others={others} />
 
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">

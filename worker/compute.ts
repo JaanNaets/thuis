@@ -147,3 +147,39 @@ export async function withCalcs(db: D1Database, personId: string, type: ItemType
     for (const def of calcs) if (computed[def.key] !== undefined) item.data[def.key] = computed[def.key];
   }
 }
+
+/** Een item zoals de lezer het ziet, voor een totaal. */
+export type SeenItem = { id: string; project_id: string; data: Attributes };
+
+/**
+ * De items van een lijst in `projectIds` zoals jij ze ziet, voor een totaal: per item je rechten in zijn project.
+ * Mag je daar de lijst of een van `keys` (of iets waarvan die afhangt) niet zien, dan telt het item niet. Met de
+ * berekeningen uitgerekend (enkel als een van `keys` er een is). `rightsOf`: je rechten per project.
+ */
+export async function itemsAsSeen(
+  db: D1Database,
+  personId: string,
+  rightsOf: Map<string, Rights>,
+  list: ItemType,
+  projectIds: string[],
+  keys: string[],
+): Promise<SeenItem[]> {
+  const allowed = projectIds.filter((id) => {
+    const r = rightsOf.get(id);
+    return r && typeAccess(r, list.id) !== "none" && keys.every((k) => fieldDeps(list.fields, k).every((d) => fieldAccess(r, list.id, d) !== "none"));
+  });
+  if (!allowed.length) return [];
+  const { results } = await db
+    .prepare(`SELECT id, project_id, type_id, data FROM items WHERE type_id = ?1 AND archived = 0 AND project_id IN (SELECT value FROM json_each(?2))`)
+    .bind(list.id, JSON.stringify(allowed))
+    .all<Row>();
+  const byProject = new Map<string, Item[]>();
+  for (const row of results) {
+    const rights = rightsOf.get(row.project_id)!;
+    const item = { id: row.id, project_id: row.project_id, type_id: row.type_id, data: visibleData(rights, list.id, list.fields, parse(row.data)) } as Item;
+    byProject.set(row.project_id, [...(byProject.get(row.project_id) ?? []), item]);
+  }
+  const calcs = keys.some((k) => fieldDeps(list.fields, k).some((d) => list.fields.find((f) => f.key === d)?.type === "calc"));
+  if (calcs) for (const [projectId, items] of byProject) await withCalcs(db, personId, list, rightsOf.get(projectId)!, items);
+  return [...byProject.values()].flat().map((i) => ({ id: i.id, project_id: i.project_id, data: i.data }));
+}

@@ -202,15 +202,16 @@ in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het
 
 ### Wie betaalde wat
 
-Een lijst kan een **regel** hebben: dan doet de app iets met haar velden. Kies ze onderaan het formulier van de lijst.
+Kosten verdelen is gebouwd uit gewone velden en een **totaal dat verrekent** (zie Totalen); de sjablonen Huishouden
+en Gedeelde uitgaven zetten het klaar.
 
-- **Kosten verdelen** (Uitgaven in de sjablonen Huishouden en Gedeelde uitgaven): elke uitgave heeft een bedrag,
-  wie betaalde en een verdeling. Een nieuwe uitgave begint met "jij betaalde" en de gewone verdeling van de lijst
-  (bv. 60/40), of gelijk over iedereen in het project. Een cent die niet deelbaar is, draagt wie betaalde.
-- **Terugbetalingen**: geld van iemand aan iemand anders.
+- **Uitgaven**: elke uitgave heeft een bedrag, wie betaalde en een verdeling. Betaald door **begint met jou**, en een
+  lege verdeling wordt de gewone verdeling van de lijst (bv. 60/40), of gelijk over iedereen in het project. Een cent
+  die niet deelbaar is, draagt wie betaalde. Het totaal: de som van Bedrag apart per Betaald door, tegenover Verdeling.
+- **Terugbetalingen**: geld van iemand aan iemand anders (Van tegenover Aan).
 
 Op het project staat dan **Wie moet wie**: zo weinig mogelijk overschrijvingen, met alles uit het project en zijn
-subprojecten. Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
+subprojecten (en uit lijsten in andere projecten als je die bij het totaal kiest). Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
 Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar met één knop klaar. Wat je niet mag zien
 (een lijst, of het bedrag), telt voor jou niet mee.
 
@@ -225,7 +226,7 @@ Lijsten → Uit sjabloon**.
 ### Sjablonen delen
 
 Heb je een project goed ingericht, dan kan je het delen: **Instellen → Algemeen → Delen als sjabloon** bewaart een
-bestand (`.thuis.json`) met de lijsten, velden, berekeningen, regels en totalen van het project en zijn subprojecten. Er staan
+bestand (`.thuis.json`) met de lijsten, velden, berekeningen en totalen van het project en zijn subprojecten. Er staan
 **geen** items, mensen, rollen, tags of verdelingen in. Eén lijst delen kan ook, onderaan het formulier van die lijst.
 
 Wie het bestand krijgt, kiest bij **Nieuw project → Uit een bestand**, of voegt de lijsten toe aan een bestaand
@@ -290,13 +291,19 @@ uitleg (i) naast een berekening zegt wat ze uitrekent.
 
 Onderaan het formulier van een lijst stel je **totalen** in (hooguit vier): wat (de som, het gemiddelde, het
 kleinste, het grootste of hoeveel items), van welk getal, bedrag of duur (ook een berekening), en over welke periode:
-alles samen, of per dag, week, maand of jaar volgens een datumveld. Eventueel **apart per** persoon, eigenaar of keuze
-(een bedrag met een verdeling telt per persoon zijn deel), en met een **doel**: "niet meer dan" (een budget, je
-calorieën) of "minstens" (stappen, water).
+alles samen, of per dag, week, maand of jaar volgens een datumveld. Verder:
+
+- **Waar**: enkel dit project, of met de subprojecten.
+- **Ook uit**: lijsten uit andere projecten met dezelfde velden (bv. de Voeding van twee mensen, of de uitgaven van
+  Huishouden én een skireis). Wie niet in dat andere project zit, ziet er niets van mee.
+- **Apart per** persoon, eigenaar of keuze (een bedrag met een verdeling telt per persoon zijn deel), eventueel
+  **tegenover** een tweede veld: een saldo (betaald door − verdeling = wie nog geld krijgt).
+- **Verrekenen**: zo'n saldo tussen personen wordt Wie moet wie op het project.
+- Een **doel**: "niet meer dan" (een budget, je calorieën) of "minstens" (stappen, water).
 
 Op het project staan ze boven de lijst die openstaat: het getal van vandaag (of deze week, maand, jaar), een balk
-naar het doel, staafjes voor de vorige periodes en per persoon of keuze. Ze tellen de items van dat project zoals jij
-ze ziet: een totaal op een veld dat je niet mag zien, krijg je niet.
+naar het doel, staafjes voor de vorige periodes en per persoon of keuze. De API rekent ze uit zoals jij de items
+ziet, per project met jouw rol daar: een totaal op een veld dat je niet mag zien, krijg je niet.
 
 Het sjabloon **Voeding** zet dit klaar voor calorieën: een lijst Eten met de datum (begint met vandaag), de maaltijd,
 kcal per 100 g, hoeveel gram, en Kcal als formule, met het totaal "Kcal per dag". Een foto van de verpakking vult de
@@ -323,7 +330,7 @@ gaat door dezelfde controle als wat je zelf typt; er wordt nooit iets bewaard zo
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`), regels (`rules`, zie `shared/rules.ts`) en totalen (`totals`, zie `shared/totals.ts`), als JSON. |
+| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`) en totalen (`totals`, zie `shared/totals.ts`), als JSON. |
 | `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
 | `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
 | `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |

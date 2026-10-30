@@ -1,8 +1,16 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { canCreate, canDelete, canEditType, fieldAccess, fieldAccessMap, mergeEditable, typeAccess, visibleData, type Rights } from "../../shared/access";
-import { cleanAttributes, missingRequired, referencedItems, referencedPeople, type Attributes, type FieldDef } from "../../shared/fields";
-import { applyRuleDefaults } from "../../shared/rules";
+import {
+  applyFieldDefaults,
+  cleanAttributes,
+  fillsDefaults,
+  missingRequired,
+  referencedItems,
+  referencedPeople,
+  type Attributes,
+  type FieldDef,
+} from "../../shared/fields";
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { withCalcs } from "../compute";
@@ -93,8 +101,8 @@ async function requireItem(c: Context<AppEnv>, id: string, want: "view" | "edit"
 
 /**
  * De waarden nakijken bij bewaren: enkel velden die je mag wijzigen, verplichte velden ingevuld, en wat je nieuw
- * kiest bij een persoon of verwijzing moet je kennen: iemand uit dit project, een item dat je mag zien. Regels vullen
- * in wat leeg is (bij een uitgave: jij betaalde, de gewone verdeling).
+ * kiest bij een persoon of verwijzing moet je kennen: iemand uit dit project, een item dat je mag zien. Velden vullen
+ * zelf in wat leeg is (bij een uitgave: jij betaalde, de gewone verdeling; zie `applyFieldDefaults`).
  */
 async function prepareData(
   db: D1Database,
@@ -107,7 +115,7 @@ async function prepareData(
 ): Promise<Attributes> {
   const clean = cleanAttributes(type.fields, incoming);
   const merged = mergeEditable(access.rights, type.id, type.fields, existing, clean);
-  const data = type.rules.length ? applyRuleDefaults(type.rules, merged, await membersOf(db, access.chain), personId, isNew) : merged;
+  const data = fillsDefaults(type.fields) ? applyFieldDefaults(type.fields, merged, await membersOf(db, access.chain), personId, isNew) : merged;
   const changed = (key: string) => JSON.stringify(data[key]) !== JSON.stringify(existing[key]);
 
   const people = referencedPeople(
@@ -490,7 +498,8 @@ projectItems.post("/:id/items/import", async (c) => {
   const seen = new Set(existing.map((e) => key(e.name, parseData(e.data))));
   const tagIds = new Map(tagRows.map((t) => [t.name.toLowerCase(), t.id]));
   const newTags: D1PreparedStatement[] = [];
-  const members = type.rules.length ? await membersOf(db, access.chain) : [];
+  // Wat velden zelf invullen (jij betaalde, de gewone verdeling), ook voor velden die je niet importeert.
+  const members = fillsDefaults(type.fields) ? await membersOf(db, access.chain) : [];
 
   const result: ImportResult = { created: 0, skipped: [] };
   const statements: D1PreparedStatement[] = [];
@@ -499,7 +508,7 @@ projectItems.post("/:id/items/import", async (c) => {
     const r = (raw && typeof raw === "object" ? raw : {}) as { name?: unknown; data?: unknown; tags?: unknown };
     const name = typeof r.name === "string" ? r.name.trim().slice(0, 200) : "";
     if (!name) return result.skipped.push({ row, error: "Geen naam" });
-    const data = applyRuleDefaults(type.rules, cleanAttributes(fields, r.data), members, me, true);
+    const data = applyFieldDefaults(type.fields, cleanAttributes(fields, r.data), members, me, true);
     const missing = missingRequired(fields, data);
     if (missing.length) return result.skipped.push({ row, error: `${missing[0].label} ontbreekt` });
     if (seen.has(key(name, data))) return result.skipped.push({ row, error: "Staat er al in" });

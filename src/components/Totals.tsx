@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { formatDuration, type FieldDef, type FieldType } from "../../shared/fields";
-import { computeTotal, totalLabel, type Period, type TotalDef } from "../../shared/totals";
-import type { ItemList, ItemTypeView } from "../../shared/types";
+import { totalLabel, type Period, type TotalDef, type TotalResult } from "../../shared/totals";
+import type { ItemTypeView } from "../../shared/types";
 import { useApi } from "../api";
 import { formatCents, formatTotal, today } from "../format";
 import { CardHead } from "./Controls";
@@ -26,46 +26,37 @@ function show(value: number, result: FieldType, unit?: string): string {
   return unit ? `${formatTotal(value)} ${unit}` : formatTotal(value);
 }
 
+/** Totalen die een eigen kaart krijgen (een saldo dat verrekent, staat in Wie moet wie). */
+export const shownTotals = (type: ItemTypeView) => type.totals.filter((t) => !t.settle);
+
 /**
- * De totalen van de lijst die openstaat (Kcal per dag, Uitgaven per maand), uit de items van dit project zoals jij
- * ze ziet. Elk totaal is een sectie in de zijkolom; op gsm staan ze boven de lijst.
+ * De totalen van de lijst die openstaat (Kcal per dag, Uitgaven per maand). De API rekent ze uit zoals jij de items
+ * ziet: in dit project, eventueel met de subprojecten en lijsten uit andere projecten. Elk totaal is een sectie in de
+ * zijkolom; op gsm staan ze boven de lijst.
  */
 export function TotalsCards({ projectId, type, className }: { projectId: string; type: ItemTypeView; className?: string }) {
-  const { data } = useApi<ItemList>(`/projects/${projectId}/items?type=${type.id}`);
+  const { data } = useApi<{ id: string; result: TotalResult }[]>(`/projects/${projectId}/totals?type=${type.id}&today=${today()}`);
   if (!data) return null;
-  const names = new Map(data.people.map((p) => [p.id, p.name]));
   return (
     <>
-      {type.totals.map((t) => (
-        <TotalCard key={t.id} total={t} fields={type.fields} items={data.items} name={(key) => names.get(key) ?? key} className={className} />
-      ))}
+      {data.map(({ id, result }) => {
+        const t = shownTotals(type).find((x) => x.id === id);
+        return t && <TotalCard key={id} total={t} result={result} fields={type.fields} className={className} />;
+      })}
     </>
   );
 }
 
-function TotalCard({
-  total: t,
-  fields,
-  items,
-  name,
-  className,
-}: {
-  total: TotalDef;
-  fields: FieldDef[];
-  items: ItemList["items"];
-  name: (key: string) => string;
-  className?: string;
-}) {
-  const r = computeTotal(t, fields, items, today());
+function TotalCard({ total: t, result: r, fields, className }: { total: TotalDef; result: TotalResult; fields: FieldDef[]; className?: string }) {
   const unit = t.agg === "count" ? undefined : fields.find((f) => f.key === t.field)?.unit;
   // Optellen bij het verschijnen; een gewoon getal op een decimaal.
   const scale = r.result === "number" ? 10 : 1;
   const counted = useCountUp(Math.round((r.current ?? 0) * scale)) / scale;
   const current = r.current ?? 0;
   const goal = t.goal;
-  // Per persoon toont de naam; per keuze de keuze zelf.
-  const byType = fields.find((f) => f.key === t.by)?.type;
-  const groupName = (key: string) => (byType === "person" || byType === "people" || byType === "share" ? name(key) : key);
+  // Bij een saldo: + krijgt nog, − moet nog.
+  const signed = (v: number) => (!t.against ? show(v, r.result, unit) : v > 0 ? `+ ${show(v, r.result, unit)}` : `− ${show(-v, r.result, unit)}`);
+  const where = [NOW[t.period], t.scope === "tree" && "met subprojecten", t.sources?.length && "ook uit andere projecten"].filter(Boolean).join(" · ");
 
   let goalText = "";
   let state = "";
@@ -84,7 +75,7 @@ function TotalCard({
 
   return (
     <section className={className ? `card total-card ${className}` : "card total-card"}>
-      <CardHead title={totalLabel(t, fields)} description={NOW[t.period]} />
+      <CardHead title={totalLabel(t, fields)} description={where} />
       <div className="card-body total-body">
         <p className="total-value">{r.current === undefined ? "—" : show(counted, r.result, unit)}</p>
         {goal !== undefined && (
@@ -130,8 +121,8 @@ function TotalCard({
           <ul className="total-groups">
             {r.groups.slice(0, 6).map((g) => (
               <li key={g.key}>
-                <span>{groupName(g.key)}</span>
-                <span className="total-group-value">{show(g.value, r.result, unit)}</span>
+                <span>{g.label ?? g.key}</span>
+                <span className="total-group-value">{signed(g.value)}</span>
               </li>
             ))}
           </ul>

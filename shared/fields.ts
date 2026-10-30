@@ -117,6 +117,12 @@ export type FieldDef = {
   required?: boolean;
   /** Datum: een nieuw item begint met vandaag (bv. wat je at). */
   today?: boolean;
+  /** Persoon: een nieuw item begint met jou (bv. wie betaalde), als je in het project zit. */
+  me?: boolean;
+  /** Personen met aandeel: leeg = verdelen, volgens de gewone verdeling of anders gelijk over iedereen in het project. */
+  fill?: boolean;
+  /** De gewone verdeling bij `fill` (procenten, samen 100). */
+  default_shares?: Share[];
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -211,6 +217,17 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.filter === true && FILTERABLE.includes(type)) def.filter = true;
     if (f.required === true && type !== "calc") def.required = true;
     if (f.today === true && type === "date") def.today = true;
+    if (f.me === true && type === "person") def.me = true;
+    if (f.fill === true && type === "share") {
+      def.fill = true;
+      let shares: Share[] = [];
+      try {
+        shares = normalizeShares(f.default_shares ?? null);
+      } catch {
+        throw new Error(`${label}: de gewone verdeling klopt niet (samen 100%, elk een deel)`);
+      }
+      if (shares.length) def.default_shares = shares;
+    }
     if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
     return def;
   });
@@ -666,6 +683,32 @@ export function normalizeShares(raw: unknown): Share[] {
   const total = list.reduce((sum, o) => sum + o.share, 0);
   return list.map((o) => ({ person_id: o.person_id, share: Math.round((o.share / total) * 10000) / 100 }));
 }
+
+/** Een lege verdeling: de gewone (wie nog in het project zit), anders gelijk over iedereen. */
+export function defaultShares(preferred: Share[] | undefined, members: string[]): Share[] {
+  const kept = (preferred ?? []).filter((s) => members.includes(s.person_id));
+  if (kept.length) return normalizeShares(kept);
+  return members.length ? normalizeShares(members.map((id) => ({ person_id: id }))) : [];
+}
+
+/**
+ * Wat velden zelf invullen als het leeg is: een verdeling (`fill`) altijd, en bij een nieuw item jij in een persoon
+ * met `me` (als je in het project zit). Wat ingevuld is, blijft. `members`: wie in het project zit.
+ */
+export function applyFieldDefaults(fields: FieldDef[], data: Attributes, members: string[], me: string, isNew: boolean): Attributes {
+  const out = { ...data };
+  for (const f of fields) {
+    if (f.type === "person" && f.me && isNew && out[f.key] === undefined && members.includes(me)) out[f.key] = me;
+    if (f.type === "share" && f.fill && out[f.key] === undefined) {
+      const shares = defaultShares(f.default_shares, members);
+      if (shares.length) out[f.key] = shares;
+    }
+  }
+  return out;
+}
+
+/** Of velden iets invullen (dan heb je wie in het project zit nodig). */
+export const fillsDefaults = (fields: FieldDef[]) => fields.some((f) => (f.type === "person" && f.me) || (f.type === "share" && f.fill));
 
 /** "Jana", "Jana en Jaan", "Jana 60% · Jaan 40%". */
 export function sharesText(shares: Share[], name: (id: string) => string): string {

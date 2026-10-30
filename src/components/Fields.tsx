@@ -1084,10 +1084,10 @@ export function fieldSuggestions(defs: FieldDef[], items: { data: Attributes }[]
 
 // ---------- de velden van een lijst samenstellen ----------
 
-export type FieldDraft = FieldDef & { isNew?: boolean; optionsText: string; open?: boolean };
+export type FieldDraft = FieldDef & { isNew?: boolean; optionsText: string; open?: boolean; sharesDraft?: SharesDraft };
 
 export function fieldsDraft(defs: FieldDef[]): FieldDraft[] {
-  return defs.map((d) => ({ ...d, optionsText: (d.options ?? []).join(", ") }));
+  return defs.map((d) => ({ ...d, optionsText: (d.options ?? []).join(", "), ...(d.type === "share" ? { sharesDraft: sharesDraft(d.default_shares) } : {}) }));
 }
 
 /**
@@ -1119,6 +1119,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
     if (d.type === "select" && options.length === 0) return { error: `Geef de keuzes voor ${label}, gescheiden door komma's.` };
     if ((d.type === "item" || d.type === "items") && !d.ref_type) return { error: `Kies naar welke lijst ${label} verwijst.` };
     if (d.type === "calc" && !d.calc) return { error: `Kies wat ${label} uitrekent.` };
+    const shares = d.type === "share" && d.fill ? buildShares(d.sharesDraft ?? sharesDraft(undefined)) : [];
+    if (shares === undefined) return { error: `${label}: de gewone verdeling is samen 100%, en elk een deel.` };
     fields.push({
       key: rename(d.key),
       label,
@@ -1131,6 +1133,9 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.column ? { column: true } : {}),
       ...(d.filter && FILTERABLE.includes(d.type) ? { filter: true } : {}),
       ...(d.required && d.type !== "calc" ? { required: true } : {}),
+      ...(d.type === "date" && d.today ? { today: true } : {}),
+      ...(d.type === "person" && d.me ? { me: true } : {}),
+      ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
     });
   }
@@ -1149,6 +1154,8 @@ export function FieldsEditor({
   lists = types,
   selfLabel,
   selfId,
+  people,
+  meId,
 }: {
   value: FieldDraft[];
   onChange: (v: FieldDraft[]) => void;
@@ -1157,6 +1164,9 @@ export function FieldsEditor({
   selfLabel: string;
   /** De lijst zelf (bij bewerken); bij een nieuwe lijst verwijst "self" naar zichzelf. */
   selfId?: string;
+  /** Wie in het project zit (voor een gewone verdeling), en jij. */
+  people: Person[];
+  meId: string;
 }) {
   const counter = useRef(0);
   const self = selfId ?? "self";
@@ -1302,6 +1312,34 @@ export function FieldsEditor({
                       label="Begint met vandaag"
                       hint="Een nieuw item krijgt de datum van vandaag; je kan ze aanpassen."
                     />
+                  )}
+                  {f.type === "person" && (
+                    <Switch
+                      checked={Boolean(f.me)}
+                      onChange={(on) => update(i, { me: on })}
+                      label="Begint met jou"
+                      hint="Een nieuw item krijgt wie het toevoegt, bv. wie betaalde."
+                    />
+                  )}
+                  {f.type === "share" && (
+                    <Switch
+                      checked={Boolean(f.fill)}
+                      onChange={(on) => update(i, { fill: on })}
+                      label="Leeg = verdelen"
+                      hint="Blijft het leeg, dan krijgt het de gewone verdeling (of gelijk over iedereen in het project)."
+                    />
+                  )}
+                  {f.type === "share" && f.fill && (
+                    <div className="field">
+                      <span className="label">Gewone verdeling</span>
+                      <SharesField
+                        people={people}
+                        meId={meId}
+                        value={f.sharesDraft ?? sharesDraft(undefined)}
+                        onChange={(sharesDraft) => update(i, { sharesDraft })}
+                      />
+                      <span className="hint">Niemand apart: gelijk over iedereen in het project.</span>
+                    </div>
                   )}
                   <Switch checked={Boolean(f.column)} onChange={(on) => update(i, { column: on })} label="Als kolom in de lijst" />
                   {FILTERABLE.includes(f.type) && (

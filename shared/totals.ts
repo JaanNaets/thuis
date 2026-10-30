@@ -2,8 +2,13 @@
 // doel) of "Uitgaven per maand" (de som van Bedrag per Datum, apart per Betaald door). Generiek: elk getal of elke
 // berekening, alles samen of per dag, week, maand of jaar, eventueel apart per persoon of keuze, met een doel of grens.
 //
-// Uitgerekend op de items zoals de lezer ze ziet (de API geeft enkel wat je mag zien). Mag je een veld van een totaal
-// (of iets waarvan het afhangt) niet zien, dan krijg je het totaal niet (`visibleTotals`).
+// Waar het telt: in het project dat je bekijkt, eventueel met zijn subprojecten, en eventueel ook in lijsten uit
+// andere projecten met dezelfde velden (op sleutel). Een **saldo** trekt per persoon af wat bij een tweede veld staat
+// (betaald door − verdeling = wie nog geld krijgt); een saldo dat **verrekent**, telt mee in Wie moet wie.
+//
+// De API rekent uit, per lezer: enkel items uit projecten en lijsten die je mag zien, met de velden die je daar mag
+// zien. Mag je in het project zelf een veld van een totaal (of iets waarvan het afhangt) niet zien, dan krijg je het
+// totaal niet (`visibleTotals`).
 
 import { aggregate, AGGS, fieldDeps, NUMERIC, typeOf, type Agg } from "./calc.ts";
 import type { Attributes, FieldDef, FieldType, FieldValue, Share } from "./fields.ts";
@@ -27,6 +32,14 @@ export type TotalDef = {
   goal?: number;
   /** "max": niet meer dan (een budget, calorieën); "min": minstens (stappen, water). */
   goal_kind?: "max" | "min";
+  /** "tree": ook de items in de subprojecten (leeg: enkel het project dat je bekijkt). */
+  scope?: "tree";
+  /** Ook de items van deze lijsten (ids, uit andere projecten), met dezelfde velden. */
+  sources?: string[];
+  /** Saldo: per persoon of keuze de som bij `by` min die bij dit veld (betaald door − verdeling). Enkel bij een som. */
+  against?: string;
+  /** Verrekenen: het saldo telt mee in Wie moet wie op het project (met de subprojecten). */
+  settle?: boolean;
 };
 
 export const PERIODS = { all: "Alles samen", day: "Per dag", week: "Per week", month: "Per maand", year: "Per jaar" } as const satisfies Record<
@@ -38,21 +51,56 @@ export const GOAL_KINDS = { max: "Niet meer dan", min: "Minstens" } as const;
 export const HISTORY = { all: 1, day: 7, week: 8, month: 6, year: 5 } as const satisfies Record<Period, number>;
 /** Waarop je een totaal kan opsplitsen. */
 export const GROUP_TYPES: FieldType[] = ["person", "people", "share", "select", "multi"];
+/** Verrekenen kan tussen mensen: wie betaalde (een persoon) en een verdeling of een andere persoon. */
+export const SETTLE_TYPES: FieldType[] = ["person", "share"];
 export const MAX_TOTALS = 4;
+export const MAX_SOURCES = 5;
 
 const AGG_WORDS = { sum: "", count: "Aantal", avg: "Gemiddelde", min: "Kleinste", max: "Grootste" } as const satisfies Record<Agg, string>;
 
 /** De naam van een totaal: zelf gekozen, of uit wat het telt ("Kcal per dag", "Gemiddelde Score per maand"). */
 export function totalLabel(t: TotalDef, fields: FieldDef[]): string {
   if (t.label) return t.label;
+  if (t.settle) return "Wie moet wie";
   const field = fields.find((f) => f.key === t.field)?.label ?? "";
-  const what = t.agg === "count" ? "Aantal" : t.agg === "sum" ? field : `${AGG_WORDS[t.agg]} ${field.toLowerCase()}`;
+  const what = t.against
+    ? `Saldo ${field.toLowerCase()}`
+    : t.agg === "count"
+      ? "Aantal"
+      : t.agg === "sum"
+        ? field
+        : `${AGG_WORDS[t.agg]} ${field.toLowerCase()}`;
   return t.period === "all" ? what : `${what} ${PERIODS[t.period].toLowerCase()}`;
 }
 
 /** De velden die een totaal gebruikt. */
 export function totalKeys(t: TotalDef): string[] {
-  return [t.field, t.date, t.by].filter((k): k is string => Boolean(k));
+  return [t.field, t.date, t.by, t.against].filter((k): k is string => Boolean(k));
+}
+
+/** Een lijst met Van en Aan (twee personen) die verrekent: daar bewaart "Terugbetaald" een terugbetaling. */
+export function isPayments(t: TotalDef, fields: FieldDef[]): boolean {
+  const type = (key?: string) => fields.find((f) => f.key === key)?.type;
+  return Boolean(t.settle && type(t.field) === "money" && type(t.by) === "person" && type(t.against) === "person");
+}
+
+/**
+ * Past een lijst uit een ander project bij een totaal? Ze moet dezelfde velden hebben (op sleutel) van een passende
+ * soort. Geeft wat er scheelt, of null.
+ */
+export function sourceMisfit(t: TotalDef, fields: FieldDef[], other: FieldDef[]): string | null {
+  for (const key of totalKeys(t)) {
+    const mine = fields.find((f) => f.key === key);
+    const theirs = other.find((f) => f.key === key);
+    if (!mine) continue;
+    if (!theirs) return `heeft geen veld "${mine.label}"`;
+    const a = typeOf(mine);
+    const b = typeOf(theirs);
+    const fits = key === t.field ? a === b : key === t.date ? b === "date" : mine.type === theirs.type;
+    if (!fits) return `"${theirs.label}" is een ander soort veld`;
+    if (t.settle && key === t.field && theirs.type !== "money") return `"${theirs.label}" is geen bedrag`;
+  }
+  return null;
 }
 
 /** Enkel de totalen waarvan je alles mag zien. `fields`: de velden die de lezer ziet. */
@@ -73,6 +121,7 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
   if (!Array.isArray(raw)) throw new Error("De totalen kloppen niet");
   if (raw.length > MAX_TOTALS) throw new Error(`Hoogstens ${MAX_TOTALS} totalen per lijst`);
   const ids = new Set<string>();
+  let settles = 0;
   return raw.map((r, index): TotalDef => {
     const o = (r ?? {}) as Record<string, unknown>;
     const label = typeof o.label === "string" ? o.label.trim().slice(0, 40) : "";
@@ -110,6 +159,34 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
       out.by = def!.key;
     }
 
+    if (o.against !== undefined && o.against !== null && o.against !== "") {
+      const def = fields.find((f) => f.key === o.against);
+      if (agg !== "sum" || !out.by) fail("tegenover: enkel bij een som, apart per persoon of keuze");
+      if (!def || !GROUP_TYPES.includes(def.type)) fail("tegenover: kies een persoon, personen, aandeel of keuzelijst");
+      if (def!.key === out.by) fail("tegenover: kies een ander veld dan bij apart per");
+      out.against = def!.key;
+    }
+
+    if (o.settle === true) {
+      const type = (key?: string) => fields.find((f) => f.key === key)?.type;
+      if (settles++) fail("verrekenen: hooguit één totaal per lijst");
+      if (!out.against) fail("verrekenen: kies apart per (wie betaalde) en tegenover (de verdeling)");
+      if (type(out.field) !== "money") fail("verrekenen: kies een bedrag (geen berekening)");
+      if (!SETTLE_TYPES.includes(type(out.by)!) || !SETTLE_TYPES.includes(type(out.against)!))
+        fail("verrekenen: apart per en tegenover zijn een persoon of een verdeling");
+      if (out.period !== "all") fail("verrekenen: kies alles samen als periode");
+      out.settle = true;
+    }
+
+    if (o.scope === "tree" || out.settle) out.scope = "tree";
+    if (o.sources !== undefined && o.sources !== null) {
+      if (!Array.isArray(o.sources) || o.sources.some((x) => typeof x !== "string" || !/^[\w-]{1,64}$/.test(x)))
+        fail("ook uit: kies lijsten");
+      const sources = [...new Set(o.sources as string[])];
+      if (sources.length > MAX_SOURCES) fail(`ook uit: hooguit ${MAX_SOURCES} lijsten`);
+      if (sources.length) out.sources = sources;
+    }
+
     if (o.goal !== undefined && o.goal !== null && o.goal !== "") {
       if (typeof o.goal !== "number" || !Number.isFinite(o.goal) || o.goal < 0 || o.goal > 1e12) fail("het doel is een getal van 0 of meer");
       out.goal = o.goal as number;
@@ -126,7 +203,7 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
 export function renameTotals(totals: TotalDef[], rename: (key: string) => string | undefined): TotalDef[] {
   return totals.map((t) => {
     const out: TotalDef = { ...t };
-    for (const k of ["field", "date", "by"] as const) {
+    for (const k of ["field", "date", "by", "against"] as const) {
       if (!t[k]) continue;
       const next = rename(t[k]!);
       if (next) out[k] = next;
@@ -185,8 +262,8 @@ export type TotalResult = {
   /** De laatste periodes, de oudste eerst; de laatste is de huidige. */
   periods: { key: string; value: number | undefined }[];
   current: number | undefined;
-  /** Apart per persoon of keuze (in de huidige periode), het grootste eerst. */
-  groups: { key: string; value: number }[];
+  /** Apart per persoon of keuze (in de huidige periode), het grootste eerst. Bij een saldo: + krijgt, − moet. */
+  groups: { key: string; value: number; label?: string }[];
   /** Hoe de uitkomst getoond wordt (een bedrag, een duur, een getal). */
   result: FieldType;
 };
@@ -204,6 +281,35 @@ function groupsOf(def: FieldDef, value: FieldValue | undefined): { key: string; 
   return [];
 }
 
+/** Een waarde over de groepen van een veld: volgens het aandeel (een bedrag tot op de cent), anders elk de hele waarde. */
+function spread(def: FieldDef, value: number, raw: FieldValue | undefined, money: boolean, payer?: string): [string, number][] {
+  if (money && def.type === "share" && Array.isArray(raw)) return [...splitCents(value, raw as Share[], payer)];
+  return groupsOf(def, raw).map((g) => [g.key, value * g.weight]);
+}
+
+/**
+ * Wat één item bijdraagt aan een som per persoon of keuze: + bij Apart per, en bij een saldo − bij Tegenover. Null
+ * als het niet meetelt (geen getal, of bij een saldo een kant zonder iemand: dan zou het niet op 0 uitkomen).
+ */
+export function itemNet(t: TotalDef, fields: FieldDef[], data: Attributes): Map<string, number> | null {
+  const byDef = fields.find((f) => f.key === t.by);
+  const value = t.field ? data[t.field] : undefined;
+  if (!byDef || t.agg !== "sum" || typeof value !== "number" || value === 0) return null;
+  const money = typeOf(fields.find((f) => f.key === t.field)) === "money";
+  const out = new Map<string, number>();
+  const plus = spread(byDef, value, data[byDef.key], money);
+  if (!plus.length) return null;
+  for (const [key, v] of plus) out.set(key, (out.get(key) ?? 0) + v);
+  if (t.against) {
+    const againstDef = fields.find((f) => f.key === t.against);
+    const payer = byDef.type === "person" && typeof data[byDef.key] === "string" ? (data[byDef.key] as string) : undefined;
+    const minus = againstDef ? spread(againstDef, value, data[againstDef.key], money, payer) : [];
+    if (!minus.length) return null;
+    for (const [key, v] of minus) out.set(key, (out.get(key) ?? 0) - v);
+  }
+  return out;
+}
+
 /**
  * Een totaal uitrekenen over items (zoals de lezer ze ziet, zonder archief). `today`: de datum van vandaag bij de
  * lezer (YYYY-MM-DD).
@@ -218,6 +324,7 @@ export function computeTotal(t: TotalDef, fields: FieldDef[], items: { data: Att
 
   const buckets = new Map<string, { values: FieldValue[]; count: number }>(keys.map((k) => [k, { values: [], count: 0 }]));
   const groups = new Map<string, { values: FieldValue[]; count: number }>();
+  const sums = new Map<string, number>();
   for (const item of items) {
     let key = "all";
     if (t.period !== "all") {
@@ -232,14 +339,18 @@ export function computeTotal(t: TotalDef, fields: FieldDef[], items: { data: Att
     bucket.count++;
     if (value !== undefined) bucket.values.push(value);
 
-    if (byDef && key === current) {
-      for (const g of groupsOf(byDef, item.data[byDef.key])) {
-        const group = groups.get(g.key) ?? { values: [], count: 0 };
-        group.count++;
-        // Een som verdeelt volgens het aandeel; een gemiddelde, kleinste of grootste neemt de hele waarde.
-        if (typeof value === "number") group.values.push(t.agg === "sum" ? value * g.weight : value);
-        groups.set(g.key, group);
-      }
+    if (!byDef || key !== current) continue;
+    if (t.agg === "sum") {
+      // Een som verdeelt volgens het aandeel (een bedrag tot op de cent); een saldo trekt de andere kant af.
+      for (const [g, v] of itemNet(t, fields, item.data) ?? []) sums.set(g, (sums.get(g) ?? 0) + v);
+      continue;
+    }
+    // Hoeveel, een gemiddelde, kleinste of grootste neemt per groep de hele waarde.
+    for (const g of groupsOf(byDef, item.data[byDef.key])) {
+      const group = groups.get(g.key) ?? { values: [], count: 0 };
+      group.count++;
+      if (typeof value === "number") group.values.push(value);
+      groups.set(g.key, group);
     }
   }
 
@@ -248,13 +359,61 @@ export function computeTotal(t: TotalDef, fields: FieldDef[], items: { data: Att
     return typeof v === "number" ? v : undefined;
   };
   const periods = keys.map((key) => ({ key, value: sum(buckets.get(key)!) }));
+  const grouped =
+    t.agg === "sum"
+      ? [...sums].map(([key, v]) => ({ key, value: result === "number" ? Math.round(v * 1000) / 1000 : Math.round(v) }))
+      : [...groups].map(([key, b]) => ({ key, value: sum(b) })).filter((g): g is { key: string; value: number } => g.value !== undefined);
   return {
     periods,
     current: periods[periods.length - 1].value,
-    groups: [...groups]
-      .map(([key, b]) => ({ key, value: sum(b) }))
-      .filter((g): g is { key: string; value: number } => g.value !== undefined)
-      .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key)),
+    groups: grouped.filter((g) => !t.against || g.value !== 0).sort((a, b) => b.value - a.value || a.key.localeCompare(b.key)),
     result,
   };
+}
+
+// ---------- verrekenen ----------
+
+/**
+ * Een bedrag (in cent) verdelen volgens aandelen. Samen altijd precies het bedrag: een cent die niet deelbaar is,
+ * draagt wie betaalde (als die meedeelt), anders wie het dichtst bij de volgende cent zat.
+ */
+export function splitCents(amount: number, shares: Share[], payer?: string): Map<string, number> {
+  const out = new Map<string, number>();
+  const sum = shares.reduce((s, x) => s + x.share, 0);
+  if (!shares.length || !(sum > 0)) return out;
+  const total = Math.abs(amount);
+  const exact = shares.map((x) => ({ id: x.person_id, raw: (total * x.share) / sum }));
+  let given = 0;
+  for (const e of exact) {
+    const cents = Math.floor(e.raw + 1e-9);
+    out.set(e.id, (out.get(e.id) ?? 0) + cents);
+    given += cents;
+  }
+  const order = [...exact].sort((a, b) => Number(b.id === payer) - Number(a.id === payer) || (b.raw % 1) - (a.raw % 1) || a.id.localeCompare(b.id));
+  for (let rest = total - given, i = 0; rest > 0; rest--, i = (i + 1) % order.length) out.set(order[i].id, out.get(order[i].id)! + 1);
+  if (amount < 0) for (const [id, cents] of out) out.set(id, -cents);
+  return out;
+}
+
+export type Transfer = { from: string; to: string; amount: number };
+
+/** Zo weinig mogelijk overschrijvingen: telkens wie het meest moet, aan wie het meest krijgt. */
+export function settleUp(net: Map<string, number>): Transfer[] {
+  const side = (sign: 1 | -1) =>
+    [...net]
+      .filter(([, v]) => v * sign > 0)
+      .map(([id, v]) => ({ id, left: Math.abs(v) }))
+      .sort((a, b) => b.left - a.left || a.id.localeCompare(b.id));
+  const owe = side(-1);
+  const get = side(1);
+  const out: Transfer[] = [];
+  for (let i = 0, j = 0; i < owe.length && j < get.length; ) {
+    const amount = Math.min(owe[i].left, get[j].left);
+    out.push({ from: owe[i].id, to: get[j].id, amount });
+    owe[i].left -= amount;
+    get[j].left -= amount;
+    if (owe[i].left === 0) i++;
+    if (get[j].left === 0) j++;
+  }
+  return out;
 }

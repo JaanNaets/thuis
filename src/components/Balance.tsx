@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Transfer } from "../../shared/rules";
+import type { Transfer } from "../../shared/totals";
 import type { Balance, ItemInput, Person } from "../../shared/types";
 import { api, useApi } from "../api";
 import { centsToInput, formatCents, parseEuro, today } from "../format";

@@ -6,13 +6,12 @@
 // binnenkomt, wordt volledig nagekeken (`parseTemplateFile`); de API kijkt daarna de verwijzingen tegen de keten na.
 
 import { cleanFields, fieldKey, MAX_FIELDS, type FieldDef } from "./fields.ts";
-import type { Rule } from "./rules.ts";
 import { MAX_TOTALS, type TotalDef } from "./totals.ts";
 import { isIconKey, type IconKey, type TemplateField, type TemplatePlan, type TypeTemplate } from "./templates.ts";
 import { isTone, type ItemType, type Tone } from "./types.ts";
 
 export const TEMPLATE_VERSION = 1;
-const LIMITS = { projects: 25, depth: 5, lists: 40, rules: 5 };
+const LIMITS = { projects: 25, depth: 5, lists: 40 };
 
 export type TemplateProject = {
   name: string;
@@ -29,18 +28,43 @@ export type TemplateFile = { thuis: "sjabloon"; version: number; project: Templa
 const isObject = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-/** Een standaardverdeling noemt mensen; die horen niet in een sjabloon. */
-function withoutPeople(rules: unknown): Rule[] {
-  if (!Array.isArray(rules)) return [];
-  return rules
-    .filter(isObject)
-    .slice(0, LIMITS.rules)
-    .map(({ default: _people, ...rule }) => rule as Rule);
+/** Een gewone verdeling noemt mensen; die horen niet in een sjabloon. */
+const withoutPeople = <F extends FieldDef | TemplateField>({ default_shares: _people, ...f }: F) => f as F;
+
+/**
+ * Totalen: enkel de vorm (de API kijkt ze na tegen de velden zodra de lijst er is), zonder lijsten uit andere
+ * projecten (die bestaan bij iemand anders niet).
+ */
+function totalsOf(totals: unknown): TotalDef[] {
+  return Array.isArray(totals)
+    ? (totals
+        .filter(isObject)
+        .slice(0, MAX_TOTALS)
+        .map(({ sources: _sources, ...t }) => t) as TotalDef[])
+    : [];
 }
 
-/** Totalen: enkel de vorm; de API kijkt ze na tegen de velden zodra de lijst er is. */
-function totalsOf(totals: unknown): TotalDef[] {
-  return Array.isArray(totals) ? (totals.filter(isObject).slice(0, MAX_TOTALS) as TotalDef[]) : [];
+/**
+ * Een sjabloon van voor de totalen had regels: Kosten verdelen (bedrag, betaald door, verdeling) of Terugbetalingen
+ * (bedrag, van, aan). Die worden velden die zelf invullen en een totaal dat verrekent.
+ */
+function fromRules(rules: unknown, fields: FieldDef[], totals: TotalDef[]): { fields: FieldDef[]; totals: TotalDef[] } {
+  const rule = Array.isArray(rules) && isObject(rules[0]) ? rules[0] : null;
+  if (!rule || totals.some((t) => t.settle)) return { fields, totals };
+  const key = (k: unknown) => (typeof k === "string" && fields.some((f) => f.key === k) ? k : undefined);
+  const amount = key(rule.amount);
+  const [by, against] = rule.kind === "split" ? [key(rule.payer), key(rule.for)] : rule.kind === "settle" ? [key(rule.from), key(rule.to)] : [];
+  if (!amount || !by || !against) return { fields, totals };
+  return {
+    fields:
+      rule.kind === "split"
+        ? fields.map((f) => (f.key === by && f.type === "person" ? { ...f, me: true } : f.key === against && f.type === "share" ? { ...f, fill: true } : f))
+        : fields,
+    totals: [...totals, { id: "saldo", agg: "sum", field: amount, period: "all", by, against, settle: true, scope: "tree" } satisfies TotalDef].slice(
+      0,
+      MAX_TOTALS,
+    ),
+  };
 }
 
 /** Een sjabloon nakijken (uit een bestand of van de API). Gooit een fout met uitleg. */
@@ -68,6 +92,7 @@ export function parseTemplateFile(raw: unknown): TemplateFile {
     } catch (err) {
       throw new Error(`${name}: ${(err as Error).message}`);
     }
+    const converted = fromRules(l.rules, fields.map(withoutPeople), totalsOf(l.totals));
     const nameLabel = text(l.name_label, 40);
     return {
       key,
@@ -75,9 +100,8 @@ export function parseTemplateFile(raw: unknown): TemplateFile {
       plural: text(l.plural, 40) || name,
       ...(nameLabel ? { name_label: nameLabel } : {}),
       icon: isIconKey(l.icon) ? l.icon : "folder",
-      fields: fields.map(({ ref_type, ...f }): TemplateField => (ref_type ? { ...f, ref: ref_type } : f)),
-      rules: withoutPeople(l.rules),
-      totals: totalsOf(l.totals),
+      fields: converted.fields.map(({ ref_type, ...f }): TemplateField => (ref_type ? { ...f, ref: ref_type } : f)),
+      totals: converted.totals,
       ...(l.linked === true ? { linked: true } : {}),
     };
   };
@@ -154,7 +178,7 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
         // Een samenvatting over een lijst die niet meekomt (bv. uit een ander project), valt weg.
         const key = f.calc.list ? keys.get(f.calc.list) : undefined;
         if (key) fields.push({ ...f, calc: { ...f.calc, list: key } });
-      } else fields.push(f);
+      } else fields.push(withoutPeople(f));
     }
     return {
       key: keys.get(l.id)!,
@@ -163,8 +187,7 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
       ...(l.name_label ? { name_label: l.name_label } : {}),
       icon: isIconKey(l.icon) ? l.icon : "folder",
       fields,
-      rules: withoutPeople(l.rules),
-      totals: l.totals,
+      totals: totalsOf(l.totals),
       ...(isLinked ? { linked: true } : {}),
     };
   };

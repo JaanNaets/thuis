@@ -11,10 +11,22 @@ import {
   visibleFields,
   type Rights,
 } from "../../shared/access";
-import { cleanFields, type Attributes, type FieldDef } from "../../shared/fields";
+import { cleanFields, type FieldDef } from "../../shared/fields";
 import { checkCalcs } from "../../shared/calc";
-import { balances, cleanRules, movementOf, ruleFieldKeys, settleUp, type Rule } from "../../shared/rules";
-import { cleanTotals, MAX_TOTALS, visibleTotals, type TotalDef } from "../../shared/totals";
+import {
+  cleanTotals,
+  computeTotal,
+  isPayments,
+  itemNet,
+  MAX_TOTALS,
+  settleUp,
+  sourceMisfit,
+  totalKeys,
+  totalLabel,
+  visibleTotals,
+  type TotalDef,
+  type TotalResult,
+} from "../../shared/totals";
 import {
   buildTemplateFile,
   flatten,
@@ -26,6 +38,7 @@ import {
 } from "../../shared/template-file";
 import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate, type TemplatePlan } from "../../shared/templates";
 import { descendantIds } from "../../shared/tree";
+import { itemsAsSeen, type SeenItem } from "../compute";
 import { isTone, type Balance, type ItemType, type Member, type Person, type ProjectDetail, type ProjectNode, type Role, type Tag } from "../../shared/types";
 import {
   accessibleProjects,
@@ -139,33 +152,46 @@ function parseTypeInput(body: unknown) {
     name_label: optionalString(obj, "name_label", 40),
     icon: icon as string | null,
     fields: obj.fields,
-    rules: obj.rules,
     totals: obj.totals,
   };
 }
 
+/** Wie in een gewone verdeling staat (`default_shares`), moet in het project zitten. */
+async function checkDefaultShares(db: D1Database, fields: FieldDef[], chain: string[]): Promise<void> {
+  const people = [...new Set(fields.flatMap((f) => (f.default_shares ?? []).map((s) => s.person_id)))];
+  if (!people.length) return;
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT person_id FROM memberships WHERE project_id IN (${placeholders(chain.length)}) AND person_id IN (SELECT value FROM json_each(?))`,
+    )
+    .bind(...chain, JSON.stringify(people))
+    .all();
+  if (results.length !== people.length) throw new ValidationError("De gewone verdeling: kies enkel mensen uit dit project.");
+}
+
 /**
- * De regels van een lijst nakijken tegen haar (nagekeken) velden. Wie in een standaardverdeling staat, moet in het
- * project zitten.
+ * "Ook uit": lijsten uit andere projecten moeten bestaan, door jou te zien zijn, en dezelfde velden hebben (op sleutel,
+ * van een passende soort).
  */
-async function cleanTypeRules(db: D1Database, raw: unknown, fields: FieldDef[], chain: string[]): Promise<Rule[]> {
-  let rules: Rule[];
-  try {
-    rules = cleanRules(raw, fields);
-  } catch (err) {
-    throw new ValidationError((err as Error).message);
+async function checkSources(db: D1Database, personId: string, totals: TotalDef[], fields: FieldDef[], selfId: string): Promise<void> {
+  const ids = [...new Set(totals.flatMap((t) => t.sources ?? []))];
+  if (!ids.length) return;
+  const [{ results }, nodes] = await Promise.all([
+    db.prepare("SELECT * FROM item_types WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<TypeRow>(),
+    accessibleProjects(db, personId),
+  ]);
+  const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
+  const lists = new Map(results.map(toItemType).map((l) => [l.id, l]));
+  for (const t of totals) {
+    for (const id of t.sources ?? []) {
+      const list = lists.get(id);
+      const rights = list && rightsOf.get(list.project_id);
+      if (!list || id === selfId || !rights || !canSeeType(rights, list.id))
+        throw new ValidationError(`${totalLabel(t, fields)}: een lijst bij "ook uit" bestaat niet (meer), of je ziet ze niet.`);
+      const misfit = sourceMisfit(t, fields, list.fields);
+      if (misfit) throw new ValidationError(`${totalLabel(t, fields)}: ${list.plural} ${misfit}.`);
+    }
   }
-  const people = rules.flatMap((r) => (r.kind === "split" ? (r.default ?? []).map((s) => s.person_id) : []));
-  if (people.length) {
-    const { results } = await db
-      .prepare(
-        `SELECT DISTINCT person_id FROM memberships WHERE project_id IN (${placeholders(chain.length)}) AND person_id IN (SELECT value FROM json_each(?))`,
-      )
-      .bind(...chain, JSON.stringify(people))
-      .all();
-    if (results.length !== new Set(people).size) throw new ValidationError("De gewone verdeling: kies enkel mensen uit dit project.");
-  }
-  return rules;
 }
 
 /** De totalen van een lijst nakijken tegen haar (nagekeken) velden. */
@@ -254,29 +280,16 @@ function templateStatements(db: D1Database, nodes: { projectId: string; plans: T
   const plans = nodes.flatMap((n) => n.plans.map((plan) => ({ ...plan, projectId: n.projectId })));
   const fields = resolveTemplateLists(plans, byName, above);
   return plans.map(({ id, list, projectId }) => {
-    let rules: Rule[] = [];
-    try {
-      rules = cleanRules(list.rules ?? [], fields[id]);
-    } catch {
-      // Een regel waarvan de velden er niet (meer) zijn, valt weg.
-    }
-    const totals = keepTotals(list.totals ?? [], fields[id]).slice(0, MAX_TOTALS);
+    // Een totaal waarvan de velden er niet (meer) zijn, valt weg; lijsten uit andere projecten komen niet mee.
+    const totals = keepTotals(list.totals ?? [], fields[id])
+      .map(({ sources: _sources, ...t }) => t)
+      .slice(0, MAX_TOTALS);
     return db
       .prepare(
-        `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, totals, sort_order)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+        `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
       )
-      .bind(
-        id,
-        projectId,
-        list.name,
-        list.plural,
-        list.name_label ?? null,
-        list.icon,
-        JSON.stringify(fields[id]),
-        JSON.stringify(rules),
-        JSON.stringify(totals),
-      );
+      .bind(id, projectId, list.name, list.plural, list.name_label ?? null, list.icon, JSON.stringify(fields[id]), JSON.stringify(totals));
   });
 }
 
@@ -566,32 +579,117 @@ projects.get("/:id", async (c) => {
  * Terugbetalingen. Telt enkel wat jij mag zien: de lijst, en het bedrag, wie betaalde en de verdeling. Wat je niet
  * mag zien, telt niet mee (en verraadt niets).
  */
+/**
+ * De totalen van een lijst op een project, zoals jij ze ziet (?type=, ?today= jouw datum). Elk item telt met jouw
+ * rechten in zijn project: het project zelf, eventueel de subprojecten, en de lijsten uit andere projecten bij "ook
+ * uit". Een saldo dat verrekent, staat in Wie moet wie (zie /balance).
+ */
+projects.get("/:id/totals", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === c.req.query("type"));
+  if (!type || !canSeeType(access.rights, type.id)) throw new NotFoundError("Die lijst bestaat niet (meer).");
+  const fields = visibleFields(access.rights, type.id, type.fields);
+  const totals = visibleTotals(type.totals, fields).filter((t) => !t.settle);
+  if (!totals.length) return c.json([]);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(c.req.query("today") ?? "") ? c.req.query("today")! : new Date().toISOString().slice(0, 10);
+
+  const nodes = await accessibleProjects(db, me);
+  const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
+  const below = [...descendantIds(nodes, access.project.id)];
+  const sources = await listsById(db, totals.flatMap((t) => t.sources ?? []));
+  const out: { id: string; result: TotalResult }[] = [];
+  const people = new Set<string>();
+  for (const t of totals) {
+    const items = await totalItems(db, me, rightsOf, t, type, t.scope === "tree" ? below : [access.project.id], sources);
+    const result = computeTotal(t, fields, items, today);
+    const groupType = fields.find((f) => f.key === t.by)?.type;
+    if (groupType === "person" || groupType === "people" || groupType === "share") for (const g of result.groups) people.add(g.key);
+    out.push({ id: t.id, result });
+  }
+  // Namen bij de groepen per persoon.
+  const names = new Map(
+    (
+      await db
+        .prepare("SELECT id, name FROM people WHERE id IN (SELECT value FROM json_each(?))")
+        .bind(JSON.stringify([...people]))
+        .all<{ id: string; name: string }>()
+    ).results.map((p) => [p.id, p.name]),
+  );
+  for (const { result } of out) for (const g of result.groups) g.label = names.get(g.key) ?? g.key;
+  return c.json(out);
+});
+
+/** Lijsten op id (voor "ook uit"). */
+async function listsById(db: D1Database, ids: string[]): Promise<Map<string, ItemType>> {
+  if (!ids.length) return new Map();
+  const { results } = await db
+    .prepare("SELECT * FROM item_types WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([...new Set(ids)]))
+    .all<TypeRow>();
+  return new Map(results.map(toItemType).map((l) => [l.id, l]));
+}
+
+/**
+ * De items voor een totaal: van de lijst zelf in `projectIds`, en van de lijsten bij "ook uit" overal waar je ze mag
+ * zien (een lijst die niet meer past, telt niet). Elk item één keer.
+ */
+async function totalItems(
+  db: D1Database,
+  me: string,
+  rightsOf: Map<string, Rights>,
+  t: TotalDef,
+  type: ItemType,
+  projectIds: string[],
+  sources: Map<string, ItemType>,
+): Promise<SeenItem[]> {
+  const keys = totalKeys(t);
+  const items = await itemsAsSeen(db, me, rightsOf, type, projectIds, keys);
+  for (const id of t.sources ?? []) {
+    const list = sources.get(id);
+    if (!list || list.id === type.id || sourceMisfit(t, type.fields, list.fields)) continue;
+    items.push(...(await itemsAsSeen(db, me, rightsOf, list, [...rightsOf.keys()], keys)));
+  }
+  const seen = new Set<string>();
+  return items.filter((i) => !seen.has(i.id) && seen.add(i.id));
+}
+
+/**
+ * Wie wie nog hoeveel moet in een project (met alles eronder): de totalen die verrekenen, van de lijsten hier, erboven
+ * en eronder (en hun lijsten bij "ook uit"). Telt enkel wat je mag zien. "Terugbetaald" bewaart in een lijst met Van
+ * en Aan uit de keten.
+ */
 projects.get("/:id/balance", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
   const access = await requireProject(db, me, c.req.param("id"));
   const nodes = await accessibleProjects(db, me);
-  const below = descendantIds(nodes, access.project.id);
-  const rightsOf = new Map(nodes.filter((n) => below.has(n.id)).map((n) => [n.id, n.rights]));
+  const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
+  const below = [...descendantIds(nodes, access.project.id)];
   const [{ results: typeRows }, chainTypes] = await Promise.all([
     db
       .prepare(
-        `SELECT * FROM item_types WHERE rules != '[]' AND (project_id IN (SELECT value FROM json_each(?1)) OR project_id IN (SELECT value FROM json_each(?2)))`,
+        `SELECT * FROM item_types WHERE totals LIKE '%"settle":true%' AND (project_id IN (SELECT value FROM json_each(?1)) OR project_id IN (SELECT value FROM json_each(?2)))`,
       )
-      .bind(JSON.stringify([...below]), JSON.stringify(access.chain))
+      .bind(JSON.stringify(below), JSON.stringify(access.chain))
       .all<TypeRow>(),
     typesFor(db, access.chain),
   ]);
-  const ruleTypes = new Map(
-    typeRows
-      .map(toItemType)
-      .filter((t) => t.rules.length)
-      .map((t) => [t.id, t]),
-  );
-  const settleType = chainTypes.find(
-    (t) =>
-      t.rules[0]?.kind === "settle" && canCreate(access.rights, t.id) && ruleFieldKeys(t.rules[0]).every((k) => fieldAccess(access.rights, t.id, k) === "edit"),
-  );
+  const settleOf = (t: ItemType) => t.totals.find((x) => x.settle);
+  const settling = typeRows
+    .map(toItemType)
+    .map((type) => ({ type, total: settleOf(type)! }))
+    .filter((x) => x.total);
+  const payments = chainTypes.find((t) => {
+    const total = settleOf(t);
+    return (
+      total &&
+      isPayments(total, t.fields) &&
+      canCreate(access.rights, t.id) &&
+      totalKeys(total).every((k) => fieldAccess(access.rights, t.id, k) === "edit")
+    );
+  });
   const result: Balance = {
     active: false,
     people: [],
@@ -599,52 +697,44 @@ projects.get("/:id/balance", async (c) => {
     transfers: [],
     counted: 0,
     settle: null,
-    can_add_settle: access.rights.manage && !chainTypes.some((t) => t.rules[0]?.kind === "settle"),
+    can_add_settle: access.rights.manage && !chainTypes.some((t) => settleOf(t) && isPayments(settleOf(t)!, t.fields)),
   };
-  if (!ruleTypes.size) return c.json(result);
+  if (!settling.length) return c.json(result);
 
-  const { results: rows } = await db
-    .prepare(
-      `SELECT project_id, type_id, data FROM items
-       WHERE archived = 0 AND project_id IN (SELECT value FROM json_each(?1)) AND type_id IN (SELECT value FROM json_each(?2))`,
-    )
-    .bind(JSON.stringify([...below]), JSON.stringify([...ruleTypes.keys()]))
-    .all<{ project_id: string; type_id: string; data: string }>();
-  const movements = [];
-  for (const row of rows) {
-    const rights = rightsOf.get(row.project_id);
-    const type = ruleTypes.get(row.type_id);
-    if (!rights || !type) continue;
-    const rule = type.rules[0];
-    if (typeAccess(rights, type.id) === "none" || ruleFieldKeys(rule).some((k) => fieldAccess(rights, type.id, k) === "none")) continue;
-    let data: Attributes = {};
-    try {
-      data = JSON.parse(row.data) as Attributes;
-    } catch {
-      continue;
+  const sources = await listsById(
+    db,
+    settling.flatMap((x) => x.total.sources ?? []),
+  );
+  const net = new Map<string, number>();
+  const counted = new Set<string>();
+  for (const { type, total } of settling) {
+    for (const item of await totalItems(db, me, rightsOf, total, type, below, sources)) {
+      if (counted.has(item.id)) continue;
+      const contribution = itemNet(total, type.fields, item.data);
+      if (!contribution) continue;
+      counted.add(item.id);
+      for (const [id, cents] of contribution) net.set(id, (net.get(id) ?? 0) + cents);
     }
-    const movement = movementOf(rule, data);
-    if (movement) movements.push(movement);
   }
-  const net = balances(movements);
   const ids = [...net.keys()];
   const { results: people } = await db
     .prepare("SELECT id, name, email, color FROM people WHERE id IN (SELECT value FROM json_each(?))")
     .bind(JSON.stringify(ids))
     .all<Person>();
-  // Zichtbaar als hier een lijst met uitgaven is die je mag zien, of als er iets meetelt.
-  const visibleSplit = [...ruleTypes.values()].some((t) => t.rules[0].kind === "split" && [...rightsOf.values()].some((r) => typeAccess(r, t.id) !== "none"));
-  const date = settleType?.fields.find((f) => f.type === "date" && f.required) ?? settleType?.fields.find((f) => f.type === "date");
-  const rule = settleType?.rules[0];
+  // Zichtbaar als hier een lijst met uitgaven (een saldo tegenover een verdeling) is die je mag zien, of als er iets meetelt.
+  const visible = settling.some(
+    ({ type, total }) => !isPayments(total, type.fields) && below.some((id) => rightsOf.has(id) && typeAccess(rightsOf.get(id)!, type.id) !== "none"),
+  );
+  const pay = payments && settleOf(payments)!;
+  const date = payments?.fields.find((f) => f.type === "date" && f.required) ?? payments?.fields.find((f) => f.type === "date");
   return c.json({
     ...result,
-    active: visibleSplit || movements.length > 0,
+    active: visible || counted.size > 0,
     people,
     net: [...net].filter(([, v]) => v !== 0).map(([person_id, amount]) => ({ person_id, amount })),
     transfers: settleUp(net),
-    counted: movements.length,
-    settle:
-      settleType && rule?.kind === "settle" ? { type_id: settleType.id, amount: rule.amount, from: rule.from, to: rule.to, date: date?.key ?? null } : null,
+    counted: counted.size,
+    settle: payments && pay ? { type_id: payments.id, amount: pay.field!, from: pay.by!, to: pay.against!, date: date?.key ?? null } : null,
   } satisfies Balance);
 });
 
@@ -692,24 +782,15 @@ projects.post("/:id/types", async (c) => {
   need(access, "manage", "Enkel wie het project instelt, kan lijsten maken.");
   const id = crypto.randomUUID();
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), id, await calcListsFor(db, access));
-  const rules = await cleanTypeRules(db, input.rules, fields, access.chain);
+  await checkDefaultShares(db, fields, access.chain);
   const totals = cleanTypeTotals(input.totals, fields);
+  await checkSources(db, c.get("person").id, totals, fields, id);
   await db
     .prepare(
-      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, rules, totals, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
     )
-    .bind(
-      id,
-      access.project.id,
-      input.name,
-      input.plural,
-      input.name_label,
-      input.icon,
-      JSON.stringify(fields),
-      JSON.stringify(rules),
-      JSON.stringify(totals),
-    )
+    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals))
     .run();
   return c.json({ id }, 201);
 });
@@ -772,6 +853,29 @@ projects.get("/:id/all-types", async (c) => {
 
 export const types = new Hono<AppEnv>();
 
+/**
+ * Alle lijsten die je ergens mag zien (in elk project waar je in zit), met de velden die je er mag zien: om ook
+ * uit een lijst in een ander project te tellen. Een lijst telt als je haar project zelf mag zien.
+ */
+types.get("/", async (c) => {
+  const db = c.env.DB;
+  const nodes = await accessibleProjects(db, c.get("person").id);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const { results } = await db
+    .prepare("SELECT * FROM item_types WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, created_at")
+    .bind(JSON.stringify(nodes.map((n) => n.id)))
+    .all<TypeRow>();
+  return c.json(
+    results
+      .map(toItemType)
+      .filter((t) => canSeeType(byId.get(t.project_id)!.rights, t.id))
+      .map((t) => {
+        const rights = byId.get(t.project_id)!.rights;
+        return { ...t, fields: visibleFields(rights, t.id, t.fields), totals: [], project_name: byId.get(t.project_id)!.name };
+      }),
+  );
+});
+
 async function requireType(db: D1Database, personId: string, typeId: string) {
   const row = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(typeId).first<TypeRow>();
   if (!row) throw new NotFoundError("Die lijst bestaat niet (meer).");
@@ -795,13 +899,13 @@ types.put("/:id", async (c) => {
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
   const fields = cleanTypeFields(input.fields, await typesFor(db, access.chain), type.id, await calcListsFor(db, access));
-  // Zonder regels in de vraag blijven de huidige (als ze nog bij de velden passen).
-  const rules = await cleanTypeRules(db, input.rules === undefined ? type.rules : input.rules, fields, access.chain);
+  await checkDefaultShares(db, fields, access.chain);
   // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
   const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);
+  if (input.totals !== undefined) await checkSources(db, c.get("person").id, totals, fields, type.id);
   await db
-    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, rules = ?, totals = ? WHERE id = ?")
-    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(rules), JSON.stringify(totals), type.id)
+    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, totals = ? WHERE id = ?")
+    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals), type.id)
     .run();
   return c.json({ id: type.id });
 });

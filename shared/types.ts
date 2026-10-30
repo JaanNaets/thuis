@@ -2,8 +2,7 @@
 
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef } from "./fields";
-import type { Rule, Transfer } from "./rules";
-import type { TotalDef } from "./totals";
+import type { TotalDef, Transfer } from "./totals";
 import type { IconKey } from "./templates";
 
 /** Pastelkleuren voor personen, projecten en tags. */
@@ -94,9 +93,7 @@ export type ItemType = {
   name_label: string | null;
   icon: IconKey | null;
   fields: FieldDef[];
-  /** Wat de app met de velden doet (Kosten verdelen, Terugbetalingen). */
-  rules: Rule[];
-  /** Samenvattingen op het project (Kcal per dag, Uitgaven per maand). */
+  /** Samenvattingen op het project (Kcal per dag, Uitgaven per maand, Wie moet wie). */
   totals: TotalDef[];
   sort_order: number;
 };
@@ -110,7 +107,6 @@ export type ItemTypeInput = {
   name_label: string | null;
   icon: IconKey | null;
   fields: FieldDef[];
-  rules: Rule[];
   totals: TotalDef[];
 };
 

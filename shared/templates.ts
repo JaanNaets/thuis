@@ -6,7 +6,6 @@
 
 import { previewCalcs, type CalcList } from "./calc.ts";
 import type { FieldDef } from "./fields.ts";
-import type { Rule } from "./rules.ts";
 import type { TotalDef } from "./totals.ts";
 
 /** Iconen voor projecten en lijsten (namen uit src/components/Icon.tsx). */
@@ -53,8 +52,6 @@ export type TypeTemplate = {
   name_label?: string;
   icon: IconKey;
   fields: TemplateField[];
-  /** Wat de app met de velden doet (zie shared/rules.ts). */
-  rules?: Rule[];
   /** Samenvattingen op het project (zie shared/totals.ts); wat niet bij de velden past, valt weg. */
   totals?: TotalDef[];
   /**
@@ -119,8 +116,8 @@ const EXPENSE: TypeTemplate = {
   icon: "receipt",
   fields: [
     { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true },
-    { key: "datum", label: "Datum", type: "date", required: true, column: true },
-    { key: "betaald_door", label: "Betaald door", type: "person", column: true, filter: true },
+    { key: "datum", label: "Datum", type: "date", required: true, column: true, today: true },
+    { key: "betaald_door", label: "Betaald door", type: "person", column: true, filter: true, me: true },
     { key: "verkoper", label: "Verkoper", type: "item", ref: "verkoper", filter: true },
     {
       key: "categorie",
@@ -129,10 +126,14 @@ const EXPENSE: TypeTemplate = {
       options: ["Boodschappen", "Wonen", "Energie", "Vervoer", "Gezondheid", "Vrije tijd", "Kleding", "Andere"],
       filter: true,
     },
-    { key: "verdeling", label: "Verdeling", type: "share", hint: "Wie draagt hoeveel (leeg = de gewone verdeling, of gelijk)" },
+    { key: "verdeling", label: "Verdeling", type: "share", fill: true, hint: "Wie draagt hoeveel (leeg = de gewone verdeling, of gelijk)" },
     NOTE,
   ],
-  rules: [{ kind: "split", amount: "bedrag", payer: "betaald_door", for: "verdeling" }],
+  // Wie moet wie: per persoon wat hij betaalde min zijn deel, met de subprojecten; en wat je per maand uitgeeft.
+  totals: [
+    { id: "saldo", agg: "sum", field: "bedrag", period: "all", by: "betaald_door", against: "verdeling", settle: true, scope: "tree" },
+    { id: "maand", label: "Uitgaven per maand", agg: "sum", field: "bedrag", period: "month", date: "datum", by: "categorie" },
+  ],
 };
 
 /** Geld dat iemand aan iemand anders gaf; samen met de uitgaven geeft dat wie wie nog hoeveel moet. */
@@ -144,12 +145,13 @@ export const SETTLEMENT: TypeTemplate = {
   icon: "transfer",
   fields: [
     { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true },
-    { key: "datum", label: "Datum", type: "date", required: true, column: true },
+    { key: "datum", label: "Datum", type: "date", required: true, column: true, today: true },
     { key: "van", label: "Van", type: "person", required: true, filter: true },
     { key: "aan", label: "Aan", type: "person", required: true, filter: true },
     NOTE,
   ],
-  rules: [{ kind: "settle", amount: "bedrag", from: "van", to: "aan" }],
+  // Wat Van gaf, telt voor hem; wat Aan kreeg, tegen hem.
+  totals: [{ id: "saldo", agg: "sum", field: "bedrag", period: "all", by: "van", against: "aan", settle: true, scope: "tree" }],
 };
 
 /** Wat je eet: een foto van de verpakking vult de naam en de kcal per 100 g in; de app rekent en telt per dag. */

@@ -7,7 +7,7 @@ import { Icon } from "../components/Icon";
 import { ItemsView } from "../components/ItemsView";
 import { EmptyState, PageHead } from "../components/Page";
 import { projectIcon } from "../components/Sidebar";
-import { TotalsCards } from "../components/Totals";
+import { shownTotals, TotalsCards } from "../components/Totals";
 import { Link } from "../router";
 import { useSession } from "../session";
 
@@ -72,7 +72,7 @@ export function ProjectPage() {
 
       <div className="split split-main-first">
         <aside className="split-aside">
-          {type && type.totals.length > 0 && <TotalsCards key={type.id} projectId={project.id} type={type} className="split-lead" />}
+          {type && shownTotals(type).length > 0 && <TotalsCards key={type.id} projectId={project.id} type={type} className="split-lead" />}
           <BalanceCard key={project.id} projectId={project.id} className="split-lead" />
           <section className="card">
             <CardHead

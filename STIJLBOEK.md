@@ -423,7 +423,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 
 | Component of hulpje | Wat |
 | --- | --- |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, kolom, filter, verplicht en uitleg |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
 | `ChecklistInput`, `ChecklistView` | Takenlijst (`.checklist`): invullen met altijd een lege regel onderaan; op de fiche een eigen kaart waar je meteen afvinkt (bewaart zonder het formulier) |
@@ -445,8 +445,9 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
   lijsten met hun velden. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
   met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
-  uit de bouwstenen (velden, formule, totalen, regels): **Voeding** is een lijst Eten met kcal per 100 g × Hoeveel als
-  formule en het totaal "Kcal per dag", geen eigen code. Losse
+  uit de bouwstenen (velden, formule, totalen): **Voeding** is een lijst Eten met kcal per 100 g × Hoeveel als
+  formule en het totaal "Kcal per dag"; **Gedeelde uitgaven** is Betaald door, een Verdeling en een totaal dat
+  verrekent. Geen eigen code. Losse
   lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
   bij **Instellen → Lijsten → Uit sjabloon**.
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
@@ -487,17 +488,26 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 Een **totaal** vat de items van een lijst samen (`shared/totals.ts`): de som, het gemiddelde, het kleinste, het
 grootste of hoeveel, van een getal, bedrag of duur (ook een berekening), alles samen of per dag, week (vanaf
 maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eigenaar of keuze, en met een doel
-("niet meer dan" of "minstens"). Hooguit vier per lijst. Het is een bouwsteen, geen regel: "Kcal per dag",
-"Uitgaven per maand per persoon" en "Gemiddelde score" zijn hetzelfde onderdeel.
+("niet meer dan" of "minstens"). Hooguit vier per lijst. "Kcal per dag", "Uitgaven per maand per persoon",
+"Gemiddelde score" en Wie moet wie zijn hetzelfde onderdeel.
+
+- **Waar**: dit project, of met de subprojecten. **Ook uit**: lijsten uit andere projecten met dezelfde velden (op
+  sleutel, van dezelfde soort; een lijst uit hetzelfde sjabloon past altijd). Hooguit vijf.
+- **Tegenover** (een saldo): per persoon of keuze de som bij Apart per, min die bij Tegenover. Betaald door tegenover
+  Verdeling = wie nog geld krijgt (+) of moet (−).
+- **Verrekenen**: een saldo van een bedrag tussen personen (Apart per en Tegenover zijn een Persoon of Personen met
+  aandeel), alles samen, met de subprojecten. Dat is Wie moet wie; het krijgt geen eigen kaart.
 
 | Waar | Hoe |
 | --- | --- |
-| Formulier van een lijst, groep "Totalen" (onder de regel) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode (`Segmented`: Alles · Dag · Week · Maand · Jaar), Volgens, Apart per, Doel (soort + getal). "Totaal toevoegen" als `btn-outline btn-sm` |
-| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per totaal een sectie. Titel = naam, uitleg = de periode ("Vandaag", "Deze week"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`) |
+| Formulier van een lijst, groep "Totalen" (onder de velden) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode en Waar (`Segmented`), Volgens, Apart per, Tegenover (bij een som per persoon of keuze), Doel (soort + getal), de schakelaar Verrekenen (als het kan), en Ook uit (`tag-picker`: "Uitgaven · Skireis", enkel lijsten die passen). "Totaal toevoegen" als `btn-outline btn-sm` |
+| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per totaal een sectie. Titel = naam, uitleg = de periode en waar ("Vandaag · met subprojecten · ook uit andere projecten"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −) |
 
 - Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
-- Telt de items van het project zelf (zonder archief), zoals de lezer ze ziet. Een totaal op een veld dat je niet
-  mag zien (of waarvan het afhangt), stuurt de API niet mee (`visibleTotals`).
+- De API rekent uit (`/projects/:id/totals`), per lezer: elk item met jouw rechten in zijn project. Wat je daar niet
+  mag zien (het project, de lijst, een veld van het totaal of iets waarvan het afhangt), telt niet; zit je niet in
+  het andere project, dan telt er niets van. Een totaal op een veld dat je in het project zelf niet mag zien, stuurt
+  de API niet mee (`visibleTotals`). Zonder archief.
 - Kleur: zwart is gewoon; rood (`--danger-solid`) enkel boven een "niet meer dan"; groen (`--success-solid`) als
   "minstens" gehaald is. De tekst eronder zegt het ook ("Nog 307 kcal tot 1.800 kcal", "120 kcal boven 1.800 kcal").
 - Getallen via `formatTotal` (`src/format.ts`): duizendtallen, vanaf 100 zonder kommagetal. Bedragen en duur zoals
@@ -517,7 +527,8 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
 ### Sjablonen delen: `ShareTemplate` en `TemplateFilePicker` (`TemplateShare.tsx`)
 
 Een project (met zijn subprojecten) of één lijst kan je delen als bestand (`.thuis.json`, `shared/template-file.ts`):
-de lijsten, velden, berekeningen, regels en totalen, **zonder** items, mensen, rollen, tags of standaardverdelingen.
+de lijsten, velden, berekeningen en totalen, **zonder** items, mensen, rollen, tags, gewone verdelingen of lijsten
+uit andere projecten bij "ook uit". Een sjabloon van vroeger met regels wordt bij het inlezen velden en een totaal.
 
 | Waar | Wat |
 | --- | --- |
@@ -562,25 +573,30 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 - Volgorde is een instelling, geen knop op een overzicht: je projecten bij **Ik**, subprojecten bij **Instellen →
   Algemeen** (`ProjectOrder`), lijsten bij **Instellen → Lijsten**, velden in het formulier van een lijst.
 
-### Regels: `RulesEditor` en `BalanceCard`
+### Kosten verdelen: `BalanceCard`
 
-Een **regel** laat de app iets doen met de velden van een lijst (`shared/rules.ts`). Een lijst heeft hooguit één
-regel; je kiest ze onderaan het formulier van de lijst (`RulesEditor`: een `Segmented`, per rol een veld, en bij
-Kosten verdelen de gewone verdeling als `SharesField`). Kies je een regel, dan zoekt de app de passende velden;
-wat ontbreekt, komt erbij.
+Kosten verdelen is geen apart onderdeel meer, maar velden en een totaal dat verrekent (de sjablonen Uitgaven en
+Terugbetalingen zetten het klaar):
 
-| Regel | Velden | Wat de app doet |
+| Lijst | Velden | Totaal |
 | --- | --- | --- |
-| Kosten verdelen (`split`) | Bedrag, Betaald door, Verdeling | Een nieuwe uitgave: jij betaalde, de gewone verdeling (of gelijk over iedereen). Telt mee in Wie moet wie |
-| Terugbetalingen (`settle`) | Bedrag, Van, Aan | Telt mee in Wie moet wie; "Terugbetaald" bewaart hier |
+| Uitgaven | Bedrag, Betaald door (**Begint met jou**), Verdeling (**Leeg = verdelen**, met de gewone verdeling) | Som van Bedrag apart per Betaald door, tegenover Verdeling, verrekenen |
+| Terugbetalingen | Bedrag, Van, Aan (twee personen) | Som van Bedrag apart per Van, tegenover Aan, verrekenen. "Terugbetaald" bewaart hier |
+
+- Wat velden zelf invullen (`applyFieldDefaults`): een Persoon met "Begint met jou" krijgt bij een nieuw item jou
+  (als je in het project zit); Personen met aandeel met "Leeg = verdelen" krijgt de gewone verdeling, anders gelijk
+  over iedereen. De API doet hetzelfde bij bewaren en importeren; wat ingevuld is, blijft.
+- Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde. Een uitgave telt
+  enkel mee als ze een bedrag, iemand die betaalde en een verdeling heeft (anders kwam het niet op 0 uit).
 
 - `BalanceCard` ("Wie moet wie") staat in de zijkolom van een project, met alles eronder. Per overschrijving één
   rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
   en datum; minder mag). Niets open: "Alles is verrekend."
 - Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
 - "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
-- Telt enkel wat je mag zien (de lijst en de velden van de regel); wat verborgen is, telt niet mee.
-- Een nieuwe regel (voorraad, ...) komt in `shared/rules.ts` met zijn velden in `RULE_FIELDS`, en in `RulesEditor`.
+- Telt enkel wat je mag zien (de lijst en de velden van het totaal, per project); wat verborgen is, telt niet mee.
+- Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
+  echt niet gaat, een eigen onderdeel bovenop de kern.
 
 ### Een lijst tonen: `ItemsView`
 
@@ -733,8 +749,8 @@ Regels:
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →
-`split split-main-first`: rechts `ItemsView`, in de zijkolom Wie moet wie (als er een lijst met een regel is; op gsm
-vóór de lijst), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
+`split split-main-first`: rechts `ItemsView`, in de zijkolom de totalen van de open lijst en Wie moet wie (als er
+een lijst is die verrekent; op gsm beide vóór de lijst), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
 `dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het
