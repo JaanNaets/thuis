@@ -172,6 +172,18 @@ test("sjabloon Voeding: formules, gerechten en totalen kloppen", async () => {
   assert.equal(lists[0].totals![1].size, "small");
   assert.equal(lists.find((l) => l.key === "weging")!.totals![0].chart, "line");
 
+  // Voeding onder een huishouden: Eten neemt over uit de Voorraad erboven en telt af wat je opat.
+  const under = resolveTemplateLists(
+    lists.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })),
+    { product: "id-voorraad" },
+  )["id-eten"];
+  const uitVoorraad = under.find((f) => f.key === "voorraad")!;
+  assert.equal(uitVoorraad.ref_type, "id-voorraad");
+  assert.equal(uitVoorraad.copy, true);
+  assert.deepEqual(uitVoorraad.adjust, { field: "aantal", by: "stuks", sign: -1 });
+  assert.equal(computeLocal(under, { gram: 30, inhoud: 400 }).stuks, 0.075);
+  assert.equal(computeLocal(under, { gram: 30 }).stuks, 1);
+
   // Eten los (zonder Gerechten): de kcal enkel uit kcal per 100 g.
   const los = resolveTemplateLists([{ id: "e", list: lists[0], refs: {}, calcs: {} }], {})["e"];
   assert.equal(los.find((f) => f.key === "gerecht"), undefined);
@@ -314,7 +326,7 @@ test("sjablonen: hun totalen passen bij hun velden", async () => {
     const ids = Object.fromEntries(lists.map((l) => [l.key, `id-${l.key}`]));
     const resolved = resolveTemplateLists(lists.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })), {});
     for (const list of lists) {
-      assert.equal(resolved[ids[list.key]].length, list.fields.length, `${list.name}: alle velden kloppen`);
+      assert.equal(resolved[ids[list.key]].length, list.fields.filter((f) => !f.ref || ids[f.ref]).length, `${list.name}: alle velden kloppen`);
       if (list.totals) assert.deepEqual(cleanTotals(list.totals, resolved[ids[list.key]]), list.totals, list.name);
     }
   }

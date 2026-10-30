@@ -20,6 +20,11 @@ const NAME_PLACEHOLDERS: Record<TemplateKey, string> = {
   bikes: "bv. Koersfietsen",
   expenses: "bv. Skireis 2027, Verbouwing badkamer",
   food: "bv. Voeding, Wat ik eet",
+  recipes: "bv. Recepten, Kookboek",
+  notes: "bv. Notities, Ideeën",
+  pets: "bv. Huisdieren, Rex en Minou",
+  trips: "bv. Reizen, Japan 2027",
+  sport: "bv. Sport, Lopen",
   collection: "bv. Platen, Strips, Gereedschap",
 };
 

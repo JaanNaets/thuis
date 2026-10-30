@@ -1237,6 +1237,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind } : {}),
       ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
       ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
+      ...(d.type === "item" && d.copy ? { copy: true } : {}),
+      ...(d.type === "item" && d.adjust ? { adjust: { field: d.adjust.field, sign: d.adjust.sign, ...(d.adjust.by ? { by: rename(d.adjust.by) } : {}) } } : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1250,6 +1252,64 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
  * verwijzing, formaat, wat een berekening uitrekent, uitleg, kolom, filter en verplicht. `types`: de lijsten waarnaar
  * een verwijzing kan wijzen; `lists`: de lijsten waarmee een berekening kan werken (ook eronder).
  */
+/**
+ * Een verwijzing die telt (zie shared/effects.ts): bij bewaren een getal van het gekozen item aanpassen, erbij of eraf,
+ * met 1 of een getal of berekening van deze lijst. Enkel als de lijst waarnaar het wijst een getal heeft.
+ */
+function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; fields: FieldDraft[]; lists: CalcList[]; onChange: (adjust: FieldDef["adjust"]) => void }) {
+  const target = lists.find((l) => l.id === field.ref_type);
+  const numbers = target?.fields.filter((x) => x.type === "number") ?? [];
+  if (!target || !numbers.length) return null;
+  const own = fields.filter((x) => x !== field && ["number", "money", "duration", "calc"].includes(x.type) && x.label.trim());
+  const adjust = field.adjust;
+  return (
+    <>
+      <label className="field">
+        <span className="label">
+          Past het gekozen item aan <span className="optional">· optioneel</span>
+        </span>
+        <select
+          value={adjust ? `${adjust.sign}:${adjust.field}` : ""}
+          onChange={(e) => {
+            const [sign, key] = e.target.value.split(":");
+            onChange(key ? { field: key, sign: Number(sign) as 1 | -1, ...(adjust?.by ? { by: adjust.by } : {}) } : undefined);
+          }}
+        >
+          <option value="">Niets</option>
+          {numbers.map((n) => (
+            <option key={`-${n.key}`} value={`-1:${n.key}`}>
+              Trekt af van {n.label}
+            </option>
+          ))}
+          {numbers.map((n) => (
+            <option key={`+${n.key}`} value={`1:${n.key}`}>
+              Telt bij {n.label}
+            </option>
+          ))}
+        </select>
+        <span className="hint">
+          Bij bewaren past de app dat getal van het gekozen item uit {target.plural.toLowerCase()} aan (bv. eten uit de voorraad, een gekocht product erbij).
+          Wijzig of verwijder je dit item, dan past het mee aan.
+        </span>
+      </label>
+      {adjust && (
+        <label className="field">
+          <span className="label">Met</span>
+          <select value={adjust.by ?? ""} onChange={(e) => onChange({ field: adjust.field, sign: adjust.sign, ...(e.target.value ? { by: e.target.value } : {}) })}>
+            <option value="">1 per item</option>
+            {own.map((x) => (
+              <option key={x.key} value={x.key}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+          <span className="hint">Een getal of berekening van deze lijst, bv. Hoeveel, of Stuks (gram ÷ inhoud).</span>
+        </label>
+      )}
+    </>
+  );
+}
+
 export function FieldsEditor({
   value,
   onChange,
@@ -1466,6 +1526,15 @@ export function FieldsEditor({
                       hint="Een verjaardag: elk jaar op dezelfde dag, niet enkel die ene datum."
                     />
                   )}
+                  {f.type === "item" && (
+                    <Switch
+                      checked={Boolean(f.copy)}
+                      onChange={(on) => update(i, { copy: on })}
+                      label="Neemt waarden over"
+                      hint="Kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde naam daar (bv. kcal uit de voorraad)."
+                    />
+                  )}
+                  {f.type === "item" && f.ref_type && <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />}
                   {f.type === "number" && (
                     <Switch
                       checked={Boolean(f.counter)}

@@ -42,7 +42,9 @@ test("sjablonen: elke lijst heeft geldige velden, verwijzingen en berekeningen",
         fields.map(({ result: _r, ...f }) => f),
         `${t.label} › ${ty.name}`,
       );
-      assert.equal(fields.length, ty.fields.length, `${t.label} › ${ty.name}: alles gevonden`);
+      // Een verwijzing naar een lijst buiten het sjabloon (Eten → de Voorraad van je huishouden) valt hier weg.
+      const inside = new Set(t.types.map((x) => x.key));
+      assert.equal(fields.length, ty.fields.filter((f) => !f.ref || inside.has(f.ref)).length, `${t.label} › ${ty.name}: alles gevonden`);
     }
   }
   for (const ty of LIST_TEMPLATES) assert.equal(resolve([ty])[`id-${ty.key}`].length, ty.fields.length, ty.name);

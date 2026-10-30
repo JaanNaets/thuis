@@ -226,7 +226,8 @@ Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar me
 
 Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
 subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
-Koersfietsen, Gedeelde uitgaven, Voeding, Verzameling) dat de lijsten met hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
+Koersfietsen, Gedeelde uitgaven, Voeding, Recepten, Notities, Huisdieren, Reizen, Sport, Verzameling) dat de lijsten met
+hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
 Losse lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken, ...) voeg je toe bij **Instellen →
 Lijsten → Uit sjabloon**.
 
@@ -349,6 +350,23 @@ filter **Kopen: Ja**.
 Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):
 je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
 een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
+
+### Verwijzingen die tellen en overnemen
+
+Een verwijzing (een veld dat naar een item uit een andere lijst wijst, ook uit een ander project) kan meer dan wijzen:
+
+- **Neemt waarden over**: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde
+  naam daar (zacht blauw, je kan ze aanpassen). Eten "Uit voorraad" neemt zo de kcal, macro's en inhoud van het
+  product over, en de naam.
+- **Past het gekozen item aan**: bij bewaren trekt het een getal van dat item af, of telt het erbij, met 1 of met een
+  getal of berekening van hier. Eten trekt van de Voorraad af wat je opat (Hoeveel ÷ Inhoud per stuk: 30 g van een
+  pot van 400 g = 0,075); de Winkellijst telt bij de Voorraad wat je afvinkt als gekocht. Wijzig je het item, dan past
+  de app enkel het verschil aan; verwijder je het, dan draait ze het terug. Je moet dat getal daar wel mogen
+  wijzigen, anders bewaart de app niets.
+
+Beide stel je in bij het veld (onder ⋯). Staat Voeding onder je huishouden, dan wijst "Uit voorraad" vanzelf naar je
+Voorraad; anders kies je bij het veld de Voorraad (ook uit een ander project). Importeren uit een tabel past niets
+aan.
 
 ### Filteren en weergaven
 

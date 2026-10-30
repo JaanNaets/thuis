@@ -134,6 +134,13 @@ export type FieldDef = {
   yearly?: boolean;
   /** Datum, periode of berekende datum: in de agenda van al je projecten (zie shared/agenda.ts). */
   agenda?: boolean;
+  /**
+   * Verwijzing: past bij bewaren het getal `field` van het gekozen item aan, met het getal `by` van dit item (leeg = 1),
+   * erbij (`sign` 1) of eraf (-1). Zie shared/effects.ts.
+   */
+  adjust?: { field: string; by?: string; sign: 1 | -1 };
+  /** Verwijzing: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde sleutel daar. */
+  copy?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -190,7 +197,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
   if (raw === null || raw === undefined) return [];
   if (!Array.isArray(raw) || raw.length > MAX_FIELDS) throw new Error(`Hoogstens ${MAX_FIELDS} velden per lijst`);
   const seen = new Set<string>();
-  return raw.map((r) => {
+  const fields = raw.map((r) => {
     const f = (r ?? {}) as Record<string, unknown>;
     const label = typeof f.label === "string" ? f.label.trim().slice(0, 40) : "";
     if (!label) throw new Error("Elk veld heeft een naam nodig");
@@ -247,8 +254,16 @@ export function cleanFields(raw: unknown): FieldDef[] {
       if (shares.length) def.default_shares = shares;
     }
     if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
+    if (f.copy === true && type === "item") def.copy = true;
+    const adjust = f.adjust as Record<string, unknown> | undefined;
+    if (type === "item" && adjust && typeof adjust === "object" && typeof adjust.field === "string" && KEY_RE.test(adjust.field) && (adjust.sign === 1 || adjust.sign === -1)) {
+      def.adjust = { field: adjust.field, sign: adjust.sign, ...(typeof adjust.by === "string" && KEY_RE.test(adjust.by) ? { by: adjust.by } : {}) };
+    }
     return def;
   });
+  // Met welk getal een verwijzing telt: een getal of berekening van deze lijst (anders 1).
+  const amounts = new Set(fields.filter((f) => ["number", "money", "duration", "calc"].includes(f.type)).map((f) => f.key));
+  return fields.map((f) => (f.adjust?.by && !amounts.has(f.adjust.by) ? { ...f, adjust: { field: f.adjust.field, sign: f.adjust.sign } } : f));
 }
 
 /** Velden waarop je boven de lijst kan filteren. */

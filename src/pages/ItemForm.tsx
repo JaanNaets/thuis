@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, formatFieldValue, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
+import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -149,6 +149,28 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       .map(([, i]) => i);
     return { earlier: byName, often };
   }, [siblings, type.name]);
+
+  // Neemt waarden over (`copy` op een verwijzing): de velden met dezelfde sleutel in het gekozen item, waar je nog niets
+  // invulde (zacht blauw), en de naam als die nog leeg is. Wat niet past bij het veld hier, valt weg (`cleanValue`).
+  async function copyFrom(id: string, via: string) {
+    try {
+      const source = await api.get<ItemDetail>(`/items/${id}`);
+      const data: Attributes = {};
+      for (const f of fields) {
+        if (f.key === via || f.type === "calc" || type.field_access[f.key] !== "edit" || touched.current.has(f.key)) continue;
+        const value = source.data[f.key];
+        const clean = value === undefined ? null : cleanValue(f, value);
+        if (clean !== null && clean !== undefined) data[f.key] = clean;
+      }
+      const drafted = attributesDraft(fields, data);
+      setAttrs((a) => ({ ...a, ...Object.fromEntries(Object.keys(data).map((k) => [k, drafted[k]])) }));
+      const named = !touched.current.has("name") && !name.trim();
+      if (named) setName(source.name);
+      setAuto((a) => new Set([...a, ...Object.keys(data), ...(named ? ["name"] : [])]));
+    } catch {
+      // Niet kunnen ophalen: dan vul je het zelf in.
+    }
+  }
 
   // Productinfo (echte gegevens uit Open Food Facts) in de velden die je nog niet zelf invulde, en de barcode in een
   // barcodeveld als de lijst er een heeft.
@@ -377,7 +399,9 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
               touched.current.add(key);
               setAuto((a) => (a.has(key) ? new Set([...a].filter((k) => k !== key)) : a));
               setAttrs(next);
-              if (fields.find((f) => f.key === key)?.type === "code") lookupCode(next[key]);
+              const def = fields.find((f) => f.key === key);
+              if (def?.type === "code") lookupCode(next[key]);
+              if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
             }}
           />
         )}

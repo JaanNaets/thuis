@@ -24,6 +24,8 @@ import { accessibleProjects, placeholders, projectAccess, requireProject, toItem
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
+import { netEffects, parseApplied } from "../../shared/effects";
+import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 import { cleanView, matchesView, sortItems } from "../../shared/views";
 import { fieldsForViews } from "./views";
@@ -33,7 +35,7 @@ export const projectItems = new Hono<AppEnv>();
 export const files = new Hono<AppEnv>();
 export const search = new Hono<AppEnv>();
 
-export type ItemRow = Omit<Item, "data" | "tag_ids"> & { data: string; tag_json: string };
+export type ItemRow = Omit<Item, "data" | "tag_ids"> & { data: string; tag_json: string; applied?: string | null };
 
 export const ITEM_SELECT = `SELECT i.*, (SELECT json_group_array(tag_id) FROM item_tags WHERE item_id = i.id) AS tag_json FROM items i`;
 
@@ -47,7 +49,8 @@ function parseData(json: string): Attributes {
 }
 
 export function toItem(row: ItemRow, rights: Rights, type: ItemType): Item {
-  const { data, tag_json, ...rest } = row;
+  // `applied` (wat het aan andere items deed) blijft op de server: het noemt items die de lezer misschien niet ziet.
+  const { data, tag_json, applied: _applied, ...rest } = row;
   return { ...rest, data: visibleData(rights, type.id, type.fields, parseData(data)), tag_ids: JSON.parse(tag_json) as string[] };
 }
 
@@ -299,11 +302,14 @@ projectItems.post("/:id/items", async (c) => {
   const data = await prepareData(db, me, access, type, input.data, {}, true);
   await assertTags(db, access.chain, input.tag_ids);
   const id = crypto.randomUUID();
+  // Verwijzingen die tellen (bv. eten uit de voorraad): samen met het item, of niets.
+  const applied = await computeEffects(db, me, access.rights, type, { id, project_id: access.project.id }, data);
   await db.batch([
     db
-      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(id, access.project.id, type.id, nameOrDefault(type, input.name, data), JSON.stringify(data), me),
+      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by, applied) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, access.project.id, type.id, nameOrDefault(type, input.name, data), JSON.stringify(data), me, applied.length ? JSON.stringify(applied) : null),
     ...tagStatements(db, id, input.tag_ids),
+    ...(await effectStatements(db, me, applied, true)),
   ]);
   return c.json(await loadDetail(c, id), 201);
 });
@@ -426,10 +432,13 @@ items.put("/:id", async (c) => {
     throw new ForbiddenError("Dit item mag je enkel bekijken.");
   if (input.type_id !== type.id) throw new ValidationError("Een item verhuist niet naar een andere lijst.");
   const data = await prepareData(db, me, access, type, input.data, parseData(row.data), false);
+  // Verwijzingen die tellen: enkel het verschil met wat al toegepast was.
+  const applied = await computeEffects(db, me, access.rights, type, row, data);
   const statements = [
     db
-      .prepare("UPDATE items SET name = ?, data = ?, updated_at = datetime('now') WHERE id = ?")
-      .bind(editsType ? nameOrDefault(type, input.name, data) : row.name, JSON.stringify(data), row.id),
+      .prepare("UPDATE items SET name = ?, data = ?, applied = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(editsType ? nameOrDefault(type, input.name, data) : row.name, JSON.stringify(data), applied.length ? JSON.stringify(applied) : null, row.id),
+    ...(await effectStatements(db, me, netEffects(parseApplied(row.applied), applied), true)),
   ];
   if (editsType) {
     await assertTags(db, access.chain, input.tag_ids);
@@ -450,7 +459,9 @@ items.delete("/:id", async (c) => {
   const { row, access, type } = await requireItem(c, c.req.param("id"));
   if (!canDelete(access.rights, type.id)) throw new ForbiddenError("Je mag dit item niet verwijderen.");
   const { results } = await c.env.DB.prepare("SELECT r2_key FROM item_files WHERE item_id = ?").bind(row.id).all<{ r2_key: string }>();
-  await c.env.DB.prepare("DELETE FROM items WHERE id = ?").bind(row.id).run();
+  // Wat het aan andere items deed, terugdraaien (waar je dat mag; anders blijft het daar zoals het is).
+  const revert = await effectStatements(c.env.DB, c.get("person").id, netEffects(parseApplied(row.applied), []), false);
+  await c.env.DB.batch([c.env.DB.prepare("DELETE FROM items WHERE id = ?").bind(row.id), ...revert]);
   await c.env.FILES.delete([...results.map((r) => r.r2_key), photoKey(row.id)]);
   return c.body(null, 204);
 });
@@ -1048,15 +1059,17 @@ export async function createRepeated(db: D1Database, personId: string, sourceId:
   const given = type.fields.some((f) => f.type === "date" && f.today) && /^.+ \d{2}\/\d{2}\/\d{4}$/.test(row.name) && row.name.startsWith(`${type.name} `);
   const { results: tags } = await db.prepare("SELECT tag_id FROM item_tags WHERE item_id = ?").bind(sourceId).all<{ tag_id: string }>();
   const id = crypto.randomUUID();
+  const applied = await computeEffects(db, personId, access.rights, type, { id, project_id: row.project_id }, data);
   await db.batch([
     db
-      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(id, row.project_id, type.id, nameOrDefault(type, given ? "" : row.name, data), JSON.stringify(data), personId),
+      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by, applied) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, row.project_id, type.id, nameOrDefault(type, given ? "" : row.name, data), JSON.stringify(data), personId, applied.length ? JSON.stringify(applied) : null),
     ...tagStatements(
       db,
       id,
       tags.map((t) => t.tag_id),
     ),
+    ...(await effectStatements(db, personId, applied, true)),
   ]);
   return id;
 }

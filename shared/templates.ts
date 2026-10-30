@@ -17,6 +17,10 @@ export const ICONS = [
   "recipe",
   "weight",
   "water",
+  "calendar",
+  "cart",
+  "paw",
+  "dumbbell",
   "bike",
   "armchair",
   "package",
@@ -185,6 +189,15 @@ const FOOD: TypeTemplate = {
     TODAY,
     { key: "maaltijd", label: "Maaltijd", type: "select", options: ["Ontbijt", "Middag", "Avond", "Tussendoor"], filter: true },
     WHO,
+    {
+      key: "voorraad",
+      label: "Uit voorraad",
+      type: "item",
+      ref: "product",
+      copy: true,
+      adjust: { field: "aantal", by: "stuks", sign: -1 },
+      hint: "een product uit je voorraad: het neemt de voedingswaarde over en telt af wat je opat",
+    },
     { key: "gerecht", label: "Gerecht", type: "item", ref: "gerecht", hint: "iets dat je zelf maakte: de kcal komt uit zijn ingrediënten" },
     {
       key: "kcal_100",
@@ -195,6 +208,15 @@ const FOOD: TypeTemplate = {
       hint: "per 100 g of 100 ml, in kcal (niet kJ): van de voedingstabel, anders geschat",
     },
     { key: "gram", label: "Hoeveel", type: "number", unit: "g", hint: "wat je at of dronk, in g of ml (niet de hele verpakking)" },
+    { key: "inhoud", label: "Inhoud per stuk", type: "number", unit: "g", hint: "komt uit de voorraad: zo weet de app hoeveel stuks je opat" },
+    {
+      key: "stuks",
+      label: "Van de voorraad",
+      type: "calc",
+      unit: "stuks",
+      hint: "wat er van de voorraad afgaat: Hoeveel ÷ Inhoud per stuk (zonder inhoud: één stuk)",
+      calc: { kind: "formula", expr: "afronden(of([gram] / [inhoud]; 1); 3)" },
+    },
     { key: "gerecht_kcal_100", label: "kcal per 100 g van het gerecht", type: "calc", unit: "kcal", calc: { kind: "lookup", via: "gerecht", field: "kcal_100" } },
     {
       key: "kcal",
@@ -268,6 +290,193 @@ const WATER: TypeTemplate = {
   totals: [{ id: "dag", label: "Water per dag", agg: "sum", field: "ml", period: "day", date: "datum", mine: "wie", goal: 2000, goal_kind: "min" }],
 };
 
+/** Een recept om te koken (los van Voeding: daar rekent een Gerecht de kcal uit zijn ingrediënten). */
+const RECIPE: TypeTemplate = {
+  key: "recept",
+  name: "Recept",
+  plural: "Recepten",
+  icon: "note",
+  fields: [
+    { key: "bron", label: "Bron", type: "url" },
+    { key: "personen", label: "Voor", type: "number", unit: "personen" },
+    { key: "duur", label: "Bereiding", type: "duration", column: true },
+    { key: "soort", label: "Soort", type: "select", options: ["Voorgerecht", "Hoofdgerecht", "Dessert", "Soep", "Bijgerecht", "Ontbijt"], filter: true },
+    { key: "score", label: "Score", type: "score", column: true },
+    { key: "ingredienten", label: "Ingrediënten", type: "checklist" },
+    { key: "bereiding", label: "Bereiding", type: "longtext" },
+  ],
+};
+
+const TRIP: TypeTemplate = {
+  key: "reis",
+  name: "Reis",
+  plural: "Reizen",
+  name_label: "Bestemming",
+  icon: "pin",
+  fields: [
+    { key: "periode", label: "Periode", type: "date_range", column: true, filter: true, agenda: true },
+    { key: "wie", label: "Wie gaat mee", type: "people", filter: true },
+    { key: "vertrek", label: "Vertrek", type: "time" },
+    { key: "budget", label: "Budget", type: "money" },
+    { key: "logies", label: "Logies", type: "address" },
+    { key: "paklijst", label: "Paklijst", type: "checklist" },
+    NOTE,
+  ],
+};
+
+/** Wat je op een reis doet: per dag in de agenda. */
+const ACTIVITY: TypeTemplate = {
+  key: "activiteit",
+  name: "Activiteit",
+  plural: "Programma",
+  icon: "star",
+  fields: [
+    { key: "reis", label: "Reis", type: "item", ref: "reis", required: true, column: true, filter: true },
+    { key: "datum", label: "Datum", type: "date", column: true, agenda: true },
+    { key: "tijd", label: "Om", type: "time" },
+    { key: "plaats", label: "Waar", type: "address" },
+    { key: "kost", label: "Kost", type: "money" },
+    { key: "geboekt", label: "Geboekt", type: "bool", filter: true },
+    { key: "boeking", label: "Boeking of ticket", type: "url" },
+    NOTE,
+  ],
+};
+
+/** Losse notities: een titel, tekst en tags; vastgezet bovenaan te filteren. */
+const NOTES: TypeTemplate = {
+  key: "notitie",
+  name: "Notitie",
+  plural: "Notities",
+  name_label: "Titel",
+  icon: "note",
+  fields: [
+    { key: "tekst", label: "Tekst", type: "longtext" },
+    { key: "vast", label: "Vastgezet", type: "bool", filter: true },
+    { key: "datum", label: "Datum", type: "date", today: true, column: true },
+  ],
+};
+
+const PET: TypeTemplate = {
+  key: "huisdier",
+  name: "Huisdier",
+  plural: "Huisdieren",
+  icon: "paw",
+  fields: [
+    { key: "soort", label: "Soort", type: "select", options: ["Hond", "Kat", "Konijn", "Cavia", "Vogel", "Vis", "Paard", "Andere"], column: true, filter: true },
+    { key: "ras", label: "Ras", type: "text" },
+    { key: "geboren", label: "Geboren", type: "date", remind: 1, yearly: true, agenda: true },
+    { key: "leeftijd", label: "Leeftijd", type: "calc", column: true, calc: { kind: "since", field: "geboren", unit: "year" } },
+    { key: "chip", label: "Chipnummer", type: "text" },
+    { key: "dierenarts", label: "Dierenarts", type: "phone", hint: "het nummer van de dierenarts" },
+    { key: "zorg", label: "Voeding en zorg", type: "longtext" },
+    NOTE,
+  ],
+};
+
+/** Wat een huisdier nodig heeft (inenting, ontworming, …): de volgende keer in de agenda, met een herinnering. */
+const PET_CARE: TypeTemplate = {
+  key: "verzorging",
+  name: "Verzorging",
+  plural: "Verzorging",
+  icon: "clock",
+  fields: [
+    { key: "huisdier", label: "Huisdier", type: "item", ref: "huisdier", required: true, column: true, filter: true },
+    {
+      key: "wat",
+      label: "Wat",
+      type: "select",
+      options: ["Inenting", "Ontworming", "Vlooien en teken", "Dierenarts", "Trimmen", "Nagels", "Andere"],
+      filter: true,
+    },
+    { key: "datum", label: "Gedaan op", type: "date", required: true, today: true },
+    { key: "elke", label: "Om de", type: "interval", hint: "bv. elk jaar, elke 3 maanden" },
+    { key: "volgende", label: "Volgende keer", type: "calc", column: true, remind: 7, agenda: true, calc: { kind: "date_add", field: "datum", add: { field: "elke" } } },
+    { key: "kost", label: "Kost", type: "money" },
+    NOTE,
+  ],
+  totals: [{ id: "jaar", label: "Kosten per jaar", agg: "sum", field: "kost", period: "year", date: "datum" }],
+};
+
+/** Sport: per week hoeveel tijd, afstand en kcal, ieder het zijne. */
+const WORKOUT: TypeTemplate = {
+  key: "training",
+  name: "Training",
+  plural: "Trainingen",
+  icon: "dumbbell",
+  fields: [
+    { key: "datum", label: "Datum", type: "date", required: true, today: true, column: true },
+    { key: "wie", label: "Wie", type: "person", me: true, filter: true },
+    {
+      key: "soort",
+      label: "Soort",
+      type: "select",
+      options: ["Lopen", "Fietsen", "Zwemmen", "Wandelen", "Fitness", "Yoga", "Padel", "Voetbal", "Andere"],
+      column: true,
+      filter: true,
+    },
+    { key: "duur", label: "Duur", type: "duration", column: true },
+    { key: "afstand", label: "Afstand", type: "number", unit: "km" },
+    { key: "kcal", label: "Verbruikt", type: "number", unit: "kcal" },
+    { key: "gevoel", label: "Gevoel", type: "score" },
+    NOTE,
+  ],
+  totals: [
+    { id: "duur", label: "Sporttijd per week", agg: "sum", field: "duur", period: "week", date: "datum", mine: "wie" },
+    { id: "afstand", label: "Afstand per week", agg: "sum", field: "afstand", period: "week", date: "datum", mine: "wie", size: "small" },
+    { id: "kcal", label: "Verbruikt per week", agg: "sum", field: "kcal", period: "week", date: "datum", mine: "wie", size: "small" },
+  ],
+};
+
+/**
+ * De winkellijst, verbonden met de voorraad: kies een product (het neemt zijn gegevens over), en vink af wat je
+ * kocht: dan telt het bij het aantal in de voorraad (en weer af als je het afvinken ongedaan maakt).
+ */
+const SHOPPING: TypeTemplate = {
+  key: "boodschap",
+  name: "Boodschap",
+  plural: "Winkellijst",
+  name_label: "Wat",
+  icon: "cart",
+  fields: [
+    {
+      key: "product",
+      label: "Product",
+      type: "item",
+      ref: "product",
+      copy: true,
+      adjust: { field: "aantal", by: "binnen", sign: 1 },
+      hint: "uit je voorraad: afgevinkt telt het erbij",
+    },
+    { key: "hoeveel", label: "Hoeveel", type: "number", column: true },
+    { key: "gekocht", label: "Gekocht", type: "bool", column: true, filter: true },
+    {
+      key: "binnen",
+      label: "Naar de voorraad",
+      type: "calc",
+      hint: "wat er bij de voorraad komt: Hoeveel, als het gekocht is",
+      calc: { kind: "formula", expr: "als([gekocht]; of([hoeveel]; 1); 0)" },
+    },
+    { key: "winkel", label: "Winkel", type: "item", ref: "verkoper", filter: true },
+    NOTE,
+  ],
+};
+
+/** Wat je gaat eten: per dag in de agenda; een gerecht vult de naam in. */
+const MEAL_PLAN: TypeTemplate = {
+  key: "maaltijd",
+  name: "Maaltijd",
+  plural: "Maaltijdplan",
+  name_label: "Wat",
+  icon: "calendar",
+  fields: [
+    { key: "datum", label: "Datum", type: "date", required: true, column: true, agenda: true },
+    { key: "moment", label: "Maaltijd", type: "select", options: ["Ontbijt", "Middag", "Avond", "Tussendoor"], column: true, filter: true },
+    { key: "gerecht", label: "Gerecht", type: "item", ref: "gerecht", copy: true },
+    { key: "wie", label: "Voor wie", type: "people" },
+    NOTE,
+  ],
+};
+
 export const PROJECT_TEMPLATES = {
   empty: {
     label: "Leeg project",
@@ -277,7 +486,7 @@ export const PROJECT_TEMPLATES = {
   },
   household: {
     label: "Huishouden",
-    description: "Wat je hebt, je voorraad, klantenkaarten, verkopers, plaatsen en uitgaven",
+    description: "Wat je hebt, je voorraad en winkellijst, klantenkaarten, verkopers, plaatsen en uitgaven",
     icon: "home",
     types: [
       {
@@ -316,9 +525,15 @@ export const PROJECT_TEMPLATES = {
           },
           { key: "plaats", label: "Plaats", type: "item", ref: "plaats", column: true, filter: true },
           { key: "barcode", label: "Barcode", type: "code", format: "ean_13" },
+          { key: "inhoud", label: "Inhoud per stuk", type: "number", unit: "g", hint: "in g of ml: zo rekent Eten uit hoeveel stuks je opat" },
+          { key: "kcal_100", label: "kcal per 100 g", type: "number", unit: "kcal", product: "kcal" },
+          { key: "eiwit_100", label: "Eiwit per 100 g", type: "number", unit: "g", product: "protein" },
+          { key: "koolhydraten_100", label: "Koolhydraten per 100 g", type: "number", unit: "g", product: "carbs" },
+          { key: "vet_100", label: "Vet per 100 g", type: "number", unit: "g", product: "fat" },
           NOTE,
         ],
       },
+      SHOPPING,
       {
         key: "kaart",
         name: "Kaart",
@@ -400,9 +615,39 @@ export const PROJECT_TEMPLATES = {
   },
   food: {
     label: "Voeding",
-    description: "Wat je eet (kcal en macro's per dag), gerechten, je gewicht en water. Een foto vult de voedingswaarde in",
+    description: "Wat je eet (kcal en macro's per dag, ook uit je voorraad), een maaltijdplan, gerechten, je gewicht en water",
     icon: "food",
-    types: [FOOD, DISH, INGREDIENT, WEIGHT, WATER],
+    types: [FOOD, MEAL_PLAN, DISH, INGREDIENT, WEIGHT, WATER],
+  },
+  recipes: {
+    label: "Recepten",
+    description: "Je kookboek: ingrediënten, bereiding, hoe lang en hoe lekker",
+    icon: "recipe",
+    types: [RECIPE],
+  },
+  notes: {
+    label: "Notities",
+    description: "Losse notities, ideeën en lijstjes, met tags",
+    icon: "note",
+    types: [NOTES],
+  },
+  pets: {
+    label: "Huisdieren",
+    description: "Je dieren, hun verjaardag en verzorging, met een herinnering voor de volgende inenting",
+    icon: "paw",
+    types: [PET, PET_CARE],
+  },
+  trips: {
+    label: "Reizen",
+    description: "Reizen met hun programma per dag, paklijst en budget, in de agenda",
+    icon: "pin",
+    types: [TRIP, ACTIVITY],
+  },
+  sport: {
+    label: "Sport",
+    description: "Je trainingen: tijd, afstand en kcal per week, ieder het zijne",
+    icon: "dumbbell",
+    types: [WORKOUT],
   },
   collection: {
     label: "Verzameling",
@@ -449,37 +694,8 @@ export const LIST_TEMPLATES: TypeTemplate[] = [
       NOTE,
     ],
   },
-  {
-    key: "recept",
-    name: "Recept",
-    plural: "Recepten",
-    icon: "note",
-    fields: [
-      { key: "bron", label: "Bron", type: "url" },
-      { key: "personen", label: "Voor", type: "number", unit: "personen" },
-      { key: "duur", label: "Bereiding", type: "duration", column: true },
-      { key: "soort", label: "Soort", type: "select", options: ["Voorgerecht", "Hoofdgerecht", "Dessert", "Soep", "Bijgerecht", "Ontbijt"], filter: true },
-      { key: "score", label: "Score", type: "score", column: true },
-      { key: "ingredienten", label: "Ingrediënten", type: "checklist" },
-      { key: "bereiding", label: "Bereiding", type: "longtext" },
-    ],
-  },
-  {
-    key: "reis",
-    name: "Reis",
-    plural: "Reizen",
-    name_label: "Bestemming",
-    icon: "pin",
-    fields: [
-      { key: "periode", label: "Periode", type: "date_range", column: true, filter: true, agenda: true },
-      { key: "wie", label: "Wie gaat mee", type: "people", filter: true },
-      { key: "vertrek", label: "Vertrek", type: "time" },
-      { key: "budget", label: "Budget", type: "money" },
-      { key: "logies", label: "Logies", type: "address" },
-      { key: "paklijst", label: "Paklijst", type: "checklist" },
-      NOTE,
-    ],
-  },
+  RECIPE,
+  TRIP,
   {
     key: "contact",
     name: "Contact",
