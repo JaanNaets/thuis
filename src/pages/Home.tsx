@@ -85,7 +85,7 @@ export function Home() {
   );
 }
 
-/** Eén project op het overzicht: de kop opent het project, elke rij opent een lijst. */
+/** Eén project op het overzicht: de kop opent het project, elke rij opent een lijst; + voegt er meteen iets aan toe. */
 function ProjectCard({ project: p, above, types, index }: { project: ProjectNode; above?: string; types?: OverviewType[]; index: number }) {
   return (
     <section className="card dash-card" style={stagger(index)}>
@@ -104,9 +104,9 @@ function ProjectCard({ project: p, above, types, index }: { project: ProjectNode
       </Link>
       {!types ? null : types.length > 0 ? (
         <ul className="rows">
-          {types.map((t) => (
-            <li key={t.id}>
-              <Link to={`/projecten/${p.id}?lijst=${t.id}`} className="row">
+          {types.map((t) => {
+            const main = (
+              <>
                 <span className="cell-main">
                   <span className="row-media">
                     <Icon name={(t.icon ?? "folder") as IconName} size={16} />
@@ -116,9 +116,27 @@ function ProjectCard({ project: p, above, types, index }: { project: ProjectNode
                 <span className="row-end">
                   <Num value={t.count} />
                 </span>
-              </Link>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={t.id}>
+                {t.can_create ? (
+                  <div className="row">
+                    <Link to={`/projecten/${p.id}?lijst=${t.id}`} className="row-link">
+                      {main}
+                    </Link>
+                    <Link to={`/projecten/${p.id}/nieuw?lijst=${t.id}`} className="btn btn-ghost btn-icon btn-sm" aria-label={`${t.name} toevoegen`}>
+                      <Icon name="plus" size={16} />
+                    </Link>
+                  </div>
+                ) : (
+                  <Link to={`/projecten/${p.id}?lijst=${t.id}`} className="row">
+                    {main}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="dash-empty">Nog niets om bij te houden</p>

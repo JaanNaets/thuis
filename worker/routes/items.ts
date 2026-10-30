@@ -590,6 +590,9 @@ projectItems.post("/:id/items/import", async (c) => {
 
 // ---------- een etiket lezen ----------
 
+/** Hoeveel andere dingen op één foto van eten de AI hooguit apart geeft. */
+const MAX_OTHERS = 5;
+
 /** Velden die de AI van een foto kan lezen. */
 const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool", "item"];
 
@@ -697,6 +700,16 @@ projectItems.post("/:id/items/scan", async (c) => {
       brand: { type: ["string", "null"] },
       barcode: { type: ["string", "null"] },
       ...Object.fromEntries(estimated.map((f) => [f.key, { type: "number" }])),
+      // Andere dingen op dezelfde foto, elk met zijn naam en dezelfde schattingen.
+      others: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { name: { type: "string" }, ...Object.fromEntries(estimated.map((f) => [f.key, { type: "number" }])) },
+          required: ["name", ...estimated.map((f) => f.key)],
+          additionalProperties: false,
+        },
+      },
     });
     schema.required = Object.keys(schema.properties);
   }
@@ -707,7 +720,8 @@ projectItems.post("/:id/items/scan", async (c) => {
 - brand: het merk zoals op de verpakking, of null
 - barcode: de cijfers onder de barcode als je ze allemaal kan lezen, anders null
 ${fields.map((f) => describeField(f) + (f.product ? ` (${PRODUCT_KEYS[f.product].label})` : "")).join("\n")}
-${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in: lees het van de verpakking als dat kan, anders schat je het zoals een voedingstabel het zou geven voor wat je ziet (een cappuccino, een croissant, een bord pasta), en schat je hoeveel er op de foto staat (in g of ml; bij een gesloten verpakking één gewone portie).\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.`
+${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in: lees het van de verpakking als dat kan, anders schat je het zoals een voedingstabel het zou geven voor wat je ziet (een cappuccino, een croissant, een bord pasta), en schat je hoeveel er op de foto staat (in g of ml; bij een gesloten verpakking één gewone portie).\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.
+- others: staan er meerdere aparte dingen op de foto (een bord met rijst, kip en broccoli; een boterham en een appel), geef dan het grootste hierboven en elk ander hier, met zijn naam in het Nederlands${estimated.length ? ` en ${estimated.map((f) => f.key).join(" en ")} geschat zoals hierboven` : ""}. Eén gerecht (lasagne, soep, een broodje) of één product is één ding: dan is others leeg.`
     : `Je leest wat er op een foto staat: een etiket, typeplaatje, kasticket of factuur. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit een getal, bedrag of datum.
 Bij een kasticket of factuur: een bedrag is het totaal dat betaald werd ("Totaal", "Te betalen"), een datum de datum van aankoop, en een winkel of verkoper de naam van de zaak (zonder adres of filiaal).
 Een keuze (zoals een categorie) mag je afleiden uit wat je ziet.
@@ -737,7 +751,7 @@ ${fields.map(describeField).join("\n")}`;
       response_format: { type: "json_schema", json_schema: { name: "label", schema, strict: true } },
       chat_template_kwargs: { enable_thinking: false },
       temperature: 0,
-      max_tokens: 500,
+      max_tokens: products ? 900 : 500,
     });
     const content = result.choices?.[0]?.message?.content;
     const parsed = ((typeof content === "string" ? safeJson(content) : content) ?? {}) as Record<string, unknown>;
@@ -771,6 +785,16 @@ ${fields.map(describeField).join("\n")}`;
         Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
         scan.source = { kind: "database", label: productLabel(info) };
       } else scan.source = { kind: "estimate" };
+      // De andere dingen op de foto: geschat, elk een eigen item als je dat wil.
+      const others = parsed.kind !== "unknown" && Array.isArray(parsed.others) ? parsed.others.slice(0, MAX_OTHERS) : [];
+      const more = others.flatMap((o): NonNullable<LabelScan["more"]> => {
+        if (!o || typeof o !== "object" || typeof (o as { name?: unknown }).name !== "string") return [];
+        const other = o as Record<string, unknown>;
+        const name = (other.name as string).trim().slice(0, 200);
+        const data = cleanAttributes(estimated, Object.fromEntries(estimated.map((f) => [f.key, other[f.key]])));
+        return name ? [{ name, data }] : [];
+      });
+      if (more.length) scan.more = more;
     }
     if (!scan.name && Object.keys(scan.data).length === 0 && !scan.create) scan.message = "Niets herkend op deze foto. Vul het zelf in.";
     return c.json(scan);

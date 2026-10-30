@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { typeAccess } from "../../shared/access";
+import { canCreate, typeAccess } from "../../shared/access";
 import type { IconKey } from "../../shared/templates";
 import { isTone, type Me, type Overview, type Person } from "../../shared/types";
 import { isValidIban, normalizeIban } from "../../shared/payment";
@@ -75,7 +75,14 @@ me.get("/overview", async (c) => {
         .filter((t) => (t.project_id === n.id || count.has(`${n.id}/${t.id}`)) && typeAccess(n.rights, t.id) !== "none")
         // Eerst de eigen lijsten, dan die van erboven (elk in hun volgorde).
         .sort((a, b) => Number(b.project_id === n.id) - Number(a.project_id === n.id))
-        .map((t) => ({ id: t.id, name: t.name, plural: t.plural, icon: t.icon, count: count.get(`${n.id}/${t.id}`) ?? 0 })),
+        .map((t) => ({
+          id: t.id,
+          name: t.name,
+          plural: t.plural,
+          icon: t.icon,
+          count: count.get(`${n.id}/${t.id}`) ?? 0,
+          can_create: canCreate(n.rights, t.id),
+        })),
     })),
   };
   return c.json(result);

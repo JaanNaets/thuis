@@ -460,7 +460,13 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
   item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
   (`datalist`); kies je er een, dan vult de app de rest in zoals de vorige keer. Een datum die met vandaag begint,
-  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`).
+  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`). Boven de naam staat **Vaak**:
+  wat je minstens twee keer toevoegde, het vaakst eerst, hooguit zes, als `tag`-knoppen in een `tag-picker`; één tik
+  doet hetzelfde. Namen die de app zelf gaf ("Weging 30/10/2026") tellen niet mee.
+- **Ook op de foto**: herkent de AI meerdere dingen op één foto van eten (een bord met rijst, kip en broccoli), dan
+  komt het grootste in het formulier en de rest onder de knoppen als `.receipt-lines` (aanvinken, naam, "180 g · 234
+  kcal"). Bij Opslaan wordt elk aangevinkt ding een eigen item met zijn eigen schatting en de rest van het formulier
+  (datum, maaltijd, wie).
 - **Productinfo** (`shared/product.ts`): een tekst- of getalveld kan "Uit productinfo" krijgen (naam, merk, inhoud,
   energie of een voedingswaarde per 100 g). Een barcode (gescand, op een foto of in een barcodeveld) of een product
   dat de AI herkent, zoekt de app op in Open Food Facts (gratis, `/products`, 30 dagen bijgehouden in `products`).
@@ -784,7 +790,8 @@ Regels:
 
 **Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" → per project (in de volgorde van de boom) een
 `dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen elke lijst
-(`?lijst=`) met het aantal → gearchiveerde projecten apart. Het kruimelpad toont hier enkel "Overzicht".
+(`?lijst=`) met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets
+mag toevoegen) dat meteen het formulier opent → gearchiveerde projecten apart. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →

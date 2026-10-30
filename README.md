@@ -349,8 +349,9 @@ een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiede
 ### Opnieuw
 
 Iets dat je vaker toevoegt (hetzelfde ontbijt, dezelfde fles), hoef je niet opnieuw in te vullen: **Opnieuw** op de
-fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Een datum
-die met vandaag begint, wordt vandaag. Gratis, zonder AI.
+fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Bovenaan
+staat **Vaak**: wat je het vaakst toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
+Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
 
 ### Een foto lezen: etiket, kasticket, factuur, product
 
@@ -372,6 +373,8 @@ Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), d
 2. **Foto zonder barcode**: de AI herkent wat erop staat. Een gekend product (bv. Nutella van Ferrero) zoekt de app
    op naam en merk op in Open Food Facts; een gerecht of iets dat niet gevonden wordt, blijft een schatting. De app
    zegt altijd welk van de twee, en welk product ze vond. Hoeveel je at, blijft een schatting: kijk het na.
+3. **Meerdere dingen op één foto** (een bord met rijst, kip en broccoli): het grootste komt in het formulier, de rest
+   staat eronder bij "Ook op de foto". Aangevinkt wordt elk een eigen item, met dezelfde datum, maaltijd en persoon.
 
 Open Food Facts krijgt enkel een barcode of een productnaam, nooit iets van jou. Wat de app opzocht, onthoudt ze 30
 dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en 50 samen per dag

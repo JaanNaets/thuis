@@ -51,7 +51,7 @@ export type ProjectNode = Project & {
 export type Me = { person: Person; projects: ProjectNode[] };
 
 /** Je overzicht: per project de lijsten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
-export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number };
+export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number; can_create: boolean };
 export type Overview = { projects: { id: string; types: OverviewType[] }[] };
 
 export type ProjectInput = {
@@ -209,6 +209,8 @@ export type LabelScan = {
    * lijst waarnaar het veld wijst (`list`: hoe één item ervan heet), als je daar iets mag toevoegen.
    */
   create?: { key: string; name: string; type_id: string; project_id: string; list: string; plural: string }[];
+  /** Bij herkennen: andere dingen op dezelfde foto (een bord met rijst, kip en broccoli), elk geschat. */
+  more?: { name: string; data: Attributes }[];
 };
 
 export type SearchResult = {

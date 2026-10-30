@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { applyFieldDefaults, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
+import { computeLocal } from "../../shared/calc";
+import { applyFieldDefaults, formatFieldValue, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -74,6 +75,10 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const [photo, setPhoto] = useState<File | null>(null);
   // Een gelezen PDF (bv. een factuur): die komt bij de bestanden van het item.
   const [original, setOriginal] = useState<File | null>(null);
+  // Andere dingen op dezelfde foto (een bord met rijst, kip en broccoli): elk een eigen item, als het aangevinkt is.
+  // `keys`: wat de foto invulde; die velden komen bij de andere dingen van hun eigen schatting, de rest (datum,
+  // maaltijd, wie) zoals in het formulier.
+  const [more, setMore] = useState<{ items: (NonNullable<LabelScan["more"]>[number] & { on: boolean })[]; keys: string[] }>({ items: [], keys: [] });
   // Na een nieuw item in een andere lijst (een nieuwe winkel): de keuzelijsten opnieuw laden.
   const [refsVersion, setRefsVersion] = useState(0);
   const touched = useRef(new Set<string>());
@@ -114,13 +119,27 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     applyFrom(source, true);
   }, [siblings, from]);
 
-  // Een naam die al eens voorkwam: de laatste keer als voorstel (de nieuwste eerst, elke naam één keer).
-  const earlier = useMemo(() => {
+  // Een naam die al eens voorkwam: de laatste keer als voorstel (de nieuwste eerst, elke naam één keer). Een naam die
+  // de app zelf gaf in een logboek ("Weging 30/10/2026") telt niet mee.
+  const { earlier, often } = useMemo(() => {
+    const escaped = type.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const given = new RegExp(`^${escaped} \\d{2}/\\d{2}/\\d{4}$`, "i");
     const byName = new Map<string, NonNullable<typeof siblings>["items"][number]>();
-    for (const i of [...(siblings?.items ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)))
-      if (!byName.has(i.name.toLowerCase())) byName.set(i.name.toLowerCase(), i);
-    return byName;
-  }, [siblings]);
+    const count = new Map<string, number>();
+    for (const i of [...(siblings?.items ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+      if (given.test(i.name)) continue;
+      const key = i.name.toLowerCase();
+      if (!byName.has(key)) byName.set(key, i);
+      count.set(key, (count.get(key) ?? 0) + 1);
+    }
+    // Vaak: wat je minstens twee keer toevoegde, het vaakst eerst (bij gelijkstand het laatst gebruikte).
+    const often = [...byName.entries()]
+      .filter(([key]) => count.get(key)! > 1)
+      .sort(([a], [b]) => count.get(b)! - count.get(a)!)
+      .slice(0, 6)
+      .map(([, i]) => i);
+    return { earlier: byName, often };
+  }, [siblings, type.name]);
 
   // Productinfo (echte gegevens uit Open Food Facts) in de velden die je nog niet zelf invulde, en de barcode in een
   // barcodeveld als de lijst er een heeft.
@@ -169,6 +188,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   function applyScan(scan: LabelScan, file: File, pdf: File | null = null) {
     setPhoto(file);
     setOriginal(pdf);
+    if (!item) setMore({ items: (scan.more ?? []).map((m) => ({ ...m, on: true })), keys: Object.keys(scan.data) });
     if (scan.name && !touched.current.has("name")) setName(scan.name);
     const scanned = attributesDraft(fields, scan.data);
     const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k));
@@ -195,7 +215,14 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         body.set("file", original);
         await api.post(`/items/${saved.id}/files`, body).catch(() => toast("De PDF kon niet bewaard worden", "alert"));
       }
-      toast(item ? "Bijgewerkt" : `${saved.name} bewaard`);
+      const others = item ? [] : more.items.filter((m) => m.on);
+      for (const m of others) {
+        const own = new Set([...more.keys, ...Object.keys(m.data)]);
+        const shared = Object.fromEntries(Object.entries(built.data).filter(([k]) => !own.has(k)));
+        await api.post(`/projects/${project.project.id}/items`, { ...input, name: m.name, data: { ...shared, ...m.data } });
+      }
+      setMore({ items: [], keys: [] });
+      toast(item ? "Bijgewerkt" : others.length ? `${saved.name} en ${others.length === 1 ? others[0].name : `${others.length} andere`} bewaard` : `${saved.name} bewaard`);
       if (next) {
         // Opslaan en volgende: tags blijven, de rest is leeg (de volgende fles uit de kelder).
         setName("");
@@ -259,10 +286,32 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             onProduct={applyProduct}
             onCreate={createRef}
           />
+          {more.items.length > 0 && <MoreOnPhoto fields={fields} more={more.items} onToggle={(i, on) => setMore((m) => ({ ...m, items: m.items.map((x, k) => (k === i ? { ...x, on } : x)) }))} />}
         </section>
       )}
 
       <section className="card form-section">
+        {!item && editsType && often.length > 0 && (
+          <div className="field">
+            <span className="label">Vaak</span>
+            <div className="tag-picker" role="group" aria-label="Vaak">
+              {often.map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  className="tag"
+                  onClick={() => {
+                    // Met één tik: de naam en de rest zoals de vorige keer (wat je zelf al invulde, blijft staan).
+                    touched.current.delete("name");
+                    applyFrom(i, true);
+                  }}
+                >
+                  {i.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <label className="field">
           <span className="label">{type.name_label ?? "Naam"}</span>
           <input
@@ -342,5 +391,45 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         )}
       </div>
     </form>
+  );
+}
+
+/** Andere dingen op dezelfde foto: aanvinken wat er als eigen item bij moet (met hun geschatte hoeveelheid). */
+function MoreOnPhoto({
+  fields,
+  more,
+  onToggle,
+}: {
+  fields: ItemTypeView["fields"];
+  more: (NonNullable<LabelScan["more"]>[number] & { on: boolean })[];
+  onToggle: (index: number, on: boolean) => void;
+}) {
+  // Wat er per ding toe doet: de hoeveelheid (een getal dat niet uit productinfo komt) en de kolommen (bv. de kcal).
+  const shown = fields.filter((f) => f.column || (f.type === "number" && !f.product));
+  return (
+    <div className="field">
+      <span className="label">Ook op de foto</span>
+      <ul className="receipt-lines">
+        {more.map((m, i) => {
+          const data = computeLocal(fields, m.data);
+          const summary = shown
+            .filter((f) => data[f.key] !== undefined)
+            .map((f) => formatFieldValue(f, data[f.key]))
+            .join(" · ");
+          return (
+            <li key={`${m.name}-${i}`} data-off={!m.on}>
+              <label className="receipt-line-check">
+                <input type="checkbox" checked={m.on} onChange={(e) => onToggle(i, e.target.checked)} />
+                <span>
+                  <span className="receipt-line-name">{m.name}</span>
+                  {summary && <span className="hint">{summary}</span>}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <span className="hint">Aangevinkt komt elk erbij als een eigen item, met dezelfde datum en maaltijd. Geschat; pas ze daarna aan als het nodig is.</span>
+    </div>
   );
 }
