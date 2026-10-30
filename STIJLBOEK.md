@@ -445,12 +445,16 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
   vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; de API vult niets stil in.
+  Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
+  lijst toont het nieuwste eerst.
 - Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
   lijsten met hun velden. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
   met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
-  uit de bouwstenen (velden, formule, totalen): **Voeding** is een lijst Eten met kcal per 100 g × Hoeveel als
-  formule en het totaal "Kcal per dag"; **Gedeelde uitgaven** is Betaald door, een Verdeling en een totaal dat
-  verrekent. Geen eigen code. Losse
+  uit de bouwstenen (velden, formule, totalen): **Voeding** is Eten (kcal en macro's per 100 g × Hoeveel als
+  formule, of de kcal van een Gerecht met `of(…)`), Gerechten (de kcal uit hun Ingrediënten), Gewicht en Water, met
+  totalen "enkel van jou"; **Gedeelde uitgaven** is Betaald door, een Verdeling en een totaal dat verrekent. Geen
+  eigen code. Een veld in een sjabloon kan een eenvoudigere berekening meekrijgen (`alt`) voor als een lijst los
+  wordt toegevoegd (Eten zonder Gerechten: de kcal enkel uit kcal per 100 g). Losse
   lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
   bij **Instellen → Lijsten → Uit sjabloon**.
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
@@ -503,7 +507,7 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 Een **totaal** vat de items van een lijst samen (`shared/totals.ts`): de som, het gemiddelde, het kleinste, het
 grootste of hoeveel, van een getal, bedrag of duur (ook een berekening), alles samen of per dag, week (vanaf
 maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eigenaar of keuze, en met een doel
-("niet meer dan" of "minstens"). Hooguit vier per lijst. "Kcal per dag", "Uitgaven per maand per persoon",
+("niet meer dan" of "minstens"). Hooguit zes per lijst. "Kcal per dag", "Uitgaven per maand per persoon",
 "Gemiddelde score" en Wie moet wie zijn hetzelfde onderdeel.
 
 - **Waar**: dit project, of met de subprojecten. **Ook uit**: lijsten uit andere projecten met dezelfde velden (op
@@ -512,11 +516,17 @@ maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eige
   Verdeling = wie nog geld krijgt (+) of moet (−).
 - **Verrekenen**: een saldo van een bedrag tussen personen (Apart per en Tegenover zijn een Persoon of Personen met
   aandeel), alles samen, met de subprojecten. Dat is Wie moet wie; het krijgt geen eigen kaart.
+- **Van wie** (`mine`: een veld Persoon): enkel de items van wie kijkt ("van jou" in de uitleg). Elk ziet zijn eigen
+  kcal, gewicht of water in hetzelfde project. Dan kan het doel ook **per persoon** (`goals`; leeg = het gewone
+  doel); de API stuurt per lezer zijn doel mee.
+- **Klein** (`size: "small"`): een tegel naast de andere kleine (eiwit, koolhydraten, vet). **Als lijn** (`chart:
+  "line"`): de vorige periodes als lijn in plaats van staafjes (je gewicht per week).
 
 | Waar | Hoe |
 | --- | --- |
 | Formulier van een lijst, groep "Totalen" (onder de velden) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode en Waar (`Segmented`), Volgens, Apart per, Tegenover (bij een som per persoon of keuze), Doel (soort + getal), de schakelaar Verrekenen (als het kan), en Ook uit (`tag-picker`: "Uitgaven · Skireis", enkel lijsten die passen). "Totaal toevoegen" als `btn-outline btn-sm` |
-| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per totaal een sectie. Titel = naam, uitleg = de periode en waar ("Vandaag · met subprojecten · ook uit andere projecten"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −) |
+| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per groot totaal een sectie. Titel = naam, uitleg = de periode en waar ("Vandaag · met subprojecten · ook uit andere projecten"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −). Met **Als lijn** een `.total-line`: een SVG-lijn (84px hoog) met een stip per periode, de huidige zwart, het doel gestippeld. De kleine samen in één sectie `.total-tiles`: per tegel het label (12,5px, grijs, hooguit twee regels; de waarden blijven op één lijn), de waarde (17px, 600) en een dunne doelbalk |
+| Formulier van een lijst, Totalen, bij een veld Persoon | "Van wie" (`select`: Iedereen samen / Enkel van jou), dan "Doel per persoon" (een getal per lid, `.goal-people`), en de schakelaars Klein en Als lijn |
 
 - Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
 - De API rekent uit (`/projects/:id/totals`), per lezer: elk item met jouw rechten in zijn project. Wat je daar niet

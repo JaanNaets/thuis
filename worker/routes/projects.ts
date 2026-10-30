@@ -24,6 +24,7 @@ import {
   totalKeys,
   totalLabel,
   visibleTotals,
+  goalFor,
   type TotalDef,
   type TotalResult,
 } from "../../shared/totals";
@@ -207,6 +208,19 @@ async function checkSources(db: D1Database, personId: string, totals: TotalDef[]
   }
 }
 
+/** Wie een eigen doel heeft (bij "enkel van jou"), moet in het project zitten. */
+async function checkGoalPeople(db: D1Database, totals: TotalDef[], chain: string[]): Promise<void> {
+  const people = [...new Set(totals.flatMap((t) => Object.keys(t.goals ?? {})))];
+  if (!people.length) return;
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT person_id FROM memberships WHERE project_id IN (${placeholders(chain.length)}) AND person_id IN (SELECT value FROM json_each(?))`,
+    )
+    .bind(...chain, JSON.stringify(people))
+    .all();
+  if (results.length !== people.length) throw new ValidationError("Een doel per persoon: kies enkel mensen uit dit project.");
+}
+
 /** De totalen van een lijst nakijken tegen haar (nagekeken) velden. */
 function cleanTypeTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
   try {
@@ -295,7 +309,7 @@ function templateStatements(db: D1Database, nodes: { projectId: string; plans: T
   return plans.map(({ id, list, projectId }) => {
     // Een totaal waarvan de velden er niet (meer) zijn, valt weg; lijsten uit andere projecten komen niet mee.
     const totals = keepTotals(list.totals ?? [], fields[id])
-      .map(({ sources: _sources, ...t }) => t)
+      .map(({ sources: _sources, goals: _goals, ...t }) => t)
       .slice(0, MAX_TOTALS);
     return db
       .prepare(
@@ -612,14 +626,17 @@ projects.get("/:id/totals", async (c) => {
   const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
   const below = [...descendantIds(nodes, access.project.id)];
   const sources = await listsById(db, totals.flatMap((t) => t.sources ?? []));
-  const out: { id: string; result: TotalResult }[] = [];
+  const out: { id: string; result: TotalResult; goal?: number }[] = [];
   const people = new Set<string>();
   for (const t of totals) {
-    const items = await totalItems(db, me, rightsOf, t, type, t.scope === "tree" ? below : [access.project.id], sources);
+    const all = await totalItems(db, me, rightsOf, t, type, t.scope === "tree" ? below : [access.project.id], sources);
+    // Enkel van jou: de items waar jij in staat (bv. bij Wie), met jouw eigen doel.
+    const items = t.mine ? all.filter((i) => i.data[t.mine!] === me) : all;
     const result = computeTotal(t, fields, items, today);
     const groupType = fields.find((f) => f.key === t.by)?.type;
     if (groupType === "person" || groupType === "people" || groupType === "share") for (const g of result.groups) people.add(g.key);
-    out.push({ id: t.id, result });
+    const goal = goalFor(t, me);
+    out.push({ id: t.id, result, ...(goal !== undefined ? { goal } : {}) });
   }
   // Namen bij de groepen per persoon.
   const names = new Map(
@@ -800,6 +817,7 @@ projects.post("/:id/types", async (c) => {
   await checkDefaultShares(db, fields, access.chain);
   const totals = cleanTypeTotals(input.totals, fields);
   await checkSources(db, c.get("person").id, totals, fields, id);
+  await checkGoalPeople(db, totals, access.chain);
   await db
     .prepare(
       `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order)
@@ -901,7 +919,10 @@ types.put("/:id", async (c) => {
   await checkDefaultShares(db, fields, access.chain);
   // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
   const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);
-  if (input.totals !== undefined) await checkSources(db, c.get("person").id, totals, fields, type.id);
+  if (input.totals !== undefined) {
+    await checkSources(db, c.get("person").id, totals, fields, type.id);
+    await checkGoalPeople(db, totals, access.chain);
+  }
   await db
     .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, totals = ? WHERE id = ?")
     .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals), type.id)

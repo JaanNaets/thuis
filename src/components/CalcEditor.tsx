@@ -218,7 +218,7 @@ function FormulaInput({ expr, fields, onChange }: { expr: string; fields: FieldD
     <div className="field">
       <span className="label">
         Formule
-        <Tip text="Velden tussen [ ], getallen met een komma, + − × ÷ en haakjes. Functies: afronden(x; 1), min(a; b), max(a; b) en als([Aantal] < 3; dan; anders). Een getal bij een bedrag telt in euro." />
+        <Tip text="Velden tussen [ ], getallen met een komma, + − × ÷ en haakjes. Functies: afronden(x; 1), min(a; b), max(a; b), als([Aantal] < 3; dan; anders) en of([Dit]; [anders dit]): het eerste dat ingevuld is. Een getal bij een bedrag telt in euro." />
       </span>
       <textarea
         ref={ref}

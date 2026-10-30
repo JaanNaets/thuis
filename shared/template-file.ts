@@ -40,7 +40,7 @@ function totalsOf(totals: unknown): TotalDef[] {
     ? (totals
         .filter(isObject)
         .slice(0, MAX_TOTALS)
-        .map(({ sources: _sources, ...t }) => t) as TotalDef[])
+        .map(({ sources: _sources, goals: _goals, ...t }) => t) as TotalDef[])
     : [];
 }
 

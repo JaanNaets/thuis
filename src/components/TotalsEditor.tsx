@@ -1,5 +1,6 @@
 import { AGGS, type Agg, NUMERIC, typeOf } from "../../shared/calc";
 import { formatDuration, parseDuration, type FieldDef } from "../../shared/fields";
+import type { Person } from "../../shared/types";
 import {
   cleanTotals,
   GOAL_KINDS,
@@ -35,6 +36,12 @@ export type TotalDraft = {
   sources: string[];
   against: string;
   settle: boolean;
+  /** Enkel van jou: een persoonveld (bv. Wie); leeg = iedereen. */
+  mine: string;
+  /** Een eigen doel per persoon (id → tekst), bij "enkel van jou". */
+  goalsText: Record<string, string>;
+  small: boolean;
+  line: boolean;
 };
 
 const SCOPE_OPTIONS = [
@@ -85,11 +92,17 @@ export function totalsDraft(totals: TotalDef[], fields: FieldDef[]): TotalDraft[
     sources: t.sources ?? [],
     against: t.against ?? "",
     settle: Boolean(t.settle),
+    mine: t.mine ?? "",
+    goalsText: Object.fromEntries(
+      Object.entries(t.goals ?? {}).map(([id, g]) => [id, goalText(g, fields.find((f) => f.key === (t.agg === "count" ? undefined : t.field)))]),
+    ),
+    small: t.size === "small",
+    line: t.chart === "line",
   }));
 }
 
 /** Van een ontwerp naar een totaal (met de sleutels in het formulier), zonder het na te kijken. */
-function rawTotal(d: TotalDraft, goal?: number): Record<string, unknown> {
+function rawTotal(d: TotalDraft, goal?: number, goals?: Record<string, number>): Record<string, unknown> {
   const sum = d.agg === "sum" && Boolean(d.by);
   return {
     id: d.id,
@@ -105,6 +118,10 @@ function rawTotal(d: TotalDraft, goal?: number): Record<string, unknown> {
     sources: d.sources,
     goal,
     goal_kind: d.goal_kind,
+    mine: d.mine || undefined,
+    goals: d.mine ? goals : undefined,
+    size: d.small ? "small" : undefined,
+    chart: d.line && d.period !== "all" ? "line" : undefined,
   };
 }
 
@@ -120,9 +137,17 @@ export function buildTotals(
   const raw: Record<string, unknown>[] = [];
   for (const [i, d] of drafts.entries()) {
     const def = d.agg === "count" ? undefined : fields.find((f) => f.key === d.field);
+    const name = d.label.trim() || `Totaal ${i + 1}`;
     const goal = parseGoal(d.goalText, def);
-    if (goal !== undefined && !Number.isFinite(goal)) return { error: `${d.label.trim() || `Totaal ${i + 1}`}: het doel is geen getal.` };
-    raw.push(rawTotal(d, goal));
+    if (goal !== undefined && !Number.isFinite(goal)) return { error: `${name}: het doel is geen getal.` };
+    const goals: Record<string, number> = {};
+    for (const [id, text] of Object.entries(d.goalsText)) {
+      const g = parseGoal(text, def);
+      if (g === undefined) continue;
+      if (!Number.isFinite(g)) return { error: `${name}: een doel per persoon is geen getal.` };
+      goals[id] = g;
+    }
+    raw.push(rawTotal(d, goal, goals));
   }
   try {
     return { totals: renameTotals(cleanTotals(raw, fields), keyOf) };
@@ -142,12 +167,16 @@ export function TotalsEditor({
   onChange,
   fields,
   others,
+  people,
 }: {
   value: TotalDraft[];
   onChange: (v: TotalDraft[]) => void;
   fields: FieldDef[];
   others: OtherList[];
+  /** Wie in het project zit (voor een doel per persoon). */
+  people: Person[];
 }) {
+  const persons = fields.filter((f) => f.type === "person");
   const numbers = fields.filter(countable);
   const dates = fields.filter((f) => typeOf(f) === "date");
   const groups = fields.filter((f) => GROUP_TYPES.includes(f.type));
@@ -174,6 +203,10 @@ export function TotalsEditor({
         sources: [],
         against: "",
         settle: false,
+        mine: "",
+        goalsText: {},
+        small: false,
+        line: false,
       },
     ]);
   };
@@ -334,7 +367,46 @@ export function TotalsEditor({
                         </span>
                       </div>
                     )}
+                    {!t.settle && persons.length > 0 && (
+                      <label className="field">
+                        <span className="label">Van wie</span>
+                        <select value={t.mine} onChange={(e) => update(i, { mine: e.target.value })}>
+                          <option value="">Iedereen samen</option>
+                          {persons.map((f) => (
+                            <option key={f.key} value={f.key}>
+                              Enkel van jou (volgens {f.label || "dit veld"})
+                            </option>
+                          ))}
+                        </select>
+                        <span className="hint">Enkel van jou: elk ziet zijn eigen totaal, met zijn eigen doel.</span>
+                      </label>
+                    )}
                   </div>
+                  {!t.settle && t.mine && people.length > 0 && (
+                    <div className="field">
+                      <span className="label">
+                        Doel per persoon <span className="optional">· leeg = het doel hierboven</span>
+                      </span>
+                      <div className="goal-people">
+                        {people.map((p) => (
+                          <label key={p.id} className="goal-person">
+                            <span>{p.name}</span>
+                            <input
+                              value={t.goalsText[p.id] ?? ""}
+                              inputMode={typeOf(def) === "duration" ? "text" : "decimal"}
+                              placeholder={t.goalText || "—"}
+                              aria-label={`Doel van ${p.name}`}
+                              onChange={(e) => update(i, { goalsText: { ...t.goalsText, [p.id]: e.target.value } })}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!t.settle && <Switch checked={t.small} onChange={(small) => update(i, { small })} label="Klein, naast andere" hint="Bv. eiwit, koolhydraten en vet onder de kcal." />}
+                  {!t.settle && t.period !== "all" && (
+                    <Switch checked={t.line} onChange={(line) => update(i, { line })} label="Als lijn" hint="De vorige periodes als lijn in plaats van staafjes (bv. je gewicht)." />
+                  )}
                   {settleable && (
                     <Switch
                       checked={t.settle}

@@ -36,7 +36,7 @@ export const CALC_KINDS = {
   math: { label: "Rekensom", hint: "Twee velden (of een veld en een getal) optellen, aftrekken, vermenigvuldigen of delen. Bv. Aantal × Prijs per fles." },
   formula: {
     label: "Formule",
-    hint: "Een eigen som met velden tussen [ ], zoals [kcal per 100 g] × [Hoeveel] ÷ 100. Ook haakjes, afronden, min, max en als.",
+    hint: "Een eigen som met velden tussen [ ], zoals [kcal per 100 g] × [Hoeveel] ÷ 100. Ook haakjes, afronden, min, max, als en of (het eerste dat ingevuld is).",
   },
   compare: { label: "Vergelijking (ja/nee)", hint: "Ja als de vergelijking klopt. Bv. Aantal ≤ Bijna op onder: dan weet je wat je moet kopen." },
   days_until: { label: "Dagen tot", hint: "Hoeveel dagen tot een datum; negatief als ze voorbij is. Bv. tot de garantie afloopt." },

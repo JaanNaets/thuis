@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkCalcs } from "../shared/calc.ts";
 import { applyFieldDefaults, cleanFields, type Attributes, type FieldDef } from "../shared/fields.ts";
+import type { TypeTemplate } from "../shared/templates.ts";
 import {
   cleanTotals,
   computeTotal,
@@ -55,7 +56,7 @@ test("totalen nakijken", () => {
   assert.throws(bad({ agg: "som", field: "kcal", period: "all" }), /kies wat je wil weten/);
   assert.throws(bad({ agg: "sum", field: "kcal", period: "all", by: "notitie" }), /apart per/);
   assert.throws(bad({ label: "Kcal", agg: "sum", field: "kcal", period: "all", goal: -1 }), /Kcal: het doel/);
-  assert.throws(() => cleanTotals(Array(5).fill({ agg: "count", period: "all" }), fields), /Hoogstens 4/);
+  assert.throws(() => cleanTotals(Array(7).fill({ agg: "count", period: "all" }), fields), /Hoogstens 6/);
   assert.throws(() => cleanTotals("x", fields), /kloppen niet/);
 });
 
@@ -142,16 +143,40 @@ test("totalen: een bedrag verdeeld volgens aandeel", () => {
   ]);
 });
 
-test("sjabloon Voeding: formule en totaal kloppen", async () => {
+test("sjabloon Voeding: formules, gerechten en totalen kloppen", async () => {
   const { PROJECT_TEMPLATES, resolveTemplateLists } = await import("../shared/templates.ts");
   const { computeLocal } = await import("../shared/calc.ts");
-  const list = PROJECT_TEMPLATES.food.types[0];
-  const fields = resolveTemplateLists([{ id: "e", list, refs: {}, calcs: {} }], {})["e"];
-  assert.equal(fields.find((f) => f.key === "kcal")?.result, "number");
-  assert.equal(computeLocal(fields, { kcal_100: 380, gram: 45 }).kcal, 171);
-  assert.deepEqual(cleanTotals(list.totals, fields), [{ id: "dag", agg: "sum", field: "kcal", period: "day", date: "datum" }]);
-  assert.equal(totalLabel(list.totals![0], fields), "Kcal per dag");
-  assert.equal(fields.find((f) => f.key === "datum")?.today, true);
+  const lists = PROJECT_TEMPLATES.food.types;
+  const ids = Object.fromEntries(lists.map((l) => [l.key, `id-${l.key}`]));
+  const resolved = resolveTemplateLists(
+    lists.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })),
+    {},
+  );
+  const eten = resolved["id-eten"];
+  assert.equal(eten.find((f) => f.key === "kcal")?.result, "number");
+  assert.equal(computeLocal(eten, { kcal_100: 380, gram: 45 }).kcal, 171);
+  // Zonder eigen kcal: die van het gerecht (opgezocht).
+  assert.equal(computeLocal(eten, { gerecht_kcal_100: 120, gram: 200 }).kcal, 240);
+  assert.equal(computeLocal(eten, { eiwit_100: 7.5, gram: 45 }).eiwit, 3.4);
+  assert.equal(eten.find((f) => f.key === "datum")?.today, true);
+  assert.equal(eten.find((f) => f.key === "wie")?.me, true);
+
+  // Een gerecht: kcal per 100 g uit zijn ingrediënten, of uit wat het klaar weegt.
+  const gerecht = resolved["id-gerecht"];
+  assert.equal(gerecht.find((f) => f.key === "totaal_kcal")?.calc?.kind === "rollup" && (gerecht.find((f) => f.key === "totaal_kcal")!.calc as { list: string }).list, "id-ingredient");
+  assert.deepEqual(computeLocal(gerecht, { totaal_kcal: 1200, totaal_gram: 800, porties: 4 }), { totaal_kcal: 1200, totaal_gram: 800, porties: 4, kcal_100: 150, kcal_portie: 300 });
+  assert.equal(computeLocal(gerecht, { totaal_kcal: 1200, totaal_gram: 800, klaar: 600 }).kcal_100, 200);
+
+  for (const list of lists) assert.deepEqual(cleanTotals(list.totals, resolved[ids[list.key]]), list.totals ?? [], list.name);
+  assert.equal(totalLabel(lists[0].totals![0], eten), "Kcal per dag");
+  assert.equal(lists[0].totals![1].size, "small");
+  assert.equal(lists.find((l) => l.key === "weging")!.totals![0].chart, "line");
+
+  // Eten los (zonder Gerechten): de kcal enkel uit kcal per 100 g.
+  const los = resolveTemplateLists([{ id: "e", list: lists[0], refs: {}, calcs: {} }], {})["e"];
+  assert.equal(los.find((f) => f.key === "gerecht"), undefined);
+  assert.deepEqual(los.find((f) => f.key === "kcal")?.calc, { kind: "formula", expr: "afronden([kcal_100] * [gram] / 100)" });
+  assert.equal(computeLocal(los, { kcal_100: 380, gram: 45 }).kcal, 171);
 });
 
 // ---------- saldo en verrekenen (de kostenverdeling) ----------
@@ -282,7 +307,18 @@ test("ook uit een lijst in een ander project: dezelfde velden", () => {
 });
 
 test("sjablonen: hun totalen passen bij hun velden", async () => {
-  const { listTemplates, resolveTemplateLists, typeTemplate } = await import("../shared/templates.ts");
+  const { listTemplates, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate } = await import("../shared/templates.ts");
+  // Een projectsjabloon samen (zijn lijsten verwijzen naar elkaar).
+  for (const template of Object.values(PROJECT_TEMPLATES)) {
+    const lists = template.types as readonly TypeTemplate[];
+    const ids = Object.fromEntries(lists.map((l) => [l.key, `id-${l.key}`]));
+    const resolved = resolveTemplateLists(lists.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })), {});
+    for (const list of lists) {
+      assert.equal(resolved[ids[list.key]].length, list.fields.length, `${list.name}: alle velden kloppen`);
+      if (list.totals) assert.deepEqual(cleanTotals(list.totals, resolved[ids[list.key]]), list.totals, list.name);
+    }
+  }
+  // En elke lijst los.
   for (const list of listTemplates()) {
     if (!list.totals) continue;
     // Verwijzingen naar andere lijsten doen hier niet ter zake (een totaal telt geen verwijzing).
@@ -293,4 +329,36 @@ test("sjablonen: hun totalen passen bij hun velden", async () => {
   const settle = typeTemplate("terugbetaling")!;
   assert.ok(isPayments(settle.totals![0], settle.fields as FieldDef[]));
   assert.equal(typeTemplate("bestaat-niet"), undefined);
+});
+
+test("totalen: enkel van jou, doel per persoon, klein en als lijn", async () => {
+  const { goalFor } = await import("../shared/totals.ts");
+  const eten: FieldDef[] = [...fields, { key: "wie", label: "Wie", type: "person" }].filter((f, i, all) => all.findIndex((x) => x.key === f.key) === i);
+  const withWho = eten.map((f) => (f.key === "wie" ? { ...f, type: "person" as const } : f));
+  const [t] = cleanTotals(
+    [{ id: "a", agg: "sum", field: "kcal", period: "day", date: "datum", mine: "wie", goal: 2000, goals: { jana: 1800, leeg: "" }, size: "small", chart: "line" }],
+    withWho,
+  );
+  assert.deepEqual(t, {
+    id: "a",
+    agg: "sum",
+    field: "kcal",
+    period: "day",
+    date: "datum",
+    mine: "wie",
+    goal: 2000,
+    goals: { jana: 1800 },
+    goal_kind: "max",
+    size: "small",
+    chart: "line",
+  });
+  assert.equal(goalFor(t, "jana"), 1800);
+  assert.equal(goalFor(t, "jaan"), 2000);
+  // Zonder "enkel van jou" geen doelen per persoon; een lijn enkel per periode.
+  const [plain] = cleanTotals([{ id: "b", agg: "count", period: "all", goals: { jana: 3 }, chart: "line" }], withWho);
+  assert.equal(plain.goals, undefined);
+  assert.equal(plain.chart, undefined);
+  assert.throws(() => cleanTotals([{ id: "c", agg: "count", period: "all", mine: "maaltijd" }], withWho), /persoonveld/);
+  assert.throws(() => cleanTotals([{ id: "c", agg: "count", period: "all", mine: "wie", goals: { x: -1 } }], withWho), /0 of meer/);
+  assert.equal(cleanTotals(Array(6).fill({ agg: "count", period: "all" }), withWho).length, 6);
 });

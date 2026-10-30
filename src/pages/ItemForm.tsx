@@ -80,6 +80,8 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const readable = editsType && fields.some((f) => READABLE.includes(f.type) && type.field_access[f.key] === "edit");
+  // Een logboek (een datum die met vandaag begint, bv. Gewicht): de naam mag leeg ("Weging 30/10/2026").
+  const logbook = fields.some((f) => f.type === "date" && f.today);
   // Velden uit productinfo (bv. kcal per 100 g): dan zoekt de app een barcode of een herkend product op.
   const products = editsType && fields.some((f) => f.product && type.field_access[f.key] === "edit");
   const looked = useRef<string>(undefined);
@@ -264,10 +266,11 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         <label className="field">
           <span className="label">{type.name_label ?? "Naam"}</span>
           <input
-            required
+            required={!logbook}
             maxLength={200}
             disabled={!editsType}
             className={auto.has("name") ? "auto" : undefined}
+            placeholder={logbook ? `${type.name} ${today().split("-").reverse().join("/")}` : undefined}
             value={name}
             list={!item && earlier.size ? "eerder" : undefined}
             onChange={(e) => {

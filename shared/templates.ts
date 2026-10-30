@@ -4,7 +4,7 @@
 // Een sjabloon kan ook een bestand zijn (zie shared/template-file.ts): een project dat iemand deelt, met dezelfde
 // vorm als de ingebouwde sjablonen hieronder.
 
-import { previewCalcs, type CalcList } from "./calc.ts";
+import { previewCalcs, type CalcDef, type CalcList } from "./calc.ts";
 import type { FieldDef } from "./fields.ts";
 import type { TotalDef } from "./totals.ts";
 
@@ -14,6 +14,9 @@ export const ICONS = [
   "project",
   "wine",
   "food",
+  "recipe",
+  "weight",
+  "water",
   "bike",
   "armchair",
   "package",
@@ -43,7 +46,11 @@ export function isIconKey(value: unknown): value is IconKey {
  * Een veld in een sjabloon: een verwijzing wijst naar een andere lijst via haar sleutel (`ref`); een samenvatting
  * van wat hiernaar verwijst ook (`calc.list` is dan een sleutel).
  */
-export type TemplateField = Omit<FieldDef, "ref_type" | "result"> & { ref?: string };
+export type TemplateField = Omit<FieldDef, "ref_type" | "result"> & {
+  ref?: string;
+  /** Een eenvoudigere berekening als deze niet kan (bv. Eten zonder Gerechten: de kcal enkel uit kcal per 100 g). */
+  alt?: CalcDef;
+};
 
 export type TypeTemplate = {
   key: string;
@@ -154,7 +161,20 @@ export const SETTLEMENT: TypeTemplate = {
   totals: [{ id: "saldo", agg: "sum", field: "bedrag", period: "all", by: "van", against: "aan", settle: true, scope: "tree" }],
 };
 
-/** Wat je eet: een foto van de verpakking vult de naam en de kcal per 100 g in; de app rekent en telt per dag. */
+/** Wie het at, woog of dronk: standaard jij, en elk ziet in de totalen zijn eigen dag. */
+const WHO: TemplateField = { key: "wie", label: "Wie", type: "person", me: true, filter: true };
+const TODAY: TemplateField = { key: "datum", label: "Datum", type: "date", required: true, today: true, column: true };
+/** Een voedingswaarde per 100 g (uit de databank of geschat) en wat dat is voor wat je at. */
+const per100 = (key: string, label: string, product: "protein" | "carbs" | "fat"): TemplateField[] => [
+  { key: `${key}_100`, label: `${label} per 100 g`, type: "number", unit: "g", product },
+  { key, label, type: "calc", unit: "g", calc: { kind: "formula", expr: `afronden([${key}_100] * [gram] / 100; 1)` } },
+];
+
+/**
+ * Wat je eet: een foto van de verpakking vult de naam en de voedingswaarde per 100 g in; de app rekent uit wat dat is
+ * voor wat je at en telt per dag, per persoon. Iets dat je zelf maakte, kies je als gerecht: de kcal komt dan uit zijn
+ * ingrediënten.
+ */
 const FOOD: TypeTemplate = {
   key: "eten",
   name: "Eten",
@@ -162,8 +182,10 @@ const FOOD: TypeTemplate = {
   name_label: "Wat",
   icon: "food",
   fields: [
-    { key: "datum", label: "Datum", type: "date", required: true, today: true, column: true },
-    { key: "maaltijd", label: "Maaltijd", type: "select", options: ["Ontbijt", "Middag", "Avond", "Tussendoor"], column: true, filter: true },
+    TODAY,
+    { key: "maaltijd", label: "Maaltijd", type: "select", options: ["Ontbijt", "Middag", "Avond", "Tussendoor"], filter: true },
+    WHO,
+    { key: "gerecht", label: "Gerecht", type: "item", ref: "gerecht", hint: "iets dat je zelf maakte: de kcal komt uit zijn ingrediënten" },
     {
       key: "kcal_100",
       label: "kcal per 100 g",
@@ -173,10 +195,77 @@ const FOOD: TypeTemplate = {
       hint: "per 100 g of 100 ml, in kcal (niet kJ): van de voedingstabel, anders geschat",
     },
     { key: "gram", label: "Hoeveel", type: "number", unit: "g", hint: "wat je at of dronk, in g of ml (niet de hele verpakking)" },
-    { key: "kcal", label: "Kcal", type: "calc", unit: "kcal", column: true, calc: { kind: "formula", expr: "[kcal_100] * [gram] / 100" } },
+    { key: "gerecht_kcal_100", label: "kcal per 100 g van het gerecht", type: "calc", unit: "kcal", calc: { kind: "lookup", via: "gerecht", field: "kcal_100" } },
+    {
+      key: "kcal",
+      label: "Kcal",
+      type: "calc",
+      unit: "kcal",
+      column: true,
+      calc: { kind: "formula", expr: "afronden(of([kcal_100]; [gerecht_kcal_100]) * [gram] / 100)" },
+      alt: { kind: "formula", expr: "afronden([kcal_100] * [gram] / 100)" },
+    },
+    ...per100("eiwit", "Eiwit", "protein"),
+    ...per100("koolhydraten", "Koolhydraten", "carbs"),
+    ...per100("vet", "Vet", "fat"),
     NOTE,
   ],
-  totals: [{ id: "dag", agg: "sum", field: "kcal", period: "day", date: "datum" }],
+  totals: [
+    { id: "dag", label: "Kcal per dag", agg: "sum", field: "kcal", period: "day", date: "datum", mine: "wie" },
+    { id: "eiwit", label: "Eiwit per dag", agg: "sum", field: "eiwit", period: "day", date: "datum", mine: "wie", size: "small" },
+    { id: "koolhydraten", label: "Koolhydraten per dag", agg: "sum", field: "koolhydraten", period: "day", date: "datum", mine: "wie", size: "small" },
+    { id: "vet", label: "Vet per dag", agg: "sum", field: "vet", period: "day", date: "datum", mine: "wie", size: "small" },
+  ],
+};
+
+/** Iets dat je zelf maakt: de kcal per 100 g volgt uit zijn ingrediënten (en wat het weegt als het klaar is). */
+const DISH: TypeTemplate = {
+  key: "gerecht",
+  name: "Gerecht",
+  plural: "Gerechten",
+  icon: "recipe",
+  fields: [
+    { key: "porties", label: "Porties", type: "number", unit: "porties" },
+    { key: "klaar", label: "Weegt klaar", type: "number", unit: "g", hint: "na het koken (leeg = wat de ingrediënten samen wegen)" },
+    { key: "totaal_kcal", label: "Kcal in totaal", type: "calc", unit: "kcal", calc: { kind: "rollup", from: "backlinks", list: "ingredient", via: "gerecht", agg: "sum", field: "kcal" } },
+    { key: "totaal_gram", label: "Ingrediënten samen", type: "calc", unit: "g", calc: { kind: "rollup", from: "backlinks", list: "ingredient", via: "gerecht", agg: "sum", field: "gram" } },
+    { key: "kcal_100", label: "kcal per 100 g", type: "calc", unit: "kcal", column: true, calc: { kind: "formula", expr: "afronden([totaal_kcal] / of([klaar]; [totaal_gram]) * 100)" } },
+    { key: "kcal_portie", label: "kcal per portie", type: "calc", unit: "kcal", column: true, calc: { kind: "formula", expr: "afronden([totaal_kcal] / [porties])" } },
+    { key: "bereiding", label: "Bereiding", type: "longtext" },
+  ],
+};
+
+const INGREDIENT: TypeTemplate = {
+  key: "ingredient",
+  name: "Ingrediënt",
+  plural: "Ingrediënten",
+  icon: "food",
+  fields: [
+    { key: "gerecht", label: "Gerecht", type: "item", ref: "gerecht", required: true, column: true, filter: true },
+    { key: "kcal_100", label: "kcal per 100 g", type: "number", unit: "kcal", product: "kcal", hint: "van de verpakking, anders geschat" },
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g" },
+    { key: "kcal", label: "Kcal", type: "calc", unit: "kcal", column: true, calc: { kind: "formula", expr: "afronden([kcal_100] * [gram] / 100)" } },
+  ],
+};
+
+/** Je gewicht: per week het gemiddelde, als lijn, ieder het zijne. */
+const WEIGHT: TypeTemplate = {
+  key: "weging",
+  name: "Weging",
+  plural: "Gewicht",
+  icon: "weight",
+  fields: [TODAY, WHO, { key: "kg", label: "Gewicht", type: "number", unit: "kg", required: true, column: true }, NOTE],
+  totals: [{ id: "week", label: "Gewicht per week", agg: "avg", field: "kg", period: "week", date: "datum", mine: "wie", chart: "line" }],
+};
+
+/** Wat je drinkt: per dag opgeteld, met een doel. */
+const WATER: TypeTemplate = {
+  key: "water",
+  name: "Water",
+  plural: "Water",
+  icon: "water",
+  fields: [TODAY, WHO, { key: "ml", label: "Hoeveel", type: "number", unit: "ml", required: true, column: true }],
+  totals: [{ id: "dag", label: "Water per dag", agg: "sum", field: "ml", period: "day", date: "datum", mine: "wie", goal: 2000, goal_kind: "min" }],
 };
 
 export const PROJECT_TEMPLATES = {
@@ -311,9 +400,9 @@ export const PROJECT_TEMPLATES = {
   },
   food: {
     label: "Voeding",
-    description: "Wat je eet en hoeveel kcal, per dag opgeteld. Een foto van de verpakking vult de voedingswaarde in",
+    description: "Wat je eet (kcal en macro's per dag), gerechten, je gewicht en water. Een foto vult de voedingswaarde in",
     icon: "food",
-    types: [FOOD],
+    types: [FOOD, DISH, INGREDIENT, WEIGHT, WATER],
   },
   collection: {
     label: "Verzameling",
@@ -454,13 +543,15 @@ export type TemplatePlan = {
  * `existing`: de lijsten die er al zijn (erboven). Geeft per id de velden.
  */
 export function resolveTemplateLists(plans: TemplatePlan[], byName: Record<string, string>, existing: CalcList[] = []): Record<string, FieldDef[]> {
+  const alts: Record<string, Record<string, CalcDef>> = {};
   const resolved: CalcList[] = plans.map(({ id, list, refs, calcs }) => {
+    alts[id] = Object.fromEntries(list.fields.flatMap((f) => (f.alt ? [[f.key, f.alt]] : [])));
     const target = (scope: Record<string, string>, ref?: string) => (ref && (scope[ref] || byName[ref.toLowerCase()])) || undefined;
     return {
       id,
       name: list.name,
       plural: list.plural,
-      fields: list.fields.flatMap(({ ref, ...field }): FieldDef[] => {
+      fields: list.fields.flatMap(({ ref, alt: _alt, ...field }): FieldDef[] => {
         if (field.type === "item" || field.type === "items") {
           const to = target(refs, ref);
           return to ? [{ ...field, ref_type: to }] : [];
@@ -478,17 +569,19 @@ export function resolveTemplateLists(plans: TemplatePlan[], byName: Record<strin
   for (let round = 0; round < 3; round++) {
     current = resolved.map((l) => ({ ...l, fields: previewCalcs(l.fields, [...current.filter((x) => x.id !== l.id), ...existing], l.id).fields }));
   }
-  // Wat dan nog niet klopt, valt weg (en wat erop verder bouwde ook).
+  // Wat dan nog niet klopt, krijgt zijn eenvoudigere berekening of valt weg (en wat erop verder bouwde ook).
   const out: Record<string, FieldDef[]> = {};
   for (const l of resolved) {
     let fields = l.fields;
-    for (let i = 0; i <= fields.length; i++) {
+    const alt = alts[l.id];
+    for (let i = 0; i <= 2 * l.fields.length; i++) {
       const { fields: checked, errors } = previewCalcs(fields, [...current.filter((x) => x.id !== l.id), ...existing], l.id);
       if (!Object.keys(errors).length) {
         fields = checked;
         break;
       }
-      fields = fields.filter((f) => !errors[f.key]);
+      const swap = (f: FieldDef) => errors[f.key] && alt[f.key] && f.calc !== alt[f.key];
+      fields = fields.some(swap) ? fields.map((f) => (swap(f) ? { ...f, calc: alt[f.key] } : f)) : fields.filter((f) => !errors[f.key]);
     }
     out[l.id] = fields;
   }

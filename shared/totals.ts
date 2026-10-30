@@ -40,6 +40,14 @@ export type TotalDef = {
   against?: string;
   /** Verrekenen: het saldo telt mee in Wie moet wie op het project (met de subprojecten). */
   settle?: boolean;
+  /** Enkel van jou: een persoonveld (bv. Wie); elke lezer ziet het totaal van de items waar hij in staat. */
+  mine?: string;
+  /** Een eigen doel per persoon (id → doel), bij `mine`; wie er niet in staat, heeft `goal`. */
+  goals?: Record<string, number>;
+  /** "small": een kleine tegel naast andere (bv. eiwit, koolhydraten en vet onder de kcal). */
+  size?: "small";
+  /** "line": de vorige periodes als lijn in plaats van staafjes (bv. je gewicht). */
+  chart?: "line";
 };
 
 export const PERIODS = { all: "Alles samen", day: "Per dag", week: "Per week", month: "Per maand", year: "Per jaar" } as const satisfies Record<
@@ -53,7 +61,7 @@ export const HISTORY = { all: 1, day: 7, week: 8, month: 6, year: 5 } as const s
 export const GROUP_TYPES: FieldType[] = ["person", "people", "share", "select", "multi"];
 /** Verrekenen kan tussen mensen: wie betaalde (een persoon) en een verdeling of een andere persoon. */
 export const SETTLE_TYPES: FieldType[] = ["person", "share"];
-export const MAX_TOTALS = 4;
+export const MAX_TOTALS = 6;
 export const MAX_SOURCES = 5;
 
 const AGG_WORDS = { sum: "", count: "Aantal", avg: "Gemiddelde", min: "Kleinste", max: "Grootste" } as const satisfies Record<Agg, string>;
@@ -75,8 +83,11 @@ export function totalLabel(t: TotalDef, fields: FieldDef[]): string {
 
 /** De velden die een totaal gebruikt. */
 export function totalKeys(t: TotalDef): string[] {
-  return [t.field, t.date, t.by, t.against].filter((k): k is string => Boolean(k));
+  return [t.field, t.date, t.by, t.against, t.mine].filter((k): k is string => Boolean(k));
 }
+
+/** Het doel van een lezer: zijn eigen (bij "enkel van jou"), anders het gewone. */
+export const goalFor = (t: TotalDef, personId: string) => (t.mine && t.goals?.[personId] !== undefined ? t.goals[personId] : t.goal);
 
 /** Een lijst met Van en Aan (twee personen) die verrekent: daar bewaart "Terugbetaald" een terugbetaling. */
 export function isPayments(t: TotalDef, fields: FieldDef[]): boolean {
@@ -187,11 +198,27 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
       if (sources.length) out.sources = sources;
     }
 
-    if (o.goal !== undefined && o.goal !== null && o.goal !== "") {
-      if (typeof o.goal !== "number" || !Number.isFinite(o.goal) || o.goal < 0 || o.goal > 1e12) fail("het doel is een getal van 0 of meer");
-      out.goal = o.goal as number;
-      out.goal_kind = o.goal_kind === "min" ? "min" : "max";
+    if (o.mine !== undefined && o.mine !== null && o.mine !== "") {
+      const def = fields.find((f) => f.key === o.mine);
+      if (!def || def.type !== "person") fail("enkel van jou: kies een persoonveld (zoals Wie)");
+      if (out.settle) fail("verrekenen telt voor iedereen samen, niet enkel van jou");
+      out.mine = def!.key;
     }
+
+    const goal = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1e12;
+    if (o.goal !== undefined && o.goal !== null && o.goal !== "") {
+      if (!goal(o.goal)) fail("het doel is een getal van 0 of meer");
+      out.goal = o.goal as number;
+    }
+    if (out.mine && o.goals && typeof o.goals === "object" && !Array.isArray(o.goals)) {
+      const goals = Object.entries(o.goals as Record<string, unknown>).filter(([id, v]) => /^[\w-]{1,64}$/.test(id) && v !== null && v !== "");
+      if (goals.length > 30) fail("hoogstens 30 doelen per persoon");
+      if (goals.some(([, v]) => !goal(v))) fail("een doel is een getal van 0 of meer");
+      if (goals.length) out.goals = Object.fromEntries(goals) as Record<string, number>;
+    }
+    if (out.goal !== undefined || out.goals) out.goal_kind = o.goal_kind === "min" ? "min" : "max";
+    if (o.size === "small") out.size = "small";
+    if (o.chart === "line" && out.period !== "all") out.chart = "line";
     return out;
   });
 }
@@ -203,7 +230,7 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
 export function renameTotals(totals: TotalDef[], rename: (key: string) => string | undefined): TotalDef[] {
   return totals.map((t) => {
     const out: TotalDef = { ...t };
-    for (const k of ["field", "date", "by", "against"] as const) {
+    for (const k of ["field", "date", "by", "against", "mine"] as const) {
       if (!t[k]) continue;
       const next = rename(t[k]!);
       if (next) out[k] = next;

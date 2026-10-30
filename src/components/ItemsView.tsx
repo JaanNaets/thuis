@@ -9,7 +9,7 @@ import {
   type FieldValue,
   type Names,
 } from "../../shared/fields";
-import type { ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
+import type { Item, ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
 import { apiUrl, useApi } from "../api";
 import { Link } from "../router";
 import { FilterSelect, FilterToggle } from "./Controls";
@@ -76,7 +76,14 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const columns = fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, 2);
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
-  const items = data?.items ?? [];
+  // Een logboek (een datum die met vandaag begint: eten, gewicht, uitgaven): het nieuwste eerst.
+  const logDate = fields.find((f) => f.type === "date" && f.today);
+  const items = useMemo(() => {
+    const all = data?.items ?? [];
+    if (!logDate) return all;
+    const day = (i: Item) => (typeof i.data[logDate.key] === "string" ? (i.data[logDate.key] as string) : "");
+    return [...all].sort((a, b) => day(b).localeCompare(day(a)));
+  }, [data, logDate]);
   const year = new Date().getFullYear();
 
   const options = useMemo(() => {

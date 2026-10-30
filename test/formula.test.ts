@@ -106,3 +106,18 @@ test("formule: namen ↔ sleutels, hernoemen, afhankelijkheden, in woorden", () 
   assert.deepEqual(fieldDeps(food, "kcal"), ["kcal", "kcal_100", "gram"]);
   assert.equal(describeCalc(food.find((f) => f.key === "kcal")!, food), "kcal per 100 g × Hoeveel ÷ 100");
 });
+
+test("formule: of(…) neemt het eerste dat ingevuld is", () => {
+  const fields: FieldDef[] = [
+    ...food,
+    { key: "recept_kcal", label: "Recept kcal", type: "number" },
+    formula("x", "X", "of([kcal_100]; [recept_kcal]) * [gram] / 100"),
+  ];
+  assert.equal(result(fields, "x"), "number");
+  assert.equal(compute(fields, { kcal_100: 200, recept_kcal: 100, gram: 50 }, "x"), 100);
+  assert.equal(compute(fields, { recept_kcal: 100, gram: 50 }, "x"), 50);
+  assert.equal(compute(fields, { gram: 50 }, "x"), undefined);
+  assert.throws(() => checkCalcs([...food, formula("x", "X", "of([gram])")], [], "self"), /minstens twee/);
+  // Een getal naast een bedrag telt in euro, ook in of(…).
+  assert.equal(compute([...food, formula("x", "X", "of([prijs]; 2)")], {}, "x"), 200);
+});

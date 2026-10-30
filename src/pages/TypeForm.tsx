@@ -165,7 +165,7 @@ function TypeForm({
         />
       </section>
 
-      <TotalsEditor value={totals} onChange={setTotals} fields={preview} others={others} />
+      <TotalsEditor value={totals} onChange={setTotals} fields={preview} others={others} people={p.members.map((m) => m.person)} />
 
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">

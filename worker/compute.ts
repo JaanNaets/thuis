@@ -2,7 +2,7 @@
 // wat jij daar mag zien (het project, de lijst en het veld) telt mee; anders blijft de uitkomst leeg.
 
 import { fieldAccess, typeAccess, visibleData, type Rights } from "../shared/access";
-import { aggregate, computeLocal, fieldDeps, type CalcDef } from "../shared/calc";
+import { aggregate, computeLocal, fieldDeps, isLinkCalc, type CalcDef } from "../shared/calc";
 import type { Attributes, FieldDef, FieldValue } from "../shared/fields";
 import type { Item, ItemType } from "../shared/types";
 import { accessibleProjects, toItemType, type TypeRow } from "./context";
@@ -24,9 +24,10 @@ const idsIn = (v: FieldValue | undefined): string[] =>
 
 /**
  * De berekeningen van een lijst invullen in de items (die al gefilterd zijn op wat je mag zien). `rights`: jouw rechten
- * in het project van deze items.
+ * in het project van deze items. `depth`: hoe diep we al zitten (opzoeken van iets dat zelf samenvat, bv. de kcal van
+ * een recept uit zijn ingrediënten, gaat één niveau dieper).
  */
-export async function withCalcs(db: D1Database, personId: string, type: ItemType, rights: Rights, items: Item[]): Promise<void> {
+export async function withCalcs(db: D1Database, personId: string, type: ItemType, rights: Rights, items: Item[], depth = 0): Promise<void> {
   const calcs = type.fields.filter((f) => f.type === "calc" && f.calc && f.result && fieldAccess(rights, type.id, f.key) !== "none");
   if (!calcs.length || !items.length) return;
 
@@ -48,11 +49,23 @@ export async function withCalcs(db: D1Database, personId: string, type: ItemType
    * Een ander item zoals jij het ziet (met zijn eigen berekeningen): null als je het item of `keys` niet mag zien;
    * `hidden` als je `value` niet mag zien (of iets waarvan die afhangt).
    */
+  const deeper = new Map<string, Attributes>();
   const seen = async (row: Row, list: ItemType, keys: string[], value?: string): Promise<{ data: Attributes; hidden: boolean } | null> => {
     const r = await rightsIn(row.project_id);
     if (!r || row.type_id !== list.id || typeAccess(r, list.id) === "none" || keys.some((k) => fieldAccess(r, list.id, k) === "none")) return null;
-    const hidden = value ? fieldDeps(list.fields, value).some((k) => fieldAccess(r, list.id, k) === "none") : false;
-    return { data: computeLocal(list.fields, visibleData(r, list.id, list.fields, parse(row.data))), hidden };
+    const deps = value ? fieldDeps(list.fields, value) : [];
+    const hidden = deps.some((k) => fieldAccess(r, list.id, k) === "none");
+    const base = visibleData(r, list.id, list.fields, parse(row.data));
+    // Hangt de waarde af van een opzoeking of samenvatting in dat andere item: die eerst uitrekenen (één niveau dieper).
+    if (depth < 1 && deps.some((k) => isLinkCalc(list.fields.find((f) => f.key === k)))) {
+      if (!deeper.has(row.id)) {
+        const item = { id: row.id, project_id: row.project_id, type_id: row.type_id, data: base } as Item;
+        await withCalcs(db, personId, list, r, [item], depth + 1);
+        deeper.set(row.id, item.data);
+      }
+      return { data: deeper.get(row.id)!, hidden };
+    }
+    return { data: computeLocal(list.fields, base), hidden };
   };
   const fetch = async (ids: string[], activeOnly: boolean) => {
     if (!ids.length) return [];

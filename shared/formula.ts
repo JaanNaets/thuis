@@ -1,13 +1,14 @@
 // Formules: een berekening die je zelf schrijft, zoals [kcal per 100 g] × [Hoeveel] ÷ 100. Velden staan tussen
 // vierkante haakjes; verder getallen (1,5 of 1.5), + − × ÷, haakjes, vergelijkingen (< ≤ > ≥ = ≠) en een paar
-// functies: afronden(x; decimalen), min(…), max(…) en als(voorwaarde; dan; anders). Argumenten scheid je met ";".
+// functies: afronden(x; decimalen), min(…), max(…), als(voorwaarde; dan; anders) en of(a; b): het eerste dat
+// ingevuld is (bv. de kcal van het product, anders die van het recept). Argumenten scheid je met ";".
 //
 // Nooit eval: de formule wordt gelezen tot een boom, nagekeken (`inferFormula`) en zo uitgerekend (`evalFormula`).
 // Bewaard met de sleutels van de velden ([kcal_100] * [gram] / 100); wie ze leest of typt, ziet de namen.
 
 import type { CompareOp } from "./calc.ts";
 
-export type FnName = "afronden" | "min" | "max" | "als";
+export type FnName = "afronden" | "min" | "max" | "als" | "of";
 export type FNode =
   | { t: "num"; v: number }
   | { t: "field"; ref: string }
@@ -29,6 +30,7 @@ const FUNCTIONS: Record<FnName, { min: number; max: number }> = {
   min: { min: 1, max: 20 },
   max: { min: 1, max: 20 },
   als: { min: 3, max: 3 },
+  of: { min: 2, max: 5 },
 };
 
 // ---------- lezen ----------
@@ -300,7 +302,9 @@ export function inferFormula(node: FNode, kindOf: (ref: string) => FKind | "wait
               ? "als(…) heeft drie delen: als(voorwaarde; dan; anders)"
               : n.name === "afronden"
                 ? "afronden(…) heeft een getal en eventueel het aantal decimalen"
-                : `${n.name}(…) heeft minstens één getal`,
+                : n.name === "of"
+                  ? "of(…) heeft minstens twee delen: of([Dit]; [anders dit])"
+                  : `${n.name}(…) heeft minstens één getal`,
           );
         if (n.name === "als") {
           if (infer(n.args[0]) !== "bool") throw new Error("het eerste deel van als(…) is een vergelijking, zoals [Aantal] < 3");
@@ -377,6 +381,15 @@ export function evalFormula(node: FNode, value: (ref: string) => number | boolea
           const unit = unify([kinds(n.args[1]), kinds(n.args[2])]);
           const chosen = run(n.args[cond.v ? 1 : 2]);
           return chosen && { v: as(chosen, unit), k: unit };
+        }
+        if (n.name === "of") {
+          // Het eerste dat ingevuld is; een leeg veld telt niet.
+          const unit = unify(n.args.map(kinds));
+          for (const arg of n.args) {
+            const x = run(arg);
+            if (x) return { v: as(x, unit), k: unit };
+          }
+          return undefined;
         }
         if (n.name === "afronden") {
           const x = run(n.args[0]);

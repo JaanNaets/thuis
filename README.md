@@ -282,7 +282,8 @@ Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn acht soorten
 
 - **Rekensom**: Aantal × Prijs, of Totaal × 1,21 (op een andere berekening verder bouwen mag).
 - **Formule**: een eigen som met velden tussen [ ], zoals `[kcal per 100 g] × [Hoeveel] ÷ 100`. Ook haakjes,
-  `afronden(x; 1)`, `min(a; b)`, `max(a; b)` en `als([Aantal] < 3; dan; anders)`. Tik op een veld om het in te
+  `afronden(x; 1)`, `min(a; b)`, `max(a; b)`, `als([Aantal] < 3; dan; anders)` en `of(a; b)` (het eerste dat
+  ingevuld is: je eigen kcal, anders die van het gerecht). Tik op een veld om het in te
   voegen; de app bewaart de formule zo dat ze blijft kloppen als je een veld hernoemt. Een getal naast een bedrag telt
   in euro (`[Prijs] + 2` is twee euro meer).
 - **Vergelijking**: ja als Aantal ≤ Bijna op onder (zo zie en filter je wat je moet kopen).
@@ -298,7 +299,7 @@ uitleg (i) naast een berekening zegt wat ze uitrekent.
 
 ### Totalen
 
-Onderaan het formulier van een lijst stel je **totalen** in (hooguit vier): wat (de som, het gemiddelde, het
+Onderaan het formulier van een lijst stel je **totalen** in (hooguit zes): wat (de som, het gemiddelde, het
 kleinste, het grootste of hoeveel items), van welk getal, bedrag of duur (ook een berekening), en over welke periode:
 alles samen, of per dag, week, maand of jaar volgens een datumveld. Verder:
 
@@ -309,14 +310,27 @@ alles samen, of per dag, week, maand of jaar volgens een datumveld. Verder:
   **tegenover** een tweede veld: een saldo (betaald door − verdeling = wie nog geld krijgt).
 - **Verrekenen**: zo'n saldo tussen personen wordt Wie moet wie op het project.
 - Een **doel**: "niet meer dan" (een budget, je calorieën) of "minstens" (stappen, water).
+- **Van wie**: iedereen samen, of enkel van wie kijkt (volgens een veld Persoon). Zo ziet elk zijn eigen calorieën,
+  gewicht en water in hetzelfde project, met een **doel per persoon**.
+- **Klein**: een tegeltje naast de andere kleine (eiwit, koolhydraten, vet). **Als lijn**: de vorige periodes als
+  lijn in plaats van staafjes (je gewicht).
 
 Op het project staan ze boven de lijst die openstaat: het getal van vandaag (of deze week, maand, jaar), een balk
 naar het doel, staafjes voor de vorige periodes en per persoon of keuze. De API rekent ze uit zoals jij de items
 ziet, per project met jouw rol daar: een totaal op een veld dat je niet mag zien, krijg je niet.
 
-Het sjabloon **Voeding** zet dit klaar voor calorieën: een lijst Eten met de datum (begint met vandaag), de maaltijd,
-kcal per 100 g, hoeveel gram, en Kcal als formule, met het totaal "Kcal per dag". Een foto van de verpakking vult de
-naam en de kcal per 100 g in (zie hieronder); een doel stel je zelf in bij het totaal.
+Het sjabloon **Voeding** zet dit klaar:
+
+- **Eten**: de datum (begint met vandaag), de maaltijd, wie (standaard jij), kcal, eiwit, koolhydraten en vet per
+  100 g, en hoeveel. De app rekent de kcal en macro's uit en telt ze per dag: "Kcal per dag" groot, de macro's als
+  tegels, elk enkel van zichzelf. Een foto van de verpakking vult de naam en de voedingswaarde in (zie hieronder).
+- **Gerechten** en hun **Ingrediënten**: wat je zelf maakt. De kcal per 100 g volgt uit de ingrediënten (en wat het
+  klaar weegt, want koken maakt het lichter), en per portie. Kies je bij Eten een gerecht, dan komt de kcal daarvan.
+- **Gewicht**: een weging per keer, per week het gemiddelde als lijn.
+- **Water**: per dag opgeteld, met als doel minstens 2.000 ml.
+
+Een doel stel je zelf in bij het totaal, voor iedereen of per persoon. In een lijst met een datum die met vandaag
+begint, mag de naam leeg ("Weging 30/10/2026"), en staat het nieuwste bovenaan.
 
 ### Voorraad
 

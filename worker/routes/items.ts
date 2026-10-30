@@ -19,7 +19,7 @@ import { productByCode, productByName } from "../products";
 import { isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
-import { asObject, ForbiddenError, idList, NotFoundError, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
+import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -184,7 +184,19 @@ function tagStatements(db: D1Database, itemId: string, tagIds: string[]): D1Prep
 
 function parseItemInput(body: unknown) {
   const obj = asObject(body);
-  return { type_id: requiredId(obj, "type_id"), name: requiredString(obj, "name", 200), data: obj.data, tag_ids: idList(obj, "tag_ids") };
+  return { type_id: requiredId(obj, "type_id"), name: optionalString(obj, "name", 200) ?? "", data: obj.data, tag_ids: idList(obj, "tag_ids") };
+}
+
+/**
+ * Een lege naam: in een logboek (een lijst met een datum die met vandaag begint, bv. Gewicht) de lijst en de datum
+ * ("Weging 30/10/2026"); anders moet je een naam geven.
+ */
+function nameOrDefault(type: ItemType, name: string, data: Attributes): string {
+  if (name) return name;
+  const date = type.fields.find((f) => f.type === "date" && f.today);
+  if (!date) throw new ValidationError(`Geef ${type.name_label?.toLowerCase() ?? "een naam"}.`);
+  const day = typeof data[date.key] === "string" ? (data[date.key] as string) : new Date().toISOString().slice(0, 10);
+  return `${type.name} ${day.split("-").reverse().join("/")}`;
 }
 
 async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
@@ -279,7 +291,7 @@ projectItems.post("/:id/items", async (c) => {
   await db.batch([
     db
       .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(id, access.project.id, type.id, input.name, JSON.stringify(data), me),
+      .bind(id, access.project.id, type.id, nameOrDefault(type, input.name, data), JSON.stringify(data), me),
     ...tagStatements(db, id, input.tag_ids),
   ]);
   return c.json(await loadDetail(c, id), 201);
@@ -344,7 +356,7 @@ items.put("/:id", async (c) => {
   const statements = [
     db
       .prepare("UPDATE items SET name = ?, data = ?, updated_at = datetime('now') WHERE id = ?")
-      .bind(editsType ? input.name : row.name, JSON.stringify(data), row.id),
+      .bind(editsType ? nameOrDefault(type, input.name, data) : row.name, JSON.stringify(data), row.id),
   ];
   if (editsType) {
     await assertTags(db, access.chain, input.tag_ids);
