@@ -336,6 +336,10 @@ zoals **Verkoper** koppelt ze op naam aan een verkoper die je al hebt ("COLRUYT 
 staat de winkel er nog niet in, dan voeg je ze met één tik toe. Wat de AI zegt, gaat door dezelfde controle als wat
 je zelf typt; er wordt nooit iets bewaard zonder dat je op **Opslaan** drukt.
 
+Bij de foto kan je de AI een korte **uitleg** meegeven ("ik at de helft", "enkel de boodschappen, niet de tankbeurt").
+Pas je die achteraf aan, dan laat je de foto opnieuw lezen (dat telt als een extra lezing). Staat er een barcode op de
+foto en geef je uitleg, dan komen de gegevens uit de barcode en leest de AI enkel de rest (zoals hoeveel je at).
+
 Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), dan zoekt de app echte gegevens op in
 [Open Food Facts](https://world.openfoodfacts.org), een open en gratis databank, zo zuinig mogelijk:
 
