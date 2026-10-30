@@ -596,13 +596,16 @@ kbd {
 
 .page-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   margin-bottom: 20px;
 }
 
+/* De titel krijgt minstens ±14 tekens breedte; is er dan geen plaats meer voor de acties, dan springen die eronder. */
 .page-title {
+  flex: 1 1 13rem;
   min-width: 0;
 }
 
@@ -2037,6 +2040,18 @@ input[type="checkbox"] {
 .scan-buttons {
   display: grid;
   gap: 10px;
+}
+
+/* Een naam van de foto die nog niet bestaat (een nieuwe winkel): uitleg links, "Toevoegen" rechts. */
+.scan-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scan-suggestion .btn {
+  flex: none;
 }
 
 .tag-new {

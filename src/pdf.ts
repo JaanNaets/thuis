@@ -44,3 +44,22 @@ export async function pdfFirstPageImage(file: File, maxSide = 1280): Promise<Blo
   await task.destroy();
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
 }
+
+/** De eerste pagina van een PDF als foto (JPEG), om ze te laten lezen (bv. een factuur). */
+export async function pdfFirstPage(file: File, width = 1600): Promise<File> {
+  const task = getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  try {
+    const page = await (await task.promise).getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: width / base.width });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    await page.render({ canvas, viewport }).promise;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.88));
+    if (!blob) throw new Error("Deze PDF kon niet gelezen worden.");
+    return new File([blob], file.name.replace(/\.pdf$/i, "") + ".jpg", { type: "image/jpeg" });
+  } finally {
+    await task.destroy();
+  }
+}

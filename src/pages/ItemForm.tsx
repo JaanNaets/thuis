@@ -14,7 +14,7 @@ import { useNavigate } from "../router";
 import { useSession } from "../session";
 
 /** Velden die de app van een foto kan lezen (zie de API). */
-const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
+const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool", "item"];
 
 /** /projecten/:id/nieuw?lijst= (nieuw) of /items/:itemId/bewerken. */
 export function ItemFormPage() {
@@ -72,6 +72,10 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const [tagIds, setTagIds] = useState<string[]>(item?.tag_ids ?? []);
   const [auto, setAuto] = useState<Set<string>>(new Set());
   const [photo, setPhoto] = useState<File | null>(null);
+  // Een gelezen PDF (bv. een factuur): die komt bij de bestanden van het item.
+  const [original, setOriginal] = useState<File | null>(null);
+  // Na een nieuw item in een andere lijst (een nieuwe winkel): de keuzelijsten opnieuw laden.
+  const [refsVersion, setRefsVersion] = useState(0);
   const touched = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -144,9 +148,25 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     }
   }
 
+  // Een naam van de foto die nog niet bestaat (bv. de winkel): toevoegen aan die lijst en meteen kiezen.
+  async function createRef(s: NonNullable<LabelScan["create"]>[number]) {
+    try {
+      const created = await api.post<{ id: string }>(`/projects/${s.project_id}/items`, { type_id: s.type_id, name: s.name, data: {}, tag_ids: [] });
+      setAttrs((a) => ({ ...a, [s.key]: created.id }));
+      setAuto((a) => new Set([...a, s.key]));
+      setRefsVersion((v) => v + 1);
+      toast(`${s.name} toegevoegd aan ${s.plural}`);
+      return true;
+    } catch (err) {
+      toast((err as Error).message, "alert");
+      return false;
+    }
+  }
+
   // Wat van het etiket gelezen werd, komt enkel in velden die je nog niet zelf invulde.
-  function applyScan(scan: LabelScan, file: File) {
+  function applyScan(scan: LabelScan, file: File, pdf: File | null = null) {
     setPhoto(file);
+    setOriginal(pdf);
     if (scan.name && !touched.current.has("name")) setName(scan.name);
     const scanned = attributesDraft(fields, scan.data);
     const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k));
@@ -168,6 +188,11 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         body.set("file", photo);
         await api.put(`/items/${saved.id}/photo`, body).catch(() => toast("De foto kon niet bewaard worden", "alert"));
       }
+      if (original) {
+        const body = new FormData();
+        body.set("file", original);
+        await api.post(`/items/${saved.id}/files`, body).catch(() => toast("De PDF kon niet bewaard worden", "alert"));
+      }
       toast(item ? "Bijgewerkt" : `${saved.name} bewaard`);
       if (next) {
         // Opslaan en volgende: tags blijven, de rest is leeg (de volgende fles uit de kelder).
@@ -177,6 +202,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         touched.current.clear();
         looked.current = undefined;
         setPhoto(null);
+        setOriginal(null);
         setSaving(false);
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
@@ -216,14 +242,21 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       {!item && (readable || products) && (
         <section className="card form-section">
           <div className="field">
-            <span className="label">{products ? "Product" : "Etiket"}</span>
+            <span className="label">{products ? "Product" : "Van een foto"}</span>
             <span className="hint">
               {products
                 ? "Scan de barcode of trek een foto: de app zoekt het product op in Open Food Facts en vult de echte gegevens in. Niets gevonden? Dan leest ze de foto."
-                : "Trek een foto van het etiket of typeplaatje: de app vult in wat erop staat, en bewaart de foto erbij."}
+                : "Trek een foto van een etiket, kasticket, factuur of typeplaatje, of kies een PDF: de app vult in wat erop staat en bewaart het erbij."}
             </span>
           </div>
-          <LabelScanner projectId={project.project.id} typeId={type.id} products={products} onResult={applyScan} onProduct={applyProduct} />
+          <LabelScanner
+            projectId={project.project.id}
+            typeId={type.id}
+            products={products}
+            onResult={applyScan}
+            onProduct={applyProduct}
+            onCreate={createRef}
+          />
         </section>
       )}
 
@@ -257,6 +290,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         </label>
         {fields.length > 0 && (
           <FieldInputs
+            key={refsVersion}
             defs={fields}
             value={attrs}
             access={type.field_access}

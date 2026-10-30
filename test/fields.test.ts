@@ -254,3 +254,25 @@ test("opnieuw: een vorig item als begin van een nieuw", async () => {
     gram: 40,
   });
 });
+
+test("een naam van een foto koppelen aan een bestaand item", async () => {
+  const { matchName } = await import("../shared/fields.ts");
+  const vendors = [
+    { id: "c", name: "Colruyt" },
+    { id: "ch", name: "Colruyt Halle" },
+    { id: "d", name: "Delhaize" },
+    { id: "a", name: "AD Delhaize Lembeek" },
+    { id: "x", name: "A" },
+  ];
+  assert.equal(matchName(vendors, "Colruyt"), "c");
+  assert.equal(matchName(vendors, "COLRUYT LAAGSTE PRIJZEN - HALLE"), "c");
+  assert.equal(matchName(vendors, "colruyt halle"), "ch");
+  assert.equal(matchName(vendors, "AD Delhaize Lembeek nv"), "a");
+  assert.equal(matchName(vendors, "Délhaize"), "d");
+  // Een woord in een ander woord telt niet; te kort of niets: geen gok.
+  assert.equal(matchName(vendors, "Colruytgroep"), null);
+  assert.equal(matchName(vendors, "Aldi"), null);
+  assert.equal(matchName(vendors, " "), null);
+  // Omgekeerd: de naam op de foto is korter dan het item.
+  assert.equal(matchName([{ id: "z", name: "Zeeman textielsupers" }], "Zeeman"), "z");
+});

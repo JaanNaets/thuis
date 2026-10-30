@@ -1397,24 +1397,33 @@ export function LabelScanner({
   products,
   onResult,
   onProduct,
+  onCreate,
 }: {
   projectId: string;
   typeId: string;
   /** De lijst heeft velden uit productinfo: barcode zoeken en opzoeken in Open Food Facts. */
   products?: boolean;
-  onResult: (scan: LabelScan, photo: File) => void;
+  /** `original`: een PDF die gelezen werd (de eerste pagina als `photo`); die hoort als bestand bij het item. */
+  onResult: (scan: LabelScan, photo: File, original: File | null) => void;
   onProduct?: (info: ProductInfo, code: string | null, photo: File | null) => void;
+  /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
+  onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string }>();
+  const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
-  async function read(file: File | undefined) {
-    if (!file) return;
-    setStatus({ tone: "busy", text: products ? "Product zoeken" : "Etiket lezen" });
+  async function read(chosen: File | undefined) {
+    if (!chosen) return;
+    setSuggestions([]);
+    setStatus({ tone: "busy", text: products ? "Product zoeken" : "Lezen" });
     try {
+      // Een PDF (bv. een factuur): de eerste pagina lezen als foto, en de PDF zelf bewaren bij het item.
+      const pdf = chosen.type === "application/pdf" ? chosen : null;
+      const file = pdf ? await (await import("../pdf")).pdfFirstPage(pdf) : chosen;
       const [small, photo] = await Promise.all([prepareForReading(file), prepareUpload(file)]);
       // Eerst een barcode op de foto zelf: gratis, zonder AI, en exact.
       if (products && onProduct) {
@@ -1429,7 +1438,8 @@ export function LabelScanner({
       body.set("image", small);
       body.set("type_id", typeId);
       const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
-      onResult(scan, photo);
+      onResult(scan, photo, pdf);
+      setSuggestions(onCreate ? (scan.create ?? []) : []);
       setStatus(
         scan.message
           ? { tone: "none", text: scan.message }
@@ -1457,11 +1467,15 @@ export function LabelScanner({
     }
   }
 
+  async function create(s: NonNullable<LabelScan["create"]>[number]) {
+    if (await onCreate!(s)) setSuggestions((list) => list.filter((x) => x !== s));
+  }
+
   const input = (ref: typeof cameraRef, camera: boolean) => (
     <input
       ref={ref}
       type="file"
-      accept="image/*"
+      accept={camera ? "image/*" : "image/*,application/pdf"}
       capture={camera ? "environment" : undefined}
       hidden
       onChange={(e) => {
@@ -1475,10 +1489,10 @@ export function LabelScanner({
     <div className="scan-buttons">
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-          <Icon name="camera" /> {products ? "Foto" : "Foto van het etiket"}
+          <Icon name="camera" /> Foto
         </button>
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
-          <Icon name="image" /> Uit foto
+          <Icon name="image" /> {products ? "Uit foto" : "Uit bestand"}
         </button>
         {products && (
           <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
@@ -1490,6 +1504,16 @@ export function LabelScanner({
       {input(fileRef, false)}
       {scanning && <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />}
       {status && <Alert tone={status.tone}>{status.text}</Alert>}
+      {suggestions.map((s) => (
+        <div key={s.key} className="scan-suggestion">
+          <span className="hint">
+            "{s.name}" staat nog niet bij {s.plural}.
+          </span>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => create(s)}>
+            <Icon name="plus" size={15} /> Toevoegen
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

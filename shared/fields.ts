@@ -725,6 +725,31 @@ export function repeatData(fields: FieldDef[], data: Attributes, today: string):
   return out;
 }
 
+const plain = (s: string) =>
+  ` ${s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()} `;
+
+/**
+ * Een naam van een foto (bv. de winkel op een kasticket) koppelen aan een bestaand item: dezelfde naam, anders een
+ * item waarvan de naam als hele woorden in de tekst staat ("COLRUYT LAAGSTE PRIJZEN HALLE" → Colruyt; het langste
+ * wint), of omgekeerd (Colruyt → Colruyt Halle; het kortste wint). Null als niets past.
+ */
+export function matchName(candidates: { id: string; name: string }[], text: string): string | null {
+  const t = plain(text);
+  if (t.trim().length < 2) return null;
+  const named = candidates.map((c) => ({ id: c.id, n: plain(c.name) })).filter((c) => c.n.trim().length >= 2);
+  const exact = named.find((c) => c.n === t);
+  if (exact) return exact.id;
+  const inText = named.filter((c) => c.n.trim().length >= 3 && t.includes(c.n)).sort((a, b) => b.n.length - a.n.length)[0];
+  if (inText) return inText.id;
+  const inName = named.filter((c) => t.trim().length >= 3 && c.n.includes(t)).sort((a, b) => a.n.length - b.n.length)[0];
+  return inName?.id ?? null;
+}
+
 /** Of velden iets invullen (dan heb je wie in het project zit nodig). */
 export const fillsDefaults = (fields: FieldDef[]) => fields.some((f) => (f.type === "person" && f.me) || (f.type === "share" && f.fill));
 

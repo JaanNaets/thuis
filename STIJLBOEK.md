@@ -196,6 +196,8 @@ met de zwevende terugknop en het titelpilletje (gsm).
 - Een overzichtsscherm (een project) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
 - Formulieren: `back={{ to: -1, label: … }}` (gewoon terug), geen `primary`.
 - Beschrijving: één korte zin, in grijs onder de titel, zonder punt als het een opsomming is.
+- Meer acties dan plaats (op gsm: Opnieuw + Bewerken)? Dan springen de acties onder de titel; de titel breekt nooit
+  midden in een woord.
 
 ### Zijkolom: `split`
 
@@ -433,7 +435,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een ander project. Je kiest enkel uit items die je mag zien |
 | `SharesField` (`sharesDraft`) | **Eigenaar**: wie welk deel heeft (Gelijk · Procent, samen 100). Leeg = van het project samen |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Foto van een etiket: de app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
+| `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
 

@@ -327,10 +327,13 @@ Iets dat je vaker toevoegt (hetzelfde ontbijt, dezelfde fles), hoef je niet opni
 fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Een datum
 die met vandaag begint, wordt vandaag. Gratis, zonder AI.
 
-### Een etiket lezen, een product herkennen
+### Een foto lezen: etiket, kasticket, factuur, product
 
-Bij een nieuw item kan je een foto van een etiket nemen: de app vult de naam en de velden in (zacht blauw tot je
-ze zelf aanpast) en bewaart de foto. Dat gebeurt met Workers AI. Wat de AI zegt, gaat door dezelfde controle als wat
+Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de
+app vult de naam en de velden in (zacht blauw tot je ze zelf aanpast) en bewaart de foto (en de PDF bij de bestanden).
+Dat gebeurt met Workers AI. Bij een kasticket neemt ze het totaal, de datum van aankoop en de winkel. Een verwijzing
+zoals **Verkoper** koppelt ze op naam aan een verkoper die je al hebt ("COLRUYT LAAGSTE PRIJZEN HALLE" → Colruyt);
+staat de winkel er nog niet in, dan voeg je ze met één tik toe. Wat de AI zegt, gaat door dezelfde controle als wat
 je zelf typt; er wordt nooit iets bewaard zonder dat je op **Opslaan** drukt.
 
 Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), dan zoekt de app echte gegevens op in

@@ -115,10 +115,10 @@ const EXPENSE: TypeTemplate = {
   name_label: "Omschrijving",
   icon: "receipt",
   fields: [
-    { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true },
+    { key: "bedrag", label: "Bedrag", type: "money", required: true, column: true, hint: "het totaal dat je betaalde" },
     { key: "datum", label: "Datum", type: "date", required: true, column: true, today: true },
     { key: "betaald_door", label: "Betaald door", type: "person", column: true, filter: true, me: true },
-    { key: "verkoper", label: "Verkoper", type: "item", ref: "verkoper", filter: true },
+    { key: "verkoper", label: "Verkoper", type: "item", ref: "verkoper", filter: true, hint: "de winkel of firma" },
     {
       key: "categorie",
       label: "Categorie",

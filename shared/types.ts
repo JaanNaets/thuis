@@ -199,6 +199,11 @@ export type LabelScan = {
    * ze geschat op basis van de foto?
    */
   source?: { kind: "database"; label: string } | { kind: "estimate" };
+  /**
+   * Een verwijzing (bv. Verkoper) waarvan de naam op de foto nog niet bestaat: die kan je meteen toevoegen aan de
+   * lijst waarnaar het veld wijst (`list`: hoe één item ervan heet), als je daar iets mag toevoegen.
+   */
+  create?: { key: string; name: string; type_id: string; project_id: string; list: string; plural: string }[];
 };
 
 export type SearchResult = {

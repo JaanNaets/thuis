@@ -5,6 +5,7 @@ import {
   applyFieldDefaults,
   cleanAttributes,
   fillsDefaults,
+  matchName,
   missingRequired,
   referencedItems,
   referencedPeople,
@@ -557,7 +558,7 @@ projectItems.post("/:id/items/import", async (c) => {
 // ---------- een etiket lezen ----------
 
 /** Velden die de AI van een foto kan lezen. */
-const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
+const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool", "item"];
 
 function labelSchema(fields: FieldDef[]) {
   const properties: Record<string, unknown> = { name: { type: ["string", "null"] } };
@@ -577,15 +578,56 @@ function labelSchema(fields: FieldDef[]) {
 
 function describeField(f: FieldDef): string {
   const extra =
-    { year_range: ` (${f.key}_from en ${f.key}_to: jaartallen)`, money: " (in euro)", multi: " (lijst)", date: " (YYYY-MM-DD)", time: " (HH:MM)" }[
-      f.type as string
-    ] ?? (f.unit ? ` (in ${f.unit})` : "");
+    {
+      year_range: ` (${f.key}_from en ${f.key}_to: jaartallen)`,
+      money: " (in euro)",
+      multi: " (lijst)",
+      date: " (YYYY-MM-DD)",
+      time: " (HH:MM)",
+      item: " (de naam zoals op de foto, bv. van de winkel)",
+    }[f.type as string] ?? (f.unit ? ` (in ${f.unit})` : "");
   return `- ${f.key}: ${f.label}${extra}${f.hint ? `. ${f.hint}` : ""}`;
 }
 
 /**
- * Een foto lezen in de velden van een lijst (die je mag invullen): een etiket of typeplaatje, of bij een lijst met
- * productinfo het product of gerecht dat erop staat (met de echte gegevens van een gekend product).
+ * Wat de AI bij een verwijzing las (een naam), koppelen aan een item van die lijst dat je mag zien (`matchName`).
+ * Bestaat het nog niet, dan een voorstel om het toe te voegen, als je dat in het project van die lijst mag.
+ */
+async function matchRefs(
+  db: D1Database,
+  personId: string,
+  fields: FieldDef[],
+  parsed: Record<string, unknown>,
+): Promise<{ data: Record<string, string>; create: NonNullable<LabelScan["create"]> }> {
+  const out = { data: {} as Record<string, string>, create: [] as NonNullable<LabelScan["create"]> };
+  const wanted = fields.filter((f) => f.type === "item" && f.ref_type && typeof parsed[f.key] === "string" && (parsed[f.key] as string).trim());
+  if (!wanted.length) return out;
+  const canSee = await visibility(db, personId);
+  for (const f of wanted) {
+    const name = (parsed[f.key] as string).trim().slice(0, 120);
+    const { results } = await db
+      .prepare("SELECT id, name, project_id, type_id FROM items WHERE type_id = ? AND archived = 0")
+      .bind(f.ref_type)
+      .all<{ id: string; name: string; project_id: string; type_id: string }>();
+    const found = matchName(
+      results.filter((r) => canSee(r)),
+      name,
+    );
+    if (found) {
+      out.data[f.key] = found;
+      continue;
+    }
+    const list = await db.prepare("SELECT * FROM item_types WHERE id = ?").bind(f.ref_type).first<TypeRow>();
+    const access = list && (await projectAccess(db, personId, list.project_id));
+    if (list && access && canCreate(access.rights, list.id))
+      out.create.push({ key: f.key, name, type_id: list.id, project_id: list.project_id, list: list.name, plural: list.plural });
+  }
+  return out;
+}
+
+/**
+ * Een foto lezen in de velden van een lijst (die je mag invullen): een etiket, typeplaatje, kasticket of factuur, of
+ * bij een lijst met productinfo het product of gerecht dat erop staat (met de echte gegevens van een gekend product).
  */
 projectItems.post("/:id/items/scan", async (c) => {
   const form = await c.req.formData();
@@ -629,8 +671,10 @@ projectItems.post("/:id/items/scan", async (c) => {
 - barcode: de cijfers onder de barcode als je ze allemaal kan lezen, anders null
 ${fields.map((f) => describeField(f) + (f.product ? ` (${PRODUCT_KEYS[f.product].label})` : "")).join("\n")}
 ${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in: lees het van de verpakking als dat kan, anders schat je het zoals een voedingstabel het zou geven voor wat je ziet (een cappuccino, een croissant, een bord pasta), en schat je hoeveel er op de foto staat (in g of ml; bij een gesloten verpakking één gewone portie).\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.`
-    : `Je leest een etiket of typeplaatje op een foto. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit.
-- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}, zoals op het etiket (zonder jaartal)
+    : `Je leest wat er op een foto staat: een etiket, typeplaatje, kasticket of factuur. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit een getal, bedrag of datum.
+Bij een kasticket of factuur: een bedrag is het totaal dat betaald werd ("Totaal", "Te betalen"), een datum de datum van aankoop, en een winkel of verkoper de naam van de zaak (zonder adres of filiaal).
+Een keuze (zoals een categorie) mag je afleiden uit wat je ziet.
+- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: zoals op het etiket (zonder jaartal), of bij een kasticket of factuur kort wat het is (bv. "Boodschappen Colruyt")
 ${fields.map(describeField).join("\n")}`;
   try {
     const dataUrl = `data:${image.type};base64,${toBase64(await image.arrayBuffer())}`;
@@ -640,7 +684,7 @@ ${fields.map(describeField).join("\n")}`;
         {
           role: "user",
           content: [
-            { type: "text", text: products ? "Wat is dit?" : "Lees dit etiket." },
+            { type: "text", text: products ? "Wat is dit?" : "Lees dit." },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
@@ -657,12 +701,15 @@ ${fields.map(describeField).join("\n")}`;
     for (const f of fields) {
       if (f.type === "year_range") raw[f.key] = [parsed[`${f.key}_from`] ?? null, parsed[`${f.key}_to`] ?? null];
       else if (f.type === "money") raw[f.key] = typeof parsed[f.key] === "number" ? Math.round((parsed[f.key] as number) * 100) : null;
-      else raw[f.key] = parsed[f.key];
+      else if (f.type !== "item") raw[f.key] = parsed[f.key];
     }
+    // Een verwijzing: de naam op de foto koppelen aan een item dat je ziet (bv. de winkel aan je Verkopers).
+    const refs = await matchRefs(db, c.get("person").id, fields, parsed);
+    Object.assign(raw, refs.data);
     // Niets eetbaars of herkenbaars op de foto: dan zijn de verplichte schattingen niets waard.
     if (parsed.kind === "unknown") for (const f of estimated) raw[f.key] = null;
     const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
-    const scan: LabelScan = { name, data: cleanAttributes(fields, raw) };
+    const scan: LabelScan = { name, data: cleanAttributes(fields, raw), ...(refs.create.length ? { create: refs.create } : {}) };
     if (products && scan.name) {
       // Een gekend product: de echte gegevens (op de barcode die de AI las, anders op naam en merk). Lukt dat niet,
       // dan blijft de schatting staan, en dat zeggen we ook.
@@ -680,7 +727,7 @@ ${fields.map(describeField).join("\n")}`;
         scan.source = { kind: "database", label: productLabel(info) };
       } else scan.source = { kind: "estimate" };
     }
-    if (!scan.name && Object.keys(scan.data).length === 0) scan.message = "Niets herkend op deze foto. Vul het zelf in.";
+    if (!scan.name && Object.keys(scan.data).length === 0 && !scan.create) scan.message = "Niets herkend op deze foto. Vul het zelf in.";
     return c.json(scan);
   } catch (err) {
     console.error("AI kon het etiket niet lezen", err);
