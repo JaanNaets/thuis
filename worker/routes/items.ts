@@ -27,6 +27,7 @@ import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
 import { descendantIds } from "../../shared/tree";
+import { nameIn, nameMatches } from "../../shared/quickfill";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
@@ -420,22 +421,35 @@ projectItems.get("/:id/items/export", async (c) => {
 
 /** Keuzes voor een verwijzing: alle items van een lijst (?type=) die je mag zien, in al je projecten. */
 /** De items om uit te kiezen bij een verwijzing (?type=lijst, of meer lijsten met komma's), enkel waar je ze ziet. */
+/**
+ * Items om uit te kiezen bij een verwijzing, over een of meer lijsten (`type`), enkel wat je mag zien. Een bladzijde
+ * (`limit`), met `more` als er meer zijn. Zoeken op naam (`q`: elk woord), de namen die in een getypte tekst staan
+ * (`in`, voor snel invullen), of bepaalde items (`ids`, de naam van wat al gekozen is).
+ */
 items.get("/", async (c) => {
   const typeIds = [...new Set((c.req.query("type") ?? "").split(",").filter(Boolean))].slice(0, MAX_REF_LISTS);
   if (!typeIds.length) throw new ValidationError("Kies een lijst");
+  const q = (c.req.query("q") ?? "").trim().slice(0, 100);
+  const within = (c.req.query("in") ?? "").trim().slice(0, 2000);
+  const only = [...new Set((c.req.query("ids") ?? "").split(",").filter(Boolean))].slice(0, 200);
+  const limit = only.length || Math.min(Math.max(Math.floor(Number(c.req.query("limit"))) || 100, 1), 500);
   const db = c.env.DB;
   const nodes = await accessibleProjects(db, c.get("person").id);
-  const allowed = new Set(nodes.flatMap((n) => typeIds.filter((t) => typeAccess(n.rights, t) !== "none").map((t) => `${t}/${n.id}`)));
-  if (!allowed.size) return c.json([]);
+  // Per lijst en project: daar mag je die lijst zien (in een subproject kan je rol anders zijn).
+  const allowed = nodes.flatMap((n) => typeIds.filter((t) => typeAccess(n.rights, t) !== "none").map((t) => `${t}/${n.id}`));
+  if (!allowed.length) return c.json({ items: [], more: false });
+  const filtered = Boolean(q || within);
   const { results } = await db
     .prepare(
       `SELECT id, name, type_id, project_id FROM items
-       WHERE type_id IN (SELECT value FROM json_each(?1)) AND archived = 0 AND project_id IN (SELECT value FROM json_each(?2))
-       ORDER BY name COLLATE NOCASE LIMIT 2000`,
+       WHERE type_id IN (SELECT value FROM json_each(?1)) AND archived = 0 AND type_id || '/' || project_id IN (SELECT value FROM json_each(?2))
+         AND (?3 IS NULL OR id IN (SELECT value FROM json_each(?3)))
+       ORDER BY name COLLATE NOCASE ${filtered ? "" : "LIMIT ?4"}`,
     )
-    .bind(JSON.stringify(typeIds), JSON.stringify([...new Set([...allowed].map((k) => k.split("/")[1]))]))
+    .bind(JSON.stringify(typeIds), JSON.stringify(allowed), only.length ? JSON.stringify(only) : null, ...(filtered ? [] : [limit + 1]))
     .all<ItemRef>();
-  return c.json(results.filter((r) => allowed.has(`${r.type_id}/${r.project_id}`)));
+  const matched = q ? results.filter((r) => nameMatches(r.name, q)) : within ? results.filter((r) => nameIn(r.name, within)) : results;
+  return c.json({ items: matched.slice(0, limit), more: matched.length > limit });
 });
 
 items.get("/:id", async (c) => c.json(await loadDetail(c, c.req.param("id"))));

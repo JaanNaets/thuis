@@ -33,6 +33,9 @@ commits en uitleg.
 - Een verwijzing (`item`, `items`) wijst naar `ref_type` en eventueel meer lijsten (`ref_also`, uit eender welk
   project dat de bewerker ziet); gebruik altijd `refLists(def)`, nooit enkel `ref_type`. Met `free` mag één
   verwijzing ook vrije tekst zijn (`{ text }`, geen verwijzing: niets na te kijken, af te trekken of over te nemen).
+  De keuzes komen per bladzijde (`GET /items?type=…`, met `more`); is een lijst groter, dan zoekt de server (`q`,
+  `nameMatches`), vindt hij de namen in een getypte tekst (`in`, `nameIn`, voor snel invullen) en de naam van wat al
+  gekozen is (`ids`). Nooit alle items van een lijst naar de browser sturen.
 - Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
   (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
   terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van lijsten, tags, rollen, personen) controleer je

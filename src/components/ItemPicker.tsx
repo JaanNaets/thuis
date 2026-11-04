@@ -1,27 +1,51 @@
 // Een item kiezen bij een verwijzing: typ om te zoeken, over een of meer lijsten (ook uit andere projecten) heen.
 // Met vrije tekst (`free`) mag je ook iets typen dat er niet bij staat. Zie STIJLBOEK.md → Lijsten en velden.
+//
+// Een kleine lijst komt in één keer en zoekt in de browser; een grote (meer dan één bladzijde) zoekt op de server
+// terwijl je typt. Wat al gekozen is maar niet op de eerste bladzijde staat, haalt de naam apart op.
 
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { refLists, type FieldDef, type TextValue } from "../../shared/fields";
+import { nameMatches } from "../../shared/quickfill";
 import type { ItemRef } from "../../shared/types";
 import { useApi } from "../api";
 import { useSession } from "../session";
 import { Icon } from "./Icon";
 
+const PAGE = 100;
 const MAX_SHOWN = 50;
-const normalize = (text: string) =>
-  text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+type Page = { items: ItemRef[]; more: boolean };
 
-/** De items om uit te kiezen, en per item het project als ze uit meer projecten komen. */
-export function useItemOptions(def: FieldDef) {
+/** Een waarde die pas verandert als ze even stil staat (zoeken terwijl je typt). */
+function useSettled(value: string, ms = 200) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
+
+/**
+ * De items om uit te kiezen (bij `text`: wat daarbij past), de naam van wat gekozen is (`chosen`), en per item het
+ * project als ze uit meer projecten komen.
+ */
+export function useItemOptions(def: FieldDef, text = "", chosen: string[] = []) {
   const { projects } = useSession();
-  const { data, error } = useApi<ItemRef[]>(`/items?type=${refLists(def).join(",")}`);
-  const several = new Set(data?.map((o) => o.project_id)).size > 1;
+  const lists = refLists(def).join(",");
+  const base = useApi<Page>(`/items?type=${lists}&limit=${PAGE}`);
+  const q = useSettled(text.trim());
+  const large = Boolean(base.data?.more);
+  const search = useApi<Page>(large && q ? `/items?type=${lists}&q=${encodeURIComponent(q)}&limit=${MAX_SHOWN}` : null);
+  const missing = large ? chosen.filter((id) => !base.data!.items.some((o) => o.id === id)) : [];
+  const named = useApi<Page>(missing.length ? `/items?type=${lists}&ids=${missing.join(",")}` : null);
+  const options = base.data && (large && text.trim() ? (search.data?.items ?? base.data.items) : base.data.items);
+  const known = [...(base.data?.items ?? []), ...(search.data?.items ?? []), ...(named.data?.items ?? [])];
+  const several = new Set(known.map((o) => o.project_id)).size > 1;
   const placeOf = (o: ItemRef) => (several ? (projects.find((p) => p.id === o.project_id)?.name ?? "") : "");
-  return { options: data, error, placeOf };
+  /** De naam van een gekozen item; "Verborgen" als je het niet (meer) mag zien. */
+  const nameOf = (id: string) => known.find((o) => o.id === id)?.name ?? (base.data && (!large || named.data) ? "Verborgen" : "");
+  return { options, error: base.error ?? search.error, placeOf, nameOf };
 }
 
 /**
@@ -57,10 +81,10 @@ function Combo({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
-  const matches = useMemo(() => {
-    const q = normalize(text.trim());
-    return (options ?? []).filter((o) => !exclude.includes(o.id) && (!q || normalize(o.name).includes(q))).slice(0, MAX_SHOWN);
-  }, [options, text, exclude]);
+  const matches = useMemo(
+    () => (options ?? []).filter((o) => !exclude.includes(o.id) && nameMatches(o.name, text)).slice(0, MAX_SHOWN),
+    [options, text, exclude],
+  );
   const current = Math.min(active, matches.length - 1);
 
   const pick = (o: ItemRef) => {
@@ -150,11 +174,10 @@ export function ItemPicker({
   /** Bv. `auto`: de app vulde het in. */
   className?: string;
 }) {
-  const { options, error, placeOf } = useItemOptions(def);
-  const chosen = typeof value === "string" ? options?.find((o) => o.id === value) : undefined;
-  const shown = typeof value === "string" ? (chosen?.name ?? (options ? "Verborgen" : "")) : (value?.text ?? "");
   // Wat je typt; tot je iets typt, staat er wat gekozen is.
   const [draft, setDraft] = useState<string | null>(null);
+  const { options, error, placeOf, nameOf } = useItemOptions(def, draft ?? "", typeof value === "string" ? [value] : []);
+  const shown = typeof value === "string" ? nameOf(value) : (value?.text ?? "");
   const text = draft ?? shown;
 
   return (
@@ -200,9 +223,9 @@ export function ItemPicker({
 
 /** Meerdere items (de ingrediënten van een recept): als chips, met het zoekveld om er een bij te zetten. */
 export function ItemsPicker({ def, value, onChange, disabled }: { def: FieldDef; value: string[]; onChange: (v: string[]) => void; disabled: boolean }) {
-  const { options, error, placeOf } = useItemOptions(def);
   const [text, setText] = useState("");
-  const name = (id: string) => options?.find((o) => o.id === id)?.name ?? (options ? "Verborgen" : "…");
+  const { options, error, placeOf, nameOf } = useItemOptions(def, text, value);
+  const name = (id: string) => nameOf(id) || "…";
   return (
     <>
       {value.length > 0 && (

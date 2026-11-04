@@ -238,7 +238,13 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     const editable = fields.filter((f) => type.field_access[f.key] === "edit");
     const refs = editable.filter((f) => f.type === "item" || f.type === "items");
     const options = new Map(
-      await Promise.all(refs.map(async (f) => [f.key, await api.get<ItemRef[]>(`/items?type=${refLists(f).join(",")}`).catch(() => [])] as const)),
+      // Enkel de items waarvan de naam in de tekst staat (ook in een lange lijst).
+      await Promise.all(
+        refs.map(async (f) => {
+          const path = `/items?type=${refLists(f).join(",")}&in=${encodeURIComponent(text)}&limit=50`;
+          return [f.key, await api.get<{ items: ItemRef[] }>(path).then((r) => r.items, () => [])] as const;
+        }),
+      ),
     );
     const quick = quickFill(text, editable, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural] });
     let scan: LabelScan = { name: quick.name, data: quick.data };

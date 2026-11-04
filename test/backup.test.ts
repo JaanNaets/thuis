@@ -1,17 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import {
-  BACKUP_KIND,
-  BACKUP_TABLES,
-  BACKUP_VERSION,
-  freshIds,
-  parseBackup,
-  projectTree,
-  remap,
-  topProjects,
-  type Backup,
-} from "../shared/backup.ts";
+import { BACKUP_KIND, BACKUP_TABLES, BACKUP_VERSION, freshIds, parseBackup, projectTree, remap, topProjects, type Backup } from "../shared/backup.ts";
 
 const P = "11111111-1111-4111-8111-111111111111";
 const SUB = "22222222-2222-4222-8222-222222222222";
@@ -139,16 +129,10 @@ const backup: Backup = {
 };
 
 test("een back-up herkennen en weigeren wat niet klopt", () => {
-  assert.equal(
-    parseBackup(JSON.parse(JSON.stringify(backup))).projects.length,
-    2,
-  );
+  assert.equal(parseBackup(JSON.parse(JSON.stringify(backup))).projects.length, 2);
   assert.throws(() => parseBackup({ kind: "iets" }), /geen back-up/);
   assert.throws(() => parseBackup({ ...backup, version: 2 }), /andere versie/);
-  assert.throws(
-    () => parseBackup({ ...backup, items: undefined }),
-    /onvolledig/,
-  );
+  assert.throws(() => parseBackup({ ...backup, items: undefined }), /onvolledig/);
   assert.throws(
     () =>
       parseBackup({
@@ -157,10 +141,7 @@ test("een back-up herkennen en weigeren wat niet klopt", () => {
       }),
     /beschadigd/,
   );
-  assert.throws(
-    () => parseBackup({ ...backup, projects: [] }),
-    /geen projecten/,
-  );
+  assert.throws(() => parseBackup({ ...backup, projects: [] }), /geen projecten/);
 });
 
 test("terugzetten: overal nieuwe ids, ook diep in velden, waarden, rechten en weergaven", () => {
@@ -188,10 +169,7 @@ test("terugzetten: overal nieuwe ids, ook diep in velden, waarden, rechten en we
     types: { [map.get(V)!]: { access: "none" } },
   });
   assert.deepEqual(items[0].tags, [map.get(TAG)]);
-  assert.deepEqual(
-    (views[0].def as { conditions: { value: string[] }[] }).conditions[0].value,
-    [map.get(TAG)],
-  );
+  assert.deepEqual((views[0].def as { conditions: { value: string[] }[] }).conditions[0].value, [map.get(TAG)]);
   assert.deepEqual(shown, [{ project_id: map.get(SUB), type_id: map.get(V) }]);
   // Sleutels van velden en gewone tekst blijven.
   assert.deepEqual(items[0].data, { aantal: 34 });
@@ -216,11 +194,7 @@ test("de projecten bovenaan, van boven naar onder, zonder kringen", () => {
   // Twee projecten die elkaars ouder zijn, hangen nergens aan.
   const loop = {
     ...backup,
-    projects: [
-      ...backup.projects,
-      { ...backup.projects[1], id: "x1", parent_id: "x2" },
-      { ...backup.projects[1], id: "x2", parent_id: "x1" },
-    ],
+    projects: [...backup.projects, { ...backup.projects[1], id: "x1", parent_id: "x2" }, { ...backup.projects[1], id: "x2", parent_id: "x1" }],
   };
   assert.deepEqual(
     projectTree(loop).order.map((p) => p.id),
@@ -235,9 +209,7 @@ test("elke tabel uit de migraties staat in BACKUP_TABLES (mee in de back-up of b
     .filter((f) => f.endsWith(".sql"))
     .sort()) {
     const sql = readFileSync(new URL(file, dir), "utf8").replace(/--.*$/gm, "");
-    for (const m of sql.matchAll(
-      /CREATE TABLE (?:IF NOT EXISTS )?(\w+)|DROP TABLE (?:IF EXISTS )?(\w+)|ALTER TABLE (\w+) RENAME TO (\w+)/gi,
-    )) {
+    for (const m of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?(\w+)|DROP TABLE (?:IF EXISTS )?(\w+)|ALTER TABLE (\w+) RENAME TO (\w+)/gi)) {
       if (m[1]) tables.add(m[1].toLowerCase());
       if (m[2]) tables.delete(m[2].toLowerCase());
       if (m[3]) {

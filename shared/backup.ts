@@ -132,8 +132,7 @@ export type Backup = {
  * migraties na): neem ze mee in de back-up en het terugzetten, of zeg waarom niet.
  */
 export const BACKUP_TABLES = {
-  people:
-    "mensen in je projecten (naam, e-mailadres, kleur; geen rekeningnummer of overzicht)",
+  people: "mensen in je projecten (naam, e-mailadres, kleur; geen rekeningnummer of overzicht)",
   projects: true,
   roles: true,
   memberships: true,
@@ -153,46 +152,20 @@ export const BACKUP_TABLES = {
   push_subscriptions: false,
 } as const;
 
-const ARRAYS = [
-  "people",
-  "projects",
-  "roles",
-  "memberships",
-  "types",
-  "tags",
-  "items",
-  "log",
-  "repeats",
-  "views",
-  "shown",
-  "files",
-] as const;
+const ARRAYS = ["people", "projects", "roles", "memberships", "types", "tags", "items", "log", "repeats", "views", "shown", "files"] as const;
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 
 /** Is dit een back-up van Thuis? Gooit een fout met uitleg als het niet klopt. */
 export function parseBackup(raw: unknown): Backup {
   const b = raw as Partial<Backup> | null;
-  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND)
-    throw new Error("Dit is geen back-up van Thuis.");
-  if (b.version !== BACKUP_VERSION)
-    throw new Error("Deze back-up is van een andere versie van Thuis.");
-  for (const key of ARRAYS)
-    if (!Array.isArray(b[key])) throw new Error("Deze back-up is onvolledig.");
-  const ids = (list: { id?: unknown }[]) =>
-    list.every((x) => typeof x?.id === "string" && ID.test(x.id));
-  if (
-    ![b.projects!, b.types!, b.items!, b.roles!, b.people!, b.tags!].every(ids)
-  )
-    throw new Error("Deze back-up is beschadigd.");
+  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND) throw new Error("Dit is geen back-up van Thuis.");
+  if (b.version !== BACKUP_VERSION) throw new Error("Deze back-up is van een andere versie van Thuis.");
+  for (const key of ARRAYS) if (!Array.isArray(b[key])) throw new Error("Deze back-up is onvolledig.");
+  const ids = (list: { id?: unknown }[]) => list.every((x) => typeof x?.id === "string" && ID.test(x.id));
+  if (![b.projects!, b.types!, b.items!, b.roles!, b.people!, b.tags!].every(ids)) throw new Error("Deze back-up is beschadigd.");
   const projects = new Set(b.projects!.map((p) => p.id));
-  if (!projects.size)
-    throw new Error("Er staan geen projecten in deze back-up.");
-  if (
-    [...b.types!, ...b.items!, ...b.roles!, ...b.tags!].some(
-      (x) => !projects.has(x.project_id),
-    )
-  )
-    throw new Error("Deze back-up is beschadigd.");
+  if (!projects.size) throw new Error("Er staan geen projecten in deze back-up.");
+  if ([...b.types!, ...b.items!, ...b.roles!, ...b.tags!].some((x) => !projects.has(x.project_id))) throw new Error("Deze back-up is beschadigd.");
   return b as Backup;
 }
 
@@ -201,9 +174,7 @@ export function remap<T>(value: T, map: Map<string, string>): T {
   if (typeof value === "string") return (map.get(value) ?? value) as T;
   if (Array.isArray(value)) return value.map((v) => remap(v, map)) as T;
   if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [map.get(k) ?? k, remap(v, map)]),
-    ) as T;
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [map.get(k) ?? k, remap(v, map)])) as T;
   }
   return value;
 }
@@ -214,25 +185,12 @@ export function remap<T>(value: T, map: Map<string, string>): T {
  */
 export function freshIds(b: Backup, newId: () => string): Map<string, string> {
   const map = new Map<string, string>();
-  for (const list of [
-    b.projects,
-    b.roles,
-    b.types,
-    b.tags,
-    b.items,
-    b.log,
-    b.views,
-    b.files,
-  ])
-    for (const x of list) map.set(x.id, newId());
+  for (const list of [b.projects, b.roles, b.types, b.tags, b.items, b.log, b.views, b.files]) for (const x of list) map.set(x.id, newId());
   return map;
 }
 
 /** De projecten bovenaan (hun ouder zit niet in de back-up): die worden hoofdprojecten. */
-export const topProjects = (b: Backup) =>
-  b.projects.filter(
-    (p) => !p.parent_id || !b.projects.some((x) => x.id === p.parent_id),
-  );
+export const topProjects = (b: Backup) => b.projects.filter((p) => !p.parent_id || !b.projects.some((x) => x.id === p.parent_id));
 
 /**
  * De projecten van boven naar onder (een ouder altijd voor zijn kinderen), met per project de keten erboven binnen de
@@ -249,9 +207,7 @@ export function projectTree(b: Backup): {
   while (level.length) {
     order.push(...level);
     const ids = new Set(level.map((p) => p.id));
-    level = b.projects.filter(
-      (p) => p.parent_id && ids.has(p.parent_id) && !chain.has(p.id),
-    );
+    level = b.projects.filter((p) => p.parent_id && ids.has(p.parent_id) && !chain.has(p.id));
     for (const p of level) chain.set(p.id, [p.id, ...chain.get(p.parent_id!)!]);
   }
   return { order, chain };

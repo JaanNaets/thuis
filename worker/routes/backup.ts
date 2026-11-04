@@ -14,14 +14,7 @@
 // niets opnieuw toe (de aantallen staan zoals in de back-up).
 
 import { Hono } from "hono";
-import {
-  canSeeType,
-  cleanRights,
-  DEFAULT_ROLES,
-  visibleData,
-  visibleFields,
-  type Rights,
-} from "../../shared/access";
+import { canSeeType, cleanRights, DEFAULT_ROLES, visibleData, visibleFields, type Rights } from "../../shared/access";
 import {
   BACKUP_KIND,
   BACKUP_VERSION,
@@ -36,30 +29,13 @@ import {
   type BackupItem,
 } from "../../shared/backup";
 import { effectsOf } from "../../shared/effects";
-import {
-  cleanAttributes,
-  cleanFields,
-  INTERVAL_UNITS,
-  refLists,
-  type Attributes,
-  type FieldDef,
-  type Share,
-} from "../../shared/fields";
+import { cleanAttributes, cleanFields, INTERVAL_UNITS, refLists, type Attributes, type FieldDef, type Share } from "../../shared/fields";
 import { isIconKey } from "../../shared/templates";
-import {
-  sourceMisfit,
-  visibleTotals,
-  type TotalDef,
-} from "../../shared/totals";
+import { sourceMisfit, visibleTotals, type TotalDef } from "../../shared/totals";
 import { isTone, type Item, type ItemType } from "../../shared/types";
 import { cleanView, viewFields } from "../../shared/views";
 import { withCalcs } from "../compute";
-import {
-  accessibleProjects,
-  toItemType,
-  visibleLists,
-  type TypeRow,
-} from "../context";
+import { accessibleProjects, toItemType, visibleLists, type TypeRow } from "../context";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { ForbiddenError, ValidationError } from "../validate";
@@ -79,16 +55,10 @@ const parse = <T>(json: string | null | undefined, fallback: T): T => {
     return fallback;
   }
 };
-const text = (v: unknown, max: number) =>
-  typeof v === "string" ? v.trim().slice(0, max) : "";
-const int = (v: unknown) =>
-  typeof v === "number" && Number.isInteger(v) ? v : 0;
-const isDay = (s: unknown): s is string =>
-  typeof s === "string" &&
-  /^\d{4}-\d{2}-\d{2}$/.test(s) &&
-  !Number.isNaN(Date.parse(s));
-const isStamp = (s: unknown): s is string =>
-  typeof s === "string" && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(s);
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+const int = (v: unknown) => (typeof v === "number" && Number.isInteger(v) ? v : 0);
+const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+const isStamp = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(s);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ---------- back-up maken ----------
@@ -96,59 +66,19 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 backup.get("/", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
-  const nodes = (await accessibleProjects(db, me.id)).filter(
-    (n) => n.rights.manage && n.rights.members,
-  );
-  if (!nodes.length)
-    throw new ForbiddenError("Je beheert geen enkel project helemaal.");
+  const nodes = (await accessibleProjects(db, me.id)).filter((n) => n.rights.manage && n.rights.members);
+  if (!nodes.length) throw new ForbiddenError("Je beheert geen enkel project helemaal.");
   const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
   const ids = JSON.stringify(nodes.map((n) => n.id));
   const IN = "(SELECT value FROM json_each(?1))";
   const ITEMS = `(SELECT id FROM items WHERE project_id IN ${IN})`;
-  const [
-    projects,
-    roles,
-    memberships,
-    people,
-    types,
-    tags,
-    items,
-    log,
-    repeats,
-    views,
-    shown,
-    files,
-  ] = (await db.batch([
-    db
-      .prepare(
-        `SELECT id, parent_id, name, description, icon, color, sort_order, archived FROM projects WHERE id IN ${IN} ORDER BY created_at`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT id, project_id, name, rights, sort_order FROM roles WHERE project_id IN ${IN}`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT project_id, person_id, role_id, sort_order FROM memberships WHERE project_id IN ${IN}`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT id, name, email, color FROM people WHERE id IN (SELECT person_id FROM memberships WHERE project_id IN ${IN})`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT * FROM item_types WHERE project_id IN ${IN} ORDER BY sort_order, created_at`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT id, project_id, name, color FROM tags WHERE project_id IN ${IN}`,
-      )
-      .bind(ids),
+  const [projects, roles, memberships, people, types, tags, items, log, repeats, views, shown, files] = (await db.batch([
+    db.prepare(`SELECT id, parent_id, name, description, icon, color, sort_order, archived FROM projects WHERE id IN ${IN} ORDER BY created_at`).bind(ids),
+    db.prepare(`SELECT id, project_id, name, rights, sort_order FROM roles WHERE project_id IN ${IN}`).bind(ids),
+    db.prepare(`SELECT project_id, person_id, role_id, sort_order FROM memberships WHERE project_id IN ${IN}`).bind(ids),
+    db.prepare(`SELECT id, name, email, color FROM people WHERE id IN (SELECT person_id FROM memberships WHERE project_id IN ${IN})`).bind(ids),
+    db.prepare(`SELECT * FROM item_types WHERE project_id IN ${IN} ORDER BY sort_order, created_at`).bind(ids),
+    db.prepare(`SELECT id, project_id, name, color FROM tags WHERE project_id IN ${IN}`).bind(ids),
     db
       .prepare(
         `SELECT i.id, i.project_id, i.type_id, i.name, i.data, i.archived, i.created_by, i.created_at, i.updated_at, i.photo_version,
@@ -156,31 +86,15 @@ backup.get("/", async (c) => {
          FROM items i WHERE i.project_id IN ${IN} ORDER BY i.created_at`,
       )
       .bind(ids),
-    db
-      .prepare(
-        `SELECT id, item_id, happened_on, text, created_by, created_at FROM item_log WHERE item_id IN ${ITEMS}`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT item_id, every_n, every_unit, next_on, created_by FROM repeats WHERE item_id IN ${ITEMS}`,
-      )
-      .bind(ids),
+    db.prepare(`SELECT id, item_id, happened_on, text, created_by, created_at FROM item_log WHERE item_id IN ${ITEMS}`).bind(ids),
+    db.prepare(`SELECT item_id, every_n, every_unit, next_on, created_by FROM repeats WHERE item_id IN ${ITEMS}`).bind(ids),
     db
       .prepare(
         `SELECT id, project_id, type_id, person_id, name, def, sort_order FROM views WHERE project_id IN ${IN} AND (person_id IS NULL OR person_id = ?2)`,
       )
       .bind(ids, me.id),
-    db
-      .prepare(
-        `SELECT project_id, type_id FROM shown_lists WHERE project_id IN ${IN}`,
-      )
-      .bind(ids),
-    db
-      .prepare(
-        `SELECT id, item_id, filename, content_type, size_bytes, created_by FROM item_files WHERE item_id IN ${ITEMS}`,
-      )
-      .bind(ids),
+    db.prepare(`SELECT project_id, type_id FROM shown_lists WHERE project_id IN ${IN}`).bind(ids),
+    db.prepare(`SELECT id, item_id, filename, content_type, size_bytes, created_by FROM item_files WHERE item_id IN ${ITEMS}`).bind(ids),
   ])) as D1Result<Record<string, unknown>>[];
 
   // Enkel de lijsten (en velden) die je ziet, en de items daarvan met de waarden die je ziet.
@@ -192,36 +106,28 @@ backup.get("/", async (c) => {
     const fields = visibleFields(rights, t.id, t.fields);
     lists.set(t.id, { ...t, fields, totals: visibleTotals(t.totals, fields) });
   }
-  const shownItems = (items.results as Record<string, unknown>[]).flatMap(
-    (row): BackupItem[] => {
-      const type = lists.get(row.type_id as string);
-      const rights = rightsOf.get(row.project_id as string);
-      if (!type || !rights || !canSeeType(rights, type.id)) return [];
-      return [
-        {
-          id: row.id as string,
-          project_id: row.project_id as string,
-          type_id: type.id,
-          name: row.name as string,
-          data: visibleData(
-            rights,
-            type.id,
-            type.fields,
-            parse<Attributes>(row.data as string, {}),
-          ),
-          archived: row.archived as number,
-          created_by: row.created_by as string,
-          created_at: row.created_at as string,
-          updated_at: row.updated_at as string,
-          tags: parse<string[]>(row.tag_json as string, []),
-          photo: row.photo_version !== null,
-        },
-      ];
-    },
-  );
+  const shownItems = (items.results as Record<string, unknown>[]).flatMap((row): BackupItem[] => {
+    const type = lists.get(row.type_id as string);
+    const rights = rightsOf.get(row.project_id as string);
+    if (!type || !rights || !canSeeType(rights, type.id)) return [];
+    return [
+      {
+        id: row.id as string,
+        project_id: row.project_id as string,
+        type_id: type.id,
+        name: row.name as string,
+        data: visibleData(rights, type.id, type.fields, parse<Attributes>(row.data as string, {})),
+        archived: row.archived as number,
+        created_by: row.created_by as string,
+        created_at: row.created_at as string,
+        updated_at: row.updated_at as string,
+        tags: parse<string[]>(row.tag_json as string, []),
+        photo: row.photo_version !== null,
+      },
+    ];
+  });
   const itemIds = new Set(shownItems.map((i) => i.id));
-  const ofItem = <T extends Record<string, unknown>>(rows: T[]) =>
-    rows.filter((r) => itemIds.has(r.item_id as string));
+  const ofItem = <T extends Record<string, unknown>>(rows: T[]) => rows.filter((r) => itemIds.has(r.item_id as string));
 
   const file: Backup = {
     kind: BACKUP_KIND,
@@ -255,9 +161,7 @@ backup.get("/", async (c) => {
         ...v,
         def: parse(v.def as string, {}),
       })) as Backup["views"],
-    shown: (shown.results as Backup["shown"]).filter((s) =>
-      lists.has(s.type_id),
-    ),
+    shown: (shown.results as Backup["shown"]).filter((s) => lists.has(s.type_id)),
     files: ofItem(files.results) as Backup["files"],
   };
   return c.json(file, 200, {
@@ -271,26 +175,15 @@ backup.get("/", async (c) => {
  * Velden zoals bij een lijst maken (`cleanTypeFields`), maar wat niet klopt valt weg in plaats van alles te weigeren:
  * eerst verwijzingen naar lijsten die je niet (meer) ziet, dan veld per veld wat op zich niet klopt.
  */
-function salvageFields(
-  raw: unknown,
-  available: ItemType[],
-  selfId: string,
-): FieldDef[] {
+function salvageFields(raw: unknown, available: ItemType[], selfId: string): FieldDef[] {
   const ids = new Set([...available.map((t) => t.id), selfId]);
   const list = (Array.isArray(raw) ? raw : []).flatMap((f) => {
     const def = f as FieldDef;
-    if (
-      !def ||
-      typeof def !== "object" ||
-      (def.type !== "item" && def.type !== "items")
-    )
-      return [def];
+    if (!def || typeof def !== "object" || (def.type !== "item" && def.type !== "items")) return [def];
     const lists = refLists(def).filter((id) => ids.has(id));
     if (!lists.length) return [];
     const [ref_type, ...ref_also] = lists;
-    return [
-      { ...def, ref_type, ref_also: ref_also.length ? ref_also : undefined },
-    ];
+    return [{ ...def, ref_type, ref_also: ref_also.length ? ref_also : undefined }];
   });
   try {
     return cleanTypeFields(list, available, selfId);
@@ -315,47 +208,26 @@ function salvageFields(
 }
 
 backup.post("/", async (c) => {
-  if (Number(c.req.header("content-length") ?? 0) > MAX_BACKUP_BYTES)
-    throw new ValidationError("Deze back-up is te groot.");
+  if (Number(c.req.header("content-length") ?? 0) > MAX_BACKUP_BYTES) throw new ValidationError("Deze back-up is te groot.");
   let b: Backup;
   try {
     b = parseBackup(await c.req.json());
   } catch (err) {
-    throw new ValidationError(
-      err instanceof SyntaxError
-        ? "Dit is geen back-up van Thuis."
-        : (err as Error).message,
-    );
+    throw new ValidationError(err instanceof SyntaxError ? "Dit is geen back-up van Thuis." : (err as Error).message);
   }
-  if (
-    b.projects.length > MAX_BACKUP_PROJECTS ||
-    b.items.length > MAX_BACKUP_ITEMS
-  )
-    throw new ValidationError(
-      "Deze back-up is te groot om in één keer terug te zetten.",
-    );
+  if (b.projects.length > MAX_BACKUP_PROJECTS || b.items.length > MAX_BACKUP_ITEMS)
+    throw new ValidationError("Deze back-up is te groot om in één keer terug te zetten.");
   const db = c.env.DB;
   const me = c.get("person");
   const ids = freshIds(b, () => crypto.randomUUID());
   const statements: D1PreparedStatement[] = [];
 
   // Mensen: wie al bestaat (zelfde e-mailadres), blijft die persoon; de anderen komen erbij.
-  const emailOf = new Map(
-    b.people.map((p) => [
-      p.id,
-      typeof p.email === "string" && EMAIL.test(p.email.trim())
-        ? p.email.trim().toLowerCase()
-        : null,
-    ]),
-  );
-  const emails = [
-    ...new Set([...emailOf.values()].filter(Boolean)),
-  ] as string[];
+  const emailOf = new Map(b.people.map((p) => [p.id, typeof p.email === "string" && EMAIL.test(p.email.trim()) ? p.email.trim().toLowerCase() : null]));
+  const emails = [...new Set([...emailOf.values()].filter(Boolean))] as string[];
   const { results: known } = emails.length
     ? await db
-        .prepare(
-          "SELECT id, email FROM people WHERE email IN (SELECT value FROM json_each(?))",
-        )
+        .prepare("SELECT id, email FROM people WHERE email IN (SELECT value FROM json_each(?))")
         .bind(JSON.stringify(emails))
         .all<{ id: string; email: string }>()
     : { results: [] };
@@ -374,43 +246,23 @@ backup.post("/", async (c) => {
     newPeople.push(id);
     statements.push(
       db
-        .prepare(
-          "INSERT INTO people (id, name, email, color, created_by) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(
-          id,
-          text(p.name, 60) || "Iemand",
-          email,
-          isTone(p.color) ? p.color : null,
-          me.id,
-        ),
+        .prepare("INSERT INTO people (id, name, email, color, created_by) VALUES (?, ?, ?, ?, ?)")
+        .bind(id, text(p.name, 60) || "Iemand", email, isTone(p.color) ? p.color : null, me.id),
     );
   }
-  const person = (old: unknown) =>
-    typeof old === "string" ? ids.get(old) : undefined;
+  const person = (old: unknown) => (typeof old === "string" ? ids.get(old) : undefined);
 
   // Projecten, van boven naar onder; bovenaan worden het hoofdprojecten.
   const tree = projectTree(b);
-  const chainOf = new Map(
-    [...tree.chain].map(([old, chain]) => [
-      ids.get(old)!,
-      chain.map((x) => ids.get(x)!),
-    ]),
-  );
-  const tops = tree.order
-    .filter((p) => chainOf.get(ids.get(p.id)!)!.length === 1)
-    .map((p) => ids.get(p.id)!);
+  const chainOf = new Map([...tree.chain].map(([old, chain]) => [ids.get(old)!, chain.map((x) => ids.get(x)!)]));
+  const tops = tree.order.filter((p) => chainOf.get(ids.get(p.id)!)!.length === 1).map((p) => ids.get(p.id)!);
   for (const p of tree.order) {
     statements.push(
       db
-        .prepare(
-          "INSERT INTO projects (id, parent_id, name, description, icon, color, sort_order, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
+        .prepare("INSERT INTO projects (id, parent_id, name, description, icon, color, sort_order, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(
           ids.get(p.id)!,
-          chainOf.get(ids.get(p.id)!)!.length > 1
-            ? ids.get(p.parent_id!)!
-            : null,
+          chainOf.get(ids.get(p.id)!)!.length > 1 ? ids.get(p.parent_id!)! : null,
           text(p.name, 80) || "Project",
           text(p.description, 2000) || null,
           isIconKey(p.icon) ? p.icon : null,
@@ -421,8 +273,7 @@ backup.post("/", async (c) => {
         ),
     );
   }
-  const inTree = (oldProject: unknown) =>
-    typeof oldProject === "string" && tree.chain.has(oldProject);
+  const inTree = (oldProject: unknown) => typeof oldProject === "string" && tree.chain.has(oldProject);
 
   // Rollen, en de mensen erin. Een rol hoort bij het project zelf of erboven.
   const roles = b.roles
@@ -436,36 +287,17 @@ backup.post("/", async (c) => {
   for (const r of roles) {
     statements.push(
       db
-        .prepare(
-          "INSERT INTO roles (id, project_id, name, rights, sort_order) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(
-          r.id,
-          r.project_id,
-          text(r.name, 40) || "Rol",
-          JSON.stringify(r.rights),
-          int(r.sort_order),
-        ),
+        .prepare("INSERT INTO roles (id, project_id, name, rights, sort_order) VALUES (?, ?, ?, ?, ?)")
+        .bind(r.id, r.project_id, text(r.name, 40) || "Rol", JSON.stringify(r.rights), int(r.sort_order)),
     );
   }
   const roleById = new Map(roles.map((r) => [r.id, r]));
-  const members = new Map<
-    string,
-    { project_id: string; person_id: string; role_id: string }
-  >();
+  const members = new Map<string, { project_id: string; person_id: string; role_id: string }>();
   for (const m of b.memberships) {
     const project = inTree(m.project_id) ? ids.get(m.project_id) : undefined;
-    const role =
-      typeof m.role_id === "string"
-        ? roleById.get(ids.get(m.role_id) ?? "")
-        : undefined;
+    const role = typeof m.role_id === "string" ? roleById.get(ids.get(m.role_id) ?? "") : undefined;
     const who = person(m.person_id);
-    if (
-      project &&
-      role &&
-      who &&
-      chainOf.get(project)!.includes(role.project_id)
-    )
+    if (project && role && who && chainOf.get(project)!.includes(role.project_id))
       members.set(`${project}|${who}`, {
         project_id: project,
         person_id: who,
@@ -475,8 +307,7 @@ backup.post("/", async (c) => {
   // Jij beheert elk project bovenaan: met een rol daar die alles mag, of anders een nieuwe Beheerder.
   for (const top of tops) {
     const mine = members.get(`${top}|${me.id}`);
-    const admin = (r?: { rights: Rights }) =>
-      Boolean(r?.rights.manage && r.rights.members);
+    const admin = (r?: { rights: Rights }) => Boolean(r?.rights.manage && r.rights.members);
     if (mine && admin(roleById.get(mine.role_id))) continue;
     let role = roles.find((r) => r.project_id === top && admin(r));
     if (!role) {
@@ -491,16 +322,8 @@ backup.post("/", async (c) => {
       roleById.set(role.id, role);
       statements.push(
         db
-          .prepare(
-            "INSERT INTO roles (id, project_id, name, rights, sort_order) VALUES (?, ?, ?, ?, ?)",
-          )
-          .bind(
-            role.id,
-            top,
-            role.name,
-            JSON.stringify(role.rights),
-            role.sort_order,
-          ),
+          .prepare("INSERT INTO roles (id, project_id, name, rights, sort_order) VALUES (?, ?, ?, ?, ?)")
+          .bind(role.id, top, role.name, JSON.stringify(role.rights), role.sort_order),
       );
     }
     members.set(`${top}|${me.id}`, {
@@ -509,21 +332,13 @@ backup.post("/", async (c) => {
       role_id: role.id,
     });
   }
-  for (const m of members.values())
-    statements.push(insertMembership(db, m.project_id, m.person_id, m.role_id));
+  for (const m of members.values()) statements.push(insertMembership(db, m.project_id, m.person_id, m.role_id));
   /** Wie in een project zit (zelf of erboven). */
   const memberSet = new Map<string, Set<string>>();
   const membersOf = (project: string) => {
     if (!memberSet.has(project)) {
       const chain = chainOf.get(project) ?? [];
-      memberSet.set(
-        project,
-        new Set(
-          [...members.values()]
-            .filter((m) => chain.includes(m.project_id))
-            .map((m) => m.person_id),
-        ),
-      );
+      memberSet.set(project, new Set([...members.values()].filter((m) => chain.includes(m.project_id)).map((m) => m.person_id)));
     }
     return memberSet.get(project)!;
   };
@@ -533,25 +348,13 @@ backup.post("/", async (c) => {
   const tagNames = new Set<string>();
   for (const t of b.tags) {
     const name = text(t.name, 40);
-    if (
-      !inTree(t.project_id) ||
-      !name ||
-      tagNames.has(`${t.project_id}|${name.toLowerCase()}`)
-    )
-      continue;
+    if (!inTree(t.project_id) || !name || tagNames.has(`${t.project_id}|${name.toLowerCase()}`)) continue;
     tagNames.add(`${t.project_id}|${name.toLowerCase()}`);
     tagProject.set(ids.get(t.id)!, ids.get(t.project_id)!);
     statements.push(
       db
-        .prepare(
-          "INSERT INTO tags (id, project_id, name, color) VALUES (?, ?, ?, ?)",
-        )
-        .bind(
-          ids.get(t.id)!,
-          ids.get(t.project_id)!,
-          name,
-          isTone(t.color) ? t.color : null,
-        ),
+        .prepare("INSERT INTO tags (id, project_id, name, color) VALUES (?, ?, ?, ?)")
+        .bind(ids.get(t.id)!, ids.get(t.project_id)!, name, isTone(t.color) ? t.color : null),
     );
   }
 
@@ -584,60 +387,30 @@ backup.post("/", async (c) => {
   for (const t of restored) {
     const source = raw.get(t.id)!;
     const people = membersOf(t.project_id);
-    const fields = salvageFields(
-      remap(source.fields, ids),
-      available,
-      t.id,
-    ).map((f) => {
+    const fields = salvageFields(remap(source.fields, ids), available, t.id).map((f) => {
       if (!f.default_shares) return f;
-      const shares = f.default_shares.filter((s: Share) =>
-        people.has(s.person_id),
-      );
+      const shares = f.default_shares.filter((s: Share) => people.has(s.person_id));
       return { ...f, default_shares: shares.length ? shares : undefined };
     });
     const byId = new Map(available.map((l) => [l.id, l]));
-    const totals = keepTotals(
-      Array.isArray(source.totals)
-        ? (remap(source.totals, ids) as TotalDef[])
-        : [],
-      fields,
-    )
+    const totals = keepTotals(Array.isArray(source.totals) ? (remap(source.totals, ids) as TotalDef[]) : [], fields)
       .map((total) => {
-        const sources = total.sources?.filter(
-          (id) =>
-            id !== t.id &&
-            byId.has(id) &&
-            !sourceMisfit(total, fields, byId.get(id)!.fields),
-        );
+        const sources = total.sources?.filter((id) => id !== t.id && byId.has(id) && !sourceMisfit(total, fields, byId.get(id)!.fields));
         return { ...total, sources: sources?.length ? sources : undefined };
       })
       .map((total) => ({
         ...total,
         ...(total.goals
           ? {
-              goals: Object.fromEntries(
-                Object.entries(total.goals).filter(([id]) => people.has(id)),
-              ),
+              goals: Object.fromEntries(Object.entries(total.goals).filter(([id]) => people.has(id))),
             }
           : {}),
       }));
     types.set(t.id, { ...t, fields, totals });
     statements.push(
       db
-        .prepare(
-          "INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(
-          t.id,
-          t.project_id,
-          t.name,
-          t.plural,
-          t.name_label,
-          t.icon,
-          JSON.stringify(fields),
-          JSON.stringify(totals),
-          t.sort_order,
-        ),
+        .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(t.id, t.project_id, t.name, t.plural, t.name_label, t.icon, JSON.stringify(fields), JSON.stringify(totals), t.sort_order),
     );
   }
 
@@ -647,8 +420,7 @@ backup.post("/", async (c) => {
   const candidates = b.items.flatMap((i) => {
     const project = inTree(i.project_id) ? ids.get(i.project_id)! : undefined;
     const type = types.get(ids.get(i.type_id) ?? "");
-    if (!project || !type || !chainOf.get(project)!.includes(type.project_id))
-      return [];
+    if (!project || !type || !chainOf.get(project)!.includes(type.project_id)) return [];
     typeOfNew.set(ids.get(i.id)!, type.id);
     return [
       {
@@ -675,19 +447,13 @@ backup.post("/", async (c) => {
   ].filter((id) => !typeOfNew.has(id));
   const { results: outsideRows } = outside.length
     ? await db
-        .prepare(
-          "SELECT id, project_id, type_id FROM items WHERE id IN (SELECT value FROM json_each(?))",
-        )
+        .prepare("SELECT id, project_id, type_id FROM items WHERE id IN (SELECT value FROM json_each(?))")
         .bind(JSON.stringify(outside))
         .all<{ id: string; project_id: string; type_id: string }>()
     : { results: [] };
   const canSee = await visibility(db, me.id);
-  const outsideType = new Map(
-    outsideRows.filter((r) => canSee(r)).map((r) => [r.id, r.type_id]),
-  );
-  const refOk = (def: FieldDef, id: unknown) =>
-    typeof id === "string" &&
-    refLists(def).includes(typeOfNew.get(id) ?? outsideType.get(id) ?? "");
+  const outsideType = new Map(outsideRows.filter((r) => canSee(r)).map((r) => [r.id, r.type_id]));
+  const refOk = (def: FieldDef, id: unknown) => typeof id === "string" && refLists(def).includes(typeOfNew.get(id) ?? outsideType.get(id) ?? "");
   const items = candidates.map((item) => {
     const people = membersOf(item.project);
     const data: Attributes = {};
@@ -700,11 +466,7 @@ backup.post("/", async (c) => {
         if (list.length) data[f.key] = list;
         continue;
       }
-      if (
-        f.type === "share" &&
-        (v as Share[]).some((s) => !people.has(s.person_id))
-      )
-        continue;
+      if (f.type === "share" && (v as Share[]).some((s) => !people.has(s.person_id))) continue;
       if (f.type === "item" && typeof v === "string" && !refOk(f, v)) continue;
       if (f.type === "items") {
         const list = (v as string[]).filter((id) => refOk(f, id));
@@ -718,27 +480,15 @@ backup.post("/", async (c) => {
 
   // Foto's en bestanden: enkel uit items die nog bestaan en die jij mag zien, en zoals ze nu in de databank staan.
   const wanted = new Map(items.map((i) => [i.old.id, i]));
-  const sourceIds = [
-    ...new Set([
-      ...items.filter((i) => i.old.photo).map((i) => i.old.id),
-      ...b.files.map((f) => f.item_id).filter((id) => wanted.has(id)),
-    ]),
-  ];
+  const sourceIds = [...new Set([...items.filter((i) => i.old.photo).map((i) => i.old.id), ...b.files.map((f) => f.item_id).filter((id) => wanted.has(id))])];
   const [{ results: sources }, { results: fileRows }] = sourceIds.length
     ? ((await db.batch([
-        db
-          .prepare(
-            "SELECT id, project_id, type_id, photo_version FROM items WHERE id IN (SELECT value FROM json_each(?))",
-          )
-          .bind(JSON.stringify(sourceIds)),
+        db.prepare("SELECT id, project_id, type_id, photo_version FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(sourceIds)),
         db
           .prepare(
             "SELECT id, item_id, filename, content_type, size_bytes, r2_key, created_by FROM item_files WHERE id IN (SELECT value FROM json_each(?)) AND item_id IN (SELECT value FROM json_each(?))",
           )
-          .bind(
-            JSON.stringify(b.files.map((f) => f.id)),
-            JSON.stringify(sourceIds),
-          ),
+          .bind(JSON.stringify(b.files.map((f) => f.id)), JSON.stringify(sourceIds)),
       ])) as [
         D1Result<{
           id: string;
@@ -761,11 +511,7 @@ backup.post("/", async (c) => {
   const copies: { from: string; to: string; then?: () => void }[] = [];
   const photos = new Set<string>();
   for (const s of sources)
-    if (
-      allowed.has(s.id) &&
-      s.photo_version !== null &&
-      wanted.get(s.id)?.old.photo
-    )
+    if (allowed.has(s.id) && s.photo_version !== null && wanted.get(s.id)?.old.photo)
       copies.push({
         from: photoKey(s.id),
         to: photoKey(wanted.get(s.id)!.id),
@@ -783,18 +529,8 @@ backup.post("/", async (c) => {
       then: () =>
         fileStatements.push(
           db
-            .prepare(
-              "INSERT INTO item_files (id, item_id, filename, content_type, size_bytes, r2_key, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            )
-            .bind(
-              id,
-              item.id,
-              f.filename,
-              f.content_type,
-              f.size_bytes,
-              key,
-              person(f.created_by) ?? me.id,
-            ),
+            .prepare("INSERT INTO item_files (id, item_id, filename, content_type, size_bytes, r2_key, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .bind(id, item.id, f.filename, f.content_type, f.size_bytes, key, person(f.created_by) ?? me.id),
         ),
     });
   }
@@ -838,86 +574,47 @@ backup.post("/", async (c) => {
       const tags = new Set(
         (Array.isArray(item.old.tags) ? item.old.tags : [])
           .map((t) => ids.get(t))
-          .filter((t): t is string =>
-            Boolean(t && chain.includes(tagProject.get(t) ?? "")),
-          ),
+          .filter((t): t is string => Boolean(t && chain.includes(tagProject.get(t) ?? ""))),
       );
-      for (const tag of tags)
-        rows.push(
-          db
-            .prepare("INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)")
-            .bind(item.id, tag),
-        );
+      for (const tag of tags) rows.push(db.prepare("INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)").bind(item.id, tag));
     }
-    const itemNew = (old: unknown) =>
-      typeof old === "string" ? wanted.get(old) : undefined;
+    const itemNew = (old: unknown) => (typeof old === "string" ? wanted.get(old) : undefined);
     for (const l of b.log) {
       const item = itemNew(l.item_id);
       const body = text(l.text, 4000);
       if (!item || !isDay(l.happened_on) || !body) continue;
       rows.push(
         db
-          .prepare(
-            "INSERT INTO item_log (id, item_id, happened_on, text, created_by, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
-          )
-          .bind(
-            ids.get(l.id) ?? crypto.randomUUID(),
-            item.id,
-            l.happened_on,
-            body,
-            person(l.created_by) ?? me.id,
-            isStamp(l.created_at) ? l.created_at : null,
-          ),
+          .prepare("INSERT INTO item_log (id, item_id, happened_on, text, created_by, created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))")
+          .bind(ids.get(l.id) ?? crypto.randomUUID(), item.id, l.happened_on, body, person(l.created_by) ?? me.id, isStamp(l.created_at) ? l.created_at : null),
       );
     }
     const today = brusselsToday();
     for (const r of b.repeats) {
       const item = itemNew(r.item_id);
       const n = int(r.every_n);
-      if (
-        !item ||
-        n < 1 ||
-        n > 100 ||
-        typeof r.every_unit !== "string" ||
-        !Object.hasOwn(INTERVAL_UNITS, r.every_unit) ||
-        !isDay(r.next_on)
-      )
-        continue;
+      if (!item || n < 1 || n > 100 || typeof r.every_unit !== "string" || !Object.hasOwn(INTERVAL_UNITS, r.every_unit) || !isDay(r.next_on)) continue;
       // Wie de herhaling instelde, maakt de nieuwe items (met zijn rechten): enkel iemand uit het project, anders jij.
       const by = person(r.created_by);
       rows.push(
         db
-          .prepare(
-            "INSERT INTO repeats (item_id, every_n, every_unit, next_on, created_by) VALUES (?, ?, ?, ?, ?)",
-          )
-          .bind(
-            item.id,
-            n,
-            r.every_unit,
-            r.next_on < today ? today : r.next_on,
-            by && membersOf(item.project).has(by) ? by : me.id,
-          ),
+          .prepare("INSERT INTO repeats (item_id, every_n, every_unit, next_on, created_by) VALUES (?, ?, ?, ?, ?)")
+          .bind(item.id, n, r.every_unit, r.next_on < today ? today : r.next_on, by && membersOf(item.project).has(by) ? by : me.id),
       );
     }
     for (const v of b.views) {
       const project = inTree(v.project_id) ? ids.get(v.project_id)! : undefined;
       const type = types.get(ids.get(v.type_id) ?? "");
-      if (!project || !type || !chainOf.get(project)!.includes(type.project_id))
-        continue;
+      if (!project || !type || !chainOf.get(project)!.includes(type.project_id)) continue;
       let def;
       try {
-        def = cleanView(
-          remap(v.def, ids),
-          viewFields(type.fields, type.name_label ?? "Naam"),
-        );
+        def = cleanView(remap(v.def, ids), viewFields(type.fields, type.name_label ?? "Naam"));
       } catch {
         continue;
       }
       rows.push(
         db
-          .prepare(
-            "INSERT INTO views (id, project_id, type_id, person_id, name, def, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          )
+          .prepare("INSERT INTO views (id, project_id, type_id, person_id, name, def, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)")
           .bind(
             ids.get(v.id) ?? crypto.randomUUID(),
             project,
@@ -934,37 +631,18 @@ backup.post("/", async (c) => {
       const project = inTree(s.project_id) ? ids.get(s.project_id)! : undefined;
       const type = types.get(ids.get(s.type_id) ?? "");
       // Enkel een lijst van erboven.
-      if (
-        !project ||
-        !type ||
-        type.project_id === project ||
-        !chainOf.get(project)!.includes(type.project_id) ||
-        shown.has(`${project}|${type.id}`)
-      )
-        continue;
+      if (!project || !type || type.project_id === project || !chainOf.get(project)!.includes(type.project_id) || shown.has(`${project}|${type.id}`)) continue;
       shown.add(`${project}|${type.id}`);
-      rows.push(
-        db
-          .prepare(
-            "INSERT INTO shown_lists (project_id, type_id) VALUES (?, ?)",
-          )
-          .bind(project, type.id),
-      );
+      rows.push(db.prepare("INSERT INTO shown_lists (project_id, type_id) VALUES (?, ?)").bind(project, type.id));
     }
     rows.push(...fileStatements);
     if (rows.length) await db.batch(rows);
   } catch (err) {
     // Niets half laten staan.
     await db.batch([
+      db.prepare("DELETE FROM projects WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(tops)),
       db
-        .prepare(
-          "DELETE FROM projects WHERE id IN (SELECT value FROM json_each(?))",
-        )
-        .bind(JSON.stringify(tops)),
-      db
-        .prepare(
-          "DELETE FROM people WHERE id IN (SELECT value FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM memberships WHERE person_id = people.id)",
-        )
+        .prepare("DELETE FROM people WHERE id IN (SELECT value FROM json_each(?)) AND NOT EXISTS (SELECT 1 FROM memberships WHERE person_id = people.id)")
         .bind(JSON.stringify(newPeople)),
     ]);
     if (copied.length) await c.env.FILES.delete(copied);
@@ -972,9 +650,7 @@ backup.post("/", async (c) => {
   }
 
   // Wat items aan andere aftrekken of bijtellen, opnieuw uitgerekend (met de berekeningen zoals jij ze ziet).
-  const nodes = new Map(
-    (await accessibleProjects(db, me.id)).map((n) => [n.id, n.rights]),
-  );
+  const nodes = new Map((await accessibleProjects(db, me.id)).map((n) => [n.id, n.rights]));
   const effects: D1PreparedStatement[] = [];
   const groups = new Map<string, typeof items>();
   for (const item of items) {
@@ -1004,17 +680,11 @@ backup.post("/", async (c) => {
     }
     for (const t of temp) {
       const applied = effectsOf(type.fields, t.data);
-      if (applied.length)
-        effects.push(
-          db
-            .prepare("UPDATE items SET applied = ? WHERE id = ?")
-            .bind(JSON.stringify(applied), t.id),
-        );
+      if (applied.length) effects.push(db.prepare("UPDATE items SET applied = ? WHERE id = ?").bind(JSON.stringify(applied), t.id));
     }
   }
   // Lukt dit niet, dan staat alles er toch: een latere wijziging past dan het hele getal toe.
-  if (effects.length)
-    await db.batch(effects).catch((err) => console.error(err));
+  if (effects.length) await db.batch(effects).catch((err) => console.error(err));
 
   return c.json(
     {

@@ -36,16 +36,9 @@ export function BackupCard() {
     if (!ok) return;
     setBusy(true);
     try {
-      const result = await api.post<{ id: string; missing: number }>(
-        "/backup",
-        content,
-      );
+      const result = await api.post<{ id: string; missing: number }>("/backup", content);
       reloadMe();
-      toast(
-        result.missing
-          ? `Teruggezet, zonder ${result.missing} ${result.missing === 1 ? "bestand" : "bestanden"}`
-          : "Teruggezet",
-      );
+      toast(result.missing ? `Teruggezet, zonder ${result.missing} ${result.missing === 1 ? "bestand" : "bestanden"}` : "Teruggezet");
       navigate(`/projecten/${result.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -63,8 +56,7 @@ export function BackupCard() {
             <Icon name="download" size={16} /> Downloaden
           </a>
           <label className="btn btn-outline" aria-disabled={busy}>
-            <Icon name="upload" size={16} />{" "}
-            {busy ? "Terugzetten…" : "Terugzetten"}
+            <Icon name="upload" size={16} /> {busy ? "Terugzetten…" : "Terugzetten"}
             <input
               type="file"
               accept=".json,application/json"

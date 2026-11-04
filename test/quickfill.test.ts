@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { quickFill, readDate } from "../shared/quickfill.ts";
+import { nameIn, nameMatches, quickFill, readDate } from "../shared/quickfill.ts";
 
 const eten: FieldDef[] = [
   { key: "datum", label: "Datum", type: "date", today: true },
@@ -89,4 +89,14 @@ test("meer datums: in de volgorde van de datumvelden, daarna een periode", () =>
   assert.deepEqual(quickFill("12-7 26-7 toscane", reis, ctx).data, { wanneer: ["2026-07-12", "2026-07-26"] });
   // Een periode met één datum blijft open aan de kant die je niet gaf (het formulier vraagt de rest).
   assert.deepEqual(quickFill("12-7 toscane", reis, ctx).data, { wanneer: ["2026-07-12", null] });
+});
+
+test("zoeken op naam en namen in een tekst (verwijzingen op de server)", () => {
+  assert.equal(nameMatches("Crème fraîche", "creme"), true);
+  assert.equal(nameMatches("Crème fraîche", "fraich cre"), true);
+  assert.equal(nameMatches("Crème fraîche", "room"), false);
+  assert.equal(nameIn("Appels", "21-10 appels, 2"), true);
+  assert.equal(nameIn("Rode appels", "gisteren rode appels gegeten"), true);
+  assert.equal(nameIn("App", "21-10 appels 2"), false);
+  assert.equal(nameIn("", "iets"), false);
 });

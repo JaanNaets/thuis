@@ -36,6 +36,18 @@ export const fold = (s: string) =>
     .replace(/[.,;:!?]+$/, "")
     .trim();
 
+/** Zoeken op naam: elk woord van wat je typt, staat in de naam (zonder hoofdletters of accenten). */
+export function nameMatches(name: string, q: string): boolean {
+  const n = fold(name);
+  return q.split(/\s+/).every((w) => n.includes(fold(w)));
+}
+
+/** Staat de naam als hele woorden in de tekst? Zo vindt snel invullen "appels" in "21-10 appels 2". */
+export function nameIn(name: string, text: string): boolean {
+  const n = fold(name);
+  return Boolean(n) && ` ${text.split(/\s+/).map(fold).join(" ")} `.includes(` ${n} `);
+}
+
 const WEEKDAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
 const MONTHS: Record<string, number> = {
   jan: 1, januari: 1, feb: 2, februari: 2, mrt: 3, maart: 3, apr: 4, april: 4, mei: 5, jun: 6, juni: 6, jul: 7, juli: 7,
