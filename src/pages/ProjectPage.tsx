@@ -46,11 +46,16 @@ export function ProjectPage() {
         description={project.description ?? undefined}
         back={parent ? { to: `/projecten/${parent.id}`, label: parent.name } : { to: "/", label: "Overzicht" }}
         actions={
-          settings && (
-            <Link to={`/projecten/${project.id}/instellingen`} className="btn btn-outline btn-sm">
-              <Icon name="sliders" size={15} /> Instellen
+          <>
+            <Link to={`/projecten/${project.id}/verbanden`} className="btn btn-outline btn-sm">
+              <Icon name="links" size={15} /> Verbanden
             </Link>
-          )
+            {settings && (
+              <Link to={`/projecten/${project.id}/instellingen`} className="btn btn-outline btn-sm">
+                <Icon name="sliders" size={15} /> Instellen
+              </Link>
+            )}
+          </>
         }
         primary={
           canAdd &&

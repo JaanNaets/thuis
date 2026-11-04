@@ -5379,3 +5379,160 @@ dialog.palette[open]::backdrop {
     display: flex;
   }
 }
+
+
+/* ---------- verbanden: de kaart (LinkMap.tsx) ----------
+ * Kolommen in de toon van het project, lijnen in de toon van de soort verband (--tone-ink: genoeg contrast op wit en
+ * op het zachte vlak). Past de kaart niet, dan verkleint ze tot 72%; nog breder schuift ze binnen haar eigen vlak (de
+ * pagina zelf schuift nooit opzij).
+ */
+.linkmap {
+  overflow-x: auto;
+  margin: 4px 0 16px;
+  overscroll-behavior-x: contain;
+}
+
+.linkmap svg {
+  display: block;
+}
+
+.lm-column > rect {
+  fill: var(--tone-soft);
+}
+
+.lm-outside > rect {
+  fill: var(--subtle);
+}
+
+.lm-column-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  fill: var(--tone-ink);
+  text-anchor: middle;
+}
+
+.lm-outside .lm-column-name {
+  fill: var(--muted-foreground);
+}
+
+.lm-column-link {
+  cursor: pointer;
+}
+
+.lm-column-link:hover,
+.lm-column-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.lm-line {
+  fill: none;
+  stroke: var(--tone-ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 0.25s var(--ease-out);
+}
+
+.lm-line.lm-grey,
+.lm-line.lm-tab {
+  stroke: var(--faint);
+  stroke-width: 3;
+}
+
+.lm-line.lm-tab {
+  stroke-dasharray: 1 7;
+}
+
+.lm-station {
+  fill: var(--background);
+  stroke: var(--tone-ink);
+}
+
+.lm-station.lm-grey,
+.lm-station.lm-tab {
+  stroke: var(--muted-foreground);
+}
+
+.lm-station.lm-mixed {
+  stroke: var(--foreground);
+}
+
+.lm-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.25s var(--ease-out);
+}
+
+.lm-halo {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.lm-halo.on,
+.lm-node:focus-visible .lm-halo {
+  opacity: 1;
+}
+
+.lm-name {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--foreground);
+}
+
+.lm-meta {
+  font-size: 12px;
+  fill: var(--muted-foreground);
+}
+
+.lm-dim {
+  opacity: 0.22;
+}
+
+/* Het streepje in de kleur van een soort verband (filters, rijen). */
+.lm-swatch {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--tone-ink);
+}
+
+.lm-swatch.lm-grey {
+  background: var(--faint);
+}
+
+.lm-swatch.lm-tab {
+  height: 0;
+  border-radius: 0;
+  background: none;
+  border-top: 3px dotted var(--faint);
+}
+
+.lm-back {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
+
+.lm-more {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.lm-more p {
+  margin: 4px 0;
+}
+
+/* Meer soorten tussen dezelfde twee lijsten: de streepjes onder elkaar. */
+.lm-swatches {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 3px;
+  width: 16px;
+}

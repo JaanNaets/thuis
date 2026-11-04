@@ -9,6 +9,8 @@ Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: 
 - **Totalen** op een lijst: de som, het gemiddelde of het aantal, per dag, week, maand of jaar, met een doel (de kcal
   van vandaag, wat je deze maand uitgaf).
 - **Items** in een lijst, met tags, een foto, bestanden en een logboek.
+- **Verbanden**: per project een kaart van wat de lijsten met elkaar doen (aftrekken, uitrekenen, meetellen,
+  verwijzen, in de agenda), ook over projecten heen.
 
 Regels voor een bepaalde use case (kosten verdelen, voorraad, calorieën, klantenkaarten offline, kastickets lezen)
 komen er bovenop: als sjabloon met deze bouwstenen, of als eigen onderdeel.
@@ -392,6 +394,19 @@ agenda** aanstaat (bij het veld, onder ⋯). Ook een berekende datum (het volgen
 een verjaardag (elk jaar). De sjablonen zetten het al aan voor taken, onderhoud, abonnementen, verjaardagen, reizen
 en de maaltijdplanning. Elke lijst met een datum kan je ook zelf als agenda bekijken (Filters → Als agenda); daar
 voeg je ook iets toe op een dag (bv. een maaltijd op dinsdag).
+
+### Verbanden
+
+Bij een project (knop **Verbanden**, of zoek "verbanden") zie je wat de lijsten met elkaar doen, als kaart of als
+lijst. Elk project is een kolom (eerst het project zelf, dan zijn subprojecten), elke lijst een punt, elk verband een
+lijn in de kleur van zijn soort: **telt bij of af** (Bijvullen trekt af van de Voorraad), **totalen** (Uitgaven tellen
+mee in Wie moet wie), **berekeningen** (Laatst bijgevuld komt uit Bijvullen), **agenda**, **verwijzingen** en een
+lijst als **tab** in een subproject. Lijsten in andere projecten staan rechts onder "Elders". Kies een lijst en je
+ziet wat erop inwerkt en waar ze op inwerkt; de soorten zet je aan en uit met de filters.
+
+Niets hiervan wordt bewaard: de kaart volgt uit de velden, berekeningen en totalen van de lijsten, en toont enkel wat
+jij mag zien (een lijst, veld of project dat je niet ziet, staat er niet op). Ze blijft licht, ook met 1000 projecten:
+hoogstens zes subprojecten en 24 lijsten van elders per kaart; de andere subprojecten hebben elk hun eigen kaart.
 
 ### Exporteren
 

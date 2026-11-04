@@ -21,6 +21,7 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | Rechten | `shared/access.ts` (wat een rol mag, per lijst en per veld) |
 | Navigatie met overgangen | `src/router.tsx` (`Link`, `NavLink`, `useNavigate`) en `src/routes.tsx` |
 | Iconen | `src/components/Icon.tsx` |
+| Verbanden tussen lijsten (kaart) | `src/components/LinkMap.tsx` en `shared/links.ts` |
 | Opmaak van bedragen, datums, hoeveelheden | `src/format.ts` |
 
 ---
@@ -691,6 +692,28 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
   (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
 
+### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList` (`LinkMap.tsx`)
+
+De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen). Bovenaan `Tabs`
+**Kaart · Lijst** (op gsm begint het met Lijst), daaronder een `FilterToggle` per soort verband met het streepje in
+zijn kleur (`.lm-swatch`).
+
+- **Kaart** (`LinkMapView`, een SVG): een kolom per project in zijn toon (`--tone-soft`, de naam in `--tone-ink`),
+  het project zelf eerst, "Elders" (`--subtle`) rechts. Een lijst is een wit punt met een rand, een lijst waar iets
+  toekomt een groter punt; een lijn heeft de kleur van haar soort (`--tone-ink` van peach, sky, lilac of mint;
+  verwijzingen en tabs grijs `--faint`, tabs gestippeld). Meer soorten op één rij rijden naast elkaar (7px). Waar de
+  plaats van alles vandaan komt: `layoutLinks` in `shared/links.ts`; teken er niets zelf bij.
+- Een punt kiezen (klik, Enter of spatie) licht zijn lijnen op en dimt de rest (`.lm-dim`); de keuze staat in het
+  adres (`?punt=`). De naam van een kolom opent de kaart van dat subproject.
+- Past de kaart niet, dan verkleint ze tot 72%. Is ze dan nog te breed, dan schuift ze **binnen haar eigen vlak**
+  (`.linkmap`): de enige plaats waar iets opzij schuift; de pagina zelf nooit.
+- **Gekozen lijst** (`LinkDetail`): een `card` met `CardHead` (naam, project, aantal, "Lijst openen") en `rows` in
+  twee groepen, **Komt van** en **Gaat naar**, een rij per andere lijst met de streepjes van haar soorten en wat het
+  verband doet ("Trekt Zakken af van Aantal").
+- **Lijst** (`LinkList`): per project een `group-row` met zijn stipje, en per lijst een rij met het aantal verbanden.
+- Onder de kaart in `.lm-more`: subprojecten zonder verbanden en wat niet meer op de kaart past (met een link naar
+  hun eigen kaart).
+
 ### Een lijst tonen: `ItemsView`
 
 `<ItemsView project={detail} type={type} />` is één lijst in een project: zoeken, filters uit de velden,
@@ -935,7 +958,7 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Volgt de rechten: knoppen enkel bij `can_create`, `access === "edit"`, `can_delete`, `rights.manage` of
       `rights.members`; velden volgens `field_access`. Getest met een rol die enkel mag zien. Afbeeldingen uit de API
       via `apiUrl`.
-- [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
+- [ ] Geen horizontale scroll (enkel de kaart van Verbanden schuift binnen haar eigen vlak); lange namen worden netjes afgekapt.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.

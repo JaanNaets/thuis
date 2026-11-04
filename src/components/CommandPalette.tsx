@@ -82,6 +82,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           icon: (p.icon ?? "project") as IconName,
           to: `/projecten/${p.id}`,
         })),
+      // "verbanden" (of "kaart"), eventueel met een projectnaam: de kaart van de verbanden van dat project.
+      /verb|kaart/.test(q)
+        ? projects
+            .filter((p) => !p.archived && normalize(p.name).includes(q.replace(/\bverb\w*|\bkaart\w*/g, "").trim()))
+            .map((p) => ({
+              key: `v${p.id}`,
+              group: "Verbanden",
+              label: `Verbanden van ${p.name}`,
+              icon: "links" as IconName,
+              to: `/projecten/${p.id}/verbanden`,
+            }))
+        : [],
       (found?.items ?? []).map((i) => ({
         key: `i${i.id}`,
         group: "Items",

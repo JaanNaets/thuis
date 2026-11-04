@@ -5,6 +5,7 @@ import { Home } from "./pages/Home";
 import { ImportPage } from "./pages/ImportPage";
 import { ItemFormPage } from "./pages/ItemForm";
 import { ItemPage } from "./pages/ItemPage";
+import { LinksPage } from "./pages/LinksPage";
 import { MePage } from "./pages/MePage";
 import { ProjectNew } from "./pages/ProjectNew";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
       { path: "projecten/:id/rollen/:roleId", element: <RoleFormPage /> },
       { path: "projecten/:id/nieuw", element: <ItemFormPage /> },
       { path: "projecten/:id/importeren", element: <ImportPage /> },
+      { path: "projecten/:id/verbanden", element: <LinksPage /> },
       { path: "items/:itemId", element: <ItemPage /> },
       { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
       { path: "agenda", element: <AgendaPage /> },

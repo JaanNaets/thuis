@@ -58,6 +58,11 @@ commits en uitleg.
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
+- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden`): worden nooit bewaard, maar
+  afgeleid uit de velden, berekeningen en totalen die de lezer ziet (`listLinks`, met `visibleFields` en
+  `visibleTotals`). Een kaart is één project met hoogstens `MAX_COLUMNS` subprojecten en `MAX_OUTSIDE` lijsten van
+  elders, met een vast aantal vragen aan de databank (ook bij 1000 projecten). De schikking is een vaste regel
+  (`layoutLinks`): een rij per lijst waar iets toekomt, kolommen per project.
 - **Verwijzingen die tellen** (`adjust`, `shared/effects.ts`, `worker/effects.ts`): wat een item aan andere items deed,
   staat in `items.applied` (nooit naar de browser). Bewaren past enkel het verschil toe, in dezelfde batch, en weigert
   als de bewerker dat getal daar niet mag wijzigen; verwijderen draait terug waar het mag. Overnemen (`copy`) gebeurt
