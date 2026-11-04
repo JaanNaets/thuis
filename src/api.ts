@@ -53,13 +53,19 @@ export const api = {
  * Haalt data op bij het laden van een component, en opnieuw wanneer `path` verandert, je reload() oproept,
  * de app terug zichtbaar wordt of de kiosk ververst.
  */
-export function useApi<T>(path: string) {
+/** Gegevens van de API, opnieuw bij een ander pad of `reload`. `null`: (nog) niets ophalen. */
+export function useApi<T>(path: string | null) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
+    if (path === null) {
+      setData(undefined);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     api.get<T>(path).then(

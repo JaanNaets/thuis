@@ -64,6 +64,9 @@ commits en uitleg.
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
+- **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
+  verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item), enkel ids, nagekeken met `cleanBlocks`. Een
+  blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (elk project).
 - **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor de lijnen
   tussen je hoofdprojecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
   ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van

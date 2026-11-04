@@ -625,9 +625,21 @@ kbd {
   letter-spacing: 0;
 }
 
-/* Jouw letter bij de titel van een hoofdscherm, enkel op gsm (op tablet staat ze in de paneelbalk). */
+/* Jouw letter bij de titel van een hoofdscherm, enkel op gsm (op tablet staat ze in de paneelbalk): vast rechtsboven,
+   acties springen eronder als er geen plaats is. */
+.page-head:has(> .head-avatar) {
+  position: relative;
+}
+
+.page-head:has(> .head-avatar) > .page-title,
+.page-head:has(> .head-avatar) > .page-actions {
+  margin-right: 48px;
+}
+
 .head-avatar {
-  align-self: center;
+  position: absolute;
+  top: 0;
+  right: 0;
   border-radius: 50%;
 }
 
@@ -641,6 +653,11 @@ kbd {
 @media (min-width: 768px) {
   .head-avatar {
     display: none;
+  }
+
+  .page-head:has(> .head-avatar) > .page-title,
+  .page-head:has(> .head-avatar) > .page-actions {
+    margin-right: 0;
   }
 }
 
@@ -5566,4 +5583,35 @@ dialog.palette[open]::backdrop {
   flex: none;
   color: var(--muted-foreground);
   font-size: 13px;
+}
+
+/* ---------- je overzicht: blokken (OverviewBlocks.tsx) ---------- */
+.dash-card > .rows:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 6px;
+}
+
+/* Eén waarde, groot (Pellets · Aantal). */
+.dash-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+/* Aanpassen: de lijsten van een project aan- of uitzetten, onder zijn naam. */
+.dash-edit-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 12px 48px;
+}
+
+.sort-row > .row-main {
+  flex: 1;
+  min-width: 0;
 }

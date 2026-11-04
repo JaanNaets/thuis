@@ -32,12 +32,15 @@ export const shownTotals = (type: ItemTypeView) => type.totals.filter((t) => !t.
 /**
  * De totalen van de lijst die openstaat (Kcal per dag, Uitgaven per maand). De API rekent ze uit zoals jij de items
  * ziet: in dit project, eventueel met de subprojecten en lijsten uit andere projecten. Elk totaal is een sectie in de
- * zijkolom; op gsm staan ze boven de lijst.
+ * zijkolom; op gsm staan ze boven de lijst. `only`: enkel dat ene totaal (een blok op het overzicht).
  */
-export function TotalsCards({ projectId, type, className }: { projectId: string; type: ItemTypeView; className?: string }) {
+export function TotalsCards({ projectId, type, className, only }: { projectId: string; type: ItemTypeView; className?: string; only?: string }) {
   const { data } = useApi<Shown[]>(`/projects/${projectId}/totals?type=${type.id}&today=${today()}`);
   if (!data) return null;
-  const totals = data.map((d) => ({ ...d, total: shownTotals(type).find((x) => x.id === d.id) })).filter((d): d is Shown & { total: TotalDef } => Boolean(d.total));
+  const totals = data
+    .filter((d) => !only || d.id === only)
+    .map((d) => ({ ...d, total: shownTotals(type).find((x) => x.id === d.id) }))
+    .filter((d): d is Shown & { total: TotalDef } => Boolean(d.total));
   const small = totals.filter((d) => d.total.size === "small");
   return (
     <>

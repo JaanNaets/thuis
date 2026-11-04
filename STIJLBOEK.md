@@ -873,10 +873,15 @@ Regels:
 
 ## 6. Patronen per scherm
 
-**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" → per project (in de volgorde van de boom) een
-`dash-card`: de kop opent het project (met het project erboven en je rol), de rijen eronder openen elke lijst
-(`?lijst=`) met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets
-mag toevoegen) dat meteen het formulier opent → gearchiveerde projecten apart. Het kruimelpad toont hier enkel "Overzicht".
+**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" en `actions` "Aanpassen" → de blokken die je koos
+(`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
+een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
+met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
+→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: één lijst, snel toevoegen (een rij met +),
+een totaal (`TotalsCards only`) of één waarde (`.dash-value`, groot). **Aanpassen** (`BlocksEditor`): een
+`sort-list` met greep en ×, bij een project de lijsten als filterpillen (aan = zichtbaar), "Toevoegen" in een
+`Sheet`, en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in de paneelbalk) en "Standaard" (ghost) bij de
+titel. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →

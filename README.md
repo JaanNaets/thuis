@@ -207,6 +207,11 @@ zit: één tik en je bent er. De volgorde van je projecten sleep je bij **Jouw g
 subprojecten bij **Instellen → Algemeen**, als je het project instelt. De volgorde van de lijsten (en dus van de tabs
 in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
 
+Met **Aanpassen** stel je je overzicht zelf samen (enkel voor jou): schik de blokken, verberg lijsten van een project,
+en zet er een lijst, **snel toevoegen** ("Eten toevoegen"), een **totaal** (Kcal vandaag) of de **waarde van een
+item** bij (Pellets · Aantal, ook een berekening zoals Laatst bijgevuld). **Standaard** zet het terug zoals het
+vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
+
 ### Wie betaalde wat
 
 Kosten verdelen is gebouwd uit gewone velden en een **totaal dat verrekent** (zie Totalen); de sjablonen Huishouden
@@ -483,7 +488,7 @@ dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en
 
 | Tabel | Wat |
 | ----- | --- |
-| `people` | Personen. Met een e-mailadres als ze aanmelden, zonder als ze nooit aanmelden. |
+| `people` | Personen. Met een e-mailadres als ze aanmelden, zonder als ze nooit aanmelden. `overview`: de blokken van hun overzicht (leeg = vanzelf). |
 | `projects` | Projecten, als boom (`parent_id`). |
 | `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
 | `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
