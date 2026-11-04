@@ -18,6 +18,8 @@ import {
   type ChecklistEntry,
   type CodeFormat,
   type CodeValue,
+  MAX_REF_LISTS,
+  type TextValue,
   type FieldDef,
   type FieldType,
   type FieldValue,
@@ -31,14 +33,16 @@ import { REMIND_DAYS } from "../../shared/remind";
 import { splitCents } from "../../shared/totals";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
-import { api, ApiError, apiUrl, useApi } from "../api";
+import { api, ApiError, apiUrl } from "../api";
 import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk } from "../device";
 import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
+import { useSession } from "../session";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { CalcEditor } from "./CalcEditor";
+import { ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { useSortable } from "./Sortable";
@@ -64,7 +68,7 @@ export type SharesDraft = { mode: "none" | "equal" | "percent" | "amount"; peopl
 type IntervalDraft = { n: string; unit: IntervalUnit };
 
 /** Wat in een veld staat terwijl je typt. */
-type DraftValue = string | [string, string] | number | boolean | null | CodeValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft;
+type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft;
 export type AttributeDraft = Record<string, DraftValue>;
 
 export function sharesDraft(shares: Share[] | undefined): SharesDraft {
@@ -171,14 +175,17 @@ function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldValue | nu
     case "bool":
       return raw === true ? true : null;
     case "code":
-      return typeof raw === "object" && raw && "text" in raw && raw.text.trim() ? { text: raw.text.trim(), format: raw.format } : null;
+      return typeof raw === "object" && raw && "text" in raw && "format" in raw && raw.text.trim() ? { text: raw.text.trim(), format: raw.format } : null;
     case "share": {
       const shares = buildShares(raw as SharesDraft);
       return shares === undefined ? undefined : shares.length ? shares : null;
     }
     case "person":
-    case "item":
       return typeof raw === "string" && raw ? raw : null;
+    case "item":
+      if (typeof raw === "string") return raw || null;
+      // Vrije tekst (enkel bij `free`).
+      return def.free && raw && typeof raw === "object" && "text" in raw && String(raw.text).trim() ? { text: String(raw.text).trim() } : null;
     case "calc":
       return null;
     case "people":
@@ -337,7 +344,7 @@ export function FieldInputs({
             return (
               <div key={def.key} className={`field ${wide}`}>
                 {label}
-                <ItemsSelect def={def} value={Array.isArray(raw) ? (raw as string[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
+                <ItemsPicker def={def} value={Array.isArray(raw) ? (raw as string[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
               </div>
             );
           case "checklist":
@@ -461,7 +468,12 @@ export function FieldInputs({
             return (
               <div key={def.key} className={`field ${wide}`}>
                 {label}
-                <ItemSelect def={def} value={typeof raw === "string" ? raw : ""} onChange={(v) => set(def.key, v)} disabled={disabled} />
+                <ItemPicker
+                  def={def}
+                  value={typeof raw === "string" ? raw || null : raw && typeof raw === "object" && "text" in raw ? { text: String(raw.text) } : null}
+                  onChange={(v) => set(def.key, v ?? "")}
+                  disabled={disabled}
+                />
               </div>
             );
           case "year_range": {
@@ -573,68 +585,6 @@ export function FieldInputs({
         }
       })}
     </div>
-  );
-}
-
-/** Een item uit een andere lijst kiezen (de verkoper van een wijn, de plaats van een fles). */
-function ItemSelect({ def, value, onChange, disabled }: { def: FieldDef; value: string; onChange: (v: string) => void; disabled: boolean }) {
-  const { data, error } = useApi<ItemRef[]>(`/items?type=${def.ref_type}`);
-  const options = data ?? [];
-  return (
-    <>
-      <select disabled={disabled || !data} value={value} onChange={(e) => onChange(e.target.value)} aria-label={def.label}>
-        <option value="">{data ? (options.length ? "—" : "Nog niets om te kiezen") : "Laden…"}</option>
-        {value && data && !options.some((o) => o.id === value) && <option value={value}>Verborgen</option>}
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
-      {error && <span className="hint error">{error}</span>}
-    </>
-  );
-}
-
-/** Meerdere items uit een andere lijst (de ingrediënten van een recept): als chips, met een keuzelijst erbij. */
-function ItemsSelect({ def, value, onChange, disabled }: { def: FieldDef; value: string[]; onChange: (v: string[]) => void; disabled: boolean }) {
-  const { data, error } = useApi<ItemRef[]>(`/items?type=${def.ref_type}`);
-  const options = data ?? [];
-  const name = (id: string) => options.find((o) => o.id === id)?.name ?? (data ? "Verborgen" : "…");
-  const rest = options.filter((o) => !value.includes(o.id));
-  return (
-    <>
-      {value.length > 0 && (
-        <ul className="ref-chips">
-          {value.map((id) => (
-            <li key={id} className="tag static ref-chip">
-              <span>{name(id)}</span>
-              {!disabled && (
-                <button type="button" aria-label={`${name(id)} weghalen`} onClick={() => onChange(value.filter((x) => x !== id))}>
-                  <Icon name="close" size={13} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {!disabled && (
-        <select
-          value=""
-          disabled={!data || rest.length === 0}
-          aria-label={`${def.label}: toevoegen`}
-          onChange={(e) => e.target.value && onChange([...value, e.target.value])}
-        >
-          <option value="">{!data ? "Laden…" : rest.length ? "Toevoegen…" : options.length ? "Alles staat erbij" : "Nog niets om te kiezen"}</option>
-          {rest.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-      )}
-      {error && <span className="hint error">{error}</span>}
-    </>
   );
 }
 
@@ -1187,6 +1137,11 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
     keys.set(d.key, key);
   }
   const rename = (k: string) => keys.get(k) ?? k;
+  // De andere lijsten van een verwijzing: zonder lege keuzes en dubbels.
+  const refAlso = (d: FieldDraft) => {
+    const also = [...new Set((d.ref_also ?? []).filter(Boolean).map((x) => (x === "self" ? selfId : x)))].filter((x) => x !== d.ref_type);
+    return also.length ? { ref_also: also } : {};
+  };
   const refOf = (k: string) => {
     const ref = drafts.find((d) => d.key === k)?.ref_type;
     return ref === "self" ? selfId : ref;
@@ -1209,7 +1164,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       type: d.type,
       ...((d.type === "select" || d.type === "multi") && options.length ? { options } : {}),
       ...((d.type === "number" || d.type === "calc") && d.unit?.trim() ? { unit: d.unit.trim() } : {}),
-      ...(d.type === "item" || d.type === "items" ? { ref_type: d.ref_type } : {}),
+      ...(d.type === "item" || d.type === "items" ? { ref_type: d.ref_type, ...refAlso(d) } : {}),
+      ...(d.type === "item" && d.free ? { free: true } : {}),
       ...(d.type === "code" && d.format ? { format: d.format } : {}),
       ...(d.type === "calc" && d.calc ? { calc: renameCalc(d.calc, rename, refOf, selfId) } : {}),
       ...(d.column ? { column: true } : {}),
@@ -1323,6 +1279,13 @@ export function FieldsEditor({
     [value, lists, self],
   );
   const update = (i: number, patch: Partial<FieldDraft>) => onChange(value.map((f, k) => (k === i ? { ...f, ...patch } : f)));
+  // Twee lijsten met dezelfde naam (de voorraad van twee huizen): met het project erbij.
+  const { projects } = useSession();
+  const listLabel = (t: ItemType) => {
+    const twin = types.some((x) => x.id !== t.id && x.plural === t.plural);
+    const where = projects.find((p) => p.id === t.project_id)?.name;
+    return twin && where ? `${t.plural} · ${where}` : t.plural;
+  };
   const sortable = useSortable(
     value.map((f) => f.key),
     (keys) => onChange(keys.map((k) => value.find((f) => f.key === k)!)),
@@ -1414,19 +1377,47 @@ export function FieldsEditor({
                     </label>
                   )}
                   {(f.type === "item" || f.type === "items") && (
-                    <label className="field">
+                    <div className="field">
                       <span className="label">Verwijst naar</span>
-                      <select value={f.ref_type ?? ""} onChange={(e) => update(i, { ref_type: e.target.value || undefined })}>
-                        <option value="">Kies een lijst</option>
-                        <option value={selfId ?? "self"}>{selfLabel} (deze lijst)</option>
-                        {types.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.plural}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      {[f.ref_type ?? "", ...(f.ref_also ?? [])].map((ref, k) => (
+                        <div key={k} className="picker-row">
+                          <select
+                            value={ref}
+                            aria-label={k === 0 ? "Verwijst naar" : "Ook naar"}
+                            onChange={(e) =>
+                              k === 0
+                                ? update(i, { ref_type: e.target.value || undefined })
+                                : update(i, { ref_also: (f.ref_also ?? []).map((x, j) => (j === k - 1 ? e.target.value : x)) })
+                            }
+                          >
+                            <option value="">Kies een lijst</option>
+                            <option value={selfId ?? "self"}>{selfLabel} (deze lijst)</option>
+                            {types.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {listLabel(t)}
+                              </option>
+                            ))}
+                          </select>
+                          {k > 0 && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon btn-sm"
+                              aria-label="Deze lijst weghalen"
+                              onClick={() => update(i, { ref_also: (f.ref_also ?? []).filter((_, j) => j !== k - 1) })}
+                            >
+                              <Icon name="close" size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {f.ref_type && (f.ref_also?.length ?? 0) < MAX_REF_LISTS - 1 && (
+                        <button type="button" className="link-button" style={{ justifySelf: "start" }} onClick={() => update(i, { ref_also: [...(f.ref_also ?? []), ""] })}>
+                          Nog een lijst
+                        </button>
+                      )}
+                    </div>
                   )}
+                  {f.type === "item" && f.ref_type && <Switch checked={Boolean(f.free)} onChange={(on) => update(i, { free: on })} label="Ook vrije tekst" />}
                   {f.type === "code" && (
                     <label className="field">
                       <span className="label">Formaat als je zelf typt</span>

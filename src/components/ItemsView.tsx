@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import {
   formatFieldValue,
   rangeStatus,
+  refLists,
   type Attributes,
   type ChecklistEntry,
   type FieldDef,
@@ -175,7 +176,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     }
     if (kind === "person" || kind === "people")
       return [{ value: "me", label: "Jij" }, ...project.members.filter((m) => m.person.id !== person.id).map((m) => ({ value: m.person.id, label: m.person.name }))];
-    if (kind === "item" || kind === "items") return (data?.refs ?? []).filter((r) => r.type_id === f.ref_type).map((r) => ({ value: r.id, label: r.name }));
+    if (kind === "item" || kind === "items") return (data?.refs ?? []).filter((r) => refLists(f).includes(r.type_id)).map((r) => ({ value: r.id, label: r.name }));
     return [];
   };
   const exportFilter = def.conditions.length || def.sort ? `&filter=${encodeURIComponent(JSON.stringify(def))}` : "";

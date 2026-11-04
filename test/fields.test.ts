@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   cleanAttributes,
   cleanFields,
+  cleanValue,
   fieldKey,
   formatFieldValue,
   guessMapping,
@@ -13,6 +14,7 @@ import {
   parseSheet,
   rangeStatus,
   referencedItems,
+  refLists,
   referencedPeople,
   sharesText,
   type FieldDef,
@@ -129,7 +131,7 @@ test("verwijzingen en verplichte velden", () => {
   ];
   const data = cleanAttributes(defs, { p: "a", s: [{ person_id: "b" }, { person_id: "a" }], i: "x" });
   assert.deepEqual(referencedPeople(defs, data).sort(), ["a", "b"]);
-  assert.deepEqual(referencedItems(defs, data), [{ id: "x", ref_type: "t1", key: "i" }]);
+  assert.deepEqual(referencedItems(defs, data), [{ id: "x", lists: ["t1"], key: "i" }]);
   assert.deepEqual(
     missingRequired(defs, {}).map((d) => d.key),
     ["i"],
@@ -277,4 +279,25 @@ test("een naam van een foto koppelen aan een bestaand item", async () => {
   assert.equal(matchName(vendors, " "), null);
   // Omgekeerd: de naam op de foto is korter dan het item.
   assert.equal(matchName([{ id: "z", name: "Zeeman textielsupers" }], "Zeeman"), "z");
+});
+
+test("een verwijzing naar meer lijsten, met vrije tekst", () => {
+  const [wat] = cleanFields([{ key: "wat", label: "Wat", type: "item", ref_type: "v1", ref_also: ["v2", "v1", "v2", "bad id!"], free: true }]);
+  assert.deepEqual(wat.ref_also, ["v2"]);
+  assert.equal(wat.free, true);
+  assert.deepEqual(refLists(wat), ["v1", "v2"]);
+  // Een gekozen item blijft een id; vrije tekst staat als { text }.
+  assert.equal(cleanValue(wat, "abc-123"), "abc-123");
+  assert.deepEqual(cleanValue(wat, { text: "  appel " }), { text: "appel" });
+  assert.equal(formatFieldValue(wat, { text: "appel" }), "appel");
+  // Vrije tekst telt niet als verwijzing (niets om na te kijken of aan te passen).
+  assert.deepEqual(referencedItems([wat], { wat: { text: "appel" } }), []);
+  assert.deepEqual(referencedItems([wat], { wat: "abc-123" }), [{ id: "abc-123", lists: ["v1", "v2"], key: "wat" }]);
+  // Zonder `free` is tekst geen waarde.
+  const [streng] = cleanFields([{ key: "w", label: "W", type: "item", ref_type: "v1" }]);
+  assert.equal(cleanValue(streng, { text: "appel" }), null);
+  assert.equal(streng.free, undefined);
+  // Vrije tekst kan enkel bij één verwijzing.
+  const [veel] = cleanFields([{ key: "w", label: "W", type: "items", ref_type: "v1", free: true }]);
+  assert.equal(veel.free, undefined);
 });

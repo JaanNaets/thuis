@@ -117,3 +117,23 @@ test("de kaart is voorspelbaar", () => {
   assert.deepEqual([...one.places], [...two.places]);
   assert.deepEqual(one.rows, two.rows);
 });
+
+test("een verwijzing naar twee voorraden geeft een lijn naar elk", () => {
+  const eten: LinkList = {
+    id: "E",
+    fields: [
+      { key: "hoeveel", label: "Hoeveel", type: "number" },
+      { key: "wat", label: "Wat", type: "item", ref_type: "V1", ref_also: ["V2"], free: true, adjust: { field: "aantal", by: "hoeveel", sign: -1 } },
+    ],
+    totals: [],
+  };
+  const fields = (id: string) => (id === "V1" || id === "V2" ? voorraad.fields : undefined);
+  const out = listLinks(eten, fields);
+  assert.deepEqual(
+    out.map((l) => [l.kind, l.from, l.to, l.texts[0]]),
+    [
+      ["adjust", "E", "V1", "Trekt Hoeveel af van Aantal"],
+      ["adjust", "E", "V2", "Trekt Hoeveel af van Aantal"],
+    ],
+  );
+});

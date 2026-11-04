@@ -5498,3 +5498,72 @@ dialog.palette[open]::backdrop {
   gap: 3px;
   width: 16px;
 }
+
+/* ---------- een item kiezen (ItemPicker.tsx) ----------
+ * Een gewoon veld waarin je typt; de keuzes zweven eronder als glas (zoals het zoekpalet).
+ */
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.picker-row > select,
+.picker-row > .picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker {
+  position: relative;
+}
+
+.picker input {
+  width: 100%;
+}
+
+.picker-list {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  max-height: 264px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-md);
+}
+
+.picker-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.picker-option[aria-selected="true"] {
+  background: var(--press);
+}
+
+.picker-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-place {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}

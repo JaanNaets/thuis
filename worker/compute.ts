@@ -3,6 +3,7 @@
 
 import { fieldAccess, typeAccess, visibleData, type Rights } from "../shared/access";
 import { aggregate, computeLocal, fieldDeps, isLinkCalc, type CalcDef } from "../shared/calc";
+import { refLists } from "../shared/fields";
 import type { Attributes, FieldDef, FieldValue } from "../shared/fields";
 import type { Item, ItemType } from "../shared/types";
 import { accessibleProjects, toItemType, type TypeRow } from "./context";
@@ -82,15 +83,19 @@ export async function withCalcs(db: D1Database, personId: string, type: ItemType
     // De verwijzing in dit item moet je zelf ook mogen zien.
     if (own && fieldAccess(rights, type.id, own.key) === "none") continue;
 
+    // Een verwijzing kan naar meer lijsten wijzen: elk gelinkt item met de velden van zijn eigen lijst (op sleutel).
+    const lists = new Set(own ? refLists(own) : []);
+    const listOfRow = async (row: Row) => (lists.has(row.type_id) ? await typeOf(row.type_id) : null);
+
     if (calc.kind === "lookup") {
-      const list = own?.ref_type ? await typeOf(own.ref_type) : null;
-      if (!list) continue;
+      if (!lists.size) continue;
       const values = new Map<string, FieldValue>();
       for (const row of await fetch(
         items.flatMap((i) => idsIn(i.data[calc.via])),
         false,
       )) {
-        const found = await seen(row, list, [], calc.field);
+        const list = await listOfRow(row);
+        const found = list ? await seen(row, list, [], calc.field) : null;
         if (found && !found.hidden && found.data[calc.field] !== undefined) values.set(row.id, found.data[calc.field]);
       }
       for (const item of items) {
@@ -113,8 +118,7 @@ export async function withCalcs(db: D1Database, personId: string, type: ItemType
       else if (found.data[field] !== undefined) linked.get(itemId)!.push(found.data[field]);
     };
     if (calc.from === "links") {
-      const list = own?.ref_type ? await typeOf(own.ref_type) : null;
-      if (!list) continue;
+      if (!lists.size) continue;
       const rows = new Map(
         (
           await fetch(
@@ -126,7 +130,8 @@ export async function withCalcs(db: D1Database, personId: string, type: ItemType
       for (const item of items) {
         for (const id of idsIn(item.data[calc.via])) {
           const row = rows.get(id);
-          const found = row ? await seen(row, list, [], field) : null;
+          const list = row ? await listOfRow(row) : null;
+          const found = row && list ? await seen(row, list, [], field) : null;
           if (found) add(item.id, found);
         }
       }

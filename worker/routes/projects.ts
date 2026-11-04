@@ -11,7 +11,7 @@ import {
   visibleFields,
   type Rights,
 } from "../../shared/access";
-import { cleanFields, type FieldDef } from "../../shared/fields";
+import { cleanFields, refLists, type FieldDef } from "../../shared/fields";
 import { checkCalcs } from "../../shared/calc";
 import {
   cleanTotals,
@@ -115,8 +115,14 @@ function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, ca
   }
   const ids = new Set([...available.map((t) => t.id), selfId]);
   for (const f of fields) {
-    if ((f.type === "item" || f.type === "items") && !ids.has(f.ref_type!))
+    if ((f.type === "item" || f.type === "items") && !refLists(f).every((id) => ids.has(id)))
       throw new ValidationError(`"${f.label}" verwijst naar een lijst die niet (meer) bestaat, of die je niet ziet`);
+    // Aftrekken of bijtellen gebeurt op sleutel: elke lijst moet dat getal hebben.
+    for (const id of f.adjust ? (f.ref_also ?? []) : []) {
+      const other = available.find((t) => t.id === id);
+      if (!other?.fields.some((x) => x.key === f.adjust!.field && x.type === "number"))
+        throw new ValidationError(`"${f.label}" past een getal aan dat ${other?.plural ?? "een van de lijsten"} niet heeft. Kies lijsten met hetzelfde veld.`);
+    }
   }
   try {
     return checkCalcs(
@@ -965,7 +971,7 @@ types.delete("/:id", async (c) => {
   // ziet, wijst daarna nergens meer heen: daar kan je niets meer kiezen, en dat project ziet het bij het aanpassen.
   const seen = new Set((await visibleLists(db, c.get("person").id)).map((l) => l.id));
   const referring = results
-    .filter((r) => seen.has(r.id) && (JSON.parse(r.fields) as FieldDef[]).some((f) => f.ref_type === type.id))
+    .filter((r) => seen.has(r.id) && (JSON.parse(r.fields) as FieldDef[]).some((f) => refLists(f).includes(type.id)))
     .map((r) => r.name);
   if (referring.length) throw new ConflictError(`${referring.join(", ")} verwijst nog naar deze lijst. Haal dat veld eerst weg.`);
   await db.prepare("DELETE FROM item_types WHERE id = ?").bind(type.id).run();

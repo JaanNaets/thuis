@@ -4,3 +4,6 @@ dist
 .dev.vars*
 !.dev.vars.example
 *.tsbuildinfo
+
+# Werkmappen van agents
+.claude/worktrees/

@@ -18,6 +18,7 @@ import {
   type LinkMap,
   type LinkNode,
 } from "../../shared/links";
+import { refLists } from "../../shared/fields";
 import { visibleTotals } from "../../shared/totals";
 import { descendantIds, flattenTree } from "../../shared/tree";
 import type { ItemType } from "../../shared/types";
@@ -77,7 +78,7 @@ projectLinks.get("/:id/links", async (c) => {
   const pointsTo = new Set<string>(shown.map((r) => r.type_id));
   for (const t of mapLists) {
     for (const f of t.fields) {
-      if (f.ref_type) pointsTo.add(f.ref_type);
+      for (const to of refLists(f)) pointsTo.add(to);
       if (f.calc?.kind === "rollup" && f.calc.list) pointsTo.add(f.calc.list);
     }
     for (const total of t.totals) for (const s of total.sources ?? []) pointsTo.add(s);

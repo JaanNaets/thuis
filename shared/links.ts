@@ -7,7 +7,7 @@
 // (geen zware berekening, en niets verspringt als er iets bijkomt).
 
 import { canAgenda } from "./agenda.ts";
-import type { FieldDef } from "./fields.ts";
+import { refLists, type FieldDef } from "./fields.ts";
 import type { IconKey } from "./templates.ts";
 import { totalLabel, type TotalDef } from "./totals.ts";
 import type { Tone } from "./types.ts";
@@ -85,10 +85,10 @@ export function listLinks(list: LinkList, fieldsOf: (listId: string) => FieldDef
     if (from && to && from !== to) out.push({ kind, from, to, texts: [text] });
   };
   for (const f of list.fields) {
-    if ((f.type === "item" || f.type === "items") && f.ref_type) {
+    for (const to of f.type === "item" || f.type === "items" ? refLists(f) : []) {
       if (f.adjust) {
         const by = f.adjust.by ? labelOf(list.fields, f.adjust.by) : "1";
-        const target = labelOf(fieldsOf(f.ref_type), f.adjust.field);
+        const target = labelOf(fieldsOf(to), f.adjust.field);
         const text =
           f.adjust.sign < 0
             ? by && target
@@ -97,16 +97,16 @@ export function listLinks(list: LinkList, fieldsOf: (listId: string) => FieldDef
             : by && target
               ? `Telt ${by} bij ${target}`
               : "Telt bij";
-        add("adjust", list.id, f.ref_type, text);
+        add("adjust", list.id, to, text);
       } else {
-        add("ref", list.id, f.ref_type, f.copy ? `Verwijst met ${f.label} en neemt over` : `Verwijst met ${f.label}`);
+        add("ref", list.id, to, f.copy ? `Verwijst met ${f.label} en neemt over` : `Verwijst met ${f.label}`);
       }
     }
     if (f.type === "calc" && f.calc) {
       const c = f.calc;
       if (c.kind === "lookup" || (c.kind === "rollup" && c.from === "links")) {
         const via = list.fields.find((x) => x.key === c.via);
-        add("calc", via?.ref_type, list.id, `Levert ${f.label}`);
+        for (const from of via ? refLists(via) : []) add("calc", from, list.id, `Levert ${f.label}`);
       } else if (c.kind === "rollup" && c.from === "backlinks") {
         add("calc", c.list, list.id, `Levert ${f.label}`);
       }

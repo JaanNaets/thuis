@@ -108,6 +108,13 @@ export type FieldDef = {
   unit?: string;
   /** Verwijzing: naar items van deze lijst. */
   ref_type?: string;
+  /**
+   * Verwijzing: ook naar items van deze lijsten, uit eender welk project dat de bewerker ziet (bv. de voorraad van
+   * twee huizen). Overnemen en aftrekken gebeuren op sleutel, dus die lijsten hebben dezelfde velden nodig.
+   */
+  ref_also?: string[];
+  /** Verwijzing (één): mag ook vrije tekst zijn als er niets past; die staat dan als { text } in de waarde. */
+  free?: boolean;
   /** Barcode/QR: het formaat als je zelf een nummer typt. */
   format?: CodeFormat;
   /** Als kolom in de lijst. */
@@ -151,6 +158,8 @@ export type FieldDef = {
 /** Een persoon met zijn aandeel in procent (samen 100). */
 export type Share = { person_id: string; share: number };
 export type CodeValue = { text: string; format: CodeFormat };
+/** Vrije tekst in een verwijzing met `free` (er was geen passend item). */
+export type TextValue = { text: string };
 
 /**
  * text, longtext, url, email, phone, address, select, date, time ("18:30"), person (id), item (id): tekst ·
@@ -166,6 +175,7 @@ export type FieldValue =
   | [number | null, number | null]
   | [string | null, string | null]
   | CodeValue
+  | TextValue
   | Share[]
   | Interval
   | ChecklistEntry[];
@@ -223,6 +233,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (type === "item" || type === "items") {
       if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke lijst "${label}" verwijst`);
       def.ref_type = f.ref_type.slice(0, 64);
+      const also = Array.isArray(f.ref_also)
+        ? [...new Set(f.ref_also.filter((x): x is string => typeof x === "string" && ID_RE.test(x) && x !== def.ref_type))].slice(0, MAX_REF_LISTS - 1)
+        : [];
+      if (also.length) def.ref_also = also;
+      if (f.free === true && type === "item") def.free = true;
     }
     if (type === "calc") {
       // Enkel de vorm; wat erin staat, kijkt shared/calc.ts na (die kent ook de andere lijsten).
@@ -324,8 +339,13 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
       return { text, format: isCodeFormat(v.format) ? v.format : (def.format ?? "qr_code") };
     }
     case "person":
-    case "item":
       return typeof value === "string" && ID_RE.test(value) ? value : null;
+    case "item": {
+      // Een id (de API kijkt na dat het item bestaat en dat je het ziet), of met `free` vrije tekst als { text }.
+      if (typeof value === "string") return ID_RE.test(value) ? value : null;
+      const text = def.free && typeof value === "object" ? (value as { text?: unknown }).text : undefined;
+      return typeof text === "string" ? textValue(text) : null;
+    }
     case "share": {
       try {
         const shares = normalizeShares(value);
@@ -415,12 +435,19 @@ export function referencedPeople(defs: FieldDef[], data: Attributes): string[] {
   return [...ids];
 }
 
-/** De items waarnaar waarden verwijzen, met de lijst waarnaar het veld wijst. */
-export function referencedItems(defs: FieldDef[], data: Attributes): { id: string; ref_type: string; key: string }[] {
+/** De lijsten waarnaar een verwijzing mag wijzen: de eerste, en de andere die je erbij koos. */
+export const refLists = (def: Pick<FieldDef, "ref_type" | "ref_also">): string[] => (def.ref_type ? [def.ref_type, ...(def.ref_also ?? [])] : []);
+/** Zoveel lijsten voor één verwijzing. */
+export const MAX_REF_LISTS = 10;
+
+const textValue = (text: string): TextValue | null => (text.trim() ? { text: text.trim().slice(0, 200) } : null);
+
+/** De items waarnaar waarden verwijzen, met de lijsten waarnaar het veld mag wijzen (vrije tekst telt niet). */
+export function referencedItems(defs: FieldDef[], data: Attributes): { id: string; lists: string[]; key: string }[] {
   return defs.flatMap((d) => {
     const v = data[d.key];
-    if (d.type === "item" && typeof v === "string") return [{ id: v, ref_type: d.ref_type!, key: d.key }];
-    if (d.type === "items" && Array.isArray(v)) return (v as string[]).map((id) => ({ id, ref_type: d.ref_type!, key: d.key }));
+    if (d.type === "item" && typeof v === "string") return [{ id: v, lists: refLists(d), key: d.key }];
+    if (d.type === "items" && Array.isArray(v)) return (v as string[]).map((id) => ({ id, lists: refLists(d), key: d.key }));
     return [];
   });
 }
@@ -639,7 +666,7 @@ export function formatFieldValue(def: FieldDef, value: FieldValue | undefined, n
     case "person":
       return typeof value === "string" ? names.person(value) : "";
     case "item":
-      return typeof value === "string" ? names.item(value) : "";
+      return typeof value === "string" ? names.item(value) : value && typeof value === "object" && "text" in value ? value.text : "";
     case "share":
       return Array.isArray(value) ? sharesText(value as Share[], names.person) : "";
     case "people":

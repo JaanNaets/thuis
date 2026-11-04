@@ -9,7 +9,7 @@
 // De API kijkt elke berekening na (`checkCalcs`) en zet de soort van de uitkomst (`result`). Uitrekenen gebeurt bij
 // het lezen; niets wordt bewaard. Opzoeken en samenvatten doet de Worker (die weet wat je mag zien).
 
-import type { Attributes, FieldDef, FieldType, FieldValue, Interval, IntervalUnit } from "./fields.ts";
+import { refLists, type Attributes, type FieldDef, type FieldType, type FieldValue, type Interval, type IntervalUnit } from "./fields.ts";
 import { evalFormula, FORMULA_MAX, formulaRefs, inferFormula, mapRefs, parseFormula, printFormula, type FKind } from "./formula.ts";
 
 export type Operand = { field: string } | { value: number };
@@ -434,7 +434,7 @@ function resultOf(
       } else {
         list = listById(calc.list);
         const via = list?.fields.find((x) => x.key === calc.via);
-        if (!list || !via || (via.type !== "item" && via.type !== "items") || via.ref_type !== selfId)
+        if (!list || !via || (via.type !== "item" && via.type !== "items") || !refLists(via).includes(selfId))
           fail("kies een lijst met een Verwijzing naar deze lijst");
       }
       if (!list) fail("de gelinkte lijst bestaat hier niet");

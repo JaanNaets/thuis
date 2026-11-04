@@ -9,7 +9,9 @@ import {
   matchName,
   missingRequired,
   referencedItems,
+  MAX_REF_LISTS,
   referencedPeople,
+  refLists,
   repeatData,
   type Attributes,
   type FieldDef,
@@ -155,7 +157,7 @@ async function prepareData(
     for (const ref of refs) {
       const target = await db.prepare("SELECT id, project_id, type_id FROM items WHERE id = ?").bind(ref.id).first<{ project_id: string; type_id: string }>();
       const label = type.fields.find((f) => f.key === ref.key)?.label ?? ref.key;
-      if (!target || target.type_id !== ref.ref_type || !canSee(target)) throw new ValidationError(`Kies bij "${label}" een item dat bestaat.`);
+      if (!target || !ref.lists.includes(target.type_id) || !canSee(target)) throw new ValidationError(`Kies bij "${label}" een item dat bestaat.`);
     }
   }
 
@@ -417,20 +419,23 @@ projectItems.get("/:id/items/export", async (c) => {
 // ---------- één item ----------
 
 /** Keuzes voor een verwijzing: alle items van een lijst (?type=) die je mag zien, in al je projecten. */
+/** De items om uit te kiezen bij een verwijzing (?type=lijst, of meer lijsten met komma's), enkel waar je ze ziet. */
 items.get("/", async (c) => {
-  const typeId = c.req.query("type");
-  if (!typeId) throw new ValidationError("Kies een lijst");
+  const typeIds = [...new Set((c.req.query("type") ?? "").split(",").filter(Boolean))].slice(0, MAX_REF_LISTS);
+  if (!typeIds.length) throw new ValidationError("Kies een lijst");
   const db = c.env.DB;
-  const nodes = (await accessibleProjects(db, c.get("person").id)).filter((n) => typeAccess(n.rights, typeId) !== "none");
-  if (!nodes.length) return c.json([]);
+  const nodes = await accessibleProjects(db, c.get("person").id);
+  const allowed = new Set(nodes.flatMap((n) => typeIds.filter((t) => typeAccess(n.rights, t) !== "none").map((t) => `${t}/${n.id}`)));
+  if (!allowed.size) return c.json([]);
   const { results } = await db
     .prepare(
-      `SELECT id, name, type_id, project_id FROM items WHERE type_id = ? AND archived = 0 AND project_id IN (SELECT value FROM json_each(?))
+      `SELECT id, name, type_id, project_id FROM items
+       WHERE type_id IN (SELECT value FROM json_each(?1)) AND archived = 0 AND project_id IN (SELECT value FROM json_each(?2))
        ORDER BY name COLLATE NOCASE LIMIT 2000`,
     )
-    .bind(typeId, JSON.stringify(nodes.map((n) => n.id)))
+    .bind(JSON.stringify(typeIds), JSON.stringify([...new Set([...allowed].map((k) => k.split("/")[1]))]))
     .all<ItemRef>();
-  return c.json(results);
+  return c.json(results.filter((r) => allowed.has(`${r.type_id}/${r.project_id}`)));
 });
 
 items.get("/:id", async (c) => c.json(await loadDetail(c, c.req.param("id"))));
@@ -764,8 +769,8 @@ async function matchRefs(
   for (const f of wanted) {
     const name = (parsed[f.key] as string).trim().slice(0, 120);
     const { results } = await db
-      .prepare("SELECT id, name, project_id, type_id FROM items WHERE type_id = ? AND archived = 0")
-      .bind(f.ref_type)
+      .prepare("SELECT id, name, project_id, type_id FROM items WHERE type_id IN (SELECT value FROM json_each(?)) AND archived = 0")
+      .bind(JSON.stringify(refLists(f)))
       .all<{ id: string; name: string; project_id: string; type_id: string }>();
     const found = matchName(
       results.filter((r) => canSee(r)),

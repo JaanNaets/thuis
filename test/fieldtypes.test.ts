@@ -101,8 +101,8 @@ test("personen, verwijzingen en takenlijst", () => {
   const defs = [def("people"), { ...def("items", { ref_type: "t" }), key: "w" }];
   assert.deepEqual(referencedPeople(defs, { v: ["a", "b"] }), ["a", "b"]);
   assert.deepEqual(referencedItems(defs, { w: ["i1", "i2"] }), [
-    { id: "i1", ref_type: "t", key: "w" },
-    { id: "i2", ref_type: "t", key: "w" },
+    { id: "i1", lists: ["t"], key: "w" },
+    { id: "i2", lists: ["t"], key: "w" },
   ]);
   const names = { person: (id: string) => id.toUpperCase(), item: (id: string) => `#${id}` };
   assert.equal(formatFieldValue(def("people"), ["a", "b"], names), "A, B");

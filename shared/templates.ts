@@ -51,7 +51,7 @@ export function isIconKey(value: unknown): value is IconKey {
  * Een veld in een sjabloon: een verwijzing wijst naar een andere lijst via haar sleutel (`ref`); een samenvatting
  * van wat hiernaar verwijst ook (`calc.list` is dan een sleutel).
  */
-export type TemplateField = Omit<FieldDef, "ref_type" | "result"> & {
+export type TemplateField = Omit<FieldDef, "ref_type" | "ref_also" | "result"> & {
   ref?: string;
   /** Een eenvoudigere berekening als deze niet kan (bv. Eten zonder Gerechten: de kcal enkel uit kcal per 100 g). */
   alt?: CalcDef;

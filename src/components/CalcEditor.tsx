@@ -18,7 +18,7 @@ import {
   type Operand,
   type SinceUnit,
 } from "../../shared/calc";
-import { INTERVAL_UNITS, type FieldDef, type FieldType, type IntervalUnit } from "../../shared/fields";
+import { INTERVAL_UNITS, refLists, type FieldDef, type FieldType, type IntervalUnit } from "../../shared/fields";
 import { Segmented } from "./Controls";
 import { Tip } from "./Tip";
 
@@ -383,7 +383,7 @@ function Rollup({
   // Wat naar deze lijst verwijst: per lijst de velden met een verwijzing hierheen.
   const pointing = [...lists, listFor(selfId)!].flatMap((l) =>
     l.fields
-      .filter((f) => (f.type === "item" || f.type === "items") && (f.ref_type === selfId || f.ref_type === "self") && f.key !== self)
+      .filter((f) => (f.type === "item" || f.type === "items") && (refLists(f).includes(selfId) || f.ref_type === "self") && f.key !== self)
       .map((f) => ({ list: l, field: f })),
   );
   const target = calc.from === "links" ? listFor(others.find((f) => f.key === calc.via)?.ref_type) : listFor(calc.list);
