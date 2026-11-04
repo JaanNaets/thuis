@@ -112,11 +112,14 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
     const w = fold(words[i]);
     const next = fold(words[i + 1] ?? "");
 
-    // Een datum gaat naar het eerste lege datumveld; zonder plaats valt ze weg (nooit in de naam).
+    // Datums in volgorde: de eerste naar het eerste lege datumveld, de tweede naar het tweede, ... Zijn die op, dan
+    // vullen ze een periode (van, dan tot). Zonder plaats valt een datum weg (nooit in de naam).
     const date = readDate(words.slice(i, i + 2), ctx.today);
     if (date && free(i, date.n)) {
       const target = firstEmpty("date");
+      const range = fields.find((f) => f.type === "date_range" && (empty(f) || (data[f.key] as [string, string | null])[1] === null));
       if (target) data[target.key] = date.date;
+      else if (range) data[range.key] = empty(range) ? [date.date, null] : [(data[range.key] as [string, null])[0], date.date];
       take(i, date.n);
       continue;
     }

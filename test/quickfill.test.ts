@@ -77,3 +77,16 @@ test("een datum zonder datumveld komt niet in de naam", () => {
   assert.deepEqual(r.data, { wat: "i1" });
   assert.equal(r.name, "Komkommer");
 });
+
+test("meer datums: in de volgorde van de datumvelden, daarna een periode", () => {
+  const velden: FieldDef[] = [
+    { key: "gekocht", label: "Gekocht", type: "date" },
+    { key: "geleverd", label: "Geleverd", type: "date" },
+    { key: "garantie", label: "Garantie tot", type: "date" },
+  ];
+  assert.deepEqual(quickFill("1-10 5-10 1-10-2028", velden, ctx).data, { gekocht: "2026-10-01", geleverd: "2026-10-05", garantie: "2028-10-01" });
+  const reis: FieldDef[] = [{ key: "wanneer", label: "Wanneer", type: "date_range" }];
+  assert.deepEqual(quickFill("12-7 26-7 toscane", reis, ctx).data, { wanneer: ["2026-07-12", "2026-07-26"] });
+  // Een periode met één datum blijft open aan de kant die je niet gaf (het formulier vraagt de rest).
+  assert.deepEqual(quickFill("12-7 toscane", reis, ctx).data, { wanneer: ["2026-07-12", null] });
+});
