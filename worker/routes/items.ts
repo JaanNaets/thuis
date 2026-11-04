@@ -61,7 +61,7 @@ export function toItem(row: ItemRow, rights: Rights, type: ItemType): Item {
  * Wat je overal mag zien: per project je rechten, om verwijzingen naar items elders te tonen (of niet). Met `key`:
  * ook dat veld van het item moet je mogen zien.
  */
-async function visibility(db: D1Database, personId: string) {
+export async function visibility(db: D1Database, personId: string) {
   const nodes = await accessibleProjects(db, personId);
   const rights = new Map(nodes.map((n) => [n.id, n.rights]));
   return (row: { project_id: string; type_id: string }, key?: string) => {

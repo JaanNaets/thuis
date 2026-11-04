@@ -249,6 +249,14 @@ Wie het bestand krijgt, kiest bij **Nieuw project → Uit een bestand**, of voeg
 project bij **Instellen → Lijsten → Uit sjabloon → Uit een bestand**. Verwijst een lijst naar een andere (de wijnen
 naar de verkopers) en bestaat die erboven al, dan wordt die gebruikt. De app en de API kijken alles na wat binnenkomt.
 
+### Back-up
+
+Bij **Jouw gegevens** → **Back-up** → **Downloaden** bewaar je één bestand met alles van de projecten die je helemaal
+beheert: subprojecten, lijsten, items, tags, rollen, mensen, logboek, herhalingen en weergaven, en welke foto's en
+bestanden erbij horen. **Terugzetten** zet zo'n bestand er altijd als kopie bij: er wordt niets overschreven, en jij
+beheert de kopie. Foto's en bestanden komen mee zolang het origineel er nog staat. Aantallen staan zoals in de
+back-up: wat een item aftrok of bijtelde, gebeurt niet opnieuw.
+
 ### Mensen en rollen
 
 Elk project heeft rollen. Er zijn er drie om mee te beginnen:

@@ -94,7 +94,7 @@ function parseProjectInput(body: unknown) {
  * Velden van een lijst nakijken, met verwijzingen naar lijsten die je kan kiezen (zie `fieldListsFor`). "self" verwijst
  * naar de lijst zelf (een plaats die in een andere plaats ligt).
  */
-function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available): FieldDef[] {
+export function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available): FieldDef[] {
   let fields: FieldDef[];
   try {
     const list = Array.isArray(raw)
@@ -238,7 +238,7 @@ function cleanTypeTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
 }
 
 /** Totalen die je niet aanraakte: wat niet meer bij de velden past (een veld is weg), valt weg. */
-function keepTotals(totals: TotalDef[], fields: FieldDef[]): TotalDef[] {
+export function keepTotals(totals: TotalDef[], fields: FieldDef[]): TotalDef[] {
   return totals.flatMap((t) => {
     try {
       return cleanTotals([t], fields);
@@ -252,7 +252,7 @@ function keepTotals(totals: TotalDef[], fields: FieldDef[]): TotalDef[] {
 const rootOf = (access: ProjectAccess) => access.chain[access.chain.length - 1];
 
 /** Een lidmaatschap. Staat het project bovenaan je overzicht, dan komt het daar achteraan. */
-function insertMembership(db: D1Database, projectId: string, personId: string, roleId: string) {
+export function insertMembership(db: D1Database, projectId: string, personId: string, roleId: string) {
   return db
     .prepare(
       `INSERT INTO memberships (project_id, person_id, role_id, sort_order)

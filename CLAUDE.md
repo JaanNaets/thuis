@@ -86,6 +86,13 @@ commits en uitleg.
   het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
   die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,
   `shared/webpush.ts`) gaan enkel naar de pushdiensten van de browsers (`isPushEndpoint`).
+- **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`, op Jouw gegevens): enkel de projecten waar je alles
+  beheert (`manage` én `members`), met wat je ziet (`visibleFields`, `visibleData`, `visibleTotals`); nooit `applied`,
+  een rekeningnummer of andermans eigen weergaven. Terugzetten maakt altijd een nieuwe kopie (`freshIds`, `remap`) en
+  kijkt alles na zoals bij gewoon invoeren (`cleanTypeFields`, `cleanAttributes`, personen uit het project,
+  verwijzingen die bestaan en die je ziet); wat niet klopt, valt weg. Foto's en bestanden enkel uit items die nog
+  bestaan en die je ziet. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES` waarom
+  niet; `test/backup.test.ts` leest de migraties na).
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.

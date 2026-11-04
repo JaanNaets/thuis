@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { formatIban, isValidIban } from "../../shared/payment";
 import type { Person, Tone } from "../../shared/types";
 import { api } from "../api";
+import { BackupCard } from "../components/Backup";
 import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { NotificationsCard } from "../components/Notifications";
@@ -14,8 +15,8 @@ import { useSession } from "../session";
 
 /**
  * Jouw naam, kleur en rekeningnummer (voor de betaal-QR, enkel te zien voor wie met jou een project deelt), je
- * meldingen en de volgorde van je projecten op het overzicht. Je e-mailadres komt van je aanmelding. Biedt de
- * browser het aan, dan staat bovenaan een knop om de app te installeren.
+ * meldingen, de volgorde van je projecten op het overzicht en een back-up. Je e-mailadres komt van je aanmelding. Biedt
+ * de browser het aan, dan staat bovenaan een knop om de app te installeren.
  */
 export function MePage() {
   const { person, projects, reloadMe } = useSession();
@@ -95,6 +96,8 @@ export function MePage() {
           <ProjectOrder nodes={tops} />
         </section>
       )}
+
+      <BackupCard />
     </form>
   );
 }
