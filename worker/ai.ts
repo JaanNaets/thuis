@@ -25,7 +25,7 @@ export async function useAiBudget(env: Env, personId: string): Promise<string | 
        RETURNING calls`,
     ).bind(personId),
   ])) as D1Result<{ calls: number }>[];
-  if ((mine.results[0]?.calls ?? Infinity) > AI_PERSON_LIMIT) return `Je hebt vandaag al ${AI_PERSON_LIMIT} foto's laten lezen. Vul het zelf in.`;
+  if ((mine.results[0]?.calls ?? Infinity) > AI_PERSON_LIMIT) return `Je hebt vandaag al ${AI_PERSON_LIMIT} keer laten lezen. Vul het zelf in.`;
   if ((all.results[0]?.calls ?? Infinity) > AI_DAILY_LIMIT) return "De daglimiet voor automatisch lezen is bereikt. Vul het zelf in.";
   return null;
 }

@@ -418,9 +418,10 @@ mee in Wie moet wie), **berekeningen** (Laatst bijgevuld komt uit Bijvullen), **
 lijst als **tab** in een subproject. Lijsten in andere projecten staan rechts onder "Elders". Kies een lijst en je
 ziet wat erop inwerkt en waar ze op inwerkt; de soorten zet je aan en uit met de filters.
 
-**Verbanden** in het menu toont hetzelfde over al je projecten heen: enkel de lijnen tussen verschillende projecten
-(bv. Eten in Voeding dat aftrekt van de voorraad in de Slachterijstraat én in de Kerkstraat). Een kolom opent de
-kaart van dat project.
+**Verbanden** in het menu toont het hele web over al je projecten heen: elk project en subproject met verbanden is
+een kolom (bv. Eten in Voeding dat aftrekt van de voorraad in de Slachterijstraat én in de Kerkstraat). Een kolom
+opent de kaart van dat project; bij heel veel projecten staan die met de meeste verbanden op de kaart en de rest bij
+naam.
 
 Niets hiervan wordt bewaard: de kaart volgt uit de velden, berekeningen en totalen van de lijsten, en toont enkel wat
 jij mag zien (een lijst, veld of project dat je niet ziet, staat er niet op). Ze blijft licht, ook met 1000 projecten:
@@ -456,6 +457,15 @@ Elke ochtend om 7 uur (8 uur in de zomer) doet de app twee dingen (`worker/cron.
 Meldingen gaan via de pushdienst van je browser (Google, Apple, Mozilla, Microsoft), versleuteld zodat enkel je
 toestel ze kan lezen (RFC 8291, `shared/webpush.ts`). De sleutels van de app maakt de Worker de eerste keer zelf en
 bewaart ze in de database (`settings`); er is niets in te stellen.
+
+### Snel invullen: typ wat je weet
+
+Bovenaan het formulier van een nieuw item typ je wat je weet en tik je **Invullen** (of Enter): "21-10 eten komkommer
+200 g" zet de datum, Wat (uit je voorraad, of als vrije tekst) en Hoeveel. De app doet dat zelf: datums ("21-10",
+"gisteren", "maandag", "21 okt"), uren, bedragen ("€ 5,20", "12 euro"), getallen met hun eenheid, keuzes, personen,
+items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet. Typ je een hele zin ("ik at gisteren
+een halve pizza op restaurant"), dan leest de gratis AI van Cloudflare ze (met dezelfde daglimiet als een foto); wat
+de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
 
 ### Een foto lezen: etiket, kasticket, factuur, product
 

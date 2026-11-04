@@ -159,6 +159,10 @@ export function attributesDraft(defs: FieldDef[], attributes: Attributes): Attri
       case "calc":
         // Wordt uitgerekend, niet ingevuld.
         break;
+      case "item":
+        // Een id, of vrije tekst ({ text }) bij een verwijzing met `free`.
+        draft[def.key] = typeof v === "string" ? v : v && typeof v === "object" && "text" in v ? { text: String(v.text) } : "";
+        break;
       default:
         draft[def.key] = v === undefined || v === null ? "" : String(v);
     }
@@ -473,6 +477,7 @@ export function FieldInputs({
                   value={typeof raw === "string" ? raw || null : raw && typeof raw === "object" && "text" in raw ? { text: String(raw.text) } : null}
                   onChange={(v) => set(def.key, v ?? "")}
                   disabled={disabled}
+                  className={cls}
                 />
               </div>
             );
@@ -1566,6 +1571,7 @@ export function LabelScanner({
   onResult,
   onProduct,
   onCreate,
+  onText,
 }: {
   projectId: string;
   typeId: string;
@@ -1576,6 +1582,8 @@ export function LabelScanner({
   onProduct?: (info: ProductInfo, code: string | null, photo: File | null) => void;
   /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
   onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
+  /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
+  onText?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1584,7 +1592,6 @@ export function LabelScanner({
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
   const [note, setNote] = useState("");
-  const [explain, setExplain] = useState(false);
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
@@ -1645,6 +1652,20 @@ export function LabelScanner({
     }
   }
 
+  /** Getypte tekst invullen: eerst met code, een zin met de AI (zie ItemForm en shared/quickfill.ts). */
+  async function fill() {
+    if (!onText || !note.trim()) return;
+    setSuggestions([]);
+    setStatus({ tone: "busy", text: "Invullen" });
+    try {
+      const done = await onText(note.trim());
+      setSuggestions(done.create ?? []);
+      setStatus(done.message ? { tone: "none", text: done.message } : undefined);
+    } catch (err) {
+      setStatus({ tone: "none", text: (err as Error).message });
+    }
+  }
+
   async function create(s: NonNullable<LabelScan["create"]>[number]) {
     if (await onCreate!(s)) setSuggestions((list) => list.filter((x) => x !== s));
   }
@@ -1665,18 +1686,27 @@ export function LabelScanner({
 
   return (
     <div className="scan-buttons">
-      {explain && (
-        <label className="field">
-          <span className="label">Uitleg bij de foto</span>
-          <input
-            autoFocus
-            value={note}
-            maxLength={200}
-            placeholder={products ? "bv. ik at de helft, met havermelk" : "bv. enkel de boodschappen, niet de tankbeurt"}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
-      )}
+      {/* Typen: op zichzelf (Invullen of Enter), of als uitleg bij een foto. */}
+      <div className="picker-row">
+        <input
+          value={note}
+          maxLength={300}
+          aria-label="Typ wat je weet"
+          placeholder={products ? "Typ wat je weet, bv. 21-10 komkommer 200 g" : "Typ wat je weet, bv. 21-10 colruyt 23,40 euro"}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && onText) {
+              e.preventDefault();
+              fill();
+            }
+          }}
+        />
+        {onText && (
+          <button type="button" className="btn btn-outline" style={{ flex: "none" }} disabled={!note.trim() || status?.tone === "busy"} onClick={fill}>
+            Invullen
+          </button>
+        )}
+      </div>
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto
@@ -1687,11 +1717,6 @@ export function LabelScanner({
         {products && (
           <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
             <Icon name="scan" /> Barcode
-          </button>
-        )}
-        {!explain && (
-          <button type="button" className="btn btn-ghost" onClick={() => setExplain(true)}>
-            Met uitleg
           </button>
         )}
       </div>

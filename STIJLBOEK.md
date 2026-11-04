@@ -451,7 +451,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand · Met uitleg, dat pas dan een veld "Uitleg bij de foto" toont): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Boven de knoppen een optioneel veld "Uitleg voor de AI" ("ik at de helft"); pas je dat na het lezen aan, dan verschijnt "Opnieuw lezen met deze uitleg". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
+| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" met **Invullen** (of Enter), daaronder Foto · Uit bestand (· Barcode). Wat je typt, is ook de uitleg bij een foto. Invullen gaat eerst met code (`shared/quickfill.ts`: datums, uren, bedragen, getallen met eenheid, keuzes, personen, items, ja/nee; de naam van de lijst telt niet), een hele zin met de AI (`POST /projects/:id/items/read`); wat de code vond, wint. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
 | `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
@@ -707,8 +707,8 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList` (`LinkMap.tsx`)
 
 De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen), en over al je
-projecten (`/verbanden`, in de zijbalk onder Agenda): daar is elke kolom een hoofdproject en staan enkel de lijnen
-ertussen. Bovenaan `Tabs`
+projecten (`/verbanden`, in de zijbalk onder Agenda): daar is elk project (ook een subproject) met verbanden een
+kolom, zonder agenda of Wie moet wie. Bovenaan `Tabs`
 **Kaart · Lijst** (op gsm begint het met Lijst), daaronder een `FilterToggle` per soort verband met het streepje in
 zijn kleur (`.lm-swatch`).
 

@@ -789,6 +789,64 @@ async function matchRefs(
 }
 
 /**
+ * Getypte tekst lezen in de velden van een lijst ("ik at gisteren een halve pizza op restaurant"), als de app het zelf
+ * niet kon plaatsen (zie shared/quickfill.ts). Zelfde AI en zelfde daglimiet als een foto; enkel velden die je mag
+ * invullen, nagekeken zoals al de rest.
+ */
+projectItems.post("/:id/items/read", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  const obj = asObject(await c.req.json());
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === obj.type_id);
+  if (!type || !canEditType(access.rights, type.id)) throw new ValidationError("Die lijst bestaat hier niet.");
+  const text = typeof obj.text === "string" ? obj.text.trim().replace(/\s+/g, " ").slice(0, 300) : "";
+  const today = typeof obj.today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(obj.today) ? obj.today : new Date().toISOString().slice(0, 10);
+  const empty: LabelScan = { name: null, data: {} };
+  if (!text) return c.json(empty);
+  const limit = await useAiBudget(c.env, c.get("person").id);
+  if (limit) return c.json({ ...empty, message: limit });
+  const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
+  const schema = labelSchema(fields);
+  const prompt = `Je krijgt een korte notitie van iemand die iets bijhoudt in de lijst "${type.plural}". Haal er de velden uit.
+Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
+- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)
+${fields.map(describeField).join("\n")}`;
+  try {
+    const result = await c.env.AI.run(MODEL, {
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: text },
+      ],
+      response_format: { type: "json_schema", json_schema: { name: "note", schema, strict: true } },
+      chat_template_kwargs: { enable_thinking: false },
+      temperature: 0,
+      max_tokens: 400,
+    });
+    const content = result.choices?.[0]?.message?.content;
+    const parsed = ((typeof content === "string" ? safeJson(content) : content) ?? {}) as Record<string, unknown>;
+    const raw: Record<string, unknown> = {};
+    for (const f of fields) {
+      if (f.type === "year_range") raw[f.key] = [parsed[`${f.key}_from`] ?? null, parsed[`${f.key}_to`] ?? null];
+      else if (f.type === "money") raw[f.key] = typeof parsed[f.key] === "number" ? Math.round((parsed[f.key] as number) * 100) : null;
+      else if (f.type !== "item") raw[f.key] = parsed[f.key];
+    }
+    const refs = await matchRefs(db, c.get("person").id, fields, parsed);
+    Object.assign(raw, refs.data);
+    // Een verwijzing met vrije tekst: wat niet bij een item past, blijft als tekst staan.
+    for (const f of fields) {
+      if (f.type === "item" && f.free && !(f.key in refs.data) && typeof parsed[f.key] === "string" && (parsed[f.key] as string).trim())
+        raw[f.key] = { text: parsed[f.key] };
+    }
+    const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
+    const create = refs.create.filter((r) => !fields.find((f) => f.key === r.key)?.free);
+    return c.json({ name, data: cleanAttributes(fields, raw), ...(create.length ? { create } : {}) } satisfies LabelScan);
+  } catch (err) {
+    console.error("Tekst lezen mislukt", err);
+    return c.json({ ...empty, message: "Lezen lukte niet. Vul het zelf in." } satisfies LabelScan);
+  }
+});
+
+/**
  * Een foto lezen in de velden van een lijst (die je mag invullen): een etiket, typeplaatje, kasticket of factuur, of
  * bij een lijst met productinfo het product of gerecht dat erop staat (met de echte gegevens van een gekend product).
  */

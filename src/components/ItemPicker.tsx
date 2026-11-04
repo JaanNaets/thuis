@@ -39,6 +39,7 @@ function Combo({
   exclude = [],
   disabled,
   placeholder,
+  className,
 }: {
   label: string;
   text: string;
@@ -50,6 +51,7 @@ function Combo({
   exclude?: string[];
   disabled: boolean;
   placeholder: string;
+  className?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -85,6 +87,7 @@ function Combo({
     <div className="picker">
       <input
         role="combobox"
+        className={className}
         aria-label={label}
         aria-expanded={open && matches.length > 0}
         aria-controls={`${id}-list`}
@@ -138,11 +141,14 @@ export function ItemPicker({
   value,
   onChange,
   disabled,
+  className,
 }: {
   def: FieldDef;
   value: string | TextValue | null;
   onChange: (value: string | TextValue | null) => void;
   disabled: boolean;
+  /** Bv. `auto`: de app vulde het in. */
+  className?: string;
 }) {
   const { options, error, placeOf } = useItemOptions(def);
   const chosen = typeof value === "string" ? options?.find((o) => o.id === value) : undefined;
@@ -161,6 +167,7 @@ export function ItemPicker({
           placeOf={placeOf}
           disabled={disabled}
           placeholder={def.free ? "Typ of kies…" : "Zoek of kies…"}
+          className={className}
           onText={(t) => {
             setDraft(t);
             if (def.free) onChange(t.trim() ? { text: t } : null);

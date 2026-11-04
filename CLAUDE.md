@@ -53,6 +53,9 @@ commits en uitleg.
 - **Sjablonen delen** (`shared/template-file.ts`): een bestand zonder items, mensen, rollen of standaardverdelingen.
   Wat binnenkomt, gaat door `parseTemplateFile`; verwijzingen wijzen enkel naar lijsten uit het sjabloon (in hetzelfde
   project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
+- **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
+  velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
+  en wat de code vond, wint. Alles daarna gewoon door het formulier en `prepareData`.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
@@ -67,8 +70,8 @@ commits en uitleg.
 - **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
   verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item), enkel ids, nagekeken met `cleanBlocks`. Een
   blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (elk project).
-- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor de lijnen
-  tussen je hoofdprojecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
+- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor het hele web
+  over al je projecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
   ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van
   `FieldDef`, `TotalDef` en elke soort berekening staat in `FIELD_LINKS`, `TOTAL_LINKS` of `CALC_LINKS` (TypeScript
   weigert te bouwen tot een nieuwe erin staat); wat lijsten verbindt (`true`), toont `listLinks`, met een voorbeeld in

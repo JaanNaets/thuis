@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
+import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
+import { quickFill } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
-import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
+import type { ItemDetail, ItemInput, ItemList, ItemRef, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
 import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
@@ -216,15 +217,40 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   }
 
   // Wat van het etiket gelezen werd, komt enkel in velden die je nog niet zelf invulde.
-  function applyScan(scan: LabelScan, file: File, pdf: File | null = null) {
-    setPhoto(file);
-    setOriginal(pdf);
+  function applyScan(scan: LabelScan, file?: File, pdf: File | null = null) {
+    if (file) {
+      setPhoto(file);
+      setOriginal(pdf);
+    }
     if (!item) setMore({ items: (scan.more ?? []).map((m) => ({ ...m, on: true })), keys: Object.keys(scan.data) });
     if (scan.name && !touched.current.has("name")) setName(scan.name);
     const scanned = attributesDraft(fields, scan.data);
     const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k));
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, scanned[k]])) }));
     setAuto(new Set([...keys, ...(scan.name ? ["name"] : [])]));
+  }
+
+  /**
+   * Getypte tekst invullen ("21-10 komkommer 200 g"): eerst met code (shared/quickfill.ts); is wat overblijft een zin,
+   * dan leest de AI het (wat de code vond, wint). Enkel velden die je mag wijzigen.
+   */
+  async function fillText(text: string): Promise<{ message?: string; create?: LabelScan["create"] }> {
+    const editable = fields.filter((f) => type.field_access[f.key] === "edit");
+    const refs = editable.filter((f) => f.type === "item" || f.type === "items");
+    const options = new Map(
+      await Promise.all(refs.map(async (f) => [f.key, await api.get<ItemRef[]>(`/items?type=${refLists(f).join(",")}`).catch(() => [])] as const)),
+    );
+    const quick = quickFill(text, editable, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural] });
+    let scan: LabelScan = { name: quick.name, data: quick.data };
+    let message: string | undefined;
+    if (quick.sentence) {
+      const ai = await api.post<LabelScan>(`/projects/${project.project.id}/items/read`, { type_id: type.id, text, today: today() });
+      scan = { name: ai.name ?? scan.name, data: { ...ai.data, ...quick.data }, ...(ai.create ? { create: ai.create } : {}) };
+      message = ai.message;
+    }
+    applyScan(scan);
+    const found = Object.keys(scan.data).length + (scan.name ? 1 : 0);
+    return { message: message ?? (found ? undefined : "Niets herkend. Vul het zelf in."), create: scan.create };
   }
 
   async function onSubmit(e: FormEvent, next = false) {
@@ -316,7 +342,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       {!item && (readable || products) && (
         <section className="card form-section">
           <div className="field">
-            <span className="label">{products ? "Product" : "Van een foto"}</span>
+            <span className="label">{products ? "Product" : "Snel invullen"}</span>
           </div>
           <LabelScanner
             projectId={project.project.id}
@@ -325,6 +351,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             onResult={applyScan}
             onProduct={applyProduct}
             onCreate={createRef}
+            onText={fillText}
           />
           {more.items.length > 0 && <MoreOnPhoto fields={fields} more={more.items} onToggle={(i, on) => setMore((m) => ({ ...m, items: m.items.map((x, k) => (k === i ? { ...x, on } : x)) }))} />}
         </section>
