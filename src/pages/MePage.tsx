@@ -3,21 +3,24 @@ import { formatIban, isValidIban } from "../../shared/payment";
 import type { Person, Tone } from "../../shared/types";
 import { api } from "../api";
 import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
+import { Icon } from "../components/Icon";
 import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
 import { ProjectOrder } from "../components/ProjectOrder";
 import { useToast } from "../components/Toast";
-import { isKiosk } from "../device";
+import { isKiosk, useInstall } from "../device";
 import { childrenOf } from "../projects";
 import { useSession } from "../session";
 
 /**
  * Jouw naam, kleur en rekeningnummer (voor de betaal-QR, enkel te zien voor wie met jou een project deelt), je
- * meldingen en de volgorde van je projecten op het overzicht. Je e-mailadres komt van je aanmelding.
+ * meldingen en de volgorde van je projecten op het overzicht. Je e-mailadres komt van je aanmelding. Biedt de
+ * browser het aan, dan staat bovenaan een knop om de app te installeren.
  */
 export function MePage() {
   const { person, projects, reloadMe } = useSession();
   const toast = useToast();
+  const { canInstall, install } = useInstall();
   const [name, setName] = useState(person.name);
   const [color, setColor] = useState<Tone | null>(person.color);
   const [iban, setIban] = useState(person.iban ? formatIban(person.iban) : "");
@@ -45,7 +48,18 @@ export function MePage() {
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title="Jouw gegevens" description={person.email ?? undefined} back={{ to: "/", label: "Overzicht" }} />
+      <PageHead
+        title="Jouw gegevens"
+        description={person.email ?? undefined}
+        back={{ to: "/", label: "Overzicht" }}
+        actions={
+          canInstall && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={install}>
+              <Icon name="download" size={15} /> App installeren
+            </button>
+          )
+        }
+      />
       <section className="card form-section">
         <label className="field">
           <span className="label">Naam</span>
