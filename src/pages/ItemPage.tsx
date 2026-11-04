@@ -111,7 +111,6 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
       <PageHead
         title={item.name}
         badge={item.archived ? <span className="badge">Gearchiveerd</span> : undefined}
-        description={`${type.name} · ${p.project.name}`}
         back={{ to: back, label: p.project.name }}
         actions={
           <>
@@ -184,7 +183,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
 
           {codes.map((f) => (
             <section key={f.key} className="card">
-              <CardHead title={f.label} description="Laat scannen aan de kassa of de balie" />
+              <CardHead title={f.label} />
               <div className="card-body">
                 <CodeView value={item.data[f.key] as CodeValue} />
               </div>
@@ -215,7 +214,6 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
           <section className="card">
             <CardHead
               title="Logboek"
-              description={item.log.length === 0 ? "Wat er gebeurde, op datum" : undefined}
               action={
                 canEdit && (
                   <button type="button" className="btn btn-outline btn-sm" onClick={() => setLogging("new")}>
@@ -244,7 +242,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
           </section>
 
           <section className="card">
-            <CardHead title="Bestanden" description={item.files.length === 0 ? "Factuur, handleiding, garantiebewijs" : undefined} />
+            <CardHead title="Bestanden" />
             {item.files.length > 0 && (
               <ul className="rows">
                 {item.files.map((f) => (

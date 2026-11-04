@@ -321,15 +321,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
               </Link>
             )
           }
-        >
-          {filtered
-            ? "Pas de zoekterm of filters aan."
-            : archived
-              ? "Wat je archiveert, komt hier."
-              : type.can_create
-                ? "Voeg er een toe, of importeer ze uit een tabel."
-                : undefined}
-        </EmptyState>
+        />
       )}
 
       {agendaField && data && (

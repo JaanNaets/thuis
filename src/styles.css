@@ -449,7 +449,7 @@ kbd {
   padding: calc(env(safe-area-inset-top) + 20px) 16px calc(var(--tabbar) + var(--float-bottom) + 92px);
 }
 
-/* Onderbalk: een zwevende glazen pil met drie tabs (Overzicht, Zoeken, Ik); een vlak schuift naar de actieve. */
+/* Onderbalk: een zwevende glazen pil met drie tabs (Overzicht, Agenda, Zoeken); een vlak schuift naar de actieve. */
 .tabbar {
   position: fixed;
   left: 20px;
@@ -623,6 +623,25 @@ kbd {
 
 .page-head h1 .badge {
   letter-spacing: 0;
+}
+
+/* Jouw letter bij de titel van een hoofdscherm, enkel op gsm (op tablet staat ze in de paneelbalk). */
+.head-avatar {
+  align-self: center;
+  border-radius: 50%;
+}
+
+.head-avatar .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .head-avatar {
+    display: none;
+  }
 }
 
 .page-desc {
@@ -1403,24 +1422,6 @@ button.row-link {
   color: var(--foreground);
 }
 
-.tab-count {
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
-  background: rgb(0 0 0 / 0.05);
-  color: var(--muted-foreground);
-  font-size: 11.5px;
-  line-height: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  transition: background-color 0.25s;
-}
-
-.tab[aria-selected="true"] .tab-count {
-  background: var(--muted);
-}
-
 .tabs-indicator {
   position: absolute;
   top: 3px;
@@ -2058,6 +2059,14 @@ input[type="checkbox"] {
 .scan-buttons {
   display: grid;
   gap: 10px;
+}
+
+.scan-buttons .btn-row {
+  flex-wrap: wrap;
+}
+
+.scan-buttons .btn-ghost {
+  flex: none;
 }
 
 /* Voorraad: − aantal + rechts in een rij (de rij zelf is geen link, enkel de naam). */
@@ -3602,11 +3611,6 @@ dialog.palette[open]::backdrop {
     transform: scale(0.98);
   }
 
-  .sidebar-search kbd {
-    margin-left: auto;
-    background: rgb(255 255 255 / 0.7);
-  }
-
   .sidebar-scroll {
     flex: 1;
     min-height: 0;
@@ -3622,7 +3626,6 @@ dialog.palette[open]::backdrop {
 
   .nav-text,
   .nav-section,
-  .nav-count,
   .sidebar-places {
     display: none;
   }
@@ -3661,8 +3664,7 @@ dialog.palette[open]::backdrop {
     pointer-events: none;
   }
 
-  .sidebar-nav a,
-  .sidebar-bottom a {
+  .sidebar-nav a {
     position: relative;
     display: flex;
     align-items: center;
@@ -3680,43 +3682,30 @@ dialog.palette[open]::backdrop {
       font-weight 0.2s;
   }
 
-  .sidebar-nav a svg,
-  .sidebar-bottom a svg {
+  .sidebar-nav a svg {
     color: var(--muted-foreground);
     transition:
       transform 0.35s var(--spring),
       color 0.2s;
   }
 
-  .sidebar-nav a:hover:not(.active),
-  .sidebar-bottom a:hover:not(.active) {
+  .sidebar-nav a:hover:not(.active) {
     background: rgb(0 0 0 / 0.035);
   }
 
-  .sidebar-nav a.active,
-  .sidebar-bottom a.active {
+  .sidebar-nav a.active {
     color: var(--foreground);
     font-weight: 600;
   }
 
-  .sidebar-nav a.active svg,
-  .sidebar-bottom a.active svg {
+  .sidebar-nav a.active svg {
     color: var(--foreground);
   }
 
-  .sidebar-nav a:active svg,
-  .sidebar-bottom a:active svg {
+  .sidebar-nav a:active svg {
     transform: scale(0.86);
   }
 
-  .sidebar-bottom {
-    display: grid;
-    gap: 1px;
-    flex: none;
-    padding-top: 8px;
-  }
-
-  .sidebar-bottom a.active,
   .place-link[aria-current="page"] {
     background: var(--glass);
     box-shadow: var(--glass-shadow);
@@ -3918,37 +3907,10 @@ dialog.palette[open]::backdrop {
     display: block;
   }
 
-  .nav-count {
-    display: inline-flex;
-    margin-left: auto;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    font-weight: 450;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .nav-count.warn {
-    min-width: 20px;
-    height: 18px;
-    align-items: center;
-    justify-content: center;
-    padding: 0 6px;
-    border-radius: 6px;
-    background: var(--warning-bg);
-    color: var(--warning);
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-
   .workspace,
   .sidebar-search,
-  .sidebar-nav a,
-  .sidebar-bottom a {
+  .sidebar-nav a {
     justify-content: flex-start;
-  }
-
-  .sidebar-search kbd {
-    display: inline-flex;
   }
 }
 
@@ -4922,7 +4884,7 @@ dialog.palette[open]::backdrop {
   padding-left: 2px;
 }
 
-/* Projecten in volgorde slepen (ProjectOrder): bij Ik en bij Instellen → Algemeen. */
+/* Projecten in volgorde slepen (ProjectOrder): bij Jouw gegevens en bij Instellen → Algemeen. */
 .sort-list {
   margin: 0;
   padding: 0 6px 6px;

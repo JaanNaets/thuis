@@ -107,9 +107,7 @@ function TotalCard({
   const current = r.current ?? 0;
   // Bij een saldo: + krijgt nog, − moet nog.
   const signed = (v: number) => (!t.against ? show(v, r.result, unit) : v > 0 ? `+ ${show(v, r.result, unit)}` : `− ${show(-v, r.result, unit)}`);
-  const where = [NOW[t.period], t.mine && "van jou", t.scope === "tree" && "met subprojecten", t.sources?.length && "ook uit andere projecten"]
-    .filter(Boolean)
-    .join(" · ");
+  const where = NOW[t.period];
 
   const { state, text: goalText } = goal !== undefined ? goalState(t, goal, current, (v) => show(v, r.result, unit)) : { state: "", text: "" };
   const history = t.period === "all" ? [] : r.periods;

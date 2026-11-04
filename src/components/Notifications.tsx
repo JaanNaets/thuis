@@ -110,10 +110,7 @@ export function NotificationsCard() {
 
   return (
     <section className="card">
-      <CardHead
-        title="Meldingen"
-        description="'s Morgens een melding als een datum nadert: een onderhoud, een verjaardag, opzeggen voor. Welke, stel je in bij het veld (Herinneren)."
-      />
+      <CardHead title="Meldingen" />
       <div className="card-body form">
         {state === "install" && (
           <Alert tone="none">
@@ -139,7 +136,6 @@ export function NotificationsCard() {
               checked={state === "on"}
               onChange={(on) => !busy && turn(on)}
               label="Meldingen op dit toestel"
-              hint="Elk toestel apart: je gsm, je laptop. Enkel over wat jij mag zien."
             />
             {state === "on" && (
               <div className="btn-row">

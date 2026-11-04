@@ -10,6 +10,9 @@ commits en uitleg.
 - Gebruik de bestaande componenten (`src/components/`) en tokens (`:root` in `src/styles.css`); verzin geen
   nieuwe kleuren, maten of patronen.
 - Loop de checklist onderaan het stijlboek af voor je iets oplevert.
+- Geen uitleg in de interface (stijlboek, principe 11): geen ondertitel die herhaalt, geen uitlegzin onder een veld,
+  schakelaar of kaart, geen "· optioneel", geen tellers of rollen als bijlabel, een lege staat is een titel en één
+  knop. Snapt iemand het niet zonder uitleg, verbeter dan het label of de opbouw.
 - Introduceer je toch een nieuw patroon, bouw het dan als component en voeg het toe aan `STIJLBOEK.md`.
 - Bekijk het resultaat op gsm (390px) en tablet (1280px en 820px) voor je het oplevert.
 

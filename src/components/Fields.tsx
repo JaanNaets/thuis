@@ -295,7 +295,6 @@ export function FieldInputs({
             {disabled && <span className="optional"> · enkel zien</span>}
           </span>
         );
-        const hint = def.hint && <span className="hint">{def.hint}</span>;
 
         switch (def.type) {
           case "calc": {
@@ -317,7 +316,7 @@ export function FieldInputs({
           case "bool":
             return (
               <div key={def.key} className={`field ${wide}`}>
-                <Switch checked={raw === true} onChange={(on) => !disabled && set(def.key, on)} label={def.label} hint={def.hint} />
+                <Switch checked={raw === true} onChange={(on) => !disabled && set(def.key, on)} label={def.label} />
               </div>
             );
           case "people":
@@ -332,7 +331,6 @@ export function FieldInputs({
                   onChange={(v) => set(def.key, v)}
                   disabled={disabled}
                 />
-                {hint}
               </div>
             );
           case "items":
@@ -340,7 +338,6 @@ export function FieldInputs({
               <div key={def.key} className={`field ${wide}`}>
                 {label}
                 <ItemsSelect def={def} value={Array.isArray(raw) ? (raw as string[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
-                {hint}
               </div>
             );
           case "checklist":
@@ -353,7 +350,6 @@ export function FieldInputs({
                   onChange={(v) => set(def.key, v)}
                   disabled={disabled}
                 />
-                {hint}
               </div>
             );
           case "interval": {
@@ -388,7 +384,6 @@ export function FieldInputs({
                     ))}
                   </select>
                 </div>
-                {hint}
               </div>
             );
           }
@@ -417,7 +412,6 @@ export function FieldInputs({
                     onChange={(e) => set(def.key, [from, e.target.value])}
                   />
                 </div>
-                {hint}
               </div>
             );
           }
@@ -440,7 +434,6 @@ export function FieldInputs({
                   disabled={disabled}
                   total={moneyTotal(defs, value)}
                 />
-                {hint}
               </div>
             );
           case "code":
@@ -448,7 +441,6 @@ export function FieldInputs({
               <div key={def.key} className={`field ${wide}`}>
                 {label}
                 <CodeInput def={def} value={raw as CodeValue | null} onChange={(v) => set(def.key, v)} disabled={disabled} auto={Boolean(cls)} />
-                {hint}
               </div>
             );
           case "person":
@@ -463,7 +455,6 @@ export function FieldInputs({
                     </option>
                   ))}
                 </select>
-                {hint}
               </label>
             );
           case "item":
@@ -471,7 +462,6 @@ export function FieldInputs({
               <div key={def.key} className={`field ${wide}`}>
                 {label}
                 <ItemSelect def={def} value={typeof raw === "string" ? raw : ""} onChange={(v) => set(def.key, v)} disabled={disabled} />
-                {hint}
               </div>
             );
           case "year_range": {
@@ -501,7 +491,6 @@ export function FieldInputs({
                     onChange={(e) => set(def.key, [from, e.target.value])}
                   />
                 </div>
-                {hint}
               </div>
             );
           }
@@ -544,7 +533,6 @@ export function FieldInputs({
               <label key={def.key} className={`field ${wide}`}>
                 {label}
                 <MoneyInput value={typeof raw === "string" ? raw : ""} onChange={(v) => set(def.key, v)} disabled={disabled} className={cls} />
-                {hint}
               </label>
             );
           default: {
@@ -558,7 +546,7 @@ export function FieldInputs({
                   type={def.type === "date" ? "date" : def.type === "time" ? "time" : def.type === "phone" ? "tel" : "text"}
                   inputMode={INPUT_MODES[def.type]}
                   autoCapitalize={def.type === "url" || def.type === "email" ? "none" : undefined}
-                  placeholder={PLACEHOLDERS[def.type]}
+                  placeholder={def.type === "multi" ? (def.options?.length ? `bv. ${def.options.slice(0, 2).join(", ")}` : "Gescheiden door komma's") : PLACEHOLDERS[def.type]}
                   list={listId}
                   value={typeof raw === "string" ? raw : ""}
                   aria-invalid={invalid}
@@ -571,18 +559,14 @@ export function FieldInputs({
                     ))}
                   </datalist>
                 )}
-                {def.type === "multi" ? (
-                  <span className="hint">Gescheiden door komma's{def.options?.length ? `, bv. ${def.options.slice(0, 2).join(", ")}` : ""}</span>
-                ) : def.type === "duration" &&
+                {def.type === "duration" &&
                   typeof raw === "string" &&
                   raw.trim() &&
                   !invalid &&
                   formatDuration(draftValue(def, raw) as number) !== raw.trim() ? (
                   // Wat de app las: "90" wordt 1 u 30 min.
                   <span className="hint">= {formatDuration(draftValue(def, raw) as number)}</span>
-                ) : (
-                  hint
-                )}
+                ) : null}
               </label>
             );
           }
@@ -1266,7 +1250,7 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
     <>
       <label className="field">
         <span className="label">
-          Past het gekozen item aan <span className="optional">· optioneel</span>
+          Past het gekozen item aan
         </span>
         <select
           value={adjust ? `${adjust.sign}:${adjust.field}` : ""}
@@ -1287,10 +1271,6 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
             </option>
           ))}
         </select>
-        <span className="hint">
-          Bij bewaren past de app dat getal van het gekozen item uit {target.plural.toLowerCase()} aan (bv. eten uit de voorraad, een gekocht product erbij).
-          Wijzig of verwijder je dit item, dan past het mee aan.
-        </span>
       </label>
       {adjust && (
         <label className="field">
@@ -1303,7 +1283,6 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
               </option>
             ))}
           </select>
-          <span className="hint">Een getal of berekening van deze lijst, bv. Hoeveel, of Stuks (gram ÷ inhoud).</span>
         </label>
       )}
     </>
@@ -1382,7 +1361,7 @@ export function FieldsEditor({
                       {Object.entries(FIELD_TYPES)
                         .filter(([, t]) => t.group === group)
                         .map(([type, t]) => (
-                          <option key={type} value={type}>
+                          <option key={type} value={type} title={t.hint}>
                             {t.label}
                           </option>
                         ))}
@@ -1401,7 +1380,6 @@ export function FieldsEditor({
               </div>
               {f.open && (
                 <div className="fields-editor-more">
-                  <p className="hint">{FIELD_TYPES[f.type].hint}</p>
                   {f.type === "calc" && (
                     <CalcEditor
                       field={preview.fields[i]}
@@ -1425,7 +1403,7 @@ export function FieldsEditor({
                   {(f.type === "number" || (f.type === "calc" && preview.fields[i].result === "number")) && (
                     <label className="field">
                       <span className="label">
-                        Eenheid <span className="optional">· optioneel</span>
+                        Eenheid
                       </span>
                       <input
                         value={f.unit ?? ""}
@@ -1464,7 +1442,7 @@ export function FieldsEditor({
                   {(f.type === "text" || f.type === "number") && (
                     <label className="field">
                       <span className="label">
-                        Uit productinfo <span className="optional">· optioneel</span>
+                        Uit productinfo
                       </span>
                       <select value={f.product ?? ""} onChange={(e) => update(i, { product: (e.target.value || undefined) as ProductKey | undefined })}>
                         <option value="">Niets</option>
@@ -1476,12 +1454,11 @@ export function FieldsEditor({
                             </option>
                           ))}
                       </select>
-                      <span className="hint">Een barcode of een foto van een gekend product vult dit in met echte gegevens uit Open Food Facts.</span>
                     </label>
                   )}
                   <label className="field">
                     <span className="label">
-                      Uitleg <span className="optional">· optioneel</span>
+                      Uitleg
                     </span>
                     <input value={f.hint ?? ""} maxLength={160} placeholder="Wat hier hoort" onChange={(e) => update(i, { hint: e.target.value })} />
                   </label>
@@ -1491,13 +1468,12 @@ export function FieldsEditor({
                       checked={Boolean(f.today)}
                       onChange={(on) => update(i, { today: on })}
                       label="Begint met vandaag"
-                      hint="Een nieuw item krijgt de datum van vandaag; je kan ze aanpassen."
                     />
                   )}
                   {(f.type === "date" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
                     <label className="field">
                       <span className="label">
-                        Herinneren <span className="optional">· met een melding</span>
+                        Herinneren
                       </span>
                       <select value={f.remind ?? ""} onChange={(e) => update(i, { remind: e.target.value === "" ? undefined : Number(e.target.value) })}>
                         <option value="">Niet</option>
@@ -1507,7 +1483,6 @@ export function FieldsEditor({
                           </option>
                         ))}
                       </select>
-                      <span className="hint">'s Morgens een melding voor wie meldingen aanzette (bij Ik) en dit mag zien.</span>
                     </label>
                   )}
                   {(f.type === "date" || f.type === "date_range" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
@@ -1515,7 +1490,6 @@ export function FieldsEditor({
                       checked={Boolean(f.agenda)}
                       onChange={(on) => update(i, { agenda: on })}
                       label="In de agenda"
-                      hint="Staat in de agenda van al je projecten (bv. een taak, het volgende onderhoud, een maaltijd)."
                     />
                   )}
                   {f.type === "date" && (f.remind !== undefined || f.agenda) && (
@@ -1523,15 +1497,13 @@ export function FieldsEditor({
                       checked={Boolean(f.yearly)}
                       onChange={(on) => update(i, { yearly: on })}
                       label="Elk jaar"
-                      hint="Een verjaardag: elk jaar op dezelfde dag, niet enkel die ene datum."
                     />
                   )}
                   {f.type === "item" && (
                     <Switch
                       checked={Boolean(f.copy)}
                       onChange={(on) => update(i, { copy: on })}
-                      label="Neemt waarden over"
-                      hint="Kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde naam daar (bv. kcal uit de voorraad)."
+                      label="Lege velden overnemen van het gekozen item"
                     />
                   )}
                   {f.type === "item" && f.ref_type && <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />}
@@ -1540,7 +1512,6 @@ export function FieldsEditor({
                       checked={Boolean(f.counter)}
                       onChange={(on) => update(i, { counter: on })}
                       label="Met − en + in de lijst"
-                      hint="Een voorraad: tel bij of af in de lijst, met scannen of met een kasticket."
                     />
                   )}
                   {f.type === "person" && (
@@ -1548,15 +1519,13 @@ export function FieldsEditor({
                       checked={Boolean(f.me)}
                       onChange={(on) => update(i, { me: on })}
                       label="Begint met jou"
-                      hint="Een nieuw item krijgt wie het toevoegt, bv. wie betaalde."
                     />
                   )}
                   {f.type === "share" && (
                     <Switch
                       checked={Boolean(f.fill)}
                       onChange={(on) => update(i, { fill: on })}
-                      label="Leeg = verdelen"
-                      hint="Blijft het leeg, dan krijgt het de gewone verdeling (of gelijk over iedereen in het project)."
+                      label="Leeg: de gewone verdeling"
                     />
                   )}
                   {f.type === "share" && f.fill && (
@@ -1568,7 +1537,6 @@ export function FieldsEditor({
                         value={f.sharesDraft ?? sharesDraft(undefined)}
                         onChange={(sharesDraft) => update(i, { sharesDraft })}
                       />
-                      <span className="hint">Niemand apart: gelijk over iedereen in het project.</span>
                     </div>
                   )}
                   <Switch checked={Boolean(f.column)} onChange={(on) => update(i, { column: on })} label="Als kolom in de lijst" />
@@ -1590,7 +1558,6 @@ export function FieldsEditor({
       <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={add}>
         <Icon name="plus" size={15} /> Veld toevoegen
       </button>
-      <span className="hint">Elk item heeft al een naam; hier komt wat je daarnaast wil bijhouden.</span>
     </div>
   );
 }
@@ -1626,6 +1593,7 @@ export function LabelScanner({
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
   const [note, setNote] = useState("");
+  const [explain, setExplain] = useState(false);
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
@@ -1706,17 +1674,18 @@ export function LabelScanner({
 
   return (
     <div className="scan-buttons">
-      <label className="field">
-        <span className="label">
-          Uitleg voor de AI <span className="optional">· optioneel</span>
-        </span>
-        <input
-          value={note}
-          maxLength={200}
-          placeholder={products ? "bv. ik at de helft, met havermelk" : "bv. enkel de boodschappen, niet de tankbeurt"}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </label>
+      {explain && (
+        <label className="field">
+          <span className="label">Uitleg bij de foto</span>
+          <input
+            autoFocus
+            value={note}
+            maxLength={200}
+            placeholder={products ? "bv. ik at de helft, met havermelk" : "bv. enkel de boodschappen, niet de tankbeurt"}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </label>
+      )}
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto
@@ -1727,6 +1696,11 @@ export function LabelScanner({
         {products && (
           <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
             <Icon name="scan" /> Barcode
+          </button>
+        )}
+        {!explain && (
+          <button type="button" className="btn btn-ghost" onClick={() => setExplain(true)}>
+            Met uitleg
           </button>
         )}
       </div>

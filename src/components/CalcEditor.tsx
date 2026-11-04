@@ -99,12 +99,11 @@ export function CalcEditor({
             Kies…
           </option>
           {Object.entries(CALC_KINDS).map(([k, c]) => (
-            <option key={k} value={k}>
+            <option key={k} value={k} title={c.hint}>
               {c.label}
             </option>
           ))}
         </select>
-        {calc.kind && <span className="hint">{CALC_KINDS[calc.kind].hint}</span>}
       </label>
 
       {(calc.kind === "math" || calc.kind === "compare") && (

@@ -153,9 +153,7 @@ export function ProjectNew() {
                 Ander bestand
               </button>
             </div>
-          ) : (
-            <span className="hint">Een sjabloon zet lijsten met velden klaar. Je kan daarna alles aanpassen, toevoegen of weghalen.</span>
-          )}
+          ) : null}
         </div>
       </section>
 
@@ -171,7 +169,6 @@ export function ProjectNew() {
         placeholder={template === "file" ? file?.project.name : NAME_PLACEHOLDERS[template]}
       />
 
-      {parent && <p className="hint">Wie in {parent.name} zit, zit ook in dit subproject, met dezelfde rol. Je kan dat per persoon aanpassen.</p>}
       {error && <p className="error">{error}</p>}
 
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
@@ -209,7 +206,7 @@ export function ProjectFieldsCard(props: {
       </div>
       <label className="field">
         <span className="label">
-          <Icon name="note" size={15} /> Beschrijving <span className="optional">· optioneel</span>
+          Beschrijving
         </span>
         <textarea
           rows={3}

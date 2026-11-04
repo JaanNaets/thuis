@@ -116,7 +116,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title="Importeren" description={p.project.name} back={{ to: -1, label: p.project.name }} />
+      <PageHead title="Importeren" back={{ to: -1, label: p.project.name }} />
 
       <section className="card form-section">
         {creatable.length > 1 && (
@@ -133,10 +133,6 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
         )}
         <div className="field">
           <span className="label">Je tabel</span>
-          <span className="hint">
-            Uit Google Sheets: Bestand → Downloaden → CSV. Of selecteer de cellen (met de kopregel), kopieer ze en plak ze hieronder. Uit Excel: opslaan als
-            CSV.
-          </span>
         </div>
         <div className="btn-row">
           <button type="button" className="btn btn-outline" onClick={() => fileRef.current?.click()}>
@@ -156,7 +152,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
         />
         <label className="field">
           <span className="label">
-            Of plak de cellen <span className="optional">· met de kopregel</span>
+            Of plak de cellen met de kopregel
           </span>
           <textarea
             rows={4}
@@ -187,11 +183,6 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
           <section className="card form-section">
             <div className="field">
               <span className="label">Kolommen</span>
-              <span className="hint">
-                {fields.some((f) => f.type === "longtext")
-                  ? "Wat we niet herkennen, komt bij de lange tekst: zo gaat er niets verloren."
-                  : "Kies per kolom waar ze heen gaat."}
-              </span>
             </div>
             <ul className="column-map">
               {sheet.headers.map((h, i) => {

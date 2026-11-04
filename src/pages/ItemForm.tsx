@@ -317,11 +317,6 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         <section className="card form-section">
           <div className="field">
             <span className="label">{products ? "Product" : "Van een foto"}</span>
-            <span className="hint">
-              {products
-                ? "Scan de barcode of trek een foto: de app zoekt het product op in Open Food Facts en vult de echte gegevens in. Niets gevonden? Dan leest ze de foto."
-                : "Trek een foto van een etiket, kasticket, factuur of typeplaatje, of kies een PDF: de app vult in wat erop staat en bewaart het erbij."}
-            </span>
           </div>
           <LabelScanner
             projectId={project.project.id}
@@ -383,7 +378,6 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
               ))}
             </datalist>
           )}
-          {!item && earlier.size > 0 && <span className="hint">Kies iets van eerder, dan vult de app de rest in zoals de vorige keer.</span>}
         </label>
         {fields.length > 0 && (
           <FieldInputs
@@ -476,7 +470,6 @@ function MoreOnPhoto({
           );
         })}
       </ul>
-      <span className="hint">Aangevinkt komt elk erbij als een eigen item, met dezelfde datum en maaltijd. Geschat; pas ze daarna aan als het nodig is.</span>
     </div>
   );
 }

@@ -152,7 +152,7 @@ Venster gemist? Je vindt de waarden ook terug:
 ### Testen
 
 Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
-e-mailadres in, krijgt een code per mail, en komt in de app. Bij **Ik** staat waarmee je aangemeld bent.
+e-mailadres in, krijgt een code per mail, en komt in de app. Bij **Jouw gegevens** (je letter rechtsboven) staat waarmee je aangemeld bent.
 
 Wie de eerste keer aanmeldt, ziet nog geen projecten. Maak er een (bv. "Huishouden" met het sjabloon
 Huishouden), en voeg de anderen toe bij **Instellen → Mensen** met het e-mailadres waarmee ze aanmelden.
@@ -202,7 +202,7 @@ In kioskmodus:
 ### Het overzicht
 
 De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
-zit: één tik en je bent er. De volgorde van je projecten sleep je bij **Ik** (dat is per persoon); die van de
+zit: één tik en je bent er. De volgorde van je projecten sleep je bij **Jouw gegevens** (je letter rechtsboven) (dat is per persoon); die van de
 subprojecten bij **Instellen → Algemeen**, als je het project instelt. De volgorde van de lijsten (en dus van de tabs
 in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
 
@@ -218,7 +218,7 @@ en Gedeelde uitgaven zetten het klaar.
 
 Op het project staat dan **Wie moet wie**: zo weinig mogelijk overschrijvingen, met alles uit het project en zijn
 subprojecten (en uit lijsten in andere projecten als je die bij het totaal kiest). Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
-Vul je bij **Ik** je rekeningnummer in, dan ziet wie jou moet bij Terugbetaald een **betaal-QR**: scannen met de
+Vul je bij **Jouw gegevens** (je letter rechtsboven) je rekeningnummer in, dan ziet wie jou moet bij Terugbetaald een **betaal-QR**: scannen met de
 bank-app, en het bedrag en je IBAN staan al ingevuld. Een verdeling kan gelijk, in procent of in **bedragen**
 ("Jaan € 12, Jana € 8"), en een bedrag in een andere munt ("45 USD") rekent de app om met de dagkoers van de ECB.
 Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar met één knop klaar. Wat je niet mag zien
@@ -427,7 +427,7 @@ Elke ochtend om 7 uur (8 uur in de zomer) doet de app twee dingen (`worker/cron.
 
 - **Herinneren**: een datum kan bij het veld (onder ⋯) **Herinneren** krijgen: op de dag zelf, of 1 dag tot 1 maand
   vooraf. Ook een berekende datum, zoals de volgende onderhoudsbeurt. Met **Elk jaar** voor een verjaardag. Wie het
-  item en die datum mag zien en meldingen aanzette (bij Ik), krijgt een melding ("Verwarming · Volgende keer: over 7
+  item en die datum mag zien en meldingen aanzette (bij Jouw gegevens), krijgt een melding ("Verwarming · Volgende keer: over 7
   dagen (6/11)"). Hooguit vijf per ochtend, de rest samen in één. De sjablonen zetten het al aan voor onderhoud,
   opzeggen, verjaardagen, taken en het einde van de garantie.
 - **Herhalen**: op de fiche van een item zet **Herhalen** het om de zoveel dagen, weken, maanden of jaren opnieuw

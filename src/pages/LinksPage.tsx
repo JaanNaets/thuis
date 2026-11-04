@@ -46,7 +46,6 @@ export function LinksPage() {
     <div className="page">
       <PageHead
         title="Verbanden"
-        description={project ? `Wat de lijsten van ${project.name} met elkaar en met andere projecten doen` : undefined}
         back={project ? { to: `/projecten/${project.id}`, label: project.name } : { to: "/", label: "Overzicht" }}
       />
       {error && <p className="error">{error}</p>}
@@ -62,9 +61,7 @@ export function LinksPage() {
               </Link>
             )
           }
-        >
-          Een verband ontstaat als een lijst naar een andere verwijst, eruit rekent, erin meetelt of iets in de agenda zet.
-        </EmptyState>
+        />
       )}
       {map && map.links.length > 0 && (
         <>
@@ -94,11 +91,7 @@ export function LinksPage() {
           {view === "kaart" && (
             <>
               <LinkMapView map={map} current={id!} links={links} selected={selected?.id ?? null} onSelect={select} onColumn={openMap} />
-              {selected ? (
-                <LinkDetail map={map} node={selected} links={links} onSelect={select} />
-              ) : (
-                <p className="hint">Kies een lijst op de kaart om te zien wat erop inwerkt en waar ze op inwerkt.</p>
-              )}
+              {selected && <LinkDetail map={map} node={selected} links={links} onSelect={select} />}
             </>
           )}
           {view === "lijst" &&

@@ -215,10 +215,6 @@ export function TotalsEditor({
     <section className="card form-section">
       <div className="field">
         <span className="label">Totalen</span>
-        <span className="hint">
-          Bovenaan het project: bv. de kcal per dag met een doel, of wat je per maand uitgaf, eventueel per persoon. Telt enkel wat
-          iemand mag zien.
-        </span>
       </div>
       {value.length > 0 && (
         <ul className="fields-editor">
@@ -311,7 +307,7 @@ export function TotalsEditor({
                     )}
                     <label className="field">
                       <span className="label">
-                        Apart per <span className="optional">· optioneel</span>
+                        Apart per
                       </span>
                       <select value={t.by} onChange={(e) => update(i, { by: e.target.value })}>
                         <option value="">Niet apart</option>
@@ -325,7 +321,7 @@ export function TotalsEditor({
                     {canNet && (
                       <label className="field">
                         <span className="label">
-                          Tegenover <span className="optional">· optioneel</span>
+                          Tegenover
                         </span>
                         <select value={t.against} onChange={(e) => update(i, { against: e.target.value, settle: e.target.value ? t.settle : false })}>
                           <option value="">Niets</option>
@@ -337,13 +333,12 @@ export function TotalsEditor({
                               </option>
                             ))}
                         </select>
-                        <span className="hint">Een saldo: per persoon wat bij Apart per staat, min wat hier staat (betaald door − verdeling).</span>
                       </label>
                     )}
                     {!t.settle && (
                       <div className="field">
                         <span className="label">
-                          Doel <span className="optional">· optioneel</span>
+                          Doel
                         </span>
                         <span className="goal-input">
                           <select
@@ -378,14 +373,13 @@ export function TotalsEditor({
                             </option>
                           ))}
                         </select>
-                        <span className="hint">Enkel van jou: elk ziet zijn eigen totaal, met zijn eigen doel.</span>
                       </label>
                     )}
                   </div>
                   {!t.settle && t.mine && people.length > 0 && (
                     <div className="field">
                       <span className="label">
-                        Doel per persoon <span className="optional">· leeg = het doel hierboven</span>
+                        Doel per persoon
                       </span>
                       <div className="goal-people">
                         {people.map((p) => (
@@ -403,22 +397,21 @@ export function TotalsEditor({
                       </div>
                     </div>
                   )}
-                  {!t.settle && <Switch checked={t.small} onChange={(small) => update(i, { small })} label="Klein, naast andere" hint="Bv. eiwit, koolhydraten en vet onder de kcal." />}
+                  {!t.settle && <Switch checked={t.small} onChange={(small) => update(i, { small })} label="Klein, naast andere" />}
                   {!t.settle && t.period !== "all" && (
-                    <Switch checked={t.line} onChange={(line) => update(i, { line })} label="Als lijn" hint="De vorige periodes als lijn in plaats van staafjes (bv. je gewicht)." />
+                    <Switch checked={t.line} onChange={(line) => update(i, { line })} label="Als lijn" />
                   )}
                   {settleable && (
                     <Switch
                       checked={t.settle}
                       onChange={(on) => update(i, { settle: on, ...(on ? { period: "all" as const, scope: "tree" as const, goalText: "" } : {}) })}
                       label="Verrekenen: Wie moet wie"
-                      hint="Op het project: zo weinig mogelijk overschrijvingen, met de subprojecten en de andere lijsten die verrekenen."
                     />
                   )}
                   {fitting.length > 0 && (
                     <div className="field">
                       <span className="label">
-                        Ook uit <span className="optional">· lijsten met dezelfde velden</span>
+                        Ook uit
                       </span>
                       <div className="tag-picker">
                         {fitting.map((l) => {
@@ -437,7 +430,6 @@ export function TotalsEditor({
                           );
                         })}
                       </div>
-                      <span className="hint">Telt ook hun items mee, voor wie die mag zien.</span>
                     </div>
                   )}
                 </div>

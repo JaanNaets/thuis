@@ -45,7 +45,7 @@ export function AgendaPage() {
 
   return (
     <div className="page">
-      <PageHead title="Agenda" description="Wat op een dag valt, uit al je projecten" />
+      <PageHead title="Agenda" />
       <div className="filters">
         <FilterSelect
           label="Project"
@@ -60,7 +60,7 @@ export function AgendaPage() {
         month={month}
         onMonth={(m) => set({ maand: m })}
         entries={entries}
-        empty="Nog niets in de agenda. Zet bij een datum in een lijst 'In de agenda' aan (Instellen → de lijst → het veld → ⋯), of begin met een sjabloon met een agenda (Maaltijdplan, Taken, Onderhoud)."
+        empty="Nog niets in de agenda."
       />
     </div>
   );

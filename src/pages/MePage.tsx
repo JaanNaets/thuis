@@ -11,7 +11,10 @@ import { isKiosk } from "../device";
 import { childrenOf } from "../projects";
 import { useSession } from "../session";
 
-/** Jouw naam en kleur (je e-mailadres komt van je aanmelding), en de volgorde van je projecten op het overzicht. */
+/**
+ * Jouw naam, kleur en rekeningnummer (voor de betaal-QR, enkel te zien voor wie met jou een project deelt), je
+ * meldingen en de volgorde van je projecten op het overzicht. Je e-mailadres komt van je aanmelding.
+ */
 export function MePage() {
   const { person, projects, reloadMe } = useSession();
   const toast = useToast();
@@ -42,21 +45,18 @@ export function MePage() {
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title="Jouw gegevens" description={person.email ?? undefined} />
+      <PageHead title="Jouw gegevens" description={person.email ?? undefined} back={{ to: "/", label: "Overzicht" }} />
       <section className="card form-section">
         <label className="field">
           <span className="label">Naam</span>
           <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
-          <span className="hint">Zo zien anderen je in hun projecten.</span>
         </label>
         <div className="field">
           <span className="label">Kleur</span>
           <ToneSwatches value={color} onChange={setColor} />
         </div>
         <label className="field">
-          <span className="label">
-            Rekeningnummer <span className="optional">· optioneel</span>
-          </span>
+          <span className="label">Rekeningnummer</span>
           <input
             value={iban}
             maxLength={42}
@@ -65,16 +65,8 @@ export function MePage() {
             aria-invalid={Boolean(iban.trim()) && !isValidIban(iban)}
             onChange={(e) => setIban(e.target.value)}
           />
-          <span className="hint">Zo kan wie je nog moet, je terugbetalen met een betaal-QR. Enkel te zien voor wie met jou een project deelt.</span>
         </label>
-        <div className="field">
-          <span className="label">Aangemeld als</span>
-          <span className="muted">{person.email}</span>
-          <span className="hint">
-            {projects.length === 1 ? "Je zit in 1 project." : `Je zit in ${projects.length} projecten.`}
-            {isKiosk ? " Dit toestel staat in kioskmodus (zet uit met /?kiosk=0)." : ""}
-          </span>
-        </div>
+        {isKiosk && <p className="hint">Kioskmodus staat aan (uit met /?kiosk=0).</p>}
       </section>
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
@@ -85,7 +77,7 @@ export function MePage() {
 
       {tops.length > 1 && (
         <section className="card">
-          <CardHead title="Volgorde op je overzicht" description="Sleep aan de greep. Dit is enkel jouw volgorde; ze wordt meteen bewaard." />
+          <CardHead title="Volgorde op je overzicht" />
           <ProjectOrder nodes={tops} />
         </section>
       )}

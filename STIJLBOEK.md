@@ -47,6 +47,12 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 9. **Mobiel eerst, kiosk mee.** Elk scherm werkt op een gsm met de duim én op de keukentablet met een natte
    vinger (aanraakvlakken van 44px).
 10. **Nederlands zoals we het zeggen.** Kort, vriendelijk, "je". Zie [Tekst](#9-tekst).
+11. **Geen uitleg in de interface.** Geen ondertitel die herhaalt wat het kruimelpad of de titel al zegt, geen
+    uitlegzin onder een veld of kaart, geen "· optioneel", geen tellers of rollen als bijlabel. Snapt iemand een
+    scherm niet zonder uitleg, dan is de opbouw of het label fout: maak het label duidelijker, zet iets op een
+    betere plaats, of laat het weg. Grijze tekst onder een titel is enkel voor **gegevens** (de beschrijving van
+    een project, je e-mailadres, "2 van 3 klaar", "Deze maand") of een **toestand** (een fout, "enkel zien").
+    Uitleg op vraag kan enkel bij een berekening (`Tip`) of als titel van een keuze in een `select`.
 
 ---
 
@@ -122,9 +128,11 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 ### Gsm (smaller dan 768px)
 
 - Witte achtergrond, inhoud met 16px marge, een grote titel (30px).
-- **Onderbalk**: een zwevende glazen pil (20px van de randen) met drie tabs: **Overzicht**, **Zoeken** (opent het
-  [zoekpalet](#zoekpalet-commandpalette)) en **Ik**. Een grijs vlak veert naar de actieve tab. Een project en een
-  fiche horen bij Overzicht.
+- **Onderbalk**: een zwevende glazen pil (20px van de randen) met drie tabs: **Overzicht**, **Agenda** en
+  **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)). Een grijs vlak veert naar de actieve tab. Een
+  project en een fiche horen bij Overzicht.
+- **Jouw gegevens** (`/ik`): je letter rechts naast de titel van een hoofdscherm (een scherm zonder terug, zoals het
+  overzicht). Geen tab: je hebt het zelden nodig.
 - **Zwevende + knop** (zwart, 56px) rechts boven de onderbalk voor de hoofdactie van het scherm.
 - **Terug** is een glazen pil die linksboven zweeft. Zodra de grote titel uit beeld scrollt, krimpt ze tot een
   rondje en verschijnt de titel in een glazen pilletje in het midden (zit in `PageHead`).
@@ -138,8 +146,8 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 │ [⌕ Zoeken  ⌘K]   │ ╭ glas ────────────────────────────────────────────╮ │ │
 │ ◖Overzicht  4◗   │ │ Slachterijstraat 1 › Wijnkelder  (+ Wijn toevoegen) J│ │ │  ← paneelbalk 60px, zweeft
 │ Projecten        │ ╰──────────────────────────────────────────────────╯ │ │
-│ ● Slachterijstr. │ Wijnkelder                              (Instellen)    │ │  ← titel 32px, uitleg eronder
-│ │ Wijnkelder     │ uitleg                                                 │ │
+│ ● Slachterijstr. │ Wijnkelder                              (Instellen)    │ │  ← titel 32px
+│ │ Wijnkelder     │                                                        │ │
 │ │ Huishouden     │ [ Wijnen 12 · Wijnhuizen 3 ]                           │ │  ← tabs per lijst
 │ ● Test           │ zijkolom (320px)        zoeken, filters                │ │
 │ + Project        │ Wie moet wie            Wijn          Wijnhuis   Jaar  │ │
@@ -152,22 +160,21 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 - **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (10px marge, geen rand, afronding 18px). Het paneel scrollt zelf; de zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het zwarte merktegeltje met "Thuis" (naar het overzicht), het
-  zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), "Overzicht" met een teller, de
-  [projectboom](#projectboom-zijbalk), onderaan jouw naam (naar `/ik`). Het actieve item ligt onder een **glazen
-  lens** die meeveert.
+  zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), Overzicht, Agenda en de
+  [projectboom](#projectboom-zijbalk). Het actieve item ligt onder een **glazen lens** die meeveert.
 - **Paneelbalk** (60px, een glazen balk die 10px van de randen zweeft en blijft staan; de inhoud scrollt eronder
   door): kruimelpad met `›` links ("Slachterijstraat 1 › Wijnkelder"), rechts de hoofdactie (zwarte pil, 40px) en
-  jouw letter in een glazen rondje (naar `/ik`).
-- **Kop**: een grote titel (32px) + badge, de uitleg eronder in grijs, acties op het item rechts (`btn-outline
-  btn-sm`, glas). Geen lijn eronder.
+  jouw letter in een glazen rondje (naar `/ik`, de enige weg ernaartoe op tablet).
+- **Kop**: een grote titel (32px) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
+  item rechts (`btn-outline btn-sm`, glas). Geen lijn eronder.
 - Inhoud daaronder met 20px marge. Een project en een fiche gebruiken de [zijkolom](#zijkolom-split).
 - Geen + knop: de hoofdactie staat in de paneelbalk.
 
 ### Opbouw van elk scherm
 
 ```
-PageHead                 paneelbalk (kruimelpad, primary, avatar) + kop (titel, badge, uitleg, actions)
-Tabs                     als er weergaves zijn (Wijnen 12 · Wijnhuizen 3 · …)
+PageHead                 paneelbalk (kruimelpad, primary, avatar) + kop (titel, badge, actions)
+Tabs                     als er weergaves zijn (Wijnen · Wijnhuizen · …)
 toolbar                  zoeken (+ iconknoppen: importeren, exporteren als CSV)
 filters                  filterpillen
 card / card table        de inhoud — of .split met zijkolom en secties
@@ -187,7 +194,7 @@ met de zwevende terugknop en het titelpilletje (gsm).
 <PageHead
   title="Wijnkelder"
   badge={<span className="badge">Gearchiveerd</span>}                 // optioneel, kort
-  description="Wat er in de kelder ligt en wanneer het drinkklaar is"
+  description={project.description}                                    // enkel gegevens, nooit uitleg
   back={{ to: `/projecten/${parent.id}`, label: parent.name }}        // het project erboven, of terug
   actions={<Link className="btn btn-outline btn-sm" …>Instellen</Link>} // acties op dit scherm, rechts naast de titel
   primary={<Link className="btn btn-primary" …><Icon name="plus" size={16} /> Wijn toevoegen</Link>} // in de paneelbalk
@@ -196,7 +203,9 @@ met de zwevende terugknop en het titelpilletje (gsm).
 
 - Een overzichtsscherm (een project) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
 - Formulieren: `back={{ to: -1, label: … }}` (gewoon terug), geen `primary`.
-- Beschrijving: één korte zin, in grijs onder de titel, zonder punt als het een opsomming is.
+- `description` is enkel voor gegevens van de gebruiker (de beschrijving van een project, je e-mailadres). Nooit een
+  zin die het scherm uitlegt, en nooit wat het kruimelpad al zegt (de naam van het project).
+- Op gsm toont een hoofdscherm (zonder `back`) vanzelf jouw letter rechts naast de titel.
 - Meer acties dan plaats (op gsm: Opnieuw + Bewerken)? Dan springen de acties onder de titel; de titel breekt nooit
   midden in een woord.
 
@@ -260,8 +269,8 @@ Hetzelfde `card` ziet er anders uit naargelang waar het staat; je kiest dat niet
 | In een formulier (`.page.form`) en bij Instellen | **Groep**: een grijs vlak (`--group`), afronding 24px, geen schaduw |
 | In een `.split` (project, fiche) | **Sectie**: geen vlak, een haarlijn tussen secties |
 
-- `CardHead`: titel 15,5px, gewicht 600, een korte grijze uitleg eronder, eventueel een actie rechts (glazen knop).
-  Geen icoon.
+- `CardHead`: titel 15,5px, gewicht 600, eventueel gegevens eronder in grijs ("2 van 3 klaar", "Deze maand"),
+  eventueel een actie rechts (glazen knop). Geen icoon, geen uitleg.
 - Inhoud zonder rijen in `card-body`. Een voetnoot (bv. "Bewaard door Jaan") in `.footnote` (ingezette lijn erboven).
 - Een lijstje witte kaartjes in een groep (velden van een lijst, kolommen bij importeren, per veld bij een rol):
   wit, afronding 14–20px, `--shadow-inset`.
@@ -326,14 +335,14 @@ Dezelfde rijen worden op tablet een tabel; de kolomkoppen staan erboven als **st
 - Wat op gsm in de grijze regel staat, heeft `narrow-only`; wat enkel in de tabel onder de titel moet, `wide-only`.
 - Lege cel: een streepje `—` in `.muted`.
 
-### Tabs met tellers: `Tabs`
+### Tabs: `Tabs`
 
 ```tsx
 <Tabs label="Lijsten" value={type.id} onChange={(t) => setParams({ lijst: t }, { replace: true })}
-  tabs={types.map((t) => ({ value: t.id, label: t.plural, count: counts[t.id] ?? 0 }))} />
+  tabs={types.map((t) => ({ value: t.id, label: t.plural }))} />
 ```
 
-Een grijs spoor met een glazen witte duim die naar de actieve tab **veert**; tellers rollen bij een wijziging. Voor
+Een grijs spoor met een glazen witte duim die naar de actieve tab **veert**. Geen tellers: het aantal staat bij de lijst zelf. Voor
 verschillende **weergaves binnen één scherm** (de lijsten van een project, de onderwerpen bij Instellen). Niet voor
 navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?tab=`), zodat je ernaar kan linken.
 
@@ -397,22 +406,24 @@ Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--de
 - Velden: 42px hoog, een grijs vlak (`--field`) zonder rand, afronding 12px; bij aanwijzen iets donkerder, bij focus
   wit met een blauwe ring.
 - Schakelaars onder elkaar krijgen vanzelf een haarlijn ertussen.
-- Label boven het veld. Optioneel? `<span className="optional">· uitleg</span>` achter het label. Uitleg onder
-  een veld in `.hint`.
+- Label boven het veld. Een veld is vanzelf optioneel (verplicht: `required`); geen "· optioneel" en geen uitleg
+  eronder. Een voorbeeld hoort in de placeholder ("bv. Rood, Wit"). `.hint` onder een veld enkel voor wat de app
+  las of uitrekende ("= 1 u 30 min") of een fout.
+- `Switch` heeft enkel een label: zegt dat het niet genoeg, kies een beter label.
 - Verplichte velden krijgen `required`, geen sterretje.
 - **Een lijst heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
   lange tekst als eigen kaart.
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
 - Kant-en-klare velden: `FieldInputs` (alle velden van een lijst), `TagPicker`, `Switch`, `ToneSwatches`,
-  `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`. Uitleg bij een label: `Tip`.
+  `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`.
 
 ### Lijsten en velden: `Fields.tsx`
 
 Alles wat je bijhoudt, is een **item** in een **lijst**: een lijst heeft eigen velden (Wijnen met jaargang en
 druiven, Klantenkaarten met een barcode). De lijsten van een project gelden ook in zijn subprojecten. In de code heet
 een lijst `item_type` (`ItemType`, `type_id`); in alles wat de gebruiker leest, is het een **lijst**. De veldsoorten
-staan in `FIELD_TYPES` (`shared/fields.ts`), elk met een groep (`FIELD_GROUPS`) en één zin uitleg; een nieuwe
+staan in `FIELD_TYPES` (`shared/fields.ts`), elk met een groep (`FIELD_GROUPS`) en één zin uitleg (de titel van de keuze); een nieuwe
 veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`formatFieldValue`), tekst lezen
 (`parseFieldText`) en hier een invoer.
 
@@ -438,10 +449,10 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Boven de knoppen een optioneel veld "Uitleg voor de AI" ("ik at de helft"); pas je dat na het lezen aan, dan verschijnt "Opnieuw lezen met deze uitleg". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
+| `LabelScanner` | Groep "Van een foto" (Foto · Uit bestand · Met uitleg, dat pas dan een veld "Uitleg bij de foto" toont): een etiket, kasticket, factuur of typeplaatje lezen, ook een PDF (de eerste pagina wordt gelezen, de PDF komt bij de bestanden). De app vult naam en velden in (zacht blauw, `auto`) en bewaart de foto. Een verwijzing (bv. Verkoper) koppelt ze op naam aan een bestaand item (`matchName`); bestaat het nog niet, dan een regel `.scan-suggestion` met "Toevoegen". Boven de knoppen een optioneel veld "Uitleg voor de AI" ("ik at de helft"); pas je dat na het lezen aan, dan verschijnt "Opnieuw lezen met deze uitleg". Heeft de lijst velden uit productinfo, dan heet de groep "Product" met drie knoppen (Foto · Uit foto · Barcode): eerst een barcode op de foto zelf (gratis, zonder AI), anders herkent de AI het product of gerecht; een `Alert` zegt waar de gegevens vandaan komen (Open Food Facts, of geschat) |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
-| `NotificationsCard` (`Notifications.tsx`) | Bij Ik: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
+| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
 | `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
@@ -507,7 +518,7 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 | Uit een gelinkt item | Via de Verwijzing Wijnhuis: zijn Land |
 | Samenvatten | Hoeveel, som, gemiddelde, kleinste, grootste: van de items in een Verwijzing(en)-veld, of van de items die hiernaar verwijzen (wat je bij een verkoper uitgaf) |
 
-- `CalcEditor` staat onder ⋯ van het veld: eerst de soort (met de uitleg eronder), dan per soort de velden. Elke
+- `CalcEditor` staat onder ⋯ van het veld: eerst de soort (de uitleg is de titel van de keuze), dan per soort de velden. Elke
   keuzelijst toont enkel velden die passen.
 - Een formule typ je zoals je ze leest (`.formula-input`): velden tussen [ ] met hun **naam**, × en ÷ mogen. Onder
   het vak staan de velden als kleine tags (`.formula-fields`): een tik voegt `[Naam]` in waar de cursor staat. Bewaard
@@ -579,7 +590,7 @@ maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eige
 | Waar | Hoe |
 | --- | --- |
 | Formulier van een lijst, groep "Totalen" (onder de velden) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode en Waar (`Segmented`), Volgens, Apart per, Tegenover (bij een som per persoon of keuze), Doel (soort + getal), de schakelaar Verrekenen (als het kan), en Ook uit (`tag-picker`: "Uitgaven · Skireis", enkel lijsten die passen). "Totaal toevoegen" als `btn-outline btn-sm` |
-| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per groot totaal een sectie. Titel = naam, uitleg = de periode en waar ("Vandaag · met subprojecten · ook uit andere projecten"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −). Met **Als lijn** een `.total-line`: een SVG-lijn (84px hoog) met een stip per periode, de huidige zwart, het doel gestippeld. De kleine samen in één sectie `.total-tiles`: per tegel het label (12,5px, grijs, hooguit twee regels; de waarden blijven op één lijn), de waarde (17px, 600) en een dunne doelbalk |
+| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per groot totaal een sectie. Titel = naam, eronder de periode ("Vandaag", "Deze maand"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −). Met **Als lijn** een `.total-line`: een SVG-lijn (84px hoog) met een stip per periode, de huidige zwart, het doel gestippeld. De kleine samen in één sectie `.total-tiles`: per tegel het label (12,5px, grijs, hooguit twee regels; de waarden blijven op één lijn), de waarde (17px, 600) en een dunne doelbalk |
 | Formulier van een lijst, Totalen, bij een veld Persoon | "Van wie" (`select`: Iedereen samen / Enkel van jou), dan "Doel per persoon" (een getal per lid, `.goal-people`), en de schakelaars Klein en Als lijn |
 
 - Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
@@ -598,9 +609,8 @@ maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eige
 `<Tip text="…" label="Hoe Totaal berekend wordt" />` is een kleine (i) naast een label: de uitleg verschijnt in
 een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape, ergens anders tikken of scrollen.
 
-- Enkel waar uitleg echt helpt en niet in één `.hint` past: bij een berekening (wat ze uitrekent), bij een keuze
-  die je moet begrijpen ("Welke items" bij samenvatten).
-- Uitleg die iedereen nodig heeft, staat gewoon als `.hint` onder het veld; verberg ze niet in een `Tip`.
+- Enkel bij een berekening: wat ze uitrekent, en bij een keuze in de `CalcEditor` die je moet begrijpen ("Welke
+  items" bij samenvatten). Nergens anders: zie principe 11.
 - Op een `label` werkt de (i) zonder het veld te focussen.
 
 ### Sjablonen delen: `ShareTemplate` en `TemplateFilePicker` (`TemplateShare.tsx`)
@@ -650,7 +660,7 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 - Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
 - Wat de volgorde betekent: de projecten bovenaan je overzicht zijn **jouw** volgorde (per persoon); subprojecten
   en lijsten zijn die van het project (enkel met `manage`), en de lijsten bepalen ook de volgorde van de tabs.
-- Volgorde is een instelling, geen knop op een overzicht: je projecten bij **Ik**, subprojecten bij **Instellen →
+- Volgorde is een instelling, geen knop op een overzicht: je projecten bij **Jouw gegevens** (je letter rechtsboven), subprojecten bij **Instellen →
   Algemeen** (`ProjectOrder`), lijsten bij **Instellen → Lijsten**, velden in het formulier van een lijst.
 
 ### Kosten verdelen: `BalanceCard`
@@ -671,7 +681,7 @@ Terugbetalingen zetten het klaar):
 
 - `BalanceCard` ("Wie moet wie") staat in de zijkolom van een project, met alles eronder. Per overschrijving één
   rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
-  en datum; minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Ik**), dan staat daar een
+  en datum; minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Jouw gegevens** (je letter rechtsboven)), dan staat daar een
   betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Alles is verrekend."
 - Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
 - "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
@@ -773,7 +783,7 @@ Badges zijn kort: 1–3 woorden.
 | Iets gebeurt of lukte half binnen een formulier | `<Alert tone="busy" \| "ok" \| "partial" \| "none">`: een zacht vlak zonder rand |
 | Iets kan niet ongedaan gemaakt worden | `useConfirm()({ title, body, confirmLabel, danger: true })` |
 | Een korte invoer (notitie in het logboek, iemand toevoegen, een tag) | `<Sheet>`: een glazen onderblad dat los onderaan zweeft (gsm), een glazen venster in het midden (tablet) |
-| Lijst is leeg | `<EmptyState icon title action>`: een zacht vlak met een glazen icoontegel, één zin uitleg en hooguit één knop (`btn-outline btn-sm`) |
+| Lijst is leeg | `<EmptyState icon title action>`: een zacht vlak met een glazen icoontegel, de titel en hooguit één knop (`btn-outline btn-sm`), zonder uitleg |
 | Lijst laadt | `<SkeletonRows rows={5} />` (verschijnt pas na 0,18 s) |
 
 Toasts zijn de bevestiging na een actie. Elke bewaar- of verwijderactie geeft er één, behalve −/+ in een lijst en
@@ -881,7 +891,7 @@ tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 `?tab=mensen`), één kaart per tab (Algemeen heeft er ook een voor de volgorde van de subprojecten). Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
-**Ik** (`/ik`): je naam en kleur; je e-mailadres komt van je aanmelding. Daaronder de volgorde van je projecten op
+**Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder de volgorde van je projecten op
 het overzicht.
 
 ## 7. Toegankelijkheid
@@ -910,9 +920,9 @@ het overzicht.
 
 - Nederlands zoals in Vlaanderen gesproken, met **je/jij**. "Kastickets", "gsm", "verkoper".
 - Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Wijn toevoegen", "Lijst maken", "Instellen".
-- Titels zonder punt. Uitleg in één zin.
+- Titels zonder punt. Geen uitleg (zie principe 11).
 - Fouten zeggen wat er is en wat je kan doen: "Er moet altijd iemand overblijven die het project kan instellen."
-- Lege staat: wat er hier komt + hoe je begint. "Nog geen wijnen. Voeg er een toe, of importeer ze uit een tabel."
+- Lege staat: wat er nog niet is, en hooguit één knop om te beginnen. "Nog geen wijnen" + "Wijn toevoegen".
 - Wat de gebruiker maakt, heet zoals hij het noemt: de naam van één item van de lijst ("Wijn toevoegen"), niet "item". Het
   algemene woord voor een formulier met eigen velden is **lijst**, nooit "soort", "type" of "categorie".
 - Datums als "20 okt 2026", bedragen als "€ 1.234,56", hoeveelheden met het juiste meervoud ("1 fles", "3 flessen").
@@ -962,5 +972,6 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.
-- [ ] Moet iets uitgelegd worden? Eerst een `.hint`; een `Tip` enkel waar de uitleg niet in één regel past.
+- [ ] Geen ondertitel, uitlegzin, "· optioneel" of bijlabel (principe 11). Moet iets uitgelegd worden, pas dan de
+      opbouw of het label aan.
 - [ ] Nieuw patroon nodig? Bouw het als component, en **voeg het toe aan dit stijlboek**.

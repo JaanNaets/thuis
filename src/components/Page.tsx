@@ -116,6 +116,12 @@ export function PageHead({
           {description && <p className="page-desc">{description}</p>}
         </div>
         {actions && <div className="page-actions">{actions}</div>}
+        {/* Op een gsm, bij een hoofdscherm (zonder terug): jouw letter, zoals de paneelbalk op tablet. */}
+        {!back && me.id && (
+          <Link to="/ik" className="head-avatar" aria-label="Jouw gegevens">
+            <Avatar member={me} />
+          </Link>
+        )}
       </header>
 
       <div className="topbar" data-visible={compact} aria-hidden="true">
@@ -125,14 +131,14 @@ export function PageHead({
   );
 }
 
-export function EmptyState({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
+/** Een lege lijst: een icoon, wat er nog niet is, en hooguit één knop om te beginnen. Geen uitleg. */
+export function EmptyState({ icon, title, action }: { icon: IconName; title: string; action?: ReactNode }) {
   return (
     <div className="empty">
       <span className="empty-icon">
         <Icon name={icon} size={18} />
       </span>
       <strong>{title}</strong>
-      {children && <p>{children}</p>}
       {action && <div style={{ marginTop: 10 }}>{action}</div>}
     </div>
   );

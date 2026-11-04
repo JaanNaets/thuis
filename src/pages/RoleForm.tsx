@@ -83,7 +83,7 @@ function RoleForm({ project: p, types, existing }: { project: ProjectDetail; typ
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title={existing ? existing.name : "Nieuwe rol"} description={p.project.name} back={{ to: -1, label: "Rollen" }} />
+      <PageHead title={existing ? existing.name : "Nieuwe rol"} back={{ to: -1, label: "Rollen" }} />
 
       <section className="card form-section">
         <label className="field">
@@ -92,7 +92,7 @@ function RoleForm({ project: p, types, existing }: { project: ProjectDetail; typ
         </label>
         {(Object.keys(PROJECT_RIGHTS) as ProjectRight[]).map((key) => {
           const r = PROJECT_RIGHTS[key];
-          return <Switch key={key} checked={rights[key]} onChange={(on) => setRight(key, on)} label={r.label} hint={"hint" in r ? r.hint : undefined} />;
+          return <Switch key={key} checked={rights[key]} onChange={(on) => setRight(key, on)} label={r.label} />;
         })}
       </section>
 
@@ -100,13 +100,12 @@ function RoleForm({ project: p, types, existing }: { project: ProjectDetail; typ
         <div className="field">
           <span className="label">Items, standaard</span>
           <Segmented label="Items, standaard" value={rights.items} onChange={(items) => setRights((r) => ({ ...r, items }))} options={LEVELS} />
-          <span className="hint">Geldt voor elke lijst en elk veld, behalve de uitzonderingen hieronder.</span>
         </div>
       </section>
 
       {types.length > 0 && (
         <section className="card">
-          <CardHead title="Per lijst en per veld" description="Niet zien: de items van die lijst (of dat veld) blijven verborgen." />
+          <CardHead title="Per lijst en per veld" />
           <ul className="rows role-types">
             {types.map((t) => {
               const entry = rights.types[t.id];

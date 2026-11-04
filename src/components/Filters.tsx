@@ -390,7 +390,7 @@ export function ViewEditor({
 
       <div className="field">
         <span className="label">
-          Kolommen <span className="optional">· leeg = zoals de lijst</span>
+          Kolommen
         </span>
         <Toggles
           label="Kolommen"
@@ -405,7 +405,6 @@ export function ViewEditor({
           checked={def.mode === "agenda"}
           onChange={(on) => setDef((d) => (on ? { ...d, mode: "agenda", date: d.date ?? dateFields[0].key } : { ...d, mode: undefined, date: undefined }))}
           label="Als agenda"
-          hint={`Per dag in een kalender, volgens ${dateFields[0].label.toLowerCase()}.`}
         />
       )}
       {def.mode === "agenda" && dateFields.length > 1 && (
@@ -432,7 +431,7 @@ export function ViewEditor({
           <input maxLength={40} placeholder="bv. Deze week, Te kopen, Van mij" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         {canShare && !active && (
-          <Switch checked={shared} onChange={setShared} label="Voor iedereen in dit project" hint="Anders zie enkel jij ze." />
+          <Switch checked={shared} onChange={setShared} label="Voor iedereen in dit project" />
         )}
         <div className="btn-row">
           {active?.can_edit && (

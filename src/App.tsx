@@ -51,8 +51,8 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
   const session = useMemo(() => ({ person: me.person, projects: me.projects, reloadMe, openSearch: () => setSearching(true) }), [me, reloadMe]);
 
-  // De onderbalk op een gsm: projecten, agenda, zoeken en jij.
-  const tabIndex = pathname.startsWith("/ik") ? 3 : pathname.startsWith("/agenda") ? 1 : 0;
+  // De onderbalk op een gsm: projecten, agenda en zoeken. Jouw gegevens: je letter bij de titel van het overzicht.
+  const tabIndex = pathname.startsWith("/agenda") ? 1 : 0;
 
   return (
     <SessionContext value={session}>
@@ -63,7 +63,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
             <Sidebar onSearch={() => setSearching(true)} />
 
-            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 4 } as CSSProperties}>
+            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 3 } as CSSProperties}>
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
               <NavLink to="/" className={({ isActive }) => (isActive || pathname.startsWith("/projecten") || pathname.startsWith("/items") ? "active" : "")}>
                 <Icon name="project" size={21} />
@@ -77,10 +77,6 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
                 <Icon name="search" size={21} />
                 <span>Zoeken</span>
               </button>
-              <NavLink to="/ik">
-                <Icon name="user" size={21} />
-                <span>Ik</span>
-              </NavLink>
             </nav>
 
             <main>

@@ -3,7 +3,7 @@ import type { FlatNode, TreeNode } from "../../shared/tree";
 import { TONES, type Person, type Tone } from "../../shared/types";
 import { formatNumber, parseQuantity } from "../format";
 import { Icon, type IconName } from "./Icon";
-import { Num, Spinner } from "./Motion";
+import { Spinner } from "./Motion";
 
 /** Keuze uit enkele opties, met een wit vlak dat naar de gekozen optie schuift. */
 export function Segmented<T extends string>({
@@ -111,14 +111,11 @@ export function QuantityField({ value, onChange, min = 0, label }: { value: stri
   );
 }
 
-/** Aan/uit-schakelaar met een label ervoor. */
-export function Switch({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+/** Aan/uit-schakelaar met een label ervoor. Geen uitleg eronder: zegt het label het niet, kies een beter label. */
+export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <label className="switch-field">
-      <span style={{ display: "grid", gap: 2 }}>
-        <span className="label">{label}</span>
-        {hint && <span className="hint">{hint}</span>}
-      </span>
+      <span className="label">{label}</span>
       <button type="button" role="switch" aria-checked={checked} className="switch" onClick={() => onChange(!checked)} />
     </label>
   );
@@ -157,12 +154,12 @@ export function Tabs<T extends string>({
 }: {
   label: string;
   value: T;
-  tabs: { value: T; label: string; count?: number }[];
+  tabs: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [line, setLine] = useState<{ x: number; w: number }>();
-  const widths = tabs.map((t) => `${t.label}${t.count ?? ""}`).join("|");
+  const widths = tabs.map((t) => t.label).join("|");
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -179,11 +176,6 @@ export function Tabs<T extends string>({
       {tabs.map((t) => (
         <button key={t.value} type="button" role="tab" aria-selected={t.value === value} className="tab" onClick={() => onChange(t.value)}>
           {t.label}
-          {t.count !== undefined && (
-            <span className="tab-count">
-              <Num value={t.count} />
-            </span>
-          )}
         </button>
       ))}
       {line && <span className="tabs-indicator" style={{ width: line.w, transform: `translateX(${line.x}px)` }} />}

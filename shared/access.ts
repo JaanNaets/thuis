@@ -33,12 +33,13 @@ export type Rights = {
   types: Record<string, TypeRights>;
 };
 
+/** Wat een rol in een project mag. Instellen: naam, subprojecten, lijsten en velden, tags en rollen. */
 export const PROJECT_RIGHTS = {
-  manage: { label: "Project instellen", hint: "Naam, subprojecten, lijsten en velden, tags en rollen" },
-  members: { label: "Mensen beheren", hint: "Iemand toevoegen, een rol geven of weghalen" },
+  manage: { label: "Project instellen" },
+  members: { label: "Mensen beheren" },
   create: { label: "Items toevoegen" },
   delete: { label: "Items verwijderen" },
-} as const satisfies Record<string, { label: string; hint?: string }>;
+} as const satisfies Record<string, { label: string }>;
 export type ProjectRight = keyof typeof PROJECT_RIGHTS;
 
 export const NO_RIGHTS: Rights = { manage: false, members: false, create: false, delete: false, items: "none", types: {} };

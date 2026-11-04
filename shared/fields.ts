@@ -20,7 +20,7 @@ export const FIELD_GROUPS = {
 } as const;
 export type FieldGroup = keyof typeof FIELD_GROUPS;
 
-/** Alle veldsoorten, met waar ze bij horen en één zin uitleg (als tooltip bij het kiezen). */
+/** Alle veldsoorten, met waar ze bij horen en één zin uitleg (de titel van de keuze, en voor wie de code leest). */
 export const FIELD_TYPES = {
   text: { label: "Tekst", group: "text", hint: "Een korte tekst, zoals een merk of een kamer." },
   longtext: { label: "Lange tekst", group: "text", hint: "Notities over meerdere regels. Op de fiche krijgt ze een eigen kaart." },

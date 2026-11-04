@@ -44,7 +44,7 @@ export function ProjectSettings() {
 
   return (
     <div className="page settings-page">
-      <PageHead title="Instellen" description={p.project.name} back={{ to: `/projecten/${p.project.id}`, label: p.project.name }} />
+      <PageHead title="Instellen" back={{ to: `/projecten/${p.project.id}`, label: p.project.name }} />
       <Tabs label="Onderwerp" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />
       <div className="settings-grid">
         {tab === "algemeen" && <GeneralTab project={p} onSaved={reload} />}
@@ -130,7 +130,6 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
         <section className="card">
           <CardHead
             title="Volgorde van de subprojecten"
-            description="Sleep aan de greep. Geldt voor iedereen in het project; wordt meteen bewaard."
           />
           <ProjectOrder nodes={children} parent={pr} onChanged={onSaved} />
         </section>
@@ -138,7 +137,6 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
       <section className="card">
         <CardHead
           title="Delen als sjabloon"
-          description="Een bestand met de lijsten en velden van dit project en zijn subprojecten, zonder items, mensen of rollen. Iemand anders maakt er een nieuw project mee."
         />
         <div className="card-body">
           <ShareTemplate path={`/projects/${pr.id}/template`} />
@@ -152,7 +150,6 @@ function GeneralTab({ project: p, onSaved }: { project: ProjectDetail; onSaved: 
           <Icon name="trash" size={16} /> Verwijderen
         </button>
       </div>
-      <p className="hint">Verwijderen kan enkel als het project leeg is (geen items, geen subprojecten). Anders: archiveren.</p>
     </form>
   );
 }
@@ -203,7 +200,6 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
     <section className="card">
       <CardHead
         title="Lijsten"
-        description="Elke lijst heeft eigen velden. Ze gelden ook in de subprojecten."
         action={
           <div className="btn-row">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPicking(true)}>
@@ -235,7 +231,6 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
                     <span className="row-main">
                       <span className="row-title">{t.plural}</span>
                       <span className="row-meta">
-                        <span>{t.fields.length === 1 ? "1 veld" : `${t.fields.length} velden`}</span>
                         <span>{(p.counts[t.id] ?? 0) === 1 ? "1 item" : `${p.counts[t.id] ?? 0} items`}</span>
                       </span>
                     </span>
@@ -247,12 +242,8 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
           );
         })}
       </ul>
-      {inherited.length > 0 && (
-        <p className="card-body muted small">
-          Van erboven: zet aan wat je hier als tab wil, bv. Uitgaven. Wat je hier ingeeft, telt erboven mee.
-        </p>
-      )}
       <ul className="rows">
+        {inherited.length > 0 && <li className="group-row">Van erboven, als tab hier</li>}
         {inherited.map((t) => {
           const here = p.counts[t.id] ?? 0;
           return (
@@ -285,7 +276,7 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
           );
         })}
       </ul>
-      {p.types.length === 0 && <p className="card-body muted small">Nog geen lijsten. Maak er een, bv. Wijnen met jaargang en druiven.</p>}
+      {p.types.length === 0 && <p className="card-body muted small">Nog geen lijsten.</p>}
       {sortable.status}
       <Sheet open={picking} title="Lijst uit een sjabloon" onClose={() => setPicking(false)}>
         <ListTemplatePicker
@@ -332,9 +323,6 @@ function ListTemplatePicker({ project: p, onAdded }: { project: ProjectDetail; o
             <span className="template-desc">{templateText({ ...file, project: { ...file.project, children: [] } })}</span>
           </span>
         </div>
-        {file.project.children.length > 0 && (
-          <p className="hint">De subprojecten uit dit sjabloon komen hier niet mee; daarvoor maak je een nieuw project uit het bestand.</p>
-        )}
         {error && <p className="error">{error}</p>}
         <div className="sheet-actions">
           <button type="button" className="btn btn-ghost" onClick={() => setFile(undefined)}>
@@ -358,7 +346,6 @@ function ListTemplatePicker({ project: p, onAdded }: { project: ProjectDetail; o
         <TemplateFilePicker onRead={setFile}>
           <Icon name="upload" size={16} /> Uit een bestand…
         </TemplateFilePicker>
-        <span className="hint">Een sjabloon dat iemand met je deelde (een .thuis.json-bestand). Of kies hieronder een lijst.</span>
       </div>
       <ul className="rows template-list">
         {listTemplates().map((t) => (
@@ -400,7 +387,6 @@ function RolesTab({ project: p }: { project: ProjectDetail }) {
     <section className="card">
       <CardHead
         title="Rollen"
-        description="Wat iemand mag: het project instellen, mensen beheren, toevoegen, verwijderen, en per lijst en veld niet zien, zien of wijzigen."
         action={
           <Link to={`/projecten/${id}/rollen/nieuw`} className="btn btn-outline btn-sm">
             <Icon name="plus" size={15} /> Rol
@@ -478,7 +464,6 @@ function PeopleTab({ project: p, onChanged }: { project: ProjectDetail; onChange
     <section className="card">
       <CardHead
         title="Mensen"
-        description="Wie erboven zit, zit ook hier, met dezelfde rol, tenzij je hier een andere rol geeft."
         action={
           canManage && (
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setAdding(true)}>
@@ -618,10 +603,9 @@ function AddPersonForm({ project: p, onDone }: { project: ProjectDetail; onDone:
           </label>
           <label className="field">
             <span className="label">
-              E-mailadres <span className="optional">· om zelf aan te melden</span>
+              E-mailadres
             </span>
             <input type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="lien@voorbeeld.be" />
-            <span className="hint">Zonder e-mailadres kan je die toch kiezen (bv. wie betaalde). Een e-mailadres kan je later nog toevoegen.</span>
           </label>
         </>
       )}
@@ -634,7 +618,6 @@ function AddPersonForm({ project: p, onDone }: { project: ProjectDetail; onDone:
             </option>
           ))}
         </select>
-        <span className="hint">{p.roles.find((r) => r.id === roleId) ? rightsSummary(p.roles.find((r) => r.id === roleId)!.rights) : ""}</span>
       </label>
       {error && <p className="error">{error}</p>}
       <div className="sheet-actions">
@@ -680,11 +663,6 @@ function PersonForm({ person, onDone }: { person: Person; onDone: () => void }) 
           onChange={(e) => setEmail(e.target.value)}
           placeholder="om zelf aan te melden"
         />
-        <span className="hint">
-          {person.email
-            ? "Het e-mailadres van wie al aanmeldt, verandert niet."
-            : "Met een e-mailadres kan die zelf aanmelden, en blijft het dezelfde persoon."}
-        </span>
       </label>
       <div className="field">
         <span className="label">Kleur</span>
@@ -709,7 +687,6 @@ function TagsTab({ project: p, onChanged }: { project: ProjectDetail; onChanged:
     <section className="card">
       <CardHead
         title="Tags"
-        description="Vrije labels op items, over lijsten heen. Ze gelden ook in de subprojecten."
         action={
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
             <Icon name="plus" size={15} /> Tag

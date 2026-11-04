@@ -69,9 +69,8 @@ export function BalanceCard({ projectId, className }: { projectId: string; class
       )}
       {data.can_add_settle && data.transfers.length > 0 && (
         <div className="balance-setup">
-          <span className="hint">Om een terugbetaling te bewaren, zet je eerst de lijst Terugbetalingen klaar.</span>
           <button type="button" className="btn btn-outline btn-sm" onClick={addSettleList}>
-            <Icon name="plus" size={15} /> Terugbetalingen
+            <Icon name="plus" size={15} /> Lijst Terugbetalingen maken
           </button>
         </div>
       )}
@@ -149,7 +148,6 @@ function SettleForm({
       <label className="field">
         <span className="label">Bedrag</span>
         <input inputMode="decimal" required autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <span className="hint">Minder mag ook: dan blijft de rest openstaan.</span>
       </label>
       {qr && (
         <div className="field pay-qr">
@@ -158,7 +156,7 @@ function SettleForm({
             <Barcode format="qr_code" value={qr} />
           </Suspense>
           <span className="hint">
-            Scan met de app van je bank: {to!.name}, {formatIban(to!.iban!)}, {formatCents(cents!)}. Daarna bewaar je hier de terugbetaling.
+            {to!.name} · {formatIban(to!.iban!)} · {formatCents(cents!)}
           </span>
         </div>
       )}

@@ -101,10 +101,6 @@ export function RepeatForm({ item, onDone }: { item: ItemDetail; onDone: (item: 
             setNext(e.target.value);
           }}
         />
-        <span className="hint">
-          Op die dag maakt de app 's morgens een nieuw {item.name ? `"${item.name}"` : "item"} zoals dit, met de datum van die dag. Daarna{" "}
-          {everyText({ n: Number(n) >= 1 ? Math.floor(Number(n)) : 1, unit })}.
-        </span>
       </label>
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">

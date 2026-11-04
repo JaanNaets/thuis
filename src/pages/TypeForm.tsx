@@ -126,7 +126,7 @@ function TypeForm({
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title={existing ? existing.plural : "Nieuwe lijst"} description={p.project.name} back={{ to: -1, label: "Lijsten" }} />
+      <PageHead title={existing ? existing.plural : "Nieuwe lijst"} back={{ to: -1, label: "Lijsten" }} />
 
       <section className="card form-section">
         <div className="field-row">
@@ -141,10 +141,9 @@ function TypeForm({
         </div>
         <label className="field">
           <span className="label">
-            Hoe heet de naam <span className="optional">· optioneel</span>
+            Hoe heet de naam
           </span>
           <input maxLength={40} value={nameLabel} onChange={(e) => setNameLabel(e.target.value)} placeholder="Naam" />
-          <span className="hint">Elk item heeft een naam. Bij een uitgave is dat bv. "Omschrijving".</span>
         </label>
         <div className="field">
           <span className="label">Icoon</span>
@@ -175,7 +174,6 @@ function TypeForm({
         <section className="card">
           <CardHead
             title="Deze lijst delen"
-            description="Een bestand met deze lijst en haar velden (en de lijsten waarnaar ze verwijst), zonder items. Iemand anders voegt ze toe met Lijsten → Uit sjabloon."
           />
           <div className="card-body">
             <ShareTemplate path={`/types/${existing.id}/template`} />

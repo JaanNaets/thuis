@@ -10,7 +10,7 @@ import { useSession } from "../session";
 
 /**
  * Je overzicht: per project een kaart met zijn lijsten en hoeveel erin zit, zodat je met één tik bij
- * je wijnen of klantenkaarten bent. De volgorde zet je bij Ik (je projecten) en Instellen (subprojecten).
+ * je wijnen of klantenkaarten bent. De volgorde zet je bij Jouw gegevens (je projecten) en Instellen (subprojecten).
  */
 export function Home() {
   const { projects } = useSession();
@@ -25,7 +25,6 @@ export function Home() {
     <div className="page">
       <PageHead
         title="Overzicht"
-        description={active.length ? "Je projecten en wat erin zit" : undefined}
         primary={
           <Link to="/projecten/nieuw" className="btn btn-primary">
             <Icon name="plus" size={16} /> Nieuw project
@@ -42,9 +41,7 @@ export function Home() {
               <Icon name="plus" size={16} /> Eerste project
             </Link>
           }
-        >
-          Begin met een huishouden, een wijnkelder of een leeg project. Daarna kies je zelf wat je bijhoudt en wie wat mag.
-        </EmptyState>
+        />
       ) : (
         <div className="dashboard stagger">
           {active.map((p, i) => (
@@ -95,10 +92,11 @@ function ProjectCard({ project: p, above, types, index }: { project: ProjectNode
         </span>
         <span className="row-main">
           <span className="row-title">{p.name}</span>
-          <span className="row-meta">
-            {above && <span>{above}</span>}
-            <span>{p.role_name}</span>
-          </span>
+          {above && (
+            <span className="row-meta">
+              <span>{above}</span>
+            </span>
+          )}
         </span>
         <Icon name="next" size={16} className="row-chevron" />
       </Link>

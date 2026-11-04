@@ -24,11 +24,11 @@ function currentProject(pathname: string): string | null {
 }
 
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, al je projecten als boom (een project
- * klapt open en toont zijn subprojecten), en jouw gegevens onderaan.
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken en al je projecten als boom (een project
+ * klapt open en toont zijn subprojecten). Jouw gegevens: je letter rechtsboven in de paneelbalk.
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
-  const { projects, person } = useSession();
+  const { projects } = useSession();
   const { pathname } = useLocation();
   const current = currentProject(pathname);
 
@@ -45,7 +45,6 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
       <button type="button" className="sidebar-search" onClick={onSearch} title={`Zoeken (${SEARCH_SHORTCUT})`}>
         <Icon name="search" size={15} />
         <span className="nav-text">Zoeken…</span>
-        <kbd className="nav-text">{SEARCH_SHORTCUT}</kbd>
       </button>
 
       <div className="sidebar-scroll">
@@ -57,7 +56,6 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           <NavLink to="/" end title="Overzicht">
             <Icon name="project" size={17} />
             <span className="nav-text">Overzicht</span>
-            {projects.length > 0 && <span className="nav-count">{projects.filter((p) => !p.archived).length}</span>}
           </NavLink>
           <NavLink to="/agenda" title="Agenda">
             <Icon name="calendar" size={17} />
@@ -66,13 +64,6 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         </nav>
 
         <ProjectTree projects={projects} current={current} />
-      </div>
-
-      <div className="sidebar-bottom">
-        <NavLink to="/ik" title={person.name}>
-          <Icon name="user" size={17} />
-          <span className="nav-text">{person.name || "Jouw gegevens"}</span>
-        </NavLink>
       </div>
     </aside>
   );

@@ -80,7 +80,6 @@ export function StockScanner({
             { value: "out", label: "Eraf (opgebruikt)" },
           ]}
         />
-        <span className="hint">Scan de ene barcode na de andere; de camera blijft open tot je ze sluit.</span>
       </div>
       <button type="button" className="btn btn-primary btn-lg" onClick={() => setScanning(true)}>
         <Icon name="scan" /> Scannen
@@ -176,7 +175,6 @@ export function ReceiptToStock({
 
   return (
     <div className="form">
-      <p className="hint">Trek een foto van het kasticket: de app zoekt welke producten je kocht en telt ze bij je voorraad.</p>
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto
