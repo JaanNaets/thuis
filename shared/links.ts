@@ -9,6 +9,7 @@
 import { canAgenda } from "./agenda.ts";
 import { refLists, type FieldDef } from "./fields.ts";
 import type { IconKey } from "./templates.ts";
+import type { CalcKind } from "./calc.ts";
 import { totalLabel, type TotalDef } from "./totals.ts";
 import type { Tone } from "./types.ts";
 
@@ -72,6 +73,74 @@ export type LinkMap = {
 
 /** Een lijst zoals de kaart ze nodig heeft: enkel de velden en totalen die de lezer ziet. */
 export type LinkList = { id: string; fields: FieldDef[]; totals: TotalDef[] };
+
+// ---------- altijd mee ----------
+// Elke eigenschap van een veld, een berekening en een totaal staat hieronder, met of ze een verband met een andere
+// lijst maakt. Komt er een eigenschap bij (een nieuwe werking van de app), dan weigert TypeScript te bouwen tot je hier
+// beslist; wat `true` is, moet `listLinks` tonen (test/links.test.ts kijkt dat na met een voorbeeld per eigenschap).
+
+/** Velden: welke eigenschappen een lijst met een andere verbinden. */
+export const FIELD_LINKS = {
+  key: false,
+  label: false,
+  type: false,
+  options: false,
+  unit: false,
+  ref_type: true,
+  ref_also: true,
+  free: false,
+  format: false,
+  column: false,
+  filter: false,
+  required: false,
+  today: false,
+  me: false,
+  fill: false,
+  default_shares: false,
+  product: false,
+  counter: false,
+  remind: false,
+  yearly: false,
+  agenda: true,
+  adjust: true,
+  copy: true,
+  hint: false,
+  calc: true,
+  result: false,
+} as const satisfies Record<keyof FieldDef, boolean>;
+
+/** Berekeningen: welke soorten met andere lijsten rekenen. */
+export const CALC_LINKS = {
+  math: false,
+  formula: false,
+  compare: false,
+  days_until: false,
+  since: false,
+  date_add: false,
+  lookup: true,
+  rollup: true,
+} as const satisfies Record<CalcKind, boolean>;
+
+/** Totalen: welke eigenschappen een lijst met een andere (of met Wie moet wie) verbinden. */
+export const TOTAL_LINKS = {
+  id: false,
+  label: false,
+  agg: false,
+  field: false,
+  period: false,
+  date: false,
+  by: false,
+  goal: false,
+  goal_kind: false,
+  scope: false,
+  sources: true,
+  against: false,
+  settle: true,
+  mine: false,
+  goals: false,
+  size: false,
+  chart: false,
+} as const satisfies Record<keyof TotalDef, boolean>;
 
 const labelOf = (fields: FieldDef[] | undefined, key: string | undefined) => (key ? fields?.find((f) => f.key === key)?.label : undefined);
 

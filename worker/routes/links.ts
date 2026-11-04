@@ -172,3 +172,73 @@ projectLinks.get("/:id/links", async (c) => {
     },
   } satisfies LinkMap);
 });
+
+/**
+ * Verbanden over al je projecten: enkel de lijnen tussen verschillende hoofdprojecten (wat binnen één project gebeurt,
+ * toont zijn eigen kaart). Een kolom per hoofdproject, in jouw volgorde; hoogstens MAX_COLUMNS + 1 kolommen, de rest
+ * bij naam. Elke lijst met jouw rechten in haar eigen project.
+ */
+export const allLinks = new Hono<AppEnv>();
+
+allLinks.get("/", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const nodes = (await accessibleProjects(db, me)).filter((n) => !n.archived);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const rootOf = (id: string) => {
+    let n = byId.get(id);
+    const seen = new Set<string>();
+    while (n?.parent_id && byId.has(n.parent_id) && !seen.has(n.id)) {
+      seen.add(n.id);
+      n = byId.get(n.parent_id);
+    }
+    return n?.id ?? id;
+  };
+  const { results } = await db
+    .prepare("SELECT * FROM item_types WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, created_at")
+    .bind(json(nodes.map((n) => n.id)))
+    .all<TypeRow>();
+  const lists = results.map(toItemType).flatMap((t): ItemType[] => {
+    const rights = byId.get(t.project_id)!.rights;
+    if (!canSeeType(rights, t.id)) return [];
+    const fields = visibleFields(rights, t.id, t.fields);
+    return [{ ...t, fields, totals: visibleTotals(t.totals, fields) }];
+  });
+  const all = new Map(lists.map((t) => [t.id, t]));
+  const crossing = mergeLinks(
+    lists
+      .flatMap((t) => listLinks(t, (id) => all.get(id)?.fields))
+      .filter((l) => all.has(l.from) && all.has(l.to) && rootOf(all.get(l.from)!.project_id) !== rootOf(all.get(l.to)!.project_id)),
+  );
+
+  // Hoofdprojecten in jouw volgorde, enkel die met een verband naar een ander hoofdproject.
+  const roots = flattenTree(nodes).filter((n) => n.depth === 0);
+  const linkedRoots = new Set(crossing.flatMap((l) => [l.from, l.to].map((x) => rootOf(all.get(x)!.project_id))));
+  const busy = roots.filter((r) => linkedRoots.has(r.id));
+  const shown = new Set(busy.slice(0, MAX_COLUMNS + 1).map((r) => r.id));
+  const kept = crossing.filter((l) => [l.from, l.to].every((x) => shown.has(rootOf(all.get(x)!.project_id))));
+  const used = new Set(kept.flatMap((l) => [l.from, l.to]));
+  const nameOf = (id: string) => byId.get(id)?.name ?? "";
+  return c.json({
+    columns: busy.filter((r) => shown.has(r.id)).map((r) => ({ id: r.id, name: r.name, color: r.color })),
+    nodes: lists
+      .filter((t) => used.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        list_id: t.id,
+        name: t.plural,
+        icon: t.icon,
+        project_id: t.project_id,
+        project_name: nameOf(t.project_id),
+        column: rootOf(t.project_id),
+        count: null,
+      })),
+    links: kept,
+    quiet: [],
+    more: {
+      projects: busy.slice(MAX_COLUMNS + 1, MAX_COLUMNS + 1 + MAX_MORE).map((r) => ({ id: r.id, name: r.name })),
+      project_count: Math.max(0, busy.length - MAX_COLUMNS - 1),
+      outside: 0,
+    },
+  } satisfies LinkMap);
+});

@@ -31,6 +31,8 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { projects } = useSession();
   const { pathname } = useLocation();
   const current = currentProject(pathname);
+  // Waar de glazen lens ligt: Overzicht, Agenda of Verbanden (anders onzichtbaar).
+  const navIndex = pathname === "/" ? 0 : pathname.startsWith("/agenda") ? 1 : pathname === "/verbanden" ? 2 : -1;
 
   return (
     <aside className="sidebar" aria-label="Hoofdmenu">
@@ -51,7 +53,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         <nav className="sidebar-nav">
           <span
             className="sidebar-indicator"
-            style={{ "--i": pathname.startsWith("/agenda") ? 1 : 0, opacity: pathname === "/" || pathname.startsWith("/agenda") ? 1 : 0 } as CSSProperties}
+            style={{ "--i": navIndex, opacity: navIndex >= 0 ? 1 : 0 } as CSSProperties}
           />
           <NavLink to="/" end title="Overzicht">
             <Icon name="project" size={17} />
@@ -60,6 +62,10 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           <NavLink to="/agenda" title="Agenda">
             <Icon name="calendar" size={17} />
             <span className="nav-text">Agenda</span>
+          </NavLink>
+          <NavLink to="/verbanden" title="Verbanden">
+            <Icon name="links" size={17} />
+            <span className="nav-text">Verbanden</span>
           </NavLink>
         </nav>
 

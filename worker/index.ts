@@ -7,7 +7,7 @@ import { daily } from "./cron";
 import { products, rates } from "./routes/products";
 import { push } from "./routes/push";
 import { agenda } from "./routes/agenda";
-import { projectLinks } from "./routes/links";
+import { allLinks, projectLinks } from "./routes/links";
 import { projectViews, views } from "./routes/views";
 import { people, projects, roles, tags, types } from "./routes/projects";
 import type { AppEnv } from "./types";
@@ -37,6 +37,7 @@ app.route("/products", products);
 app.route("/rates", rates);
 app.route("/push", push);
 app.route("/agenda", agenda);
+app.route("/links", allLinks);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {

@@ -30,6 +30,9 @@ commits en uitleg.
 - Elke route die iets van een project raakt, haalt eerst de toegang op met `requireProject` (of `projectAccess`) uit
   `worker/context.ts`, en een item met `requireItem` (`worker/routes/items.ts`). Geen lidmaatschap = 404 "niet
   gevonden"; ontbreekt een recht, dan `need(access, …)` of een `ForbiddenError`. Bij twijfel: weigeren.
+- Een verwijzing (`item`, `items`) wijst naar `ref_type` en eventueel meer lijsten (`ref_also`, uit eender welk
+  project dat de bewerker ziet); gebruik altijd `refLists(def)`, nooit enkel `ref_type`. Met `free` mag één
+  verwijzing ook vrije tekst zijn (`{ text }`, geen verwijzing: niets na te kijken, af te trekken of over te nemen).
 - Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
   (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
   terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van lijsten, tags, rollen, personen) controleer je
@@ -61,9 +64,12 @@ commits en uitleg.
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
-- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden`): worden nooit bewaard, maar
-  afgeleid uit de velden, berekeningen en totalen die de lezer ziet (`listLinks`, met `visibleFields` en
-  `visibleTotals`). Een kaart is één project met hoogstens `MAX_COLUMNS` subprojecten en `MAX_OUTSIDE` lijsten van
+- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor de lijnen
+  tussen je hoofdprojecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
+  ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van
+  `FieldDef`, `TotalDef` en elke soort berekening staat in `FIELD_LINKS`, `TOTAL_LINKS` of `CALC_LINKS` (TypeScript
+  weigert te bouwen tot een nieuwe erin staat); wat lijsten verbindt (`true`), toont `listLinks`, met een voorbeeld in
+  `test/links.test.ts`. Een kaart is één project met hoogstens `MAX_COLUMNS` subprojecten en `MAX_OUTSIDE` lijsten van
   elders, met een vast aantal vragen aan de databank (ook bij 1000 projecten). De schikking is een vaste regel
   (`layoutLinks`): een rij per lijst waar iets toekomt, kolommen per project.
 - **Verwijzingen die tellen** (`adjust`, `shared/effects.ts`, `worker/effects.ts`): wat een item aan andere items deed,

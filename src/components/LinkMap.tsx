@@ -35,6 +35,8 @@ const countText = (n: number) => (n === 1 ? "1 item" : `${n} items`);
 
 export function nodeMeta(node: LinkNode): string {
   if (node.column === OUTSIDE) return node.project_name;
+  // Op de kaart van al je projecten: het subproject waar de lijst staat (niet nog eens de kolom zelf).
+  if (node.count === null && node.project_id === node.column) return "";
   if (node.count !== null) return countText(node.count);
   return node.project_name;
 }

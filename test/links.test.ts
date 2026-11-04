@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { AGENDA_NODE, BALANCE_NODE, layoutLinks, listLinks, mergeLinks, type LinkList } from "../shared/links.ts";
+import { AGENDA_NODE, BALANCE_NODE, CALC_LINKS, FIELD_LINKS, layoutLinks, listLinks, mergeLinks, TOTAL_LINKS, type LinkList } from "../shared/links.ts";
 
 // De pelletkachel: Bijvullen trekt af van de Voorraad, Uitgaven tellen erbij en verrekenen, Verkopers vatten de
 // uitgaven samen, Onderhoud staat in de agenda.
@@ -136,4 +136,33 @@ test("een verwijzing naar twee voorraden geeft een lijn naar elk", () => {
       ["adjust", "E", "V2", "Trekt Hoeveel af van Aantal"],
     ],
   );
+});
+
+// Elke eigenschap die volgens shared/links.ts een verband maakt, heeft hier een voorbeeld dat een lijn moet geven.
+// Komt er een bij (TypeScript dwingt dat af in FIELD_LINKS, CALC_LINKS of TOTAL_LINKS), dan faalt deze test tot
+// `listLinks` ze toont en er hier een voorbeeld staat.
+test("elke werking die lijsten verbindt, staat op de kaart", () => {
+  const ref = { key: "r", label: "R", type: "item", ref_type: "B" } as const;
+  const field: Record<string, FieldDef[]> = {
+    ref_type: [ref],
+    ref_also: [{ ...ref, ref_also: ["C"] }],
+    agenda: [{ key: "d", label: "D", type: "date", agenda: true }],
+    adjust: [{ key: "n", label: "N", type: "number" }, { ...ref, adjust: { field: "aantal", sign: -1 } }],
+    copy: [{ ...ref, copy: true }],
+    calc: [ref, { key: "c", label: "C", type: "calc", result: "text", calc: { kind: "lookup", via: "r", field: "x" } }],
+  };
+  const calc: Record<string, FieldDef[]> = {
+    lookup: field.calc,
+    rollup: [{ key: "s", label: "S", type: "calc", result: "number", calc: { kind: "rollup", from: "backlinks", list: "B", via: "r", agg: "count" } }],
+  };
+  const total: Record<string, LinkList["totals"]> = {
+    sources: [{ id: "t", agg: "count", period: "all", sources: ["B"] }],
+    settle: [{ id: "t", agg: "sum", field: "n", period: "all", by: "p", against: "q", settle: true }],
+  };
+  const linksOf = (fields: FieldDef[], totals: LinkList["totals"] = []) => listLinks({ id: "A", fields, totals });
+  for (const [key, on] of Object.entries(FIELD_LINKS)) if (on) assert.ok(field[key] && linksOf(field[key]).length > 0, `veld.${key} geeft geen verband`);
+  for (const [kind, on] of Object.entries(CALC_LINKS)) if (on) assert.ok(calc[kind] && linksOf(calc[kind]).length > 0, `berekening ${kind} geeft geen verband`);
+  for (const [key, on] of Object.entries(TOTAL_LINKS)) if (on) assert.ok(total[key] && linksOf([], total[key]).length > 0, `totaal.${key} geeft geen verband`);
+  // En omgekeerd: een veld zonder zo'n eigenschap verbindt niets.
+  assert.deepEqual(linksOf([{ key: "t", label: "T", type: "text", hint: "x", column: true }]), []);
 });

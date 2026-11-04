@@ -33,6 +33,7 @@ export const routes: RouteObject[] = [
       { path: "items/:itemId", element: <ItemPage /> },
       { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
       { path: "agenda", element: <AgendaPage /> },
+      { path: "verbanden", element: <LinksPage /> },
       { path: "ik", element: <MePage /> },
       { path: "*", element: <p className="page muted">Deze pagina bestaat niet.</p> },
     ],

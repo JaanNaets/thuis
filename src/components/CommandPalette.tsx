@@ -9,6 +9,7 @@ type Entry = { key: string; group: string; label: string; hint?: string; icon: I
 
 const ACTIONS: Entry[] = [
   { key: "home", group: "Ga naar", label: "Overzicht", icon: "project", to: "/" },
+  { key: "links", group: "Ga naar", label: "Verbanden", icon: "links", to: "/verbanden" },
   { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
   { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "plus", to: "/projecten/nieuw" },
 ];

@@ -360,6 +360,14 @@ Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als
 je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
 een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
 
+### Een verwijzing naar meer lijsten
+
+Een veld **Verwijzing** kan naar meer lijsten wijzen, ook uit andere projecten (bij het veld, onder ⋯: **Nog een
+lijst**). Zo kiest "Wat" in Voeding uit de voorraad van de Slachterijstraat én die van de Kerkstraat: typ om te
+zoeken, en heten de lijsten hetzelfde, dan staat het project erbij. Met **Ook vrije tekst** mag je ook iets typen dat
+er niet bij staat (dat telt dan nergens af). Aftrekken en overnemen gebeuren per veld met dezelfde naam, dus geef die
+lijsten dezelfde velden.
+
 ### Verwijzingen die tellen en overnemen
 
 Een verwijzing (een veld dat naar een item uit een andere lijst wijst, ook uit een ander project) kan meer dan wijzen:
@@ -404,6 +412,10 @@ lijn in de kleur van zijn soort: **telt bij of af** (Bijvullen trekt af van de V
 mee in Wie moet wie), **berekeningen** (Laatst bijgevuld komt uit Bijvullen), **agenda**, **verwijzingen** en een
 lijst als **tab** in een subproject. Lijsten in andere projecten staan rechts onder "Elders". Kies een lijst en je
 ziet wat erop inwerkt en waar ze op inwerkt; de soorten zet je aan en uit met de filters.
+
+**Verbanden** in het menu toont hetzelfde over al je projecten heen: enkel de lijnen tussen verschillende projecten
+(bv. Eten in Voeding dat aftrekt van de voorraad in de Slachterijstraat én in de Kerkstraat). Een kolom opent de
+kaart van dat project.
 
 Niets hiervan wordt bewaard: de kaart volgt uit de velden, berekeningen en totalen van de lijsten, en toont enkel wat
 jij mag zien (een lijst, veld of project dat je niet ziet, staat er niet op). Ze blijft licht, ook met 1000 projecten:

@@ -24,7 +24,9 @@ export function LinksPage() {
   const { projects } = useSession();
   const project = projects.find((p) => p.id === id);
   const parent = project?.parent_id ? projects.find((p) => p.id === project.parent_id) : undefined;
-  const { data: map, error } = useApi<LinkMap>(`/projects/${id}/links`);
+  // Zonder project: de verbanden tussen al je projecten.
+  const all = !id;
+  const { data: map, error } = useApi<LinkMap>(all ? "/links" : `/projects/${id}/links`);
   const [off, setOff] = useState<Set<LinkKind>>(new Set());
 
   const wide = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
@@ -44,16 +46,13 @@ export function LinksPage() {
 
   return (
     <div className="page">
-      <PageHead
-        title="Verbanden"
-        back={project ? { to: `/projecten/${project.id}`, label: project.name } : { to: "/", label: "Overzicht" }}
-      />
+      <PageHead title="Verbanden" back={all ? undefined : project ? { to: `/projecten/${project.id}`, label: project.name } : { to: "/", label: "Overzicht" }} />
       {error && <p className="error">{error}</p>}
       {!map && !error && <SkeletonRows rows={4} />}
       {map && !map.links.length && (
         <EmptyState
           icon="links"
-          title="Nog geen verbanden"
+          title={all ? "Nog geen verbanden tussen je projecten" : "Nog geen verbanden"}
           action={
             settings && (
               <Link to={`/projecten/${id}/instellingen?tab=lijsten`} className="btn btn-outline btn-sm">
@@ -90,7 +89,7 @@ export function LinksPage() {
 
           {view === "kaart" && (
             <>
-              <LinkMapView map={map} current={id!} links={links} selected={selected?.id ?? null} onSelect={select} onColumn={openMap} />
+              <LinkMapView map={map} current={id ?? ""} links={links} selected={selected?.id ?? null} onSelect={select} onColumn={openMap} />
               {selected && <LinkDetail map={map} node={selected} links={links} onSelect={select} />}
             </>
           )}
@@ -123,7 +122,7 @@ export function LinksPage() {
               )}
               {map.more.project_count > 0 && (
                 <p>
-                  Nog {map.more.project_count} subprojecten met een eigen kaart:{" "}
+                  Nog {map.more.project_count} {all ? "projecten" : "subprojecten"} met een eigen kaart:{" "}
                   {map.more.projects.map((q, i) => (
                     <span key={q.id}>
                       {i > 0 && ", "}
@@ -138,10 +137,10 @@ export function LinksPage() {
               {map.more.outside > 0 && <p>En {map.more.outside} lijsten in andere projecten die hier niet meer passen.</p>}
             </div>
           )}
-          {parent && (
+          {!all && (
             <p className="lm-more">
-              <Link to={`/projecten/${parent.id}/verbanden`} className="link-quiet">
-                Kaart van {parent.name}
+              <Link to={parent ? `/projecten/${parent.id}/verbanden` : "/verbanden"} className="link-quiet">
+                {parent ? `Kaart van ${parent.name}` : "Alle projecten"}
               </Link>
             </p>
           )}

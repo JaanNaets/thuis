@@ -161,7 +161,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 - **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (10px marge, geen rand, afronding 18px). Het paneel scrollt zelf; de zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het zwarte merktegeltje met "Thuis" (naar het overzicht), het
-  zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), Overzicht, Agenda en de
+  zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), Overzicht, Agenda, Verbanden en de
   [projectboom](#projectboom-zijbalk). Het actieve item ligt onder een **glazen lens** die meeveert.
 - **Paneelbalk** (60px, een glazen balk die 10px van de randen zweeft en blijft staan; de inhoud scrollt eronder
   door): kruimelpad met `›` links ("Slachterijstraat 1 › Wijnkelder"), rechts de hoofdactie (zwarte pil, 40px) en
@@ -439,6 +439,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 
 | Component of hulpje | Wat |
 | --- | --- |
+| `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes zweven eronder als glas (`.picker-list`), met het project erbij als ze uit meer projecten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
 | `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
@@ -705,7 +706,9 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
 
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList` (`LinkMap.tsx`)
 
-De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen). Bovenaan `Tabs`
+De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen), en over al je
+projecten (`/verbanden`, in de zijbalk onder Agenda): daar is elke kolom een hoofdproject en staan enkel de lijnen
+ertussen. Bovenaan `Tabs`
 **Kaart · Lijst** (op gsm begint het met Lijst), daaronder een `FilterToggle` per soort verband met het streepje in
 zijn kleur (`.lm-swatch`).
 
