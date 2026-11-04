@@ -70,7 +70,7 @@ De grijzen zijn doorschijnend (`rgb(118 118 128 / …)`): zo werkt hetzelfde vla
 | `--canvas` | #eef0f2 | Koel grijs achter het paneel, waarop de zijbalk staat (enkel tablet) |
 | `--background` | #ffffff | Paneel, kaarten, wit kaartje in een groep |
 | `--group` | grijs 4,5% | Een groep velden in een formulier, een instelling |
-| `--subtle` | grijs 6% | Zacht vlak: lege staat, foto zonder foto, bestanden, lange tekst, melding |
+| `--subtle` | grijs 6% | Zacht vlak: lege staat, bestanden, lange tekst, melding |
 | `--field` (+ `-hover`) | grijs 8% (12%) | Invoervelden (worden wit bij focus) |
 | `--muted` (+ `-strong`) | grijs 10% (16%) | Pillen, zachte knoppen, filters, tags, sporen van tabs en segmenten (hover) |
 | `--hover`, `--press` | zwart 2,5% / 5,5% | Hover van een rij; ingedrukt, gekozen zoekresultaat, actieve tab onderaan |
@@ -452,7 +452,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" met **Invullen** (of Enter), daaronder Foto · Uit bestand (· Barcode). Wat je typt, is ook de uitleg bij een foto. Invullen gaat eerst met code (`shared/quickfill.ts`: datums, uren, bedragen, getallen met eenheid, keuzes, personen, items, ja/nee; de naam van de lijst telt niet), een hele zin met de AI (`POST /projects/:id/items/read`); wat de code vond, wint. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). |
-| `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: een zacht vlak met een glazen knop erop |
+| `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
 | `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
 | `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
@@ -698,9 +698,9 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
 - In elke rij rechts `− 3 +` (`.row-stepper`); de rij is dan een `div.row` met de naam als `.row-link`. Dat getal is
   geen kolom meer (het staat al rechts). Elke tik gaat in één keer naar de database (`/items/:id/adjust`, nooit
   onder 0), zonder toast: het getal zelf is de bevestiging.
-- In de werkbalk twee iconknoppen: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
+- Bij **Meer opties** van de lijst: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
   Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
-  resultaat onderaan in beeld. En **Kasticket** (`receipt`): een foto, de lijnen worden gekoppeld aan je items
+  resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`): een foto, de lijnen worden gekoppeld aan je items
   (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
 
@@ -734,8 +734,11 @@ zijn kleur (`.lm-swatch`).
 
 ### Een lijst tonen: `ItemsView`
 
-`<ItemsView project={detail} type={type} />` is één lijst in een project: zoeken, filters uit de velden,
-Tag, Archief, een iconknop om te importeren en de tabel `.table-items`. Gebruik ze overal waar items van een lijst
+`<ItemsView project={detail} type={type} />` is één lijst in een project: het zoekveld met één knop **Meer opties**
+(`dots`), de filters uit de velden en Tag, en de tabel `.table-items`. Wat zelden nodig is, staat bij Meer opties in
+een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen, Importeren, Exporteren), met daaronder de
+schakelaars Met subprojecten en Archief; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
+(één tik zet hem uit). Geen rij iconknoppen naast het zoekveld. Gebruik `ItemsView` overal waar items van een lijst
 staan; bouw geen eigen lijst.
 
 ### Rechten in de app

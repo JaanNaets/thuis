@@ -4541,16 +4541,6 @@ dialog.palette[open]::backdrop {
   flex: 0 0 auto;
 }
 
-.item-photo[data-empty="true"] {
-  min-height: 150px;
-  margin: 14px 18px 8px;
-  padding: 16px;
-  align-content: end;
-  justify-items: center;
-  border-radius: var(--radius-xl);
-  background: var(--subtle);
-}
-
 .item-photo img {
   width: 100%;
   max-height: 280px;
@@ -4561,6 +4551,11 @@ dialog.palette[open]::backdrop {
 
 .item-photo .btn-row {
   justify-content: flex-start;
+}
+
+/* Een sheet als menu (Meer bij een lijst): rijen zonder kaart eromheen, dan de schakelaars. */
+.sheet-menu {
+  margin: 0 -8px 12px;
 }
 
 /* Kolommen van een lijst kiezen: per kolom een wit kaartje, de kop en een voorbeeld links, waar het heen gaat rechts. */

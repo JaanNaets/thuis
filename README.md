@@ -362,8 +362,8 @@ begint, mag de naam leeg ("Weging 30/10/2026"), en staat het nieuwste bovenaan.
 ### Voorraad
 
 Een getal kan **− en + in de lijst** krijgen (in Voorraad: Aantal). Dan tel je bij of af met één tik in de lijst, of
-met **Scannen**: scan de ene barcode na de andere, en de voorraad gaat erbij (gekocht) of eraf (opgebruikt). Met
-**Kasticket** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →
+met **Scannen** (bij **Meer opties**, de knop naast het zoekveld): scan de ene barcode na de andere, en de voorraad
+gaat erbij (gekocht) of eraf (opgebruikt). Met **Kasticket bijtellen** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →
 Melk), jij kiest wat erbij komt, en wat nog niet bestaat, wordt een nieuw product. Wat je moet kopen, zie je met de
 filter **Kopen: Ja**.
 

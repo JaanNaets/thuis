@@ -18,7 +18,7 @@ import { useSession } from "../session";
 import { Link, useNavigate } from "../router";
 import { occurrences } from "../../shared/agenda";
 import { CalendarMonth, gridRange, type CalendarEntry } from "./Calendar";
-import { FilterSelect, FilterToggle } from "./Controls";
+import { FilterSelect, FilterToggle, Switch } from "./Controls";
 import { ConditionPills, ViewChips, ViewEditor, type Choices } from "./Filters";
 import { namesFrom, ScoreStars } from "./Fields";
 import { Icon, type IconName } from "./Icon";
@@ -59,7 +59,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const [archived, setArchived] = useState(false);
   const toast = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [sheet, setSheet] = useState<"scan" | "receipt">();
+  const [sheet, setSheet] = useState<"scan" | "receipt" | "more">();
   async function step(id: string, delta: number) {
     try {
       const value = await adjust(id, counter!.key, delta);
@@ -205,6 +205,14 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   }, [agendaField, month, shown, project.project.color, type.icon, columns, names, placeOf]);
   const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(counter && !archived ? ["auto"] : [])].join(" ");
   const icon = (type.icon ?? "folder") as IconName;
+  const live = !project.project.archived;
+  // Wat bij Meer staat: zelden nodig, dus niet als knoppen naast het zoekveld.
+  const actions: { icon: IconName; label: string; run?: () => void; to?: string; href?: string }[] = [
+    ...(counter && codeField && !archived ? [{ icon: "scan" as const, label: "Scannen", run: () => setSheet("scan") }] : []),
+    ...(counter && type.can_create && live ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
+    ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
+    ...(items.length > 0 ? [{ icon: "download" as const, label: "Exporteren", href: apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`) }] : []),
+  ];
 
   return (
     <>
@@ -219,38 +227,9 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
-        {counter && codeField && !archived && (
-          <button type="button" className="btn btn-outline btn-icon" aria-label="Scannen" title="Scannen: bijtellen of aftrekken" onClick={() => setSheet("scan")}>
-            <Icon name="scan" />
-          </button>
-        )}
-        {counter && type.can_create && !project.project.archived && (
-          <button type="button" className="btn btn-outline btn-icon" aria-label="Kasticket" title="Een kasticket bijtellen" onClick={() => setSheet("receipt")}>
-            <Icon name="receipt" />
-          </button>
-        )}
-        {type.can_create && !project.project.archived && (
-          <Link
-            to={`/projecten/${project.project.id}/importeren?lijst=${type.id}`}
-            className="btn btn-outline btn-icon"
-            aria-label={`Importeren in ${type.plural}`}
-            title="Importeren uit een tabel"
-          >
-            <Icon name="table" />
-          </Link>
-        )}
-        {items.length > 0 && (
-          // Een bestand, geen ander scherm: een gewone link met `download`.
-          <a
-            href={apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`)}
-            download
-            className="btn btn-outline btn-icon"
-            aria-label={`${type.plural} exporteren`}
-            title="Exporteren als CSV (voor Excel)"
-          >
-            <Icon name="download" />
-          </a>
-        )}
+        <button type="button" className="btn btn-outline btn-icon" aria-label="Meer opties" aria-haspopup="dialog" onClick={() => setSheet("more")}>
+          <Icon name="dots" />
+        </button>
       </div>
 
       {savedViews && (
@@ -297,14 +276,17 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         {usedTags.length > 0 && (
           <FilterSelect label="Tag" all="Alle" value={tag} onChange={setTag} options={usedTags.map((t) => ({ value: t.id, label: t.name }))} />
         )}
-        {project.children.length > 0 && (
-          <FilterToggle on={tree} onChange={(on) => setDef({ ...def, tree: on || undefined })}>
+        {/* Aan te zetten bij Meer; staat het aan, dan hier, om met één tik uit te zetten. */}
+        {tree && (
+          <FilterToggle on onChange={() => setDef({ ...def, tree: undefined })}>
             <Icon name="project" size={14} /> Met subprojecten
           </FilterToggle>
         )}
-        <FilterToggle on={archived} onChange={setArchived}>
-          <Icon name="archive" size={14} /> Archief
-        </FilterToggle>
+        {archived && (
+          <FilterToggle on onChange={() => setArchived(false)}>
+            <Icon name="archive" size={14} /> Archief
+          </FilterToggle>
+        )}
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -378,6 +360,45 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
           </ul>
         </div>
       )}
+
+      <Sheet open={sheet === "more"} title={type.plural} onClose={() => setSheet(undefined)}>
+        {actions.length > 0 && (
+        <ul className="rows sheet-menu">
+          {actions.map((a) => {
+            const body = (
+              <span className="cell-main">
+                <span className="row-media">
+                  <Icon name={a.icon} size={16} />
+                </span>
+                <span className="row-title">{a.label}</span>
+              </span>
+            );
+            return (
+              <li key={a.label}>
+                {a.to ? (
+                  <Link to={a.to} className="row">
+                    {body}
+                  </Link>
+                ) : a.href ? (
+                  // Een bestand, geen ander scherm: een gewone link met `download`.
+                  <a href={a.href} download className="row" onClick={() => setSheet(undefined)}>
+                    {body}
+                  </a>
+                ) : (
+                  <button type="button" className="row" onClick={a.run}>
+                    {body}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        )}
+        <div className="form">
+          {project.children.length > 0 && <Switch label="Met subprojecten" checked={tree} onChange={(on) => setDef({ ...def, tree: on || undefined })} />}
+          <Switch label="Archief" checked={archived} onChange={setArchived} />
+        </div>
+      </Sheet>
 
       <Sheet open={editing} title={active ? active.name : "Filters"} onClose={() => setEditing(false)}>
         {editing && (

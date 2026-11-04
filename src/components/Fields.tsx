@@ -1795,7 +1795,8 @@ export function ItemPhoto({
 
   if (!item.photo_version && !canEdit) return null;
   return (
-    <div className="item-photo" data-empty={!item.photo_version && canEdit}>
+    // Zonder foto: enkel de knop (geen leeg vlak).
+    <div className="item-photo">
       {item.photo_version ? <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt={`Foto van ${item.name}`} /> : null}
       {canEdit && (
         <div className="btn-row">
