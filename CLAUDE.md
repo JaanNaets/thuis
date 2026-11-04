@@ -83,7 +83,9 @@ commits en uitleg.
   weigert te bouwen tot een nieuwe erin staat); wat lijsten verbindt (`true`), toont `listLinks`, met een voorbeeld in
   `test/links.test.ts`. Een kaart is één project met hoogstens `MAX_COLUMNS` subprojecten en `MAX_OUTSIDE` lijsten van
   elders, met een vast aantal vragen aan de databank (ook bij 1000 projecten). De schikking is een vaste regel
-  (`layoutLinks`): een rij per lijst waar iets toekomt, kolommen per project.
+  (`layoutLinks`): een rij per lijst waar iets toekomt, kolommen per project. **Problemen** (`adjustProblems`): wie
+  een item met een verwijzing die telt mag bewaren, maar het getal aan de andere kant niet mag wijzigen (dichtste rol
+  per project); enkel voor wie de mensen in beide projecten beheert, met twee vragen aan de databank.
 - **Verwijzingen die tellen** (`adjust`, `shared/effects.ts`, `worker/effects.ts`): wat een item aan andere items deed,
   staat in `items.applied` (nooit naar de browser). Bewaren past enkel het verschil toe, in dezelfde batch, en weigert
   als de bewerker dat getal daar niet mag wijzigen; verwijderen draait terug waar het mag. Overnemen (`copy`) gebeurt

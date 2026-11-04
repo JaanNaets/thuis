@@ -704,7 +704,7 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
   (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
 
-### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList` (`LinkMap.tsx`)
+### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)
 
 De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen), en over al je
 projecten (`/verbanden`, in de zijbalk onder Agenda): daar is elk project (ook een subproject) met verbanden een
@@ -727,6 +727,10 @@ zijn kleur (`.lm-swatch`).
 - **Lijst** (`LinkList`): per project een `group-row` met zijn stipje, en per lijst een rij met het aantal verbanden.
 - Onder de kaart in `.lm-more`: subprojecten zonder verbanden en wat niet meer op de kaart past (met een link naar
   hun eigen kaart).
+- **Werkt niet voor iedereen** (`LinkProblems`, boven kaart en lijst; enkel voor wie de mensen in beide projecten
+  beheert): een `card` met een rij per persoon ("Jana mag Aantal van Voorraad niet wijzigen", of "Jana zit niet in
+  Kerkstraat") met een rood `alert`-icoon (`--danger` op `--danger-bg`); de rij opent haar rol in dat project, of de
+  mensen. Op de kaart is zo'n lijn rood gestreept (`.lm-problem`, `--danger`). Geen problemen: geen kaart.
 
 ### Een lijst tonen: `ItemsView`
 

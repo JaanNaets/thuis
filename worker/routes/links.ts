@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { canSeeType, visibleFields, type Rights } from "../../shared/access";
 import {
+  adjustProblems,
   AGENDA_NODE,
   BALANCE_NODE,
   listLinks,
@@ -14,20 +15,87 @@ import {
   MAX_OUTSIDE,
   mergeLinks,
   OUTSIDE,
+  type AdjustEdge,
   type Link,
   type LinkMap,
   type LinkNode,
+  type LinkProblem,
 } from "../../shared/links";
 import { refLists } from "../../shared/fields";
 import { visibleTotals } from "../../shared/totals";
 import { descendantIds, flattenTree } from "../../shared/tree";
 import type { ItemType } from "../../shared/types";
-import { accessibleProjects, requireProject, toItemType, type TypeRow } from "../context";
+import { accessibleProjects, parseRights, requireProject, toItemType, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 
 export const projectLinks = new Hono<AppEnv>();
 
 const json = (v: unknown) => JSON.stringify(v);
+
+/**
+ * Wie een verwijzing die telt niet kan gebruiken (zie `adjustProblems`), voor de verbanden op de kaart. Enkel waar de
+ * lezer de mensen beheert in het project van beide lijsten. Twee vragen aan de databank, hoeveel verbanden er ook zijn.
+ */
+async function problemsFor(
+  db: D1Database,
+  lists: Map<string, ItemType>,
+  links: Link[],
+  rightsIn: (projectId: string) => Rights | undefined,
+  nameOf: (projectId: string) => string,
+): Promise<LinkProblem[]> {
+  const drawn = new Set(links.filter((l) => l.kind === "adjust").map((l) => `${l.from}|${l.to}`));
+  const edges: AdjustEdge[] = [];
+  for (const s of lists.values()) {
+    for (const f of s.fields) {
+      if (f.type !== "item" || !f.adjust) continue;
+      for (const to of refLists(f)) {
+        const t = lists.get(to);
+        if (!t || !drawn.has(`${s.id}|${to}`) || !rightsIn(s.project_id)?.members || !rightsIn(t.project_id)?.members) continue;
+        const target = f.adjust.field;
+        edges.push({
+          from: s.id,
+          fromProject: s.project_id,
+          key: f.key,
+          to,
+          toProject: t.project_id,
+          toProjectName: nameOf(t.project_id),
+          target,
+          label: t.fields.find((x) => x.key === target)?.label ?? target,
+        });
+      }
+    }
+  }
+  if (!edges.length) return [];
+  const starts = [...new Set(edges.flatMap((e) => [e.fromProject, e.toProject]))];
+  const { results: up } = await db
+    .prepare(
+      `WITH RECURSIVE up(start, id, depth) AS (
+         SELECT value, value, 0 FROM json_each(?1)
+         UNION ALL
+         SELECT up.start, p.parent_id, up.depth + 1 FROM projects p JOIN up ON p.id = up.id WHERE p.parent_id IS NOT NULL AND up.depth < 30
+       )
+       SELECT start, id FROM up ORDER BY start, depth`,
+    )
+    .bind(json(starts))
+    .all<{ start: string; id: string }>();
+  const chains = new Map<string, string[]>();
+  for (const r of up) chains.set(r.start, [...(chains.get(r.start) ?? []), r.id]);
+  const { results: rows } = await db
+    .prepare(
+      `SELECT m.project_id, m.person_id, m.role_id, r.name AS role_name, r.rights, r.project_id AS role_project, pe.name AS person_name
+       FROM memberships m JOIN roles r ON r.id = m.role_id JOIN people pe ON pe.id = m.person_id
+       WHERE m.project_id IN (SELECT value FROM json_each(?))`,
+    )
+    .bind(json([...new Set(up.map((r) => r.id))]))
+    .all<{ project_id: string; person_id: string; role_id: string; role_name: string; rights: string; role_project: string; person_name: string }>();
+  return adjustProblems(
+    edges,
+    new Map(rows.map((r) => [r.person_id, r.person_name])),
+    rows,
+    new Map(rows.map((r) => [r.role_id, { name: r.role_name, rights: parseRights(r.rights), project_id: r.role_project }])),
+    (p) => chains.get(p) ?? [p],
+  );
+}
 
 projectLinks.get("/:id/links", async (c) => {
   const db = c.env.DB;
@@ -164,6 +232,7 @@ projectLinks.get("/:id/links", async (c) => {
     columns: columnIds.filter((pid) => used.has(pid)).map((pid) => ({ id: pid, name: project(pid).name, color: project(pid).color })),
     nodes: out,
     links: kept,
+    problems: await problemsFor(db, all, kept, rightsIn, nameOf),
     quiet: columnIds.filter((pid) => pid !== id && !used.has(pid)).map((pid) => ({ id: pid, name: project(pid).name })),
     more: {
       projects: subs.slice(MAX_COLUMNS, MAX_COLUMNS + MAX_MORE).map((n) => ({ id: n.id, name: n.name })),
@@ -222,6 +291,13 @@ allLinks.get("/", async (c) => {
         count: null,
       })),
     links: kept,
+    problems: await problemsFor(
+      db,
+      all,
+      kept,
+      (p) => byId.get(p)?.rights,
+      (p) => byId.get(p)?.name ?? "",
+    ),
     quiet: [],
     more: { projects: rest.slice(0, MAX_MORE).map((n) => ({ id: n.id, name: n.name })), project_count: rest.length, outside: 0 },
   } satisfies LinkMap);

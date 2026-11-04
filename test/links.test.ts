@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { AGENDA_NODE, BALANCE_NODE, CALC_LINKS, FIELD_LINKS, layoutLinks, listLinks, mergeLinks, TOTAL_LINKS, type LinkList } from "../shared/links.ts";
+import { adjustProblems, AGENDA_NODE, BALANCE_NODE, CALC_LINKS, FIELD_LINKS, layoutLinks, listLinks, mergeLinks, TOTAL_LINKS, type LinkList } from "../shared/links.ts";
 
 // De pelletkachel: Bijvullen trekt af van de Voorraad, Uitgaven tellen erbij en verrekenen, Verkopers vatten de
 // uitgaven samen, Onderhoud staat in de agenda.
@@ -165,4 +165,49 @@ test("elke werking die lijsten verbindt, staat op de kaart", () => {
   for (const [key, on] of Object.entries(TOTAL_LINKS)) if (on) assert.ok(total[key] && linksOf([], total[key]).length > 0, `totaal.${key} geeft geen verband`);
   // En omgekeerd: een veld zonder zo'n eigenschap verbindt niets.
   assert.deepEqual(linksOf([{ key: "t", label: "T", type: "text", hint: "x", column: true }]), []);
+});
+
+test("problemen: wie bijvult maar het aantal daar niet mag wijzigen", () => {
+  const admin = { manage: true, members: true, create: true, delete: true, items: "edit", types: {} } as const;
+  const member = { ...admin, manage: false, members: false } as const;
+  const viewer = { ...member, create: false, delete: false, items: "view" } as const;
+  const noWat = { ...member, types: { E: { fields: { wat: "view" } } } } as const;
+  const roles = new Map([
+    ["r-admin", { name: "Beheerder", rights: admin, project_id: "F" }],
+    ["r-lid", { name: "Lid", rights: member, project_id: "F" }],
+    ["r-kijk", { name: "Lezer", rights: viewer, project_id: "K" }],
+    ["r-k-admin", { name: "Beheerder", rights: admin, project_id: "K" }],
+    ["r-nowat", { name: "Kijker", rights: noWat, project_id: "F" }],
+  ]);
+  const memberships = [
+    { project_id: "F", person_id: "jaan", role_id: "r-admin" },
+    { project_id: "K", person_id: "jaan", role_id: "r-k-admin" },
+    { project_id: "F", person_id: "jana", role_id: "r-lid" },
+    { project_id: "K", person_id: "jana", role_id: "r-kijk" },
+    { project_id: "F", person_id: "piet", role_id: "r-lid" },
+    { project_id: "F", person_id: "kim", role_id: "r-nowat" },
+  ];
+  const people = new Map([
+    ["jaan", "Jaan"],
+    ["jana", "Jana"],
+    ["piet", "Piet"],
+    ["kim", "Kim"],
+  ]);
+  const edge = { from: "E", fromProject: "F", key: "wat", to: "V", toProject: "K", toProjectName: "Kerkstraat", target: "aantal", label: "Aantal" };
+  const problems = adjustProblems([edge], people, memberships, roles, (p) => [p]);
+  assert.deepEqual(
+    problems.map((p) => [p.person, p.role?.name ?? null]),
+    [
+      ["Jana", "Lezer"],
+      ["Piet", null],
+    ],
+  );
+  assert.equal(problems[0].field, "Aantal");
+  assert.deepEqual(problems[0].project, { id: "K", name: "Kerkstraat" });
+  // Een rol erboven telt ook: wie in het hoofdproject Beheerder is, kan het.
+  const sub = adjustProblems([{ ...edge, toProject: "K-sub" }], people, memberships, roles, (p) => (p === "K-sub" ? ["K-sub", "K"] : [p]));
+  assert.deepEqual(
+    sub.map((p) => p.person),
+    ["Jana", "Piet"],
+  );
 });

@@ -3,7 +3,18 @@
 // hier wordt ze enkel getekend.
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { AGENDA_NODE, BALANCE_NODE, LINK_KINDS, layoutLinks, OUTSIDE, type Link as LinkDef, type LinkKind, type LinkMap, type LinkNode } from "../../shared/links";
+import {
+  AGENDA_NODE,
+  BALANCE_NODE,
+  LINK_KINDS,
+  layoutLinks,
+  OUTSIDE,
+  type Link as LinkDef,
+  type LinkKind,
+  type LinkMap,
+  type LinkNode,
+  type LinkProblem,
+} from "../../shared/links";
 import { CardHead } from "./Controls";
 import { Icon } from "./Icon";
 import { Link } from "../router";
@@ -79,6 +90,8 @@ export function LinkMapView({
   const layout = layoutLinks(columnIds, map.nodes, active);
   const nodes = map.nodes.filter((n) => layout.places.has(n.id));
   const links = active.filter((l) => layout.places.has(l.from) && layout.places.has(l.to));
+  /** Verbanden die voor iemand niet werken (rood gestreept). */
+  const broken = new Set(map.problems.map((p) => `${p.from}|${p.to}`));
 
   // Kolommen naast elkaar (enkel die met punten), rijen onder elkaar (een rij met meer banen is wat hoger).
   const used = columnIds.filter((_, i) => nodes.some((n) => layout.places.get(n.id)!.col === i));
@@ -168,7 +181,11 @@ export function LinkMapView({
         })}
 
         {links.map((l) => (
-          <path key={`${l.kind}-${l.from}-${l.to}`} d={path(l)} className={`lm-line ${kindClass(l.kind)} ${isLit(l) ? "" : "lm-dim"}`} />
+          <path
+            key={`${l.kind}-${l.from}-${l.to}`}
+            d={path(l)}
+            className={`lm-line ${kindClass(l.kind)} ${l.kind === "adjust" && broken.has(`${l.from}|${l.to}`) ? "lm-problem" : ""} ${isLit(l) ? "" : "lm-dim"}`}
+          />
         ))}
 
         {nodes.map((n) => {
@@ -326,6 +343,46 @@ export function LinkList({ map, links, onSelect }: { map: LinkMap; links: LinkDe
             </li>
           )),
         ])}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Verbanden die voor iemand niet werken (zie `adjustProblems`): per persoon wat er mis is, met een link naar waar je het
+ * oplost (de rol in dat project, of de mensen als hij er niet in zit).
+ */
+export function LinkProblems({ map }: { map: LinkMap }) {
+  if (!map.problems.length) return null;
+  const listName = (id: string) => map.nodes.find((n) => n.list_id === id)?.name ?? "";
+  const fix = (p: LinkProblem) => (p.role ? `/projecten/${p.role.project_id}/rollen/${p.role.id}` : `/projecten/${p.project.id}/instellingen?tab=mensen`);
+  return (
+    <section className="card lm-problems">
+      <CardHead title="Werkt niet voor iedereen" />
+      <ul className="rows">
+        {map.problems.map((p) => (
+          <li key={`${p.from}|${p.to}|${p.person}`}>
+            <Link to={fix(p)} className="row">
+              <span className="cell-main">
+                <span className="row-media lm-problem-icon">
+                  <Icon name="alert" size={16} />
+                </span>
+                <span className="row-main">
+                  <span className="row-title">
+                    {p.role ? `${p.person} mag ${p.field} van ${listName(p.to)} niet wijzigen` : `${p.person} zit niet in ${p.project.name}`}
+                  </span>
+                  <span className="row-meta">
+                    <span>
+                      {listName(p.from)} → {listName(p.to)}
+                    </span>
+                    <span>{p.role ? `${p.role.name} in ${p.project.name}` : `${p.field} van ${listName(p.to)}`}</span>
+                  </span>
+                </span>
+              </span>
+              <Icon name="next" size={16} className="row-chevron" />
+            </Link>
+          </li>
+        ))}
       </ul>
     </section>
   );

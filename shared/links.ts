@@ -6,6 +6,7 @@
 // dezelfde lijst toekomt, rijdt op één rij: zo blijft de kaart rustig, en volgt de plaats van alles uit een vaste regel
 // (geen zware berekening, en niets verspringt als er iets bijkomt).
 
+import { fieldAccess, type Rights } from "./access.ts";
 import { canAgenda } from "./agenda.ts";
 import { refLists, type FieldDef } from "./fields.ts";
 import type { IconKey } from "./templates.ts";
@@ -67,6 +68,8 @@ export type LinkMap = {
   columns: LinkColumn[];
   nodes: LinkNode[];
   links: Link[];
+  /** Verbanden die voor iemand niet werken (enkel voor wie de mensen in beide projecten beheert). */
+  problems: LinkProblem[];
   quiet: { id: string; name: string }[];
   more: { projects: { id: string; name: string }[]; project_count: number; outside: number };
 };
@@ -188,6 +191,65 @@ export function listLinks(list: LinkList, fieldsOf: (listId: string) => FieldDef
     if (t.settle) add("total", list.id, BALANCE_NODE, `Telt mee in ${label}`);
   }
   return out;
+}
+
+// ---------- problemen ----------
+
+/**
+ * Een verband dat voor iemand niet werkt: die persoon mag een item met de verwijzing bewaren, maar het getal dat ze
+ * aanpast (`field`) in het andere project niet wijzigen; dan weigert bewaren. `role`: de rol die hij daar heeft (null:
+ * hij zit er niet in), om meteen aan te passen.
+ */
+export type LinkProblem = {
+  from: string;
+  to: string;
+  person: string;
+  field: string;
+  project: { id: string; name: string };
+  role: { id: string; name: string; project_id: string } | null;
+};
+
+/** Een verwijzing die telt: veld `key` van lijst `from` past getal `target` (`label`) van lijst `to` aan. */
+export type AdjustEdge = { from: string; fromProject: string; key: string; to: string; toProject: string; toProjectName: string; target: string; label: string };
+export type MemberRole = { project_id: string; person_id: string; role_id: string };
+
+/**
+ * Wie een item met die verwijzing mag bewaren (het veld wijzigen), maar het getal in de andere lijst niet. Per persoon
+ * telt de dichtste rol: in het project zelf of erboven (`chainOf`: het project en alles erboven, van onder naar boven).
+ */
+export function adjustProblems(
+  edges: AdjustEdge[],
+  people: Map<string, string>,
+  memberships: MemberRole[],
+  roles: Map<string, { name: string; rights: Rights; project_id: string }>,
+  chainOf: (projectId: string) => string[],
+): LinkProblem[] {
+  const nearest = (person: string, project: string) => {
+    for (const p of chainOf(project)) {
+      const m = memberships.find((x) => x.project_id === p && x.person_id === person);
+      if (m) return roles.has(m.role_id) ? { id: m.role_id, ...roles.get(m.role_id)! } : null;
+    }
+    return null;
+  };
+  const out = new Map<string, LinkProblem>();
+  for (const e of edges) {
+    const chain = chainOf(e.fromProject);
+    for (const person of new Set(memberships.filter((m) => chain.includes(m.project_id)).map((m) => m.person_id))) {
+      const here = nearest(person, e.fromProject);
+      if (!here || fieldAccess(here.rights, e.from, e.key) !== "edit") continue;
+      const there = nearest(person, e.toProject);
+      if (there && fieldAccess(there.rights, e.to, e.target) === "edit") continue;
+      out.set(`${e.from}|${e.to}|${person}`, {
+        from: e.from,
+        to: e.to,
+        person: people.get(person) ?? "Iemand",
+        field: e.label,
+        project: { id: e.toProject, name: e.toProjectName },
+        role: there ? { id: there.id, name: there.name, project_id: there.project_id } : null,
+      });
+    }
+  }
+  return [...out.values()];
 }
 
 /**

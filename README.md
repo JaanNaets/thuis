@@ -426,6 +426,10 @@ mee in Wie moet wie), **berekeningen** (Laatst bijgevuld komt uit Bijvullen), **
 lijst als **tab** in een subproject. Lijsten in andere projecten staan rechts onder "Elders". Kies een lijst en je
 ziet wat erop inwerkt en waar ze op inwerkt; de soorten zet je aan en uit met de filters.
 
+Beheer je de mensen, dan zie je bovenaan ook wat **niet voor iedereen werkt**: mag Jana Bijvullen invullen maar
+het Aantal van de Voorraad niet wijzigen (haar rol in dat project is Lezer, of ze zit er niet in), dan zou bewaren
+voor haar mislukken. Die lijn is rood gestreept, en één tik opent haar rol of de mensen van dat project.
+
 **Verbanden** in het menu toont het hele web over al je projecten heen: elk project en subproject met verbanden is
 een kolom (bv. Eten in Voeding dat aftrekt van de voorraad in de Slachterijstraat én in de Kerkstraat). Een kolom
 opent de kaart van dat project; bij heel veel projecten staan die met de meeste verbanden op de kaart en de rest bij

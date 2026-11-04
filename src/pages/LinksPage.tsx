@@ -4,7 +4,7 @@ import { KIND_ORDER, LINK_KINDS, type LinkKind, type LinkMap } from "../../share
 import { useApi } from "../api";
 import { FilterToggle, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
-import { kindClass, LinkDetail, LinkList, LinkMapView } from "../components/LinkMap";
+import { kindClass, LinkDetail, LinkList, LinkMapView, LinkProblems } from "../components/LinkMap";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { Link, useNavigate } from "../router";
@@ -87,6 +87,7 @@ export function LinksPage() {
             </div>
           )}
 
+          <LinkProblems map={map} />
           {view === "kaart" && (
             <>
               <LinkMapView map={map} current={id ?? ""} links={links} selected={selected?.id ?? null} onSelect={select} onColumn={openMap} />

@@ -5427,6 +5427,21 @@ dialog.palette[open]::backdrop {
   stroke-dasharray: 1 7;
 }
 
+/* Een verband dat voor iemand niet werkt (zie LinkProblems). */
+.lm-line.lm-problem {
+  stroke: var(--danger);
+  stroke-dasharray: 10 8;
+}
+
+.lm-problems {
+  margin-bottom: 16px;
+}
+
+.lm-problem-icon {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
 .lm-station {
   fill: var(--background);
   stroke: var(--tone-ink);
