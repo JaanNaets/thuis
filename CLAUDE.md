@@ -72,7 +72,10 @@ commits en uitleg.
   enkel lijsten uit de keten erboven die je ziet).
 - **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
   verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item), enkel ids, nagekeken met `cleanBlocks`. Een
-  blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (elk project).
+  blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:
+  elk project, of bij meer dan `DEFAULT_ALL` enkel die bovenaan). `GET /me/overview` geeft enkel de lijsten van de
+  projecten in de blokken (`blockProjects`, of `?projects=`). Opstarten blijft licht bij 1000 projecten: geen lijst
+  of boom die alles tegelijk tekent (de zijbalk tekent een tak pas als hij open gaat).
 - **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor het hele web
   over al je projecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
   ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van

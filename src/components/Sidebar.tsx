@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useLocation } from "react-router";
 import { descendantIds } from "../../shared/tree";
 import type { ProjectNode, Tone } from "../../shared/types";
@@ -78,20 +78,29 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 /** De projecten bovenaan, elk met een gekleurd icoon; een project met subprojecten klapt open. */
 function ProjectTree({ projects, current }: { projects: ProjectNode[]; current: string | null }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  // Een tak komt pas in de pagina als hij (ooit) open was: met 1000 projecten blijft de zijbalk zo licht.
+  const [seen, setSeen] = useState<Set<string>>(() => new Set());
   const live = projects.filter((p) => !p.archived);
   const flat = projectTree(live);
-  const roots = childrenOf(live, null);
+  const roots = childrenOf(live, null).map((root) => {
+    const below = descendantIds(live, root.id);
+    // Open als je erop klikte, of als je nu dit project (of iets erin) bekijkt.
+    return { root, below, open: toggled[root.id] ?? (current !== null && below.has(current)) };
+  });
+  const openIds = roots.filter((r) => r.open).map((r) => r.root.id);
+  const openKey = openIds.join(",");
+  useEffect(() => {
+    // Wat open was, blijft in de pagina (zodat dichtklappen nog beweegt).
+    setSeen((s) => (openIds.every((id) => s.has(id)) ? s : new Set([...s, ...openIds])));
+  }, [openKey]);
 
   return (
     <div className="sidebar-places">
       <p className="nav-section">Projecten</p>
       <ul className="place-tree">
-        {roots.map((root, index) => {
-          const below = descendantIds(live, root.id);
-          const children = flat.filter((p) => p.id !== root.id && below.has(p.id));
+        {roots.map(({ root, below, open }, index) => {
           const rootDepth = flat.find((p) => p.id === root.id)?.depth ?? 0;
-          // Open als je erop klikte, of als je nu dit project (of iets erin) bekijkt.
-          const open = toggled[root.id] ?? (current !== null && below.has(current));
+          const children = open || seen.has(root.id) ? flat.filter((p) => p.id !== root.id && below.has(p.id)) : [];
           return (
             <li key={root.id}>
               <div className="place-row">
@@ -101,7 +110,7 @@ function ProjectTree({ projects, current }: { projects: ProjectNode[]; current: 
                   </span>
                   <span className="place-name">{root.name}</span>
                 </Link>
-                {children.length > 0 && (
+                {below.size > 1 && (
                   <button
                     type="button"
                     className="place-toggle"
@@ -113,7 +122,7 @@ function ProjectTree({ projects, current }: { projects: ProjectNode[]; current: 
                   </button>
                 )}
               </div>
-              {children.length > 0 && (
+              {below.size > 1 && (
                 <div className="place-children" data-open={open} inert={!open}>
                   <ul>
                     {children.map((child, k) => (

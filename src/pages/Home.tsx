@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { blockKey, defaultBlocks, type Block } from "../../shared/overview";
+import { blockKey, blockProjects, defaultBlocks, type Block } from "../../shared/overview";
 import type { Overview } from "../../shared/types";
 import { api, useApi } from "../api";
 import { Icon } from "../components/Icon";
@@ -19,14 +19,18 @@ import { useSession } from "../session";
 export function Home() {
   const { projects } = useSession();
   const toast = useToast();
-  const { data: overview, mutate } = useApi<Overview>("/me/overview");
+  const { data: base, mutate } = useApi<Overview>("/me/overview");
   const tree = projectTree(projects, true);
   const active = tree.filter((p) => !p.archived);
   const archived = tree.filter((p) => p.archived);
-  const lists = new Map(overview?.projects.map((p) => [p.id, p.types]));
   const [editing, setEditing] = useState<Block[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const blocks = editing ?? overview?.blocks ?? defaultBlocks(active.map((p) => p.id));
+  const blocks = editing ?? base?.blocks ?? defaultBlocks(active);
+  // De server stuurt enkel de lijsten van de projecten in je blokken; een project dat je net toevoegde, komt apart.
+  const missing = base ? blockProjects(blocks).filter((id) => !base.projects.some((p) => p.id === id)) : [];
+  const { data: extra } = useApi<Overview>(missing.length ? `/me/overview?projects=${missing.join(",")}` : null);
+  const overview = base && { ...base, projects: [...base.projects, ...(extra?.projects ?? [])] };
+  const lists = new Map(overview?.projects.map((p) => [p.id, p.types]));
 
   async function save(next: Block[] | null) {
     setBusy(true);

@@ -74,5 +74,18 @@ export function cleanBlocks(raw: unknown): Block[] | null {
   return out;
 }
 
-/** Het overzicht vanzelf: elk project (in de volgorde van je boom) met al zijn lijsten. */
-export const defaultBlocks = (projectIds: string[]): Block[] => projectIds.map((project) => ({ kind: "project", project }));
+/** Tot zoveel projecten krijgt vanzelf elk een blok; heb je er meer, dan enkel de projecten bovenaan. */
+export const DEFAULT_ALL = 12;
+
+/**
+ * Het overzicht vanzelf: elk project (in de volgorde van je boom) met al zijn lijsten, of bij veel projecten enkel die
+ * bovenaan (hun ouder zit er niet bij). Zo blijft het overzicht licht, ook met 1000 projecten.
+ */
+export function defaultBlocks(projects: { id: string; parent_id: string | null }[]): Block[] {
+  const ids = new Set(projects.map((p) => p.id));
+  const shown = projects.length <= DEFAULT_ALL ? projects : projects.filter((p) => !p.parent_id || !ids.has(p.parent_id));
+  return shown.map((p) => ({ kind: "project", project: p.id }));
+}
+
+/** De projecten waarvan de blokken de lijsten nodig hebben (een projectblok toont ze). */
+export const blockProjects = (blocks: Block[]): string[] => [...new Set(blocks.flatMap((b) => (b.kind === "project" ? [b.project] : [])))];

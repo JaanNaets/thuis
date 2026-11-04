@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { blockKey, cleanBlocks, defaultBlocks, MAX_BLOCKS } from "../shared/overview.ts";
+import { blockKey, blockProjects, cleanBlocks, DEFAULT_ALL, defaultBlocks, MAX_BLOCKS } from "../shared/overview.ts";
 
 test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
   const out = cleanBlocks([
@@ -30,9 +30,29 @@ test("leeg is vanzelf; te veel valt weg", () => {
   assert.deepEqual(cleanBlocks([]), []);
   const many = Array.from({ length: MAX_BLOCKS + 5 }, (_, i) => ({ kind: "project", project: `p${i}` }));
   assert.equal(cleanBlocks(many)!.length, MAX_BLOCKS);
-  assert.deepEqual(defaultBlocks(["a", "b"]), [
-    { kind: "project", project: "a" },
-    { kind: "project", project: "b" },
-  ]);
+  assert.deepEqual(
+    defaultBlocks([
+      { id: "a", parent_id: null },
+      { id: "b", parent_id: "a" },
+    ]),
+    [
+      { kind: "project", project: "a" },
+      { kind: "project", project: "b" },
+    ],
+  );
+  // Veel projecten: enkel die bovenaan (ook een subproject waarvan je de ouder niet ziet).
+  const big = [{ id: "r", parent_id: null }, { id: "los", parent_id: "onzichtbaar" }, ...Array.from({ length: DEFAULT_ALL }, (_, i) => ({ id: `s${i}`, parent_id: "r" }))];
+  assert.deepEqual(
+    defaultBlocks(big).map((b) => (b.kind === "project" ? b.project : "")),
+    ["r", "los"],
+  );
+  assert.deepEqual(
+    blockProjects([
+      { kind: "project", project: "a" },
+      { kind: "list", project: "b", list: "l" },
+      { kind: "project", project: "a", hide: ["x"] },
+    ]),
+    ["a"],
+  );
   assert.equal(blockKey({ kind: "value", item: "i", field: "f" }), "value/i/f");
 });

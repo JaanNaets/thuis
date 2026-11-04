@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { canCreate, typeAccess } from "../../shared/access";
 import type { IconKey } from "../../shared/templates";
 import { isTone, type Me, type Overview, type Person } from "../../shared/types";
-import { cleanBlocks } from "../../shared/overview";
+import { blockProjects, cleanBlocks, defaultBlocks } from "../../shared/overview";
+import { flattenTree } from "../../shared/tree";
 import { isValidIban, normalizeIban } from "../../shared/payment";
 import { accessibleProjects } from "../context";
 import type { AppEnv } from "../types";
@@ -62,14 +63,24 @@ me.put("/order", async (c) => {
 });
 
 /**
- * Je overzicht: per project de lijsten van dat project zelf, en die van erboven waar hier items in zitten, met
- * het aantal. Een lijst die je niet mag zien, staat er niet (ook niet als aantal).
+ * Je overzicht: je blokken (of vanzelf, zie `defaultBlocks`), en voor de projecten die ze tonen de lijsten van dat
+ * project zelf en die van erboven waar hier items in zitten, met het aantal. `?projects=a,b`: enkel voor die projecten
+ * (een blok dat je net toevoegde). Een lijst die je niet mag zien, staat er niet (ook niet als aantal).
  */
 me.get("/overview", async (c) => {
   const db = c.env.DB;
-  const nodes = (await accessibleProjects(db, c.get("person").id)).filter((n) => !n.archived);
+  const personId = c.get("person").id;
+  const [all, mine] = await Promise.all([
+    accessibleProjects(db, personId),
+    db.prepare("SELECT overview FROM people WHERE id = ?").bind(personId).first<{ overview: string | null }>(),
+  ]);
+  const live = all.filter((n) => !n.archived);
+  const blocks = cleanBlocks(parseJson(mine?.overview));
+  const asked = c.req.query("projects")?.split(",").filter(Boolean).slice(0, 60);
+  const wanted = new Set(asked ?? blockProjects(blocks ?? defaultBlocks(flattenTree(live))));
+  const nodes = live.filter((n) => wanted.has(n.id));
   const ids = JSON.stringify(nodes.map((n) => n.id));
-  const [types, counts, shownRows, mine] = (await db.batch([
+  const [types, counts, shownRows] = (await db.batch([
     db
       .prepare(
         `SELECT id, project_id, name, plural, icon FROM item_types
@@ -86,18 +97,16 @@ me.get("/overview", async (c) => {
       )
       .bind(ids),
     db.prepare("SELECT project_id, type_id FROM shown_lists WHERE project_id IN (SELECT value FROM json_each(?))").bind(ids),
-    db.prepare("SELECT overview FROM people WHERE id = ?").bind(c.get("person").id),
   ])) as [
     D1Result<{ id: string; project_id: string; name: string; plural: string; icon: IconKey | null }>,
     D1Result<{ project_id: string; type_id: string; n: number }>,
     D1Result<{ project_id: string; type_id: string }>,
-    D1Result<{ overview: string | null }>,
   ];
   const count = new Map(counts.results.map((r) => [`${r.project_id}/${r.type_id}`, r.n]));
   // Lijsten van erboven die een subproject zelf koos (zie PUT /projects/:id/shown).
   const shown = new Set(shownRows.results.map((r) => `${r.project_id}/${r.type_id}`));
   const result: Overview = {
-    blocks: cleanBlocks(parseJson(mine.results[0]?.overview)),
+    blocks,
     projects: nodes.map((n) => ({
       id: n.id,
       types: types.results

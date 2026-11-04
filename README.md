@@ -203,7 +203,7 @@ In kioskmodus:
 ### Het overzicht
 
 De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
-zit: één tik en je bent er. De volgorde van je projecten sleep je bij **Jouw gegevens** (je letter rechtsboven) (dat is per persoon); die van de
+zit: één tik en je bent er. Heb je meer dan 12 projecten, dan staan vanzelf enkel de projecten bovenaan erop. De volgorde van je projecten sleep je bij **Jouw gegevens** (je letter rechtsboven) (dat is per persoon); die van de
 subprojecten bij **Instellen → Algemeen**, als je het project instelt. De volgorde van de lijsten (en dus van de tabs
 in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
 
