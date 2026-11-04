@@ -78,7 +78,7 @@ De database en de opslag bestaan al in je Cloudflare-account. Je moet de app all
    Pages** → **Configure**, voeg bij **Repository access** de repo `thuis` toe, sla op en herlaad de pagina
    in Cloudflare.
 3. Projectnaam: `thuis`. Die moet gelijk zijn aan `name` in `wrangler.jsonc`.
-4. **Build command**: leeg laten. **Deploy command**: `npm run deploy`.
+4. **Build command**: leeg laten. **Deploy command**: `npm run deploy` (eerst de tests: faalt er een, dan gaat er niets online; Node-versie in `.node-version`).
 5. Klik op **Save and Deploy**.
 
 Vanaf nu wordt elke push naar `main` automatisch uitgerold. `npm run deploy` bouwt de app, past nieuwe
