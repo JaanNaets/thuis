@@ -56,7 +56,6 @@ const isRange = (def: FieldDef) => def.type === "year_range" || def.type === "da
  */
 export function ItemsView({ project, type }: { project: ProjectDetail; type: ItemTypeView }) {
   const [archived, setArchived] = useState(false);
-  const { data, error, loading, reload } = useApi<ItemList>(`/projects/${project.project.id}/items?type=${type.id}${archived ? "&archived=1" : ""}`);
   const toast = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [sheet, setSheet] = useState<"scan" | "receipt">();
@@ -68,7 +67,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       toast((err as Error).message, "alert");
     }
   }
-  const { person } = useSession();
+  const { person, projects } = useSession();
   // Weergaven: filters, sortering en kolommen (shared/views.ts); wat je koos, blijft staan zolang de app openstaat.
   const { data: savedViews, reload: reloadViews } = useApi<SavedView[]>(`/projects/${project.project.id}/views?type=${type.id}`);
   const storeKey = `thuis:weergave:${project.project.id}:${type.id}`;
@@ -87,6 +86,12 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     }
   }, [storeKey, activeId, def]);
   const setDef = (next: ViewDef) => setView((v) => ({ ...v, def: next }));
+  // Met subprojecten: ook de items die eronder in deze lijst staan (elk met jouw rechten daar), met hun project erbij.
+  const tree = Boolean(def.tree && project.children.length);
+  const listQuery = `type=${type.id}${archived ? "&archived=1" : ""}${tree ? "&sub=1" : ""}`;
+  const { data, error, loading, reload } = useApi<ItemList>(`/projects/${project.project.id}/items?${listQuery}`);
+  const placeOf = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const elsewhere = (item: Item) => (item.project_id !== project.project.id ? placeOf.get(item.project_id) : undefined);
   const [editing, setEditing] = useState(false);
   const navigate = useNavigate();
   const [month, setMonth] = useState(() => today().slice(0, 7));
@@ -186,16 +191,17 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         title: item.name,
         ...o,
         href: `/items/${item.id}`,
-        tone: project.project.color ?? "sky",
+        tone: elsewhere(item)?.color ?? project.project.color ?? "sky",
         icon: (type.icon ?? "calendar") as IconName,
-        meta: columns
-          .filter((c) => c.key !== agendaField.key)
-          .map((c) => formatFieldValue(c, item.data[c.key], names))
+        meta: [
+          elsewhere(item)?.name,
+          ...columns.filter((c) => c.key !== agendaField.key).map((c) => formatFieldValue(c, item.data[c.key], names)),
+        ]
           .filter(Boolean)
           .join(" · "),
       })),
     );
-  }, [agendaField, month, shown, project.project.color, type.icon, columns, names]);
+  }, [agendaField, month, shown, project.project.color, type.icon, columns, names, placeOf]);
   const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(counter && !archived ? ["auto"] : [])].join(" ");
   const icon = (type.icon ?? "folder") as IconName;
 
@@ -235,7 +241,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         {items.length > 0 && (
           // Een bestand, geen ander scherm: een gewone link met `download`.
           <a
-            href={apiUrl(`/projects/${project.project.id}/items/export?type=${type.id}${archived ? "&archived=1" : ""}${exportFilter}`)}
+            href={apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`)}
             download
             className="btn btn-outline btn-icon"
             aria-label={`${type.plural} exporteren`}
@@ -289,6 +295,11 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
           ))}
         {usedTags.length > 0 && (
           <FilterSelect label="Tag" all="Alle" value={tag} onChange={setTag} options={usedTags.map((t) => ({ value: t.id, label: t.name }))} />
+        )}
+        {project.children.length > 0 && (
+          <FilterToggle on={tree} onChange={(on) => setDef({ ...def, tree: on || undefined })}>
+            <Icon name="project" size={14} /> Met subprojecten
+          </FilterToggle>
         )}
         <FilterToggle on={archived} onChange={setArchived}>
           <Icon name="archive" size={14} /> Archief
@@ -354,7 +365,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
                 <ItemRow
                   item={item}
                   icon={icon}
-                  tone={project.project.color ?? "sky"}
+                  tone={elsewhere(item)?.color ?? project.project.color ?? "sky"}
+                  place={elsewhere(item)?.name}
                   columns={columns}
                   names={names}
                   tags={project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name)}
@@ -457,6 +469,7 @@ function ItemRow({
   item,
   icon,
   tone,
+  place,
   columns,
   names,
   tags,
@@ -465,13 +478,16 @@ function ItemRow({
   item: { id: string; name: string; data: Attributes; photo_version: number | null };
   icon: IconName;
   tone: string;
+  /** Het subproject waar het item staat (met subprojecten). */
+  place?: string;
   columns: FieldDef[];
   names: Names;
   tags: string[];
   /** Een voorraad: − en + rechts; de rij is dan geen link, enkel het deel met de naam. */
   stepper?: ReactNode;
 }) {
-  const meta = [...columns.map((c) => formatFieldValue(c, item.data[c.key], names)), ...tags].filter(Boolean).join(" · ");
+  const meta = [place, ...columns.map((c) => formatFieldValue(c, item.data[c.key], names)), ...tags].filter(Boolean).join(" · ");
+  const wide = [place, ...tags].filter(Boolean).join(" · ");
   const main = (
     <>
       {item.photo_version ? (
@@ -490,9 +506,9 @@ function ItemRow({
             <span>{meta}</span>
           </span>
         )}
-        {tags.length > 0 && (
+        {wide && (
           <span className="row-meta wide-only">
-            <span>{tags.join(" · ")}</span>
+            <span>{wide}</span>
           </span>
         )}
       </span>

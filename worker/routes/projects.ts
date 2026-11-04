@@ -60,6 +60,7 @@ import {
   ConflictError,
   ForbiddenError,
   guard,
+  idList,
   NotFoundError,
   optionalId,
   optionalString,
@@ -501,6 +502,24 @@ projects.put("/:id/types/order", async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * Welke lijsten van erboven dit (sub)project als eigen tab toont, ook zonder items erin (bv. Uitgaven in Pelletkachel).
+ * Enkel lijsten uit de projecten erboven die je mag zien; wie het project instelt, kiest.
+ */
+projects.put("/:id/shown", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  need(access, "manage", "Enkel wie het project instelt, kiest welke lijsten hier staan.");
+  const ids = idList(asObject(await c.req.json()), "ids");
+  const above = new Set((await typesFor(db, access.chain)).filter((t) => t.project_id !== access.project.id && canSeeType(access.rights, t.id)).map((t) => t.id));
+  if (ids.some((t) => !above.has(t))) throw new ValidationError("Kies enkel lijsten van de projecten erboven.");
+  await db.batch([
+    db.prepare("DELETE FROM shown_lists WHERE project_id = ?").bind(access.project.id),
+    ...[...new Set(ids)].map((t) => db.prepare("INSERT INTO shown_lists (project_id, type_id) VALUES (?, ?)").bind(access.project.id, t)),
+  ]);
+  return c.json({ ids: [...new Set(ids)] });
+});
+
 projects.get("/:id", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
@@ -509,7 +528,7 @@ projects.get("/:id", async (c) => {
   const id = access.project.id;
   const inChain = placeholders(chain.length);
 
-  const [children, ownChild, tags, roles, memberships, counts, childCounts] = await db.batch([
+  const [children, ownChild, tags, roles, memberships, counts, childCounts, shownRows] = await db.batch([
     db.prepare("SELECT * FROM projects WHERE parent_id = ? ORDER BY archived, sort_order, name COLLATE NOCASE").bind(id),
     db
       .prepare(
@@ -540,6 +559,7 @@ projects.get("/:id", async (c) => {
          SELECT down.top AS id, COUNT(i.id) AS n FROM down LEFT JOIN items i ON i.project_id = down.id AND i.archived = 0 GROUP BY down.top`,
       )
       .bind(id),
+    db.prepare("SELECT type_id FROM shown_lists WHERE project_id = ?").bind(id),
   ]);
 
   const ownByChild = new Map((ownChild.results as { project_id: string; role_id: string; role_name: string; rights: string }[]).map((m) => [m.project_id, m]));
@@ -596,6 +616,7 @@ projects.get("/:id", async (c) => {
     roles: (roles.results as (Omit<Role, "rights"> & { rights: string })[]).map((r) => ({ ...r, rights: parseRights(r.rights) })),
     members: [...nearest.values()].sort((a, b) => a.person.name.localeCompare(b.person.name, "nl")),
     counts: Object.fromEntries((counts.results as { type_id: string; n: number }[]).filter((r) => visible.has(r.type_id)).map((r) => [r.type_id, r.n])),
+    shown: (shownRows.results as { type_id: string }[]).map((r) => r.type_id).filter((t) => types.some((x) => x.id === t && x.project_id !== id)),
   };
   delete (detail.project as { created_by?: string }).created_by;
   return c.json(detail);

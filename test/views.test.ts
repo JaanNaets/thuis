@@ -118,6 +118,9 @@ test("weergave nakijken: enkel bestaande velden en passende vergelijkingen", () 
   assert.throws(() => cleanView({ conditions: [{ field: "bedrag", op: "gt" }] }, fields), /getal/);
   assert.throws(() => cleanView({ conditions: [{ field: "datum", op: "weekday", value: [8] }] }, fields), /dag van de week/);
   assert.deepEqual(cleanView({}, fields), { match: "all", conditions: [] });
+  // Met subprojecten: enkel echt aan, anders weg.
+  assert.deepEqual(cleanView({ tree: true }, fields), { match: "all", conditions: [], tree: true });
+  assert.deepEqual(cleanView({ tree: "ja" }, fields), { match: "all", conditions: [] });
 });
 
 test("voorwaarden in woorden", () => {

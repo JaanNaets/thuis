@@ -48,12 +48,13 @@ me.get("/overview", async (c) => {
   const db = c.env.DB;
   const nodes = (await accessibleProjects(db, c.get("person").id)).filter((n) => !n.archived);
   const ids = JSON.stringify(nodes.map((n) => n.id));
-  const [types, counts] = (await db.batch([
+  const [types, counts, shownRows] = (await db.batch([
     db
       .prepare(
         `SELECT id, project_id, name, plural, icon FROM item_types
          WHERE project_id IN (SELECT value FROM json_each(?1))
             OR id IN (SELECT type_id FROM items WHERE archived = 0 AND project_id IN (SELECT value FROM json_each(?1)))
+            OR id IN (SELECT type_id FROM shown_lists WHERE project_id IN (SELECT value FROM json_each(?1)))
          ORDER BY sort_order, created_at`,
       )
       .bind(ids),
@@ -63,16 +64,20 @@ me.get("/overview", async (c) => {
          WHERE archived = 0 AND project_id IN (SELECT value FROM json_each(?)) GROUP BY project_id, type_id`,
       )
       .bind(ids),
+    db.prepare("SELECT project_id, type_id FROM shown_lists WHERE project_id IN (SELECT value FROM json_each(?))").bind(ids),
   ])) as [
     D1Result<{ id: string; project_id: string; name: string; plural: string; icon: IconKey | null }>,
     D1Result<{ project_id: string; type_id: string; n: number }>,
+    D1Result<{ project_id: string; type_id: string }>,
   ];
   const count = new Map(counts.results.map((r) => [`${r.project_id}/${r.type_id}`, r.n]));
+  // Lijsten van erboven die een subproject zelf koos (zie PUT /projects/:id/shown).
+  const shown = new Set(shownRows.results.map((r) => `${r.project_id}/${r.type_id}`));
   const result: Overview = {
     projects: nodes.map((n) => ({
       id: n.id,
       types: types.results
-        .filter((t) => (t.project_id === n.id || count.has(`${n.id}/${t.id}`)) && typeAccess(n.rights, t.id) !== "none")
+        .filter((t) => (t.project_id === n.id || count.has(`${n.id}/${t.id}`) || shown.has(`${n.id}/${t.id}`)) && typeAccess(n.rights, t.id) !== "none")
         // Eerst de eigen lijsten, dan die van erboven (elk in hun volgorde).
         .sort((a, b) => Number(b.project_id === n.id) - Number(a.project_id === n.id))
         .map((t) => ({

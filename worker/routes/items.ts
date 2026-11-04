@@ -24,6 +24,7 @@ import { accessibleProjects, placeholders, projectAccess, requireProject, toItem
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
+import { descendantIds } from "../../shared/tree";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
@@ -266,28 +267,56 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
 
 // ---------- items van een project ----------
 
-/** De items van een project (?type= één lijst, ?archived=1 het archief), met de namen waarnaar ze verwijzen. */
+/**
+ * De items van een project in deze lijsten, en met `sub` ook die in de subprojecten eronder (een lijst van erboven
+ * gebruik je ook daar). Elk item met jouw rechten in zijn eigen project (daar kan je een andere rol hebben), met zijn
+ * berekeningen.
+ */
+async function itemsIn(db: D1Database, me: string, access: ProjectAccess, lists: ItemType[], archived: boolean, sub: boolean): Promise<Item[]> {
+  if (!lists.length) return [];
+  const rightsOf = new Map<string, Rights>([[access.project.id, access.rights]]);
+  if (sub) {
+    const nodes = await accessibleProjects(db, me);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    for (const id of descendantIds(nodes, access.project.id)) if (id !== access.project.id && byId.has(id)) rightsOf.set(id, byId.get(id)!.rights);
+  }
+  const { results } = await db
+    .prepare(
+      `${ITEM_SELECT} WHERE i.project_id IN (SELECT value FROM json_each(?)) AND i.archived = ? AND i.type_id IN (${placeholders(lists.length)})
+       ORDER BY i.name COLLATE NOCASE LIMIT 5000`,
+    )
+    .bind(JSON.stringify([...rightsOf.keys()]), archived ? 1 : 0, ...lists.map((t) => t.id))
+    .all<ItemRow>();
+  const byId = new Map(lists.map((t) => [t.id, t]));
+  const groups = new Map<string, Item[]>();
+  for (const r of results) {
+    const rights = rightsOf.get(r.project_id)!;
+    if (typeAccess(rights, r.type_id) === "none") continue;
+    const key = `${r.project_id}/${r.type_id}`;
+    groups.set(key, [...(groups.get(key) ?? []), toItem(r, rights, byId.get(r.type_id)!)]);
+  }
+  for (const [key, group] of groups) {
+    const [projectId, typeId] = key.split("/");
+    await withCalcs(db, me, byId.get(typeId)!, rightsOf.get(projectId)!, group);
+  }
+  // In de volgorde van de vraag (op naam), over de projecten heen.
+  const order = new Map(results.map((r, i) => [r.id, i]));
+  return [...groups.values()].flat().sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+}
+
+/**
+ * De items van een project (?type= één lijst, ?archived=1 het archief, ?sub=1 ook uit de subprojecten), met de namen
+ * waarnaar ze verwijzen.
+ */
 projectItems.get("/:id/items", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
   const access = await requireProject(db, me, c.req.param("id"));
   const types = await typesFor(db, access.chain);
-  const visible = types.filter((t) => typeAccess(access.rights, t.id) !== "none");
   const typeId = c.req.query("type") || null;
-  const ids = visible.map((t) => t.id).filter((t) => !typeId || t === typeId);
-  if (!ids.length) return c.json({ items: [], people: [], refs: [] } satisfies ItemList);
-  const { results } = await db
-    .prepare(
-      `${ITEM_SELECT} WHERE i.project_id = ? AND i.archived = ? AND i.type_id IN (${placeholders(ids.length)}) ORDER BY i.name COLLATE NOCASE LIMIT 5000`,
-    )
-    .bind(access.project.id, c.req.query("archived") === "1" ? 1 : 0, ...ids)
-    .all<ItemRow>();
-  const byId = new Map(visible.map((t) => [t.id, t]));
-  const list = results.map((r) => toItem(r, access.rights, byId.get(r.type_id)!));
-  for (const t of visible) {
-    const ofType = list.filter((i) => i.type_id === t.id);
-    if (ofType.length) await withCalcs(db, me, t, access.rights, ofType);
-  }
+  const lists = types.filter((t) => typeAccess(access.rights, t.id) !== "none" && (!typeId || t.id === typeId));
+  if (!lists.length) return c.json({ items: [], people: [], refs: [] } satisfies ItemList);
+  const list = await itemsIn(db, me, access, lists, c.req.query("archived") === "1", c.req.query("sub") === "1");
   return c.json({ items: list, ...(await namesFor(db, me, access.chain, types, list)) } satisfies ItemList);
 });
 
@@ -316,7 +345,8 @@ projectItems.post("/:id/items", async (c) => {
 
 /**
  * Een lijst als CSV (?type=), zoals jij ze ziet: de velden die je mag zien, met de berekeningen, de namen van personen
- * en verwijzingen, en de tags. Zonder archief (?archived=1: enkel het archief).
+ * en verwijzingen, en de tags. Zonder archief (?archived=1: enkel het archief); ?sub=1 ook uit de subprojecten (met
+ * het project erbij).
  */
 projectItems.get("/:id/items/export", async (c) => {
   const db = c.env.DB;
@@ -325,12 +355,7 @@ projectItems.get("/:id/items/export", async (c) => {
   const types = await typesFor(db, access.chain);
   const type = types.find((t) => t.id === c.req.query("type") && typeAccess(access.rights, t.id) !== "none");
   if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
-  const { results } = await db
-    .prepare(`${ITEM_SELECT} WHERE i.project_id = ? AND i.archived = ? AND i.type_id = ? ORDER BY i.name COLLATE NOCASE LIMIT 5000`)
-    .bind(access.project.id, c.req.query("archived") === "1" ? 1 : 0, type.id)
-    .all<ItemRow>();
-  let list = results.map((r) => toItem(r, access.rights, type));
-  await withCalcs(db, me, type, access.rights, list);
+  let list = await itemsIn(db, me, access, [type], c.req.query("archived") === "1", c.req.query("sub") === "1");
   const { people, refs } = await namesFor(db, me, access.chain, types, list);
   const person = new Map(people.map((p) => [p.id, p.name]));
   const ref = new Map(refs.map((r) => [r.id, r.name]));
@@ -353,17 +378,30 @@ projectItems.get("/:id/items/export", async (c) => {
       names,
     );
   }
+  // De tags van het project en erboven, en met de subprojecten ook die van hun projecten.
   const { results: tags } = await db
-    .prepare(`SELECT id, name FROM tags WHERE project_id IN (${placeholders(access.chain.length)})`)
-    .bind(...access.chain)
+    .prepare("SELECT id, name FROM tags WHERE project_id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([...access.chain, ...list.map((i) => i.project_id)]))
     .all<{ id: string; name: string }>();
   const tagName = new Map(tags.map((t) => [t.id, t.name]));
   const fields = type.fields.filter((f) => fieldAccess(access.rights, type.id, f.key) !== "none");
   const withTags = list.some((i) => i.tag_ids.length);
+  const places = new Set(list.map((i) => i.project_id));
+  const { results: projectRows } =
+    places.size > 1
+      ? await db.prepare("SELECT id, name FROM projects WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...places])).all<{ id: string; name: string }>()
+      : { results: [] };
+  const place = new Map(projectRows.map((p) => [p.id, p.name]));
   const csv = toCsv([
-    [type.name_label ?? "Naam", ...fields.map((f) => (f.unit ? `${f.label} (${f.unit})` : f.label)), ...(withTags ? ["Tags"] : [])],
+    [
+      type.name_label ?? "Naam",
+      ...(place.size ? ["Project"] : []),
+      ...fields.map((f) => (f.unit ? `${f.label} (${f.unit})` : f.label)),
+      ...(withTags ? ["Tags"] : []),
+    ],
     ...list.map((i) => [
       i.name,
+      ...(place.size ? [place.get(i.project_id) ?? ""] : []),
       ...fields.map((f) => exportValue(f, i.data[f.key], names)),
       ...(withTags ? [i.tag_ids.flatMap((id) => tagName.get(id) ?? []).join(", ")] : []),
     ]),

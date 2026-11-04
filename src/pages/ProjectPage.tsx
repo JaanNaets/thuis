@@ -26,8 +26,9 @@ export function ProjectPage() {
 
   const { project, counts } = p;
   const rights = project.rights;
-  // Tabs: de lijsten van dit project, en lijsten van erboven waar hier al iets in zit (zonder eigen lijsten: alle).
-  const own = p.types.filter((t) => t.project_id === project.id || counts[t.id]);
+  // Tabs: de lijsten van dit project, en lijsten van erboven die het project koos of waar hier al iets in zit (zonder
+  // eigen lijsten: alle).
+  const own = p.types.filter((t) => t.project_id === project.id || counts[t.id] || p.shown.includes(t.id));
   const types = own.length ? own : p.types;
   const wanted = params.get("lijst");
   const type = p.types.find((t) => t.id === wanted) ?? types.find((t) => counts[t.id]) ?? types[0];

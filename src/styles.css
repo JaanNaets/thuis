@@ -1949,6 +1949,20 @@ input[type="checkbox"] {
   transform: translateX(14px);
 }
 
+/* Vast aan (of uit): zoals een knop die niet kan. */
+.switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.switch:disabled::after {
+  width: 22px;
+}
+
+.switch[aria-checked="true"]:disabled::after {
+  transform: translateX(18px);
+}
+
 .quantity-field {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

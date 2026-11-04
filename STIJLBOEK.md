@@ -348,7 +348,8 @@ navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?t
 Een grijze pil zonder rand: grijs label, donkere waarde. Een actieve filter komt naar voren als **glas**. Filters
 staan onder het zoekveld.
 In `ItemsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
-wordt een schakelaar "Label: nu"), plus Tag en Archief. Toon een filter pas als er iets te kiezen valt.
+wordt een schakelaar "Label: nu"), plus Tag, Met subprojecten (icoon `project`, enkel als het project
+subprojecten heeft) en Archief. Toon een filter pas als er iets te kiezen valt.
 
 ### Segmenten: `Segmented`
 
@@ -532,11 +533,13 @@ relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen t
 
 | Waar | Hoe |
 | --- | --- |
-| Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden en Archief |
+| Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden, Met subprojecten en Archief |
 | Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting), Kolommen (`tag-picker`, leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen in dit project, Bijwerken / Als nieuwe bewaren / Verwijderen) |
 | Kolomkoppen (tablet) | Een kop sorteert (`.table-sort`): oplopend, aflopend, weer zoals de lijst; een pijltje `up`/`down` toont welke |
 
 - Wat je koos, blijft staan zolang de app openstaat (per lijst, `sessionStorage`). Exporteren volgt het filter.
+- Met subprojecten (`tree` in de weergave): een item uit een subproject krijgt de naam van dat project vooraan in
+  de rij (`.row-meta`) en het icoon in de toon van dat project.
 - Een voorwaarde op een veld dat iemand niet mag zien, telt voor hem niet mee; een weergave is geen beveiliging.
 
 ### Agenda: `CalendarMonth`
@@ -611,6 +614,7 @@ uit andere projecten bij "ook uit". Een sjabloon van vroeger met regels wordt bi
 | Formulier van een lijst, kaart "Deze lijst delen" | Dezelfde knoppen, voor één lijst (met de lijsten waarnaar ze verwijst) |
 | Nieuw project → "Uit een bestand" | Kies het bestand; naam, icoon, kleur en beschrijving komen eruit, wat erin zit staat in `.template-file` |
 | Instellen → Lijsten → "Uit sjabloon" | Een `Sheet`: bovenaan "Uit een bestand…", daaronder de ingebouwde lijsten (een badge "Staat er al" als die naam al bestaat) |
+| Instellen → Lijsten van een subproject | Onder de eigen lijsten een zin (`card-body muted small`: "Van erboven: …"), dan de lijsten van erboven als rij met "van Slachterijstraat 1" (en "3 items hier") en rechts een kale `.switch` met `aria-label` "… als tab tonen". Staan er al items in, dan staat hij aan en `disabled` (de tab blijft) |
 
 - Een lijst die meekomt omdat ernaar verwezen wordt (de Verkopers bij Wijnen), wordt bij het importeren hergebruikt
   als er erboven al een lijst met die naam is.
@@ -757,7 +761,7 @@ Tekst: wat er gebeurde, in de verleden tijd of als korte vaststelling ("12 wijne
 
 Twee soorten, inline in `Icon.tsx`:
 
-- **Gevuld voor dingen** (bon, kaart, doos, portefeuille, speld, tandwiel, …): Phosphor "fill" (phosphoricons.com).
+- **Gevuld voor dingen** (bon, kaart, doos, portefeuille, speld, tandwiel, vlam, …): Phosphor "fill" (phosphoricons.com).
   Grijs (`--muted-foreground`) in menu en ghostknoppen; in de kleur van de tekst in een knop; donker als het item
   actief is.
 - **Lijnen voor richtingen en handelingen** (plus, min, kruis, vinkje, chevrons, pijl, zoeken, downloaden, delen,

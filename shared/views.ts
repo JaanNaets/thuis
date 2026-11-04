@@ -199,6 +199,8 @@ export type ViewDef = {
   /** Als agenda volgens een datumveld (zie Agenda). */
   mode?: "list" | "agenda";
   date?: string;
+  /** Ook de items uit de subprojecten (elk met jouw rechten in zijn eigen project). */
+  tree?: boolean;
 };
 /** Een bewaarde weergave; `shared`: voor iedereen in het project; `can_edit`: jij mag ze aanpassen. */
 export type SavedView = { id: string; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
@@ -466,5 +468,6 @@ export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
     ...(sort.length ? { sort } : {}),
     ...(columns.length ? { columns: [...new Set(columns)] } : {}),
     ...(o.mode === "agenda" && date ? { mode: "agenda" as const, date } : {}),
+    ...(o.tree === true ? { tree: true } : {}),
   };
 }

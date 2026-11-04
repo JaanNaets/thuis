@@ -181,6 +181,24 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
   }
   const sortable = useSortable(order, save, (tid) => own.find((t) => t.id === tid)?.plural ?? "");
   const [picking, setPicking] = useState(false);
+  // Lijsten van erboven als eigen tab hier (bv. Uitgaven in een subproject); waar al items in zitten, staat de tab er.
+  const shownKey = p.shown.join(",");
+  const [shown, setShown] = useState(p.shown);
+  useEffect(() => setShown(shownKey ? shownKey.split(",") : []), [shownKey]);
+  async function show(tid: string, on: boolean) {
+    const before = shown;
+    const next = on ? [...shown, tid] : shown.filter((x) => x !== tid);
+    setShown(next);
+    try {
+      await api.put(`/projects/${id}/shown`, { ids: next });
+      const plural = inherited.find((t) => t.id === tid)?.plural ?? "De lijst";
+      toast(on ? `${plural} staat hier nu als tab` : `${plural} staat hier niet meer als tab`);
+      onChanged();
+    } catch (err) {
+      toast((err as Error).message, "alert");
+      setShown(before);
+    }
+  }
   return (
     <section className="card">
       <CardHead
@@ -228,23 +246,44 @@ function TypesTab({ project: p, onChanged }: { project: ProjectDetail; onChanged
             </li>
           );
         })}
-        {inherited.map((t) => (
-          <li key={t.id}>
-            <div className="row">
-              <span className="cell-main">
-                <span className="row-media">
-                  <Icon name={(t.icon ?? "folder") as IconName} size={16} />
-                </span>
-                <span className="row-main">
-                  <span className="row-title">{t.plural}</span>
-                  <span className="row-meta">
-                    <span>van {projectName(t.project_id)}</span>
+      </ul>
+      {inherited.length > 0 && (
+        <p className="card-body muted small">
+          Van erboven: zet aan wat je hier als tab wil, bv. Uitgaven. Wat je hier ingeeft, telt erboven mee.
+        </p>
+      )}
+      <ul className="rows">
+        {inherited.map((t) => {
+          const here = p.counts[t.id] ?? 0;
+          return (
+            <li key={t.id}>
+              <div className="row">
+                <span className="cell-main">
+                  <span className="row-media">
+                    <Icon name={(t.icon ?? "folder") as IconName} size={16} />
+                  </span>
+                  <span className="row-main">
+                    <span className="row-title">{t.plural}</span>
+                    <span className="row-meta">
+                      <span>van {projectName(t.project_id)}</span>
+                      {here > 0 && <span>{here === 1 ? "1 item hier" : `${here} items hier`}</span>}
+                    </span>
                   </span>
                 </span>
-              </span>
-            </div>
-          </li>
-        ))}
+                <button
+                  type="button"
+                  role="switch"
+                  className="switch"
+                  aria-checked={here > 0 || shown.includes(t.id)}
+                  aria-label={`${t.plural} als tab tonen`}
+                  title={here > 0 ? "Er staan hier al items in: de tab blijft" : "Als tab tonen in dit project"}
+                  disabled={here > 0}
+                  onClick={() => show(t.id, !shown.includes(t.id))}
+                />
+              </div>
+            </li>
+          );
+        })}
       </ul>
       {p.types.length === 0 && <p className="card-body muted small">Nog geen lijsten. Maak er een, bv. Wijnen met jaargang en druiven.</p>}
       {sortable.status}

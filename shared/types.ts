@@ -142,6 +142,8 @@ export type ProjectDetail = {
   members: Member[];
   /** Aantal items per lijst in dit project. */
   counts: Record<string, number>;
+  /** Lijsten van erboven die dit project als eigen tab toont (ook zonder items). */
+  shown: string[];
 };
 
 export type Item = {

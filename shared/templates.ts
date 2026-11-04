@@ -22,6 +22,7 @@ export const ICONS = [
   "paw",
   "dumbbell",
   "bike",
+  "flame",
   "armchair",
   "package",
   "card",

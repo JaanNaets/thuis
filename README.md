@@ -278,6 +278,12 @@ item krijgt de datum van vandaag), een persoon kan **beginnen met jou**, en een 
 (de gewone verdeling, of gelijk over iedereen). Bij het kiezen van een veldsoort staat telkens wat ze doet. De
 lijsten van een project gelden ook in zijn subprojecten.
 
+Een subproject toont zijn eigen lijsten, en een lijst van erboven zodra er iets in staat. Wil je die lijst er al
+eerder (bv. de Uitgaven van het huishouden in het subproject Pelletkachel), zet ze dan aan bij **Instellen → Lijsten**
+van het subproject. Wat je daar ingeeft, staat in het subproject en telt erboven mee (Wie moet wie met de
+subprojecten). Bovenaan zie je die items in de lijst met de filter **Met subprojecten**, elk met zijn subproject
+erbij; dat kan je ook als weergave bewaren en zo exporteren. Elk item toont wat jij in zijn eigen project mag zien.
+
 Een verwijzing kan ook naar een lijst in een **ander project** wijzen (bv. de Verkopers van Huishouden vanuit een los
 project), als je dat project ziet. Wie er niet in zit, ziet bij dat veld "Verborgen" en kan er niets kiezen.
 
@@ -463,6 +469,8 @@ dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en
 | `settings` | Gegevens van de app zelf: de dagkoersen van de ECB, de sleutels voor meldingen. |
 | `push_subscriptions` | Toestellen die meldingen willen: het adres bij hun pushdienst en hun sleutels. Uitzetten verwijdert de rij. |
 | `repeats` | Items die zich herhalen: om de hoeveel, de volgende keer, en wie het instelde. |
+| `views` | Bewaarde weergaven van een lijst (filters, sortering, kolommen, met subprojecten), voor jezelf of voor iedereen. |
+| `shown_lists` | Lijsten van erboven die een subproject als eigen tab toont (bv. Uitgaven in Pelletkachel). |
 
 Velden en rechten controleert de Worker, niet de database (`shared/fields.ts` en `shared/access.ts`). Zo kan er
 later een veldsoort of recht bij zonder de tabellen te herbouwen.
