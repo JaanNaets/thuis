@@ -172,7 +172,8 @@ code, controleer dan:
 ## 4. Op je gsm zetten
 
 - **iPhone**: open de app in Safari → deelknop → **Zet op beginscherm**.
-- **Android**: open de app in Chrome → ⋮ → **App installeren**.
+- **Android** (of Chrome en Edge op je computer): tik bij **Jouw gegevens** op **App installeren**, of open het
+  menu van de browser (⋮) → **App installeren**.
 
 Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je projecten, hun
 lijsten, een item) blijft op het toestel bewaard. Een **nieuw item** bewaren lukt ook offline: het wacht op je

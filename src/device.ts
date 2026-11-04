@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "./router";
 
 const KIOSK_KEY = "huishouden:kiosk";
@@ -63,6 +63,54 @@ export function useOnline(): boolean {
     };
   }, []);
   return online;
+}
+
+/** Het event van Chrome en Edge (ook op Android) om de app te installeren; TypeScript kent het niet. */
+interface InstallPromptEvent extends Event {
+  prompt(): Promise<unknown>;
+}
+
+let installPrompt: InstallPromptEvent | null = null;
+const installListeners = new Set<() => void>();
+const installChanged = () => installListeners.forEach((listener) => listener());
+
+// Zo vroeg mogelijk opvangen: de browser vuurt het af kort na het laden, vaak voor er een scherm staat.
+// preventDefault houdt de eigen balk van de browser weg; installeren gaat via de knop (of het menu van de browser).
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e as InstallPromptEvent;
+  installChanged();
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  installChanged();
+});
+
+function subscribeInstall(listener: () => void) {
+  installListeners.add(listener);
+  return () => {
+    installListeners.delete(listener);
+  };
+}
+
+/**
+ * Kan deze browser de app installeren? Enkel waar de browser dat aanbiedt (Chrome, Edge, Android), niet als de
+ * app al geïnstalleerd is of als app draait. Op een iPhone kan het niet: daar zet je ze via Deel op je beginscherm.
+ */
+export function useInstall(): { canInstall: boolean; install: () => Promise<void> } {
+  const prompt = useSyncExternalStore(subscribeInstall, () => installPrompt);
+  const standalone = matchMedia("(display-mode: standalone)").matches;
+
+  async function install() {
+    const event = installPrompt;
+    if (!event) return;
+    // Een prompt werkt maar één keer; de browser biedt het later opnieuw aan als je weigerde.
+    installPrompt = null;
+    installChanged();
+    await event.prompt();
+  }
+
+  return { canInstall: Boolean(prompt) && !standalone, install };
 }
 
 export function registerServiceWorker() {

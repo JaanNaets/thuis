@@ -23,6 +23,7 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | Iconen | `src/components/Icon.tsx` |
 | Verbanden tussen lijsten (kaart) | `src/components/LinkMap.tsx` en `shared/links.ts` |
 | Opmaak van bedragen, datums, hoeveelheden | `src/format.ts` |
+| Toestel: kiosk, online, app installeren | `src/device.ts` (`isKiosk`, `useOnline`, `useInstall`) |
 
 ---
 
@@ -892,7 +893,7 @@ tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
 **Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder de volgorde van je projecten op
-het overzicht.
+het overzicht. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).
 
 ## 7. Toegankelijkheid
 
