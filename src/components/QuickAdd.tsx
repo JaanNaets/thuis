@@ -1,6 +1,6 @@
 // Snel toevoegen op je overzicht: het slimme invulveld van het formulier (QuickInput, shared/quickfill.ts) in een blok,
 // met Bewaar: wat je typt, gaat meteen in de lijst zonder het formulier te openen, met Ongedaan maken in de melding.
-// Mist er iets verplichts, dan wordt de knop Verder en opent het formulier met je tekst. Wat het blok invult: eerst
+// Mist er iets verplichts (of bij eten de voedingswaarde), dan wordt de knop Verder en opent het formulier met je tekst. Wat het blok invult: eerst
 // wat de velden zelf invullen (vandaag, jij), dan je geheugen (`remember`), dan wat een gekozen item overneemt
 // (`copy`), dan je tekst en je keuzes. Alles gaat daarna door de gewone route (POST /projects/:id/items, prepareData).
 
@@ -151,8 +151,12 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
     };
   }, [bySigs.join("|")]);
   const mem: Attributes = Object.assign({}, ...byKeys.map((by, i) => (byMem[by]?.sig === bySigs[i] ? byMem[by].data : {})));
+  // Eten zonder voedingswaarde (niets uit je geheugen of de voorraad): eerst het formulier, waar ✨ ze opzoekt of schat.
+  const energy = fields.find((f) => f.type === "number" && f.product === "kcal");
   const missingIn = (data: Attributes, name: string) =>
-    type.fields.some((f) => f.required && type.field_access[f.key] === "edit" && empty(data[f.key])) || (!logbook && !name.trim());
+    type.fields.some((f) => f.required && type.field_access[f.key] === "edit" && empty(data[f.key])) ||
+    (!logbook && !name.trim()) ||
+    Boolean(energy && empty(data[energy.key]));
   const missing = missingIn(compose(result, picks, copied, mem), nameOf(result, picks, copied));
   const typed = Boolean(note.trim());
 

@@ -983,9 +983,11 @@ formulier (`?tekst=`), Nieuw project als laatste. → de blokken die je koos
 (`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
 een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
 met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
+→ daaronder **Projecten** (`.home-projects`: je projecten bovenaan als rijen met icoon in hun toon, enkel tot 1100px, waar
+de zijbalk geen projecten toont: zo raak je op gsm en tablet altijd bij een project, wat er ook op het overzicht staat)
 → gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: **snel toevoegen** (`QuickAdd`: de kop
 opent het formulier, eronder `QuickInput` met `QuickChips` en **Bewaar**: meteen bewaard, met **Ongedaan maken** in
-de toast; ontbreekt er iets verplichts, dan heet de knop Verder en opent het formulier met je tekst; de kaart komt
+de toast; ontbreekt er iets verplichts (of bij eten de kcal: niets uit je geheugen of de voorraad), dan heet de knop Verder en opent het formulier met je tekst; de kaart komt
 niet omhoog bij aanwijzen), een totaal
 (`TotalsCards only`), één waarde (`.dash-value`, groot; de naam van het item als titel, het veld eronder, − en + bij
 een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen), **Wie moet wie** (`BalanceCard`

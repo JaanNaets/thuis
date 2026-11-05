@@ -13,7 +13,7 @@ import { BlocksEditor, BlockView } from "../components/OverviewBlocks";
 import { EmptyState, PageHead } from "../components/Page";
 import { projectIcon } from "../components/Sidebar";
 import { useToast } from "../components/Toast";
-import { projectTree } from "../projects";
+import { childrenOf, projectTree } from "../projects";
 import { Link } from "../router";
 import { useSession } from "../session";
 
@@ -254,6 +254,32 @@ export function Home() {
             ))}
           </div>
         </>
+      )}
+
+      {/* Zonder zijbalk met projecten (gsm, tablet): je projecten bovenaan altijd onder het overzicht. */}
+      {!editing && active.length > 0 && (
+        <section className="home-projects">
+          <h2 className="section-title">Projecten</h2>
+          <div className="card">
+            <ul className="rows">
+              {childrenOf(projects.filter((p) => !p.archived), null).map((p) => (
+                <li key={p.id}>
+                  <Link to={`/projecten/${p.id}`} className="row">
+                    <span className="cell-main">
+                      <span className={`row-media tone-${p.color ?? "sky"}`}>
+                        <Icon name={projectIcon(p)} size={16} />
+                      </span>
+                      <span className="row-main">
+                        <span className="row-title">{p.name}</span>
+                      </span>
+                    </span>
+                    <Icon name="next" size={16} className="row-chevron" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       )}
 
       {archived.length > 0 && !editing && (
