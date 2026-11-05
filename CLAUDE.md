@@ -58,7 +58,9 @@ commits en uitleg.
   project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
 - **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
   velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
-  en wat de code vond, wint. Alles daarna gewoon door het formulier en `prepareData`.
+  en wat de code vond, wint. Alles daarna gewoon door het formulier en `prepareData`. Terwijl je typt, toont
+  `QuickInput` keuzes uit de velden (`typedFragments`, `formSuggestions`, `matchSuggestions`; items enkel via
+  `GET /items?type=…&q=`, nooit een hele lijst); kiezen vult het veld in zoals zelf invullen (`changeField`).
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.

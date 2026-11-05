@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
 import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue } from "../../shared/fields";
-import { quickFill } from "../../shared/quickfill";
+import { quickFill, type Suggestion } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemRef, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -10,6 +10,7 @@ import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
 import { attributesDraft, buildAttributes, FieldInputs, fieldSuggestions, findProduct, LabelScanner, type AttributeDraft } from "../components/Fields";
 import { PageHead } from "../components/Page";
+import type { QuickSource } from "../components/QuickInput";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
@@ -246,13 +247,72 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k));
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, scanned[k]])) }));
     setAuto(new Set([...keys, ...(scan.name ? ["name"] : [])]));
+    rescale(scanned, keys);
+  }
+
+  // Een veld dat je zelf invult (of kiest terwijl je typt): het blijft staan, en wat erbij hoort, gebeurt (overnemen,
+  // een barcode opzoeken, hoeveelheden meerekenen met de porties).
+  function changeField(next: AttributeDraft, key: string) {
+    touched.current.add(key);
+    setAuto((a) => (a.has(key) ? new Set([...a].filter((k) => k !== key)) : a));
+    setAttrs(next);
+    const def = fields.find((f) => f.key === key);
+    if (def?.type === "code") lookupCode(next[key]);
+    if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
+    rescale(next, [key]);
+  }
+
+  // Andere porties (zelf getypt of ingevuld): de overgenomen hoeveelheden (een recept) rekenen mee, zolang je ze niet
+  // zelf aanpaste.
+  function rescale(next: AttributeDraft, changed: string[]) {
+    for (const f of fields) {
+      const base = scaleBase.current[f.key];
+      if (f.type !== "amounts" || !f.per || !changed.includes(f.per) || !base || touched.current.has(f.key)) continue;
+      const now = Number(String(next[f.per] ?? "").replace(",", "."));
+      if (!(now > 0)) continue;
+      setAttrs((a) => ({ ...a, [f.key]: scaleAmounts(base.amounts, now / base.per) }));
+    }
+  }
+
+  // Keuzes terwijl je typt (zie QuickInput): uit de velden die je mag wijzigen, en de namen van eerder.
+  const quick = useMemo<QuickSource>(
+    () => ({
+      fields: fields.filter((f) => f.type !== "calc" && type.field_access[f.key] === "edit"),
+      people,
+      names: [...earlier.values()].map((i) => i.name),
+      nameLabel: type.name_label ?? "Naam",
+    }),
+    [fields, type, earlier, project.members],
+  );
+
+  /** Een keuze terwijl je typt: dat veld meteen invullen (bij meer waarden erbij), zoals zelf invullen. */
+  function pickSuggestion(s: Suggestion) {
+    if (s.field === "name") {
+      touched.current.add("name");
+      setAuto((a) => new Set([...a].filter((k) => k !== "name")));
+      return setName(s.text);
+    }
+    const def = fields.find((f) => f.key === s.field);
+    if (!def) return;
+    const now = attrs[def.key];
+    const list = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+    let value: AttributeDraft[string];
+    if (def.type === "items" || def.type === "people") value = [...new Set([...list(now), String(s.value)])];
+    else if (def.type === "amounts") value = [...(Array.isArray(now) ? (now as AmountEntry[]) : []), { item: String(s.value) }];
+    else if (def.type === "multi") {
+      const chosen = String(now ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      value = [...new Set([...chosen, String(s.value)])].join(", ");
+    } else if (def.type === "bool") value = true;
+    else value = String(s.value);
+    changeField({ ...attrs, [def.key]: value }, def.key);
   }
 
   /**
    * Getypte tekst invullen ("21-10 komkommer 200 g"): eerst met code (shared/quickfill.ts); is wat overblijft een zin,
-   * dan leest de AI het (wat de code vond, wint). Enkel velden die je mag wijzigen.
+   * dan leest de AI het (wat de code vond, wint). Enkel velden die je mag wijzigen. Wat je terwijl je typte koos
+   * (`picked`), staat al in zijn veld: die woorden slaat de code over, en de AI zet die keuze niet in een ander veld.
    */
-  async function fillText(text: string): Promise<{ message?: string; create?: LabelScan["create"] }> {
+  async function fillText(text: string, picked: Suggestion[] = []): Promise<{ message?: string; create?: LabelScan["create"] }> {
     const editable = fields.filter((f) => type.field_access[f.key] === "edit");
     const refs = editable.filter((f) => f.type === "item" || f.type === "items");
     const options = new Map(
@@ -264,7 +324,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         }),
       ),
     );
-    const quick = quickFill(text, editable, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural] });
+    const quick = quickFill(text, editable, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural, ...picked.map((p) => p.text)] });
     let scan: LabelScan = { name: quick.name, data: quick.data };
     let message: string | undefined;
     if (quick.sentence) {
@@ -272,6 +332,8 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       scan = { name: ai.name ?? scan.name, data: { ...ai.data, ...quick.data }, ...(ai.create ? { create: ai.create } : {}) };
       message = ai.message;
     }
+    const chosen = new Set(picked.map((p) => String(p.value)));
+    for (const [k, v] of Object.entries(scan.data)) if (typeof v === "string" && chosen.has(v) && !picked.some((p) => p.field === k)) delete scan.data[k];
     applyScan(scan);
     const found = Object.keys(scan.data).length + (scan.name ? 1 : 0);
     return { message: message ?? (found ? undefined : "Niets herkend. Vul het zelf in."), create: scan.create };
@@ -376,6 +438,8 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             onProduct={applyProduct}
             onCreate={createRef}
             onText={fillText}
+            quick={quick}
+            onPick={pickSuggestion}
           />
           {more.items.length > 0 && <MoreOnPhoto fields={fields} more={more.items} onToggle={(i, on) => setMore((m) => ({ ...m, items: m.items.map((x, k) => (k === i ? { ...x, on } : x)) }))} />}
         </section>
@@ -440,22 +504,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             meId={person.id}
             auto={auto}
             suggestions={fieldSuggestions(fields, siblings?.items ?? [])}
-            onChange={(next, key) => {
-              touched.current.add(key);
-              setAuto((a) => (a.has(key) ? new Set([...a].filter((k) => k !== key)) : a));
-              setAttrs(next);
-              const def = fields.find((f) => f.key === key);
-              if (def?.type === "code") lookupCode(next[key]);
-              if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
-              // Andere porties: de overgenomen hoeveelheden (een recept) rekenen mee, zolang je ze niet zelf aanpaste.
-              for (const f of fields) {
-                const base = scaleBase.current[f.key];
-                if (f.type !== "amounts" || f.per !== key || !base || touched.current.has(f.key)) continue;
-                const now = Number(String(next[key] ?? "").replace(",", "."));
-                if (!(now > 0)) continue;
-                setAttrs((a) => ({ ...a, [f.key]: scaleAmounts(base.amounts, now / base.per) }));
-              }
-            }}
+            onChange={changeField}
           />
         )}
       </section>

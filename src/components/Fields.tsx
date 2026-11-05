@@ -30,6 +30,7 @@ import {
   type Share,
 } from "../../shared/fields";
 import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
+import type { Suggestion } from "../../shared/quickfill";
 import { REMIND_DAYS } from "../../shared/remind";
 import { splitCents } from "../../shared/totals";
 import { formatAmount, measureOf, UNITS } from "../../shared/units";
@@ -47,6 +48,7 @@ import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { QuickInput, type QuickSource } from "./QuickInput";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
 
@@ -1703,6 +1705,8 @@ export function LabelScanner({
   onProduct,
   onCreate,
   onText,
+  quick,
+  onPick,
 }: {
   projectId: string;
   typeId: string;
@@ -1714,7 +1718,10 @@ export function LabelScanner({
   /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
   onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
   /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  onText?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  onText?: (text: string, picked: Suggestion[]) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  /** Keuzes terwijl je typt (zie QuickInput): uit deze velden, en wat je kiest, vult dat veld meteen in. */
+  quick?: QuickSource;
+  onPick?: (suggestion: Suggestion) => void;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1723,6 +1730,9 @@ export function LabelScanner({
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
   const [note, setNote] = useState("");
+  // Wat je koos terwijl je typte: Invullen laat die woorden met rust.
+  const [picked, setPicked] = useState<Suggestion[]>([]);
+  const multiple = (key: string) => ["multi", "people", "items", "amounts"].includes(quick?.fields.find((f) => f.key === key)?.type ?? "");
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
@@ -1789,7 +1799,7 @@ export function LabelScanner({
     setSuggestions([]);
     setStatus({ tone: "busy", text: "Invullen" });
     try {
-      const done = await onText(note.trim());
+      const done = await onText(note.trim(), picked.filter((p) => note.includes(p.text)));
       setSuggestions(done.create ?? []);
       setStatus(done.message ? { tone: "none", text: done.message } : undefined);
     } catch (err) {
@@ -1819,17 +1829,16 @@ export function LabelScanner({
     <div className="scan-buttons">
       {/* Typen: op zichzelf (Invullen of Enter), of als uitleg bij een foto. */}
       <div className="picker-row">
-        <input
+        <QuickInput
           value={note}
-          maxLength={300}
-          aria-label="Typ wat je weet"
+          label="Typ wat je weet"
           placeholder={products ? "Typ wat je weet, bv. 21-10 komkommer 200 g" : "Typ wat je weet, bv. 21-10 colruyt 23,40 euro"}
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && onText) {
-              e.preventDefault();
-              fill();
-            }
+          onChange={setNote}
+          onEnter={() => onText && fill()}
+          source={onText ? quick : undefined}
+          onPick={(s) => {
+            setPicked((list) => [...list.filter((p) => p.field !== s.field || multiple(s.field)), s]);
+            onPick?.(s);
           }}
         />
         {onText && (

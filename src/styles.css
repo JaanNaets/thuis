@@ -5717,6 +5717,7 @@ dialog.palette[open]::backdrop {
  * Een gewoon veld waarin je typt; de keuzes zweven eronder als glas (zoals het zoekpalet).
  */
 .picker-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -5730,6 +5731,11 @@ dialog.palette[open]::backdrop {
 
 .picker {
   position: relative;
+}
+
+/* Snel invullen: de keuzes zo breed als de hele rij (ook onder Invullen), zodat namen niet afgekort worden. */
+.picker.is-row {
+  position: static;
 }
 
 .picker input {

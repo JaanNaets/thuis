@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { nameIn, nameMatches, quickFill, readDate } from "../shared/quickfill.ts";
+import { formSuggestions, insertSuggestion, matchSuggestions, nameIn, nameMatches, quickFill, readDate, suggestionLists, typedFragments, type Suggestion } from "../shared/quickfill.ts";
 
 const eten: FieldDef[] = [
   { key: "datum", label: "Datum", type: "date", today: true },
@@ -99,4 +99,93 @@ test("zoeken op naam en namen in een tekst (verwijzingen op de server)", () => {
   assert.equal(nameIn("Rode appels", "gisteren rode appels gegeten"), true);
   assert.equal(nameIn("App", "21-10 appels 2"), false);
   assert.equal(nameIn("", "iets"), false);
+});
+
+test("keuzes terwijl je typt: het woord bij de cursor, ook met de woorden ervoor", () => {
+  const t = "2 zakken pel";
+  assert.deepEqual(typedFragments(t, t.length), [
+    { query: "zakken pel", start: 2, end: 12 },
+    { query: "pel", start: 9, end: 12 },
+  ]);
+  // Midden in een woord: tot het einde van dat woord.
+  assert.deepEqual(typedFragments("pellets 2", 3), [{ query: "pellets", start: 0, end: 7 }]);
+  // Na een spatie, één letter of een getal: niets te kiezen.
+  assert.deepEqual(typedFragments("pellets ", 8), []);
+  assert.deepEqual(typedFragments("p", 1), []);
+  assert.deepEqual(typedFragments("21-10", 5), []);
+  assert.deepEqual(typedFragments("", 0), []);
+});
+
+test("keuzes terwijl je typt: uit alle velden, de beste eerst", () => {
+  const fields: FieldDef[] = [
+    ...eten,
+    { key: "bio", label: "Bio", type: "bool" },
+    { key: "ingredienten", label: "Ingrediënten", type: "amounts", ref_type: "V1" },
+    { key: "tekst", label: "Tekst", type: "amounts" },
+  ];
+  const local = formSuggestions(fields, ctx.people, ["Boterham met kaas", "Boterham met kaas"], "Wat");
+  assert.deepEqual(
+    local.filter((s) => s.field === "maaltijd").map((s) => s.text),
+    ["Ontbijt", "Middag", "Avond", "Tussendoor"],
+  );
+  assert.ok(local.some((s) => s.field === "bio" && s.value === true));
+  assert.equal(local.filter((s) => s.field === "name").length, 1);
+  // Items vraagt de app per groep lijsten aan de server (wat en ingrediënten elk apart).
+  assert.deepEqual(
+    suggestionLists(fields).map((g) => [g.lists, g.fields.map((f) => f.key)]),
+    [
+      [["V1", "V2"], ["wat"]],
+      [["V1"], ["ingredienten"]],
+    ],
+  );
+  const items: Suggestion[] = [
+    { field: "wat", label: "Wat", text: "Pellets", value: "i9" },
+    { field: "wat", label: "Wat", text: "Appelpellets", value: "i8" },
+    { field: "wat", label: "Wat", text: "Rode wijn", value: "i7" },
+    { field: "wat", label: "Wat", text: "Witte wijn", value: "i6" },
+  ];
+  const all = [...local, ...items];
+  // "pel": eerst wat ermee begint, dan wat het ergens bevat.
+  const t = "2 zakken pel";
+  const found = matchSuggestions(all, typedFragments(t, t.length))!;
+  assert.deepEqual(
+    found.suggestions.map((s) => s.text),
+    ["Pellets", "Appelpellets"],
+  );
+  assert.deepEqual(insertSuggestion(t, found.start, found.end, "Pellets"), { text: "2 zakken Pellets ", caret: 17 });
+  // Twee woorden: enkel Rode wijn, en het hele stuk wordt vervangen.
+  const wine = matchSuggestions(all, typedFragments("rode wi", 7))!;
+  assert.deepEqual([wine.start, wine.suggestions.map((s) => s.text)], [0, ["Rode wijn"]]);
+  // Personen (Jana en Jaan Naets) en een keuze; een eerdere naam als laatste.
+  assert.deepEqual(
+    matchSuggestions(all, typedFragments("ja", 2))!.suggestions.map((s) => s.text),
+    ["Jana", "Jaan Naets"],
+  );
+  assert.deepEqual(
+    matchSuggestions(all, typedFragments("bo", 2))!.suggestions.map((s) => [s.text, s.label]),
+    [["Boterham met kaas", "Wat"]],
+  );
+  assert.equal(matchSuggestions(all, typedFragments("xyz", 3)), null);
+});
+
+test("een getal met het label van het veld erachter: 4 porties", () => {
+  const fields: FieldDef[] = [
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g" },
+    { key: "porties", label: "Porties", type: "number" },
+  ];
+  const r = quickFill("4 porties 200 g", fields, { ...ctx, items: () => [] });
+  assert.deepEqual(r.data, { porties: 4, gram: 200 });
+  assert.equal(r.name, null);
+  // Een eenheid wint van een label.
+  assert.deepEqual(quickFill("2 g", [{ key: "g", label: "G", type: "number" }, ...fields], { ...ctx, items: () => [] }).data, { gram: 2 });
+});
+
+test("2 zakken: het verpakkingswoord hoort bij het getal", () => {
+  const fields: FieldDef[] = [
+    { key: "bedrag", label: "Bedrag", type: "money" },
+    { key: "stuks", label: "Aantal", type: "number" },
+  ];
+  const r = quickFill("40 euro 2 zakken", fields, { ...ctx, items: () => [] });
+  assert.deepEqual(r.data, { bedrag: 4000, stuks: 2 });
+  assert.equal(r.name, null);
 });

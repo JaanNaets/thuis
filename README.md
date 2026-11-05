@@ -502,6 +502,8 @@ items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet
 een halve pizza op restaurant"), dan leest de gratis AI van Cloudflare ze (met dezelfde daglimiet als een foto); wat
 de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
 
+Terwijl je typt, verschijnt eronder wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en ook namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat meteen ingevuld; een recept kiezen neemt zijn ingrediënten over. **Invullen** doet daarna de rest en laat wat je koos staan. Een getal met de naam van het veld erachter ("4 porties") of een verpakking ("2 zakken") hoort bij dat getal.
+
 ### Een foto lezen: etiket, kasticket, factuur, product
 
 Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de

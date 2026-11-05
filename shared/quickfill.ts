@@ -105,6 +105,14 @@ const unitFits = (unit: string, field: FieldDef) => {
   const b = fold(field.unit ?? "");
   return Boolean(a && b && (a === b || a.startsWith(b) || b.startsWith(a)));
 };
+/** Woorden voor een stuk of verpakking na een getal ("2 zakken", "3 stuks"). */
+const PACKS = /^(stuks?|zak(ken)?|doos|dozen|fles(sen)?|pak(ken)?|pot(ten)?|blik(ken)?|bak(ken)?|net(ten)?|verpakkingen?)$/;
+/** Het woord na een getal is het label van het veld ("4 porties", "3 portie"): ook dat veld. */
+const labelFits = (word: string, field: FieldDef) => {
+  const a = fold(word);
+  const b = fold(field.label);
+  return a.length >= 3 && (a === b || a.startsWith(b) || b.startsWith(a));
+};
 
 export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): QuickResult {
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -179,7 +187,10 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
     const number = withUnit ? withUnit[1] : NUMBER.test(w) ? w : null;
     if (number) {
       const unit = withUnit ? withUnit[2] : next;
-      const byUnit = unit ? fields.find((f) => f.type === "number" && empty(f) && unitFits(unit, f)) : undefined;
+      const byUnit = unit
+        ? (fields.find((f) => f.type === "number" && empty(f) && unitFits(unit, f)) ??
+          (withUnit ? undefined : fields.find((f) => f.type === "number" && empty(f) && labelFits(unit, f))))
+        : undefined;
       if (byUnit) {
         data[byUnit.key] = toNumber(number);
         take(i, withUnit ? 1 : 2);
@@ -188,7 +199,8 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
       const plain = firstEmpty("number") ?? firstEmpty("money");
       if (!withUnit && plain) {
         data[plain.key] = plain.type === "money" ? Math.round(toNumber(number) * 100) : toNumber(number);
-        take(i);
+        // "2 zakken": het woord voor de verpakking hoort bij het getal (en wordt geen naam).
+        take(i, plain.type === "number" && PACKS.test(next) ? 2 : 1);
         continue;
       }
       if (/^\d{4}$/.test(w) && firstEmpty("year")) {
@@ -243,4 +255,111 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
     name = rest.charAt(0).toUpperCase() + rest.slice(1);
   } else if (matchedName) name = matchedName;
   return { name, data, rest: sentence ? rest : "", sentence };
+}
+
+// ---------- keuzes terwijl je typt ----------
+
+/**
+ * Een keuze onder het invulveld terwijl je typt: een waarde voor één veld van het formulier (een item, een keuze, een
+ * persoon, ja bij een ja/nee-veld, of de naam). Kiezen vult dat veld meteen in en zet `text` in je tekst.
+ */
+export type Suggestion = {
+  /** Sleutel van het veld, of "name" voor de naam. */
+  field: string;
+  /** Het label van het veld (rechts in de keuze, om twee velden met dezelfde waarde uit elkaar te houden). */
+  label: string;
+  /** Wat in je tekst komt en wat je ziet. */
+  text: string;
+  /** Een id (item, persoon), een keuze, of true (ja/nee). */
+  value: string | true;
+};
+
+/** Zoveel keuzes tegelijk. */
+export const MAX_SUGGESTIONS = 8;
+
+/**
+ * Wat je aan het typen bent: het woord bij de cursor (tot zijn einde), en ook met één of twee woorden ervoor (voor een
+ * naam van meer woorden: "rode wi" → Rode wijn). De langste eerst. Leeg na een spatie, bij minder dan twee tekens of
+ * een getal ("200", "21-10"): daar valt niets te kiezen.
+ */
+export function typedFragments(text: string, caret: number): { query: string; start: number; end: number }[] {
+  let end = caret;
+  while (end < text.length && !/\s/.test(text[end])) end++;
+  const before = text.slice(0, end);
+  const words = [...before.matchAll(/\S+/g)];
+  const last = words[words.length - 1];
+  if (!last || last.index! + last[0].length !== end || end === 0 || /\s/.test(text[caret - 1] ?? " ")) return [];
+  if (fold(last[0]).length < 2 || /^[\d.,:/-]/.test(last[0])) return [];
+  const out: { query: string; start: number; end: number }[] = [];
+  for (let n = Math.min(3, words.length); n >= 1; n--) {
+    const group = words.slice(words.length - n);
+    // Een getal vooraan hoort bij een hoeveelheid ("2 pel"), niet bij de naam.
+    if (n > 1 && /^[\d.,:/-]/.test(group[0][0])) continue;
+    out.push({ query: group.map((w) => w[0]).join(" "), start: group[0].index!, end });
+  }
+  return out;
+}
+
+/** De keuzes uit de velden zelf (zonder items, die komen van de server): keuzes, personen, ja/nee en eerdere namen. */
+export function formSuggestions(fields: FieldDef[], people: { id: string; name: string }[], names: string[] = [], nameLabel = "Naam"): Suggestion[] {
+  const out: Suggestion[] = [];
+  for (const f of fields) {
+    if ((f.type === "select" || f.type === "multi") && f.options) for (const o of f.options) out.push({ field: f.key, label: f.label, text: o, value: o });
+    if (f.type === "person" || f.type === "people") for (const p of people) out.push({ field: f.key, label: f.label, text: p.name, value: p.id });
+    if (f.type === "bool") out.push({ field: f.key, label: f.label, text: f.label, value: true });
+  }
+  for (const n of new Set(names)) out.push({ field: "name", label: nameLabel, text: n, value: n });
+  return out;
+}
+
+/** De velden die items als keuze hebben, per groep lijsten (één vraag aan de server per groep). */
+export function suggestionLists(fields: FieldDef[]): { lists: string[]; fields: FieldDef[] }[] {
+  const groups = new Map<string, { lists: string[]; fields: FieldDef[] }>();
+  for (const f of fields) {
+    if (f.type !== "item" && f.type !== "items" && f.type !== "amounts") continue;
+    const lists = refLists(f);
+    if (!lists.length) continue;
+    const key = [...lists].sort().join(",");
+    groups.set(key, { lists, fields: [...(groups.get(key)?.fields ?? []), f] });
+  }
+  return [...groups.values()];
+}
+
+/**
+ * De keuzes die passen bij wat je typt (`typedFragments`, de langste woordgroep die iets vindt), de beste eerst: de
+ * naam begint ermee, dan een woord in de naam, dan ergens in de naam; namen van eerder als laatste. Geeft ook welk
+ * stuk tekst een keuze vervangt.
+ */
+export function matchSuggestions(
+  candidates: Suggestion[],
+  fragments: { query: string; start: number; end: number }[],
+): { start: number; end: number; suggestions: Suggestion[] } | null {
+  for (const fragment of fragments) {
+    const q = fold(fragment.query);
+    const found = candidates.filter((c) => nameMatches(c.text, fragment.query));
+    if (!found.length) continue;
+    const rank = (c: Suggestion) => {
+      const t = fold(c.text);
+      const place = t.startsWith(q) ? 0 : ` ${t}`.includes(` ${q.split(" ")[0]}`) ? 1 : 2;
+      return place + (c.field === "name" ? 3 : 0);
+    };
+    const seen = new Set<string>();
+    const suggestions = found
+      .filter((c) => {
+        const key = `${c.field}:${String(c.value)}`;
+        return !seen.has(key) && Boolean(seen.add(key));
+      })
+      .sort((a, b) => rank(a) - rank(b) || a.text.length - b.text.length || a.text.localeCompare(b.text, "nl"))
+      .slice(0, MAX_SUGGESTIONS);
+    return { start: fragment.start, end: fragment.end, suggestions };
+  }
+  return null;
+}
+
+/** Een keuze in de tekst zetten: het getypte stuk wordt de volledige naam, met een spatie erna. Geeft ook de cursor. */
+export function insertSuggestion(text: string, start: number, end: number, insert: string): { text: string; caret: number } {
+  const after = text.slice(end);
+  const glue = after.startsWith(" ") ? "" : " ";
+  const next = text.slice(0, start) + insert + glue + after;
+  return { text: next, caret: start + insert.length + 1 };
 }
