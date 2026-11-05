@@ -35,6 +35,7 @@ import {
 import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
 import type { Suggestion } from "../../shared/quickfill";
 import { REMIND_DAYS } from "../../shared/remind";
+import { MAX_SPAWN } from "../../shared/spawn";
 import { splitCents } from "../../shared/totals";
 import { formatAmount, measureOf, UNITS } from "../../shared/units";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
@@ -1274,7 +1275,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind, ...(d.remind_at ? { remind_at: rename(d.remind_at) } : {}) } : {}),
       ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
       ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
-      ...(d.type === "item" && d.copy ? { copy: true } : {}),
+      ...(d.type === "bool" && d.spawn?.some(Boolean) ? { spawn: d.spawn.filter(Boolean) } : {}),
+      ...(d.type === "bool" && d.spawn?.length ? { spawn: d.spawn } : {}),
       ...((d.type === "item" || d.type === "amounts") && d.adjust
         ? {
             adjust: {
@@ -1282,6 +1284,7 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
               sign: d.adjust.sign,
               ...(d.type === "item" && d.adjust.by ? { by: rename(d.adjust.by) } : {}),
               ...(d.type === "item" && d.adjust.by && d.adjust.unit ? { unit: d.adjust.unit } : {}),
+              ...(d.type === "item" && d.adjust.by && d.adjust.unit_by && rename(d.adjust.unit_by) ? { unit_by: rename(d.adjust.unit_by) } : {}),
             },
           }
         : {}),
@@ -1364,8 +1367,23 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
       {adjust?.by && field.type === "item" && (
         <label className="field">
           <span className="label">In</span>
-          <select aria-label="In" value={adjust.unit ?? ""} onChange={(e) => onChange({ ...adjust, unit: e.target.value || undefined })}>
+          <select
+            aria-label="In"
+            value={adjust.unit_by ? `veld:${adjust.unit_by}` : (adjust.unit ?? "")}
+            onChange={(e) => {
+              const v = e.target.value;
+              const { unit: _u, unit_by: _b, ...rest } = adjust;
+              onChange(v.startsWith("veld:") ? { ...rest, unit_by: v.slice(5) } : { ...rest, ...(v ? { unit: v } : {}) });
+            }}
+          >
             <option value="">Zoals het gekozen item telt</option>
+            {fields
+              .filter((x) => x !== field && (x.type === "select" || x.type === "text") && x.label.trim())
+              .map((x) => (
+                <option key={x.key} value={`veld:${x.key}`}>
+                  Volgens {x.label}
+                </option>
+              ))}
             <option value="verpakking">verpakking</option>
             {UNITS.map((u) => (
               <option key={u} value={u}>
@@ -1765,6 +1783,47 @@ export function FieldsEditor({
                   )}
                   {(f.type === "item" || f.type === "amounts") && f.ref_type && (
                     <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />
+                  )}
+                  {/* Meteen ook: aan bij een nieuw item = ook een item in de eerste van deze lijsten waarin je mag toevoegen. */}
+                  {f.type === "bool" && types.length > 0 && (
+                    <div className="field">
+                      <span className="label">Aan: ook een item in</span>
+                      {[...(f.spawn ?? []), ...((f.spawn?.length ?? 0) === 0 ? [""] : [])].map((id, k) => (
+                        <div key={k} className="picker-row">
+                          <select
+                            value={id}
+                            aria-label={k === 0 ? "Aan: ook een item in" : "Of anders in"}
+                            onChange={(e) => {
+                              const next = [...(f.spawn ?? [])];
+                              next[k] = e.target.value;
+                              update(i, { spawn: next.filter(Boolean) });
+                            }}
+                          >
+                            <option value="">{k === 0 ? "Niets" : "Kies een lijst"}</option>
+                            {types.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {listLabel(t)}
+                              </option>
+                            ))}
+                          </select>
+                          {k > 0 && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-icon btn-sm"
+                              aria-label="Deze lijst weghalen"
+                              onClick={() => update(i, { spawn: (f.spawn ?? []).filter((_, j) => j !== k) })}
+                            >
+                              <Icon name="close" size={15} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {(f.spawn?.length ?? 0) > 0 && (f.spawn?.length ?? 0) < MAX_SPAWN && !(f.spawn ?? []).includes("") && (
+                        <button type="button" className="link-button" style={{ justifySelf: "start" }} onClick={() => update(i, { spawn: [...(f.spawn ?? []), ""] })}>
+                          Nog een lijst
+                        </button>
+                      )}
+                    </div>
                   )}
                   {f.type === "amounts" && (
                     <label className="field">

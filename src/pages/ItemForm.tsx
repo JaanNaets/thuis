@@ -740,7 +740,13 @@ function ItemForm({
         await api.post(`/projects/${project.project.id}/items`, { ...input, name: m.name, data: { ...shared, ...m.data } });
       }
       setMore({ items: [], keys: [] });
-      toast(item ? "Bijgewerkt" : others.length ? `${saved.name} en ${others.length === 1 ? others[0].name : `${others.length} andere`} bewaard` : `${saved.name} bewaard`);
+      // Meteen ook (Gegeten): zeg waar het nog bij kwam, met een knop om het te openen.
+      const also = saved.spawned?.[0];
+      toast(
+        item ? "Bijgewerkt" : others.length ? `${saved.name} en ${others.length === 1 ? others[0].name : `${others.length} andere`} bewaard` : also ? `${saved.name} bewaard, ook bij ${also.list}` : `${saved.name} bewaard`,
+        "check",
+        also ? { label: "Openen", run: () => navigate(`/items/${also.id}`) } : undefined,
+      );
       if (next) {
         // Opslaan en volgende: tags blijven, de rest is leeg (de volgende fles uit de kelder).
         setName("");

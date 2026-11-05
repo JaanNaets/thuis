@@ -115,6 +115,7 @@ export const FIELD_LINKS = {
   remind_at: false,
   agenda: true,
   adjust: true,
+  spawn: true,
   copy: true,
   per: false,
   hint: false,
@@ -194,6 +195,8 @@ export function listLinks(list: LinkList, fieldsOf: (listId: string) => FieldDef
       }
     }
     if (f.agenda && canAgenda(f)) add("agenda", list.id, AGENDA_NODE, `${f.label} in de agenda`);
+    // Meteen ook: een ja/nee dat ook een item maakt in een andere lijst.
+    if (f.type === "bool") for (const to of f.spawn ?? []) add("ref", list.id, to, `Met ${f.label} ook een item hier`);
   }
   for (const t of list.totals) {
     const label = totalLabel(t, list.fields);

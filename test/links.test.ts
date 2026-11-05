@@ -149,6 +149,7 @@ test("elke werking die lijsten verbindt, staat op de kaart", () => {
     agenda: [{ key: "d", label: "D", type: "date", agenda: true }],
     adjust: [{ key: "n", label: "N", type: "number" }, { ...ref, adjust: { field: "aantal", sign: -1 } }],
     copy: [{ ...ref, copy: true }],
+    spawn: [{ key: "g", label: "Gegeten", type: "bool", spawn: ["E"] }],
     calc: [ref, { key: "c", label: "C", type: "calc", result: "text", calc: { kind: "lookup", via: "r", field: "x" } }],
   };
   const calc: Record<string, FieldDef[]> = {

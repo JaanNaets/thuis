@@ -174,8 +174,9 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
       engine.reset();
       setCopy(null);
       window.dispatchEvent(new Event(REFRESH_EVENT));
+      const also = saved.spawned?.[0];
       toast(
-        `${saved.name} bewaard`,
+        also ? `${saved.name} bewaard, ook bij ${also.list}` : `${saved.name} bewaard`,
         "check",
         type.can_delete
           ? {
@@ -183,6 +184,8 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
               run: async () => {
                 try {
                   await api.delete(`/items/${saved.id}`);
+                  // Wat Meteen ook erbij maakte, gaat mee weg.
+                  for (const made of saved.spawned ?? []) await api.delete(`/items/${made.id}`).catch(() => {});
                   window.dispatchEvent(new Event(REFRESH_EVENT));
                   toast(`${saved.name} ongedaan gemaakt`);
                 } catch (err) {

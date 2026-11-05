@@ -435,8 +435,12 @@ Een verwijzing (een veld dat naar een item uit een andere lijst wijst, ook uit e
   pot van 400 g = 0,075); de Winkellijst telt bij de Voorraad wat je afvinkt als gekocht. Wijzig je het item, dan past
   de app enkel het verschil aan; verwijder je het, dan draait ze het terug. Je moet dat getal daar wel mogen
   wijzigen, anders bewaart de app niets.
+- **Maakt ook een item** (bij een vinkje): een nieuwe uitgave met **Gegeten** aan zet het gekochte broodje meteen in
+  je Eten, met hetzelfde product en hoeveel (1 yoghurt van 125 g = 125 g). Kopen telt het bij de voorraad, eten trekt
+  het er weer af. Staan er meer lijsten (jouw Eten en dat van Jana), dan komt het in de eerste waarin jij mag
+  toevoegen.
 
-Beide stel je in bij het veld (onder ⋯). Staat Voeding onder je huishouden, dan wijst "Uit voorraad" vanzelf naar je
+Alle drie stel je in bij het veld (onder ⋯). Staat Voeding onder je huishouden, dan wijst "Uit voorraad" vanzelf naar je
 Voorraad; anders kies je bij het veld de Voorraad (ook uit een ander project). Importeren uit een tabel past niets
 aan.
 

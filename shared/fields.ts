@@ -181,7 +181,19 @@ export type FieldDef = {
    * erbij (`sign` 1) of eraf (-1). `unit`: de eenheid van `by` (g): de app rekent om naar de eenheid van het gekozen
    * item (zie `measure` en shared/units.ts). Zie shared/effects.ts.
    */
-  adjust?: { field: string; by?: string; sign: 1 | -1; unit?: string };
+  /**
+   * Meteen ook (ja/nee, zie shared/spawn.ts): staat het aan bij een nieuw item, dan ook een item in de eerste van deze
+   * lijsten waarin je mag toevoegen (Gegeten bij een uitgave → je eigen Eten).
+   */
+  spawn?: string[];
+  adjust?: {
+    field: string;
+    by?: string;
+    sign: 1 | -1;
+    unit?: string;
+    /** De eenheid per item uit een veld van deze lijst (een uitgavelijn: 2 kg, 1 zak, 6 fles); leeg = `unit`. */
+    unit_by?: string;
+  };
   /** Verwijzing: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde sleutel daar. */
   copy?: boolean;
   /**
@@ -378,6 +390,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.copy === true && type === "item") def.copy = true;
     const adjust = f.adjust as Record<string, unknown> | undefined;
     if (type === "amounts" && typeof f.per === "string" && KEY_RE.test(f.per)) def.per = f.per;
+    // Meteen ook: enkel bij ja/nee, ids van lijsten (welke je ziet, kijkt de server na bij bewaren).
+    if (type === "bool" && Array.isArray(f.spawn)) {
+      const ids = [...new Set(f.spawn.filter((x): x is string => typeof x === "string" && /^[\w-]{1,64}$/.test(x)))].slice(0, 10);
+      if (ids.length) def.spawn = ids;
+    }
     if (
       (type === "item" || type === "amounts") &&
       adjust &&
@@ -392,6 +409,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
         sign: adjust.sign,
         ...(typeof adjust.by === "string" && KEY_RE.test(adjust.by) ? { by: adjust.by } : {}),
         ...(unit ? { unit } : {}),
+        ...(typeof adjust.unit_by === "string" && KEY_RE.test(adjust.unit_by) ? { unit_by: adjust.unit_by } : {}),
       };
     }
     return def;
@@ -405,6 +423,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     let out = f;
     // Bij hoeveelheden telt elke regel met zijn eigen hoeveelheid en eenheid.
     if (f.adjust?.by && (f.type === "amounts" || !amounts.has(f.adjust.by))) out = { ...out, adjust: { field: f.adjust.field, sign: f.adjust.sign } };
+    // De eenheid per item: enkel uit een keuzelijst of tekst van deze lijst, en enkel met een getal (by).
+    if (out.adjust?.unit_by && (!out.adjust.by || !["select", "text"].includes(kinds.get(out.adjust.unit_by) ?? ""))) {
+      const { unit_by: _u, ...adjust } = out.adjust;
+      out = { ...out, adjust };
+    }
     if (f.remind_at && kinds.get(f.remind_at) !== "time") {
       const { remind_at: _r, ...rest } = out;
       out = rest;

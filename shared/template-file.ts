@@ -101,7 +101,7 @@ export function parseTemplateFile(raw: unknown): TemplateFile {
       ...(nameLabel ? { name_label: nameLabel } : {}),
       icon: isIconKey(l.icon) ? l.icon : "folder",
       // Andere lijsten van een verwijzing (uit je eigen projecten) gaan niet mee in een sjabloon.
-      fields: converted.fields.map(({ ref_type, ref_also: _also, ...f }): TemplateField => (ref_type ? { ...f, ref: ref_type } : f)),
+      fields: converted.fields.map(({ ref_type, ref_also: _also, spawn: _spawn, ...f }): TemplateField => (ref_type ? { ...f, ref: ref_type } : f)),
       totals: converted.totals,
       ...(l.linked === true ? { linked: true } : {}),
     };
@@ -172,7 +172,8 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
   const toTemplate = (l: ItemType, isLinked: boolean): TypeTemplate => {
     const fields: TemplateField[] = [];
     for (const def of l.fields) {
-      const { ref_type, ref_also: _also, result: _result, ...f } = def;
+      // Meteen ook wijst naar lijsten uit je eigen projecten: gaat niet mee in een sjabloon.
+      const { ref_type, ref_also: _also, result: _result, spawn: _spawn, ...f } = def;
       if (f.type === "item" || f.type === "items" || f.type === "amounts") {
         const key = ref_type ? keys.get(ref_type) : undefined;
         if (key) fields.push({ ...f, ref: key });

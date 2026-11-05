@@ -195,6 +195,8 @@ export type LogEntry = {
 };
 
 export type ItemDetail = Item & {
+  /** Net bewaard: wat Meteen ook erbij maakte (een broodje ook in je Eten). */
+  spawned?: { id: string; name: string; project_id: string; list: string }[];
   files: ItemFile[];
   log: LogEntry[];
   people: Person[];

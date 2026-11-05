@@ -97,7 +97,7 @@ function parseProjectInput(body: unknown) {
  * Velden van een lijst nakijken, met verwijzingen naar lijsten die je kan kiezen (zie `fieldListsFor`). "self" verwijst
  * naar de lijst zelf (een plaats die in een andere plaats ligt).
  */
-export function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available): FieldDef[] {
+export function cleanTypeFields(raw: unknown, available: ItemType[], selfId: string, calcLists: ItemType[] = available, before: FieldDef[] = []): FieldDef[] {
   let fields: FieldDef[];
   try {
     const list = Array.isArray(raw)
@@ -127,6 +127,15 @@ export function cleanTypeFields(raw: unknown, available: ItemType[], selfId: str
         throw new ValidationError(`"${f.label}" past een getal aan dat ${other?.plural ?? "een van de lijsten"} niet heeft. Kies lijsten met hetzelfde veld.`);
     }
   }
+  // Meteen ook: naar lijsten die je ziet (niet deze). Een lijst die er al stond en die jij niet ziet (het Eten van
+  // iemand anders), blijft staan: zo haalt bewaren door jou die van een ander niet weg.
+  const kept = new Set(before.flatMap((f) => f.spawn ?? []));
+  fields = fields.map((f) => {
+    if (!f.spawn) return f;
+    const spawn = f.spawn.filter((id) => id !== selfId && (available.some((t) => t.id === id) || kept.has(id)));
+    const { spawn: _s, ...rest } = f;
+    return spawn.length ? { ...rest, spawn } : rest;
+  });
   try {
     return checkCalcs(
       fields,
@@ -962,7 +971,7 @@ types.put("/:id", async (c) => {
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
   const lists = await fieldListsFor(db, c.get("person").id, access);
   // Zonder velden in de vraag blijven de huidige (een onvolledige vraag wist nooit alle velden).
-  const fields = input.fields === undefined ? type.fields : cleanTypeFields(input.fields, lists.refs, type.id, lists.calcs);
+  const fields = input.fields === undefined ? type.fields : cleanTypeFields(input.fields, lists.refs, type.id, lists.calcs, type.fields);
   await checkDefaultShares(db, fields, access.chain);
   // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
   const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);

@@ -122,3 +122,26 @@ test("hoeveelheden: een recept dat je at, trekt elk ingrediënt af in zijn eigen
   // Zonder lijst: enkel tekst.
   assert.deepEqual(cleanFields([{ key: "i", label: "Ingrediënten", type: "amounts" }]), [{ key: "i", label: "Ingrediënten", type: "amounts" }]);
 });
+
+test("Eenheid per item: een uitgavelijn zegt zelf in welke eenheid Hoeveel is", async () => {
+  const { cleanFields } = await import("../shared/fields.ts");
+  const fields = cleanFields([
+    { key: "wat", label: "Wat", type: "item", ref_type: "voorraad", adjust: { field: "aantal", by: "hoeveel", sign: 1, unit_by: "eenheid" } },
+    { key: "hoeveel", label: "Hoeveel", type: "number" },
+    { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "kg", "zak"] },
+  ]);
+  assert.equal(fields[0].adjust?.unit_by, "eenheid");
+  // 1 zak pellets: de eenheid gaat mee, het omrekenen naar kg doet convertEffects.
+  const [e] = effectsOf(fields, { wat: "pellets", hoeveel: 1, eenheid: "zak" });
+  assert.deepEqual(e, { target: "pellets", field: "aantal", delta: 1, unit: "zak" });
+  const [kg] = convertEffects([e], () => ({ unit: "kg", pack: 15, pack_name: "zak" }));
+  assert.equal(kg.delta, 15);
+  // Geen eenheid ingevuld: zoals het gekozen item telt.
+  assert.equal(effectsOf(fields, { wat: "pasta", hoeveel: 2 })[0].unit, undefined);
+  // Een eenheid uit een veld dat er niet is of geen keuze is: valt weg.
+  const bad = cleanFields([
+    { key: "wat", label: "Wat", type: "item", ref_type: "voorraad", adjust: { field: "aantal", by: "hoeveel", sign: 1, unit_by: "hoeveel" } },
+    { key: "hoeveel", label: "Hoeveel", type: "number" },
+  ]);
+  assert.equal(bad[0].adjust?.unit_by, undefined);
+});

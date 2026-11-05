@@ -478,11 +478,17 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - Herhaling (`.interval-input`): "elke [3] [maanden]". Duur typ je vrij ("1u30", "90", "1,5 uur"); onder het veld
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
-  vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; de API vult niets stil in.
+  vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; enkel een verplichte datum die
+  leeg blijft (Start in een timerblok) krijgt van de API vandaag.
   Een verwijzing kan **Neemt waarden over** (`copy`, schakelaar): kies je een item, dan krijgen de lege velden hier
   de waarden van de velden met dezelfde sleutel daar (zacht blauw, `auto`; en de naam als die leeg is). En **Past het
   gekozen item aan** (`adjust`, keuzelijst "Trekt af van Aantal" / "Telt bij Aantal", met "Met": 1 per item of een
   getal of berekening van deze lijst; enkel als de lijst waarnaar het wijst een getal heeft).
+  Een ja/nee kan **Aan: ook een item in** (`spawn`, lijsten kiezen onder ⋯): een nieuw item met dat vinkje aan maakt
+  ook een item in de eerste van die lijsten waarin je mag toevoegen (Gegeten bij een uitgave → je eigen Eten), met de
+  naam, de velden met dezelfde sleutel, hetzelfde product (met wat het overneemt) en hoeveel, omgerekend naar de
+  eenheid daar. De toast zegt "Yoghurt bewaard, ook bij Eten" met **Openen**; Ongedaan maken in een snel-toevoegen-blok
+  haalt beide weg.
   Een datum, periode of berekende datum kan **In de agenda** (`agenda`, schakelaar): ze staat dan in de Agenda.
   Een datum (of een berekende datum, zoals Volgende keer) kan **Herinneren** (`remind`, keuzelijst onder ⋯: Niet,
   Op de dag zelf, 1, 2, 3 dagen, 1 of 2 weken, 1 maand vooraf), met **Elk jaar** (`yearly`) voor een verjaardag.

@@ -183,6 +183,8 @@ function salvageFields(raw: unknown, available: ItemType[], selfId: string): Fie
   const ids = new Set([...available.map((t) => t.id), selfId]);
   const list = (Array.isArray(raw) ? raw : []).flatMap((f) => {
     const def = f as FieldDef;
+    // Meteen ook: enkel naar lijsten die er (nog) zijn en die je ziet.
+    if (def && typeof def === "object" && def.type === "bool" && Array.isArray(def.spawn)) return [{ ...def, spawn: def.spawn.filter((id) => ids.has(id) && id !== selfId) }];
     if (!def || typeof def !== "object" || (def.type !== "item" && def.type !== "items" && def.type !== "amounts")) return [def];
     const lists = refLists(def).filter((id) => ids.has(id));
     if (!lists.length) return [];

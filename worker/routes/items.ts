@@ -43,6 +43,7 @@ import { fieldsForViews } from "./views";
 import { boardWindow, BOARD_PERIODS, cleanChart, computeChart, type BoardPeriod } from "../../shared/charts";
 import { notifyNewItem } from "../notify";
 import { onlyMine } from "../../shared/totals";
+import { spawnStatements } from "../spawn";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -216,6 +217,8 @@ function tagStatements(db: D1Database, itemId: string, tagIds: string[]): D1Prep
     ...tagIds.map((t) => db.prepare("INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)").bind(itemId, t)),
   ];
 }
+
+type ItemInput = ReturnType<typeof parseItemInput>;
 
 function parseItemInput(body: unknown) {
   const obj = asObject(body);
@@ -534,6 +537,31 @@ projectItems.get("/:id/timer", async (c) => {
   });
 });
 
+/**
+ * Een nieuw item als statements (nog niet uitgevoerd): nagekeken zoals altijd (`prepareData`, tags), met wat het
+ * aanpast (verwijzingen die tellen), het geheugen en wat Meteen ook erbij maakt. Voor één item of een hele batch.
+ */
+async function createStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, input: ItemInput) {
+  const data = await prepareData(db, me, access, type, input.data, {}, true);
+  await assertTags(db, access.chain, input.tag_ids);
+  const id = crypto.randomUUID();
+  // Verwijzingen die tellen (bv. eten uit de voorraad): samen met het item, of niets.
+  const applied = await computeEffects(db, me, access.rights, type, { id, project_id: access.project.id }, data);
+  const name = nameOrDefault(type, input.name, data);
+  // Meteen ook (Gegeten bij een uitgave): ook een item in je eigen Eten, in dezelfde batch.
+  const spawn = await spawnStatements(db, me, type, { name, data }, (a, t, raw) => prepareData(db, me, a, t, raw, {}, true));
+  const statements = [
+    db
+      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by, applied) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, access.project.id, type.id, name, JSON.stringify(data), me, applied.length ? JSON.stringify(applied) : null),
+    ...tagStatements(db, id, input.tag_ids),
+    ...(await effectStatements(db, me, applied, true)),
+    ...firstFixedStatements(db, me, access.rights, type, name, data),
+    ...spawn.statements,
+  ];
+  return { id, name, data, statements, spawned: spawn.made };
+}
+
 projectItems.post("/:id/items", async (c) => {
   const input = parseItemInput(await c.req.json());
   const db = c.env.DB;
@@ -542,23 +570,46 @@ projectItems.post("/:id/items", async (c) => {
   const type = (await typesFor(db, access.chain)).find((t) => t.id === input.type_id);
   if (!type) throw new ValidationError("Die lijst bestaat hier niet.");
   if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
-  const data = await prepareData(db, me, access, type, input.data, {}, true);
-  await assertTags(db, access.chain, input.tag_ids);
-  const id = crypto.randomUUID();
-  // Verwijzingen die tellen (bv. eten uit de voorraad): samen met het item, of niets.
-  const applied = await computeEffects(db, me, access.rights, type, { id, project_id: access.project.id }, data);
-  const name = nameOrDefault(type, input.name, data);
-  await db.batch([
-    db
-      .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by, applied) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, access.project.id, type.id, name, JSON.stringify(data), me, applied.length ? JSON.stringify(applied) : null),
-    ...tagStatements(db, id, input.tag_ids),
-    ...(await effectStatements(db, me, applied, true)),
-    ...firstFixedStatements(db, me, access.rights, type, name, data),
-  ]);
+  const made = await createStatements(db, me, access, type, input);
+  await db.batch(made.statements);
   // Een melding aan wie dat wil (instelling van de lijst), op de achtergrond: bewaren wacht er niet op.
-  if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id, name, data }).catch((err) => console.warn("Melding niet verstuurd", err)));
-  return c.json(await loadDetail(c, id), 201);
+  if (type.notify)
+    c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id: made.id, name: made.name, data: made.data }).catch((err) => console.warn("Melding niet verstuurd", err)));
+  const detail: ItemDetail = await loadDetail(c, made.id);
+  return c.json(made.spawned.length ? { ...detail, spawned: made.spawned } : detail, 201);
+});
+
+/** Zoveel items hoogstens in één keer (de lijnen van een lang kasticket). */
+const MAX_BATCH = 80;
+
+/**
+ * Meer items tegelijk in één lijst (de lijnen van een kasticket): elk nagekeken zoals een gewoon nieuw item, en alles
+ * in één batch (alles of niets). Eén melding voor allemaal ("Jana voegde 24 uitgaven toe"). Geeft de ids en wat Meteen
+ * ook erbij maakte.
+ */
+projectItems.post("/:id/items/batch", async (c) => {
+  const obj = asObject(await c.req.json());
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === obj.type_id);
+  if (!type) throw new ValidationError("Die lijst bestaat hier niet.");
+  if (!canCreate(access.rights, type.id)) throw new ForbiddenError(`Je mag hier geen ${type.plural.toLowerCase()} toevoegen.`);
+  const raw = Array.isArray(obj.items) ? obj.items : [];
+  if (!raw.length) throw new ValidationError("Niets om te bewaren.");
+  if (raw.length > MAX_BATCH) throw new ValidationError(`Hoogstens ${MAX_BATCH} tegelijk.`);
+  const made: Awaited<ReturnType<typeof createStatements>>[] = [];
+  for (const [i, r] of raw.entries()) {
+    try {
+      made.push(await createStatements(db, me, access, type, parseItemInput({ ...(r as object), type_id: type.id })));
+    } catch (err) {
+      throw new ValidationError(`Lijn ${i + 1}: ${(err as Error).message}`);
+    }
+  }
+  await db.batch(made.flatMap((m) => m.statements));
+  const last = made[made.length - 1];
+  if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id: last.id, name: last.name, data: last.data }).catch((err) => console.warn("Melding niet verstuurd", err)));
+  return c.json({ ids: made.map((m) => m.id), spawned: made.flatMap((m) => m.spawned) }, 201);
 });
 
 /**

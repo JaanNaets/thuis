@@ -31,7 +31,10 @@ export function effectsOf(fields: FieldDef[], data: Attributes): Effect[] {
     const amount = f.adjust.by ? data[f.adjust.by] : 1;
     if (typeof amount !== "number" || !Number.isFinite(amount) || amount === 0) return [];
     const effect: Effect = { target: data[f.key] as string, field: f.adjust.field, delta: round(f.adjust.sign * amount) };
-    return [f.adjust.by && f.adjust.unit ? { ...effect, unit: f.adjust.unit } : effect];
+    // De eenheid: uit een veld van dit item (2 kg, 1 zak), anders die van het veld.
+    const own = f.adjust.unit_by && typeof data[f.adjust.unit_by] === "string" ? (data[f.adjust.unit_by] as string).trim() : "";
+    const unit = own || f.adjust.unit;
+    return [f.adjust.by && unit ? { ...effect, unit } : effect];
   });
 }
 

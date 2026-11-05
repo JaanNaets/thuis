@@ -141,7 +141,11 @@ commits en uitleg.
   in het formulier en gaat daarna door `prepareData` zoals alles. **Eenheden** (`shared/units.ts`): een voorraad telt
   per item in een eenheid (`measure` op het getal: welk veld de eenheid, de inhoud per stuk en per verpakking zegt);
   wat telt, mag een eenheid hebben (`adjust.unit`, 500 g of 2 zak) en wordt in `inTargetUnits` omgerekend naar die
-  van het item, vóór het in `applied` komt. Geen eenheid = zoals het staat. **Hoeveelheden** (veldsoort `amounts`):
+  van het item, vóór het in `applied` komt (of per lijn in een ander veld: `adjust.unit_by`). Geen eenheid = zoals het
+  staat. **Meteen ook** (`spawn` op een ja/nee, `shared/spawn.ts`, `worker/spawn.ts`): een nieuw item met dat vinkje
+  aan maakt ook een item in de eerste van die lijsten waarin de bewaarder mag toevoegen (Gegeten → je eigen Eten), in
+  dezelfde batch en door `prepareData`; het neemt naam, velden met dezelfde sleutel, het product en hoeveel (omgerekend)
+  over. Ids van lijsten die de bewerker niet ziet, blijven staan als ze er al stonden (`cleanTypeFields(…, before)`). **Hoeveelheden** (veldsoort `amounts`):
   per regel een item (of tekst), hoeveel en de eenheid; met `adjust` trekt elke regel af (een maaltijd uit een recept),
   met `per` (porties) rekent overnemen uit een recept mee. Waar code `item`/`items` behandelt, hoort `amounts` erbij. Een kasticket rekent de maat op de lijn om
   (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
