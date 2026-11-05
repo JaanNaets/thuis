@@ -572,6 +572,10 @@ relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen t
 - Wat je koos, blijft staan zolang de app openstaat (per lijst, `sessionStorage`). Exporteren volgt het filter.
 - Met subprojecten (`tree` in de weergave): een item uit een subproject krijgt de naam van dat project vooraan in
   de rij (`.row-meta`) en het icoon in de toon van dat project.
+- **Ook uit** (`also` in de weergave, `AlsoPicker` onderaan Meer opties): dezelfde lijst uit andere projecten erbij
+  ("Wijnen · Gezamenlijke wijnkelder", enkel lijsten die passen: minstens de helft van de velden is dezelfde). Zo'n
+  item krijgt de naam van zijn project zoals bij subprojecten; staat het aan, dan staat **Ook uit** als actieve filter
+  in de rij. Ieder ziet er enkel wat hij in dat project mag zien.
 - Een voorwaarde op een veld dat iemand niet mag zien, telt voor hem niet mee; een weergave is geen beveiliging.
 
 ### Agenda: `CalendarMonth`
@@ -601,8 +605,9 @@ maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eige
   Verdeling = wie nog geld krijgt (+) of moet (−).
 - **Verrekenen**: een saldo van een bedrag tussen personen (Apart per en Tegenover zijn een Persoon of Personen met
   aandeel), alles samen, met de subprojecten. Dat is Wie moet wie; het krijgt geen eigen kaart.
-- **Van wie** (`mine`: een veld Persoon): enkel de items van wie kijkt ("van jou" in de uitleg). Elk ziet zijn eigen
-  kcal, gewicht of water in hetzelfde project. Dan kan het doel ook **per persoon** (`goals`; leeg = het gewone
+- **Van wie** (`mine`: een veld Persoon, Personen of Verdeling): enkel de items van wie kijkt ("Enkel van jou"; bij
+  een verdeling of eigenaars "Enkel jouw deel": van € 60 voor jullie twee telt € 30, van een fles van drie ⅓). Elk
+  ziet zijn eigen kcal, gewicht of water in hetzelfde project. Dan kan het doel ook **per persoon** (`goals`; leeg = het gewone
   doel); de API stuurt per lezer zijn doel mee.
 - **Klein** (`size: "small"`): een tegel naast de andere kleine (eiwit, koolhydraten, vet). **Als lijn** (`chart:
   "line"`): de vorige periodes als lijn in plaats van staafjes (je gewicht per week).
@@ -612,7 +617,7 @@ maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eige
 | Formulier van een lijst, onder de totalen | Een eigen groep met één `select` **Melden bij een nieuw item**: Niet · Aan iedereen die de lijst ziet · Aan wie in … staat (per veld met mensen: Persoon, Personen, Personen met aandeel) |
 | Formulier van een lijst, groep "Totalen" (onder de velden) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode en Waar (`Segmented`), Volgens, Apart per, Tegenover (bij een som per persoon of keuze), Doel (soort + getal), de schakelaar Verrekenen (als het kan), en Ook uit (`tag-picker`: "Uitgaven · Skireis", enkel lijsten die passen). "Totaal toevoegen" als `btn-outline btn-sm` |
 | Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per groot totaal een sectie. Titel = naam, eronder de periode ("Vandaag", "Deze maand"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −). Met **Als lijn** een `.total-line`: een SVG-lijn (84px hoog) met een stip per periode, de huidige zwart, het doel gestippeld. De kleine samen in één sectie `.total-tiles`: per tegel het label (12,5px, grijs, hooguit twee regels; de waarden blijven op één lijn), de waarde (17px, 600) en een dunne doelbalk |
-| Formulier van een lijst, Totalen, bij een veld Persoon | "Van wie" (`select`: Iedereen samen / Enkel van jou), dan "Doel per persoon" (een getal per lid, `.goal-people`), en de schakelaars Klein en Als lijn |
+| Formulier van een lijst, Totalen, bij een veld met mensen | "Van wie" (`select`: Iedereen samen / Enkel van jou / Enkel jouw deel), dan "Doel per persoon" (een getal per lid, `.goal-people`), en de schakelaars Klein en Als lijn |
 
 - Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
 - De API rekent uit (`/projects/:id/totals`), per lezer: elk item met jouw rechten in zijn project. Wat je daar niet
@@ -697,6 +702,8 @@ Terugbetalingen zetten het klaar):
 - Wat velden zelf invullen (`applyFieldDefaults`): een Persoon met "Begint met jou" krijgt bij een nieuw item jou
   (als je in het project zit); Personen met aandeel met "Leeg = verdelen" krijgt de gewone verdeling, anders gelijk
   over iedereen. De API doet hetzelfde bij bewaren en importeren; wat ingevuld is, blijft.
+- Ben je alleen in een project (je eigen project), dan staan die velden niet in het formulier: ze vullen zich met
+  jou in. Staat er al iemand anders in, of komt er iemand bij, dan staan ze er weer.
 - Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde. Een uitgave telt
   enkel mee als ze een bedrag, iemand die betaalde en een verdeling heeft (anders kwam het niet op 0 uit).
 
@@ -762,7 +769,7 @@ zijn kleur (`.lm-swatch`).
 `<ItemsView project={detail} type={type} />` is één lijst in een project: het zoekveld met één knop **Meer opties**
 (`dots`), de filters uit de velden en Tag, en de tabel `.table-items`. Wat zelden nodig is, staat bij Meer opties in
 een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen, Importeren, Exporteren), met daaronder de
-schakelaars Met subprojecten en Archief; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
+schakelaars Met subprojecten en Archief en Ook uit; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
 (één tik zet hem uit). Geen rij iconknoppen naast het zoekveld. Gebruik `ItemsView` overal waar items van een lijst
 staan; bouw geen eigen lijst (op het overzicht hergebruikt `ListBlock` haar `ItemRow`).
 
@@ -892,7 +899,8 @@ maakt).
   de tabel (`.chart-table`): de tooltip is nooit de enige weg naar een getal.
 - **Samenstellen** (`ChartBuilder` in een `Sheet`): Als (Staafjes · Lijn · Getal · Per keuze · Verdeling), Wat en
   Van, Per (bij Per keuze en Verdeling), Volgens, Per / Periode en Laatste (leeg = Alles), Apart per, Weergave, Doel,
-  Met subprojecten, Titel (de naam vanzelf als placeholder), en eronder een voorbeeld (`.chart-preview`) dat meekijkt.
+  Van wie (zoals bij totalen), Met subprojecten, Ook uit (`AlsoPicker`), Titel (de naam vanzelf als placeholder), en
+  eronder een voorbeeld (`.chart-preview`) dat meekijkt.
 - **Overzicht als verslag**: staat er een grafiek op, dan een rij `filters` met `FilterSelect` **Periode** ("Zoals
   ingesteld" of Deze week, Deze maand, Vorige maand, …) voor alle grafieken; een korte periode neemt een kleinere
   stap (een maand per week). ⋯ → **Afdrukken of als pdf**: bij afdrukken de naam en de periode bovenaan

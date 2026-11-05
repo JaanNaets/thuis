@@ -22,6 +22,7 @@ import { CalendarMonth, gridRange, type CalendarEntry } from "./Calendar";
 import { FilterSelect, FilterToggle, Switch } from "./Controls";
 import { ConditionPills, ViewChips, ViewEditor, type Choices } from "./Filters";
 import { namesFrom, ScoreStars } from "./Fields";
+import { AlsoPicker } from "./AlsoPicker";
 import { Icon, type IconName } from "./Icon";
 import { SkeletonRows, stagger } from "./Motion";
 import { EmptyState } from "./Page";
@@ -144,7 +145,9 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   }, [wanted, savedViews]);
   // Met subprojecten: ook de items die eronder in deze lijst staan (elk met jouw rechten daar), met hun project erbij.
   const tree = Boolean(def.tree && project.children.length);
-  const listQuery = `type=${type.id}${archived ? "&archived=1" : ""}${tree ? "&sub=1" : ""}`;
+  // Ook uit: dezelfde lijst in andere projecten (elk item met jouw rechten daar, met de velden die hier ook zijn).
+  const also = def.also ?? [];
+  const listQuery = `type=${type.id}${archived ? "&archived=1" : ""}${tree ? "&sub=1" : ""}${also.length ? `&also=${also.join(",")}` : ""}`;
   const { data, error, loading, reload } = useApi<ItemList>(`/projects/${project.project.id}/items?${listQuery}`);
   const placeOf = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const elsewhere = (item: Item) => (item.project_id !== project.project.id ? placeOf.get(item.project_id) : undefined);
@@ -381,6 +384,11 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             <Icon name="project" size={14} /> Met subprojecten
           </FilterToggle>
         )}
+        {also.length > 0 && (
+          <FilterToggle on onChange={() => setDef({ ...def, also: undefined })}>
+            <Icon name="project" size={14} /> Ook uit
+          </FilterToggle>
+        )}
         {archived && (
           <FilterToggle on onChange={() => setArchived(false)}>
             <Icon name="archive" size={14} /> Archief
@@ -495,6 +503,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         <div className="form">
           {project.children.length > 0 && <Switch label="Met subprojecten" checked={tree} onChange={(on) => setDef({ ...def, tree: on || undefined })} />}
           <Switch label="Archief" checked={archived} onChange={setArchived} />
+          {sheet === "more" && <AlsoPicker home={type} value={also} onChange={(ids) => setDef({ ...def, also: ids.length ? ids : undefined })} />}
         </div>
       </Sheet>
 

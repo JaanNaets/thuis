@@ -6,6 +6,7 @@ import {
   GOAL_KINDS,
   GROUP_TYPES,
   MAX_SOURCES,
+  MINE_TYPES,
   MAX_TOTALS,
   renameTotals,
   SETTLE_TYPES,
@@ -176,7 +177,8 @@ export function TotalsEditor({
   /** Wie in het project zit (voor een doel per persoon). */
   people: Person[];
 }) {
-  const persons = fields.filter((f) => f.type === "person");
+  // Enkel van jou: volgens wie in een veld staat (bij een verdeling of eigenaars: jouw deel).
+  const persons = fields.filter((f) => MINE_TYPES.includes(f.type));
   const numbers = fields.filter(countable);
   const dates = fields.filter((f) => typeOf(f) === "date");
   const groups = fields.filter((f) => GROUP_TYPES.includes(f.type));
@@ -369,7 +371,7 @@ export function TotalsEditor({
                           <option value="">Iedereen samen</option>
                           {persons.map((f) => (
                             <option key={f.key} value={f.key}>
-                              Enkel van jou (volgens {f.label || "dit veld"})
+                              {f.type === "share" ? "Enkel jouw deel" : "Enkel van jou"} (volgens {f.label || "dit veld"})
                             </option>
                           ))}
                         </select>

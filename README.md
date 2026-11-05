@@ -226,7 +226,8 @@ Grafiek). Er staat niets vast: je kiest een lijst, en dan
 - **Wat**: Aantal, of de Som, het Gemiddelde, het Hoogste of het Laagste van een getal of bedrag (ook een berekening).
 - **Volgens** een datum (of wanneer het toegevoegd werd), **per** dag, week, maand of jaar, de **laatste** zoveel.
 - **Per** of **Apart per** een keuzelijst, persoon, verwijzing, ja/nee of de tags (bv. uitgaven per persoon per week).
-- Eventueel een bewaarde **weergave** als filter, **met subprojecten**, een **doel** en een eigen **titel**.
+- Eventueel een bewaarde **weergave** als filter, **met subprojecten**, **ook uit** dezelfde lijst in een ander
+  project, **enkel van jou** (of **enkel jouw deel** van een verdeling), een **doel** en een eigen **titel**.
 
 Een voorbeeld kijkt meteen mee terwijl je kiest. Elke grafiek heeft een tooltip per periode (ook met de pijltjes) en
 kan ook **als tabel**. Een blok **Tekst** zet er een titel en wat uitleg bij. Met **Periode** bovenaan geldt één
@@ -260,6 +261,13 @@ Koersfietsen, Gedeelde uitgaven, Voeding, Recepten, Notities, Huisdieren, Reizen
 hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
 Losse lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken, ...) voeg je toe bij **Instellen →
 Lijsten → Uit sjabloon**.
+
+**Wie wat ziet**: een project bepaalt wie iets ziet, een veld (Eigenaar, Verdeling) van wie het is. Deel je iets met
+andere mensen, maak er dan een project voor met hen erin (je eigen project, het huis met je partner, een wijnkelder met
+vrienden). Met **Ook uit** (bij Meer opties van een lijst, of in een grafiek) zie je dezelfde lijst uit je andere
+projecten samen in één tabel, en met **Enkel jouw deel** telt een totaal of grafiek enkel jouw deel (van € 60 voor
+twee € 30, van een fles van drie ⅓). Ben je alleen in een project, dan vullen Betaald door, Verdeling en Wie zich
+vanzelf met jou in en staan ze niet in het formulier.
 
 ### Sjablonen delen
 

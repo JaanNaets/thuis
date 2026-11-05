@@ -40,7 +40,10 @@ export type TotalDef = {
   against?: string;
   /** Verrekenen: het saldo telt mee in Wie moet wie op het project (met de subprojecten). */
   settle?: boolean;
-  /** Enkel van jou: een persoonveld (bv. Wie); elke lezer ziet het totaal van de items waar hij in staat. */
+  /**
+   * Enkel van jou: een veld met mensen (Wie, Personen, een Verdeling of Eigenaar); elke lezer ziet het totaal van de
+   * items waar hij in staat, bij een verdeling met enkel zijn deel (zie `onlyMine`).
+   */
   mine?: string;
   /** Een eigen doel per persoon (id → doel), bij `mine`; wie er niet in staat, heeft `goal`. */
   goals?: Record<string, number>;
@@ -61,6 +64,8 @@ export const HISTORY = { all: 1, day: 7, week: 8, month: 6, year: 5 } as const s
 export const GROUP_TYPES: FieldType[] = ["person", "people", "share", "select", "multi"];
 /** Verrekenen kan tussen mensen: wie betaalde (een persoon) en een verdeling of een andere persoon. */
 export const SETTLE_TYPES: FieldType[] = ["person", "share"];
+/** Enkel van jou kan met wie in een veld staat: een persoon, personen of een verdeling (dan telt jouw deel). */
+export const MINE_TYPES: FieldType[] = ["person", "people", "share"];
 export const MAX_TOTALS = 6;
 export const MAX_SOURCES = 5;
 
@@ -200,7 +205,7 @@ export function cleanTotals(raw: unknown, fields: FieldDef[]): TotalDef[] {
 
     if (o.mine !== undefined && o.mine !== null && o.mine !== "") {
       const def = fields.find((f) => f.key === o.mine);
-      if (!def || def.type !== "person") fail("enkel van jou: kies een persoonveld (zoals Wie)");
+      if (!def || !MINE_TYPES.includes(def.type)) fail("enkel van jou: kies een veld met mensen (zoals Wie of Verdeling)");
       if (out.settle) fail("verrekenen telt voor iedereen samen, niet enkel van jou");
       out.mine = def!.key;
     }
@@ -333,6 +338,42 @@ export function itemNet(t: TotalDef, fields: FieldDef[], data: Attributes): Map<
     const minus = againstDef ? spread(againstDef, value, data[againstDef.key], money, payer) : [];
     if (!minus.length) return null;
     for (const [key, v] of minus) out.set(key, (out.get(key) ?? 0) - v);
+  }
+  return out;
+}
+
+/**
+ * Enkel van jou: de items waar `me` in het veld `mine` staat. Bij een verdeling (of eigenaars met een aandeel) telt
+ * van het getal `value` enkel jouw deel: van een uitgave van € 60 voor jullie twee € 30, van 1 fles van drie ⅓. Een
+ * lege verdeling is van niemand in het bijzonder en telt niet. Werkt voor totalen en grafieken.
+ */
+export function onlyMine<T extends { data: Attributes }>(fields: FieldDef[], mine: string, items: T[], me: string, value?: string): T[] {
+  const def = fields.find((f) => f.key === mine);
+  if (!def || !MINE_TYPES.includes(def.type)) return [];
+  const money = typeOf(fields.find((f) => f.key === value)) === "money";
+  const out: T[] = [];
+  for (const item of items) {
+    const raw = item.data[def.key];
+    if (def.type === "person") {
+      if (raw === me) out.push(item);
+      continue;
+    }
+    if (!Array.isArray(raw)) continue;
+    if (def.type === "people") {
+      if ((raw as unknown[]).includes(me)) out.push(item);
+      continue;
+    }
+    const shares = (raw as Share[]).filter((x) => x && typeof x.person_id === "string" && typeof x.share === "number" && x.share > 0);
+    const sum = shares.reduce((s, x) => s + x.share, 0);
+    const own = shares.filter((x) => x.person_id === me).reduce((s, x) => s + x.share, 0);
+    if (!(sum > 0) || !(own > 0)) continue;
+    const v = value ? item.data[value] : undefined;
+    if (typeof v !== "number" || own === sum) {
+      out.push(item);
+      continue;
+    }
+    const part = money ? (splitCents(v, shares).get(me) ?? 0) : Math.round(((v * own) / sum) * 1000) / 1000;
+    out.push({ ...item, data: { ...item.data, [value!]: part } });
   }
   return out;
 }

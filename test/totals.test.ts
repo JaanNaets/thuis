@@ -371,7 +371,7 @@ test("totalen: enkel van jou, doel per persoon, klein en als lijn", async () => 
   const [plain] = cleanTotals([{ id: "b", agg: "count", period: "all", goals: { jana: 3 }, chart: "line" }], withWho);
   assert.equal(plain.goals, undefined);
   assert.equal(plain.chart, undefined);
-  assert.throws(() => cleanTotals([{ id: "c", agg: "count", period: "all", mine: "maaltijd" }], withWho), /persoonveld/);
+  assert.throws(() => cleanTotals([{ id: "c", agg: "count", period: "all", mine: "maaltijd" }], withWho), /veld met mensen/);
   assert.throws(() => cleanTotals([{ id: "c", agg: "count", period: "all", mine: "wie", goals: { x: -1 } }], withWho), /0 of meer/);
   assert.equal(cleanTotals(Array(6).fill({ agg: "count", period: "all" }), withWho).length, 6);
 });

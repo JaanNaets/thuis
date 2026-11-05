@@ -7,6 +7,8 @@
 // Wat de browser krijgt, zijn enkel de uitkomsten per periode en reeks, nooit de items.
 
 import type { Attributes, FieldDef, FieldType } from "./fields";
+import { MINE_TYPES } from "./totals.ts";
+import { cleanAlso } from "./views.ts";
 
 export type ChartForm = "bars" | "line" | "number" | "ranked" | "parts";
 export type ChartAgg = "count" | "sum" | "avg" | "min" | "max";
@@ -31,6 +33,10 @@ export type ChartDef = {
   view?: string;
   /** Ook de items uit de subprojecten. */
   sub?: true;
+  /** Ook uit: dezelfde lijst in andere projecten (ids; zie `alsoData` in shared/views.ts). */
+  also?: string[];
+  /** Enkel van jou: een veld met mensen; bij een verdeling telt jouw deel (zie `onlyMine` in shared/totals.ts). */
+  mine?: string;
 };
 
 export const CHART_FORMS = {
@@ -108,6 +114,8 @@ export function cleanChart(raw: unknown): ChartDef | null {
     ...(goal !== undefined && (overTime(form) || form === "number") ? { goal } : {}),
     ...(view ? { view } : {}),
     ...(o.sub === true ? { sub: true as const } : {}),
+    ...(cleanAlso(o.also).length ? { also: cleanAlso(o.also) } : {}),
+    ...(typeof o.mine === "string" && KEY.test(o.mine) ? { mine: o.mine } : {}),
   };
 }
 
@@ -120,6 +128,8 @@ export function fitChart(def: ChartDef, fields: FieldDef[]): { value?: FieldDef;
   if (def.date !== "created" && (!date || !isDateField(date))) return null;
   const byField = def.by && def.by !== "tags" ? find(def.by) : undefined;
   if (def.by && def.by !== "tags" && (!byField || !isGroupField(byField))) return null;
+  const mine = find(def.mine);
+  if (def.mine && (!mine || !MINE_TYPES.includes(mine.type))) return null;
   return { value, date, by: def.by === "tags" ? "tags" : byField };
 }
 

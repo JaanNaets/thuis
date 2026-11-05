@@ -19,11 +19,13 @@ import {
   type ChartStep,
 } from "../../shared/charts";
 import type { FieldDef } from "../../shared/fields";
+import { MINE_TYPES } from "../../shared/totals";
 import type { Block } from "../../shared/overview";
 import type { ItemTypeView, OverviewType } from "../../shared/types";
 import type { SavedView } from "../../shared/views";
 import { useApi } from "../api";
 import { centsToInput, parseEuro } from "../format";
+import { AlsoPicker } from "./AlsoPicker";
 import { ChartView } from "./Chart";
 import { CardHead, Switch } from "./Controls";
 import { Icon } from "./Icon";
@@ -108,6 +110,7 @@ export function ChartBuilder({
   const numbers = fields.filter(isNumberField);
   const dates = fields.filter(isDateField);
   const groups = fields.filter(isGroupField);
+  const mines = fields.filter((f) => MINE_TYPES.includes(f.type));
   const { data: views } = useApi<SavedView[]>(`/projects/${project}/views?type=${type.id}`);
   const { data: preview, error } = useApi<ChartData>(chartPath(project, type.id, value));
   const set = (patch: Partial<ChartDef>) => onChange({ ...value, ...patch });
@@ -264,7 +267,22 @@ export function ChartBuilder({
         </label>
       )}
 
+      {mines.length > 0 && (
+        <label className="field">
+          <span className="label">Van wie</span>
+          <select value={value.mine ?? ""} onChange={(e) => set({ mine: e.target.value || undefined })}>
+            <option value="">Iedereen samen</option>
+            {mines.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.type === "share" ? "Enkel jouw deel" : "Enkel van jou"} (volgens {f.label})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <Switch checked={Boolean(value.sub)} onChange={(on) => set({ sub: on || undefined })} label="Met subprojecten" />
+      <AlsoPicker home={type} value={value.also ?? []} onChange={(ids) => set({ also: ids.length ? ids : undefined })} />
 
       <label className="field">
         <span className="label">Titel</span>

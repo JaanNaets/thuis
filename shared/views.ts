@@ -201,6 +201,11 @@ export type ViewDef = {
   date?: string;
   /** Ook de items uit de subprojecten (elk met jouw rechten in zijn eigen project). */
   tree?: boolean;
+  /**
+   * Ook uit: de items van deze lijsten uit andere projecten (ids), elk met jouw rechten in zijn eigen project en enkel
+   * met de velden die hier ook bestaan (`alsoData`). Al je wijnen uit twee kelders in één tabel.
+   */
+  also?: string[];
   /** Groeperen op een veld (zie `groupItems`), met per groep het aantal en de som. */
   group?: string;
 };
@@ -524,6 +529,39 @@ function cleanValue(op: Op, value: unknown): unknown {
   }
 }
 
+// ---------- ook uit ----------
+
+/** Hoogstens zoveel andere lijsten bij Ook uit (in een weergave of grafiek). */
+export const MAX_ALSO = 5;
+const LIST_ID = /^[\w-]{1,64}$/;
+
+/** Ids van lijsten bij Ook uit, nagekeken op vorm (welke je ziet, kijkt de server per item na). */
+export function cleanAlso(raw: unknown, own?: string): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((x): x is string => typeof x === "string" && LIST_ID.test(x) && x !== own))].slice(0, MAX_ALSO);
+}
+
+/** Hetzelfde veld in twee lijsten: dezelfde sleutel en dezelfde soort (een berekening telt met haar uitkomst). */
+const effective = (f: FieldDef) => (f.type === "calc" ? (f.result ?? "text") : f.type);
+const sameField = (a: FieldDef, b: FieldDef) => a.key === b.key && effective(a) === effective(b);
+
+/** Past een lijst uit een ander project bij deze (voor Ook uit)? Minstens de helft van de velden is dezelfde. */
+export function alsoFits(home: FieldDef[], other: FieldDef[]): boolean {
+  if (!home.length) return false;
+  const same = home.filter((f) => other.some((o) => sameField(f, o))).length;
+  return same > 0 && same * 2 >= home.length;
+}
+
+/** De waarden van een item uit een andere lijst zoals deze lijst ze toont: enkel de velden die hier hetzelfde zijn. */
+export function alsoData(home: FieldDef[], other: FieldDef[], data: Attributes): Attributes {
+  const out: Attributes = {};
+  for (const f of home) {
+    const o = other.find((x) => sameField(f, x));
+    if (o && data[o.key] !== undefined) out[f.key] = data[o.key];
+  }
+  return out;
+}
+
 /** Een weergave nakijken tegen de velden van de lijst (met `viewFields`). Gooit een Error met uitleg. */
 export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Geen geldige weergave");
@@ -558,6 +596,7 @@ export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
     ...(columns.length ? { columns: [...new Set(columns)] } : {}),
     ...(o.mode === "agenda" && date ? { mode: "agenda" as const, date } : {}),
     ...(o.tree === true ? { tree: true } : {}),
+    ...(cleanAlso(o.also).length ? { also: cleanAlso(o.also) } : {}),
     ...(group ? { group } : {}),
   };
 }

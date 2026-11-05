@@ -26,6 +26,7 @@ import {
   totalLabel,
   visibleTotals,
   goalFor,
+  onlyMine,
   type TotalDef,
   type TotalResult,
 } from "../../shared/totals";
@@ -674,8 +675,8 @@ projects.get("/:id/totals", async (c) => {
   const people = new Set<string>();
   for (const t of totals) {
     const all = await totalItems(db, me, rightsOf, t, type, t.scope === "tree" ? below : [access.project.id], sources);
-    // Enkel van jou: de items waar jij in staat (bv. bij Wie), met jouw eigen doel.
-    const items = t.mine ? all.filter((i) => i.data[t.mine!] === me) : all;
+    // Enkel van jou: de items waar jij in staat (bv. bij Wie), bij een verdeling met jouw deel, en jouw eigen doel.
+    const items = t.mine ? onlyMine(fields, t.mine, all, me, t.field) : all;
     const result = computeTotal(t, fields, items, today);
     const groupType = fields.find((f) => f.key === t.by)?.type;
     if (groupType === "person" || groupType === "people" || groupType === "share") for (const g of result.groups) people.add(g.key);

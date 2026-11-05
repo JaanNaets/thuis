@@ -38,10 +38,11 @@ import { measureOf, receiptAmount, round3 } from "../../shared/units";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
-import { cleanView, EMPTY_VIEW, groupItems, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
+import { alsoData, alsoFits, cleanAlso, cleanView, EMPTY_VIEW, groupItems, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
 import { fieldsForViews } from "./views";
 import { boardWindow, BOARD_PERIODS, cleanChart, computeChart, type BoardPeriod } from "../../shared/charts";
 import { notifyNewItem } from "../notify";
+import { onlyMine } from "../../shared/totals";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -331,6 +332,48 @@ async function itemsIn(db: D1Database, me: string, access: ProjectAccess, lists:
 }
 
 /**
+ * Ook uit (zie shared/views.ts): de items van andere lijsten (`ids`, uit andere projecten) die bij `home` passen, elk
+ * met jouw rechten in zijn eigen project (geen lidmaatschap = niets) en enkel met de velden die `home` ook heeft. Met
+ * de lijsten zelf (voor de namen).
+ */
+export async function itemsAlso(db: D1Database, me: string, home: ItemType, ids: string[], archived = false): Promise<{ items: Item[]; lists: ItemType[] }> {
+  const wanted = cleanAlso(ids, home.id);
+  if (!wanted.length) return { items: [], lists: [] };
+  const { results: rows } = await db
+    .prepare("SELECT * FROM item_types WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(wanted))
+    .all<TypeRow>();
+  const lists = rows.map(toItemType).filter((t) => alsoFits(home.fields, t.fields));
+  if (!lists.length) return { items: [], lists: [] };
+  const nodes = await accessibleProjects(db, me);
+  const rightsOf = new Map(nodes.map((n) => [n.id, n.rights]));
+  const { results } = await db
+    .prepare(
+      `${ITEM_SELECT} WHERE i.project_id IN (SELECT value FROM json_each(?)) AND i.archived = ? AND i.type_id IN (SELECT value FROM json_each(?))
+       ORDER BY i.name COLLATE NOCASE LIMIT 5000`,
+    )
+    .bind(JSON.stringify([...rightsOf.keys()]), archived ? 1 : 0, JSON.stringify(lists.map((t) => t.id)))
+    .all<ItemRow>();
+  const byId = new Map(lists.map((t) => [t.id, t]));
+  const groups = new Map<string, Item[]>();
+  for (const r of results) {
+    const rights = rightsOf.get(r.project_id);
+    if (!rights || typeAccess(rights, r.type_id) === "none") continue;
+    const key = `${r.project_id}/${r.type_id}`;
+    groups.set(key, [...(groups.get(key) ?? []), toItem(r, rights, byId.get(r.type_id)!)]);
+  }
+  for (const [key, group] of groups) {
+    const [projectId, typeId] = key.split("/");
+    await withCalcs(db, me, byId.get(typeId)!, rightsOf.get(projectId)!, group);
+  }
+  const items = [...groups.values()].flat().map((i) => ({ ...i, data: alsoData(home.fields, byId.get(i.type_id)!.fields, i.data) }));
+  return { items, lists };
+}
+
+/** Samen op naam, zoals een lijst ze ophaalt. */
+const byName = (a: Item, b: Item) => a.name.localeCompare(b.name, "nl", { sensitivity: "base" });
+
+/**
  * De items van een project (?type= één lijst, ?archived=1 het archief, ?sub=1 ook uit de subprojecten), met de namen
  * waarnaar ze verwijzen. Voor een blok op het overzicht: ?view= een bewaarde weergave (gedeeld of de jouwe) en
  * ?limit= enkel de eerste items (0: enkel het aantal), in de volgorde van de lijst (`orderItems`), met `count`: hoeveel
@@ -362,9 +405,17 @@ projectItems.get("/:id/items", async (c) => {
   }
   const sub = c.req.query("sub") === "1" || Boolean(view.tree);
   let list = await itemsIn(db, me, access, lists, c.req.query("archived") === "1", sub);
-  if (!paged) return c.json({ items: list, ...(await namesFor(db, me, access.chain, types, list)) } satisfies ItemList);
+  // Ook uit: dezelfde lijst in andere projecten (?also=id,id of uit de weergave).
+  const alsoIds = typeId ? [...(c.req.query("also")?.split(",") ?? []), ...(view.also ?? [])] : [];
+  const also = alsoIds.length ? await itemsAlso(db, me, lists[0], alsoIds, c.req.query("archived") === "1") : { items: [], lists: [] };
+  if (also.items.length) {
+    const seen = new Set(list.map((i) => i.id));
+    list = [...list, ...also.items.filter((i) => !seen.has(i.id))].sort(byName);
+  }
+  const named = [...types, ...also.lists];
+  if (!paged) return c.json({ items: list, ...(await namesFor(db, me, access.chain, named, list)) } satisfies ItemList);
 
-  const all = await namesFor(db, me, access.chain, types, list);
+  const all = await namesFor(db, me, access.chain, named, list);
   const person = new Map(all.people.map((p) => [p.id, p.name]));
   const ref = new Map(all.refs.map((r) => [r.id, r.name]));
   const names = { person: (id: string) => person.get(id) ?? "", item: (id: string) => ref.get(id) ?? "" };
@@ -425,11 +476,15 @@ projectItems.get("/:id/chart", async (c) => {
     }
   }
   let list = await itemsIn(db, me, access, [type], false, Boolean(def.sub || view.tree));
-  const all = await namesFor(db, me, access.chain, types, list);
+  const also = await itemsAlso(db, me, type, [...(def.also ?? []), ...(view.also ?? [])]);
+  list = [...list, ...also.items];
+  const all = await namesFor(db, me, access.chain, [...types, ...also.lists], list);
   const person = new Map(all.people.map((p) => [p.id, p.name]));
   const ref = new Map(all.refs.map((r) => [r.id, r.name]));
   const today = brusselsToday();
   if (def.view) list = list.filter((i) => matchesView(i, view, fields, { today, me, names: { person: (id) => person.get(id) ?? "", item: (id) => ref.get(id) ?? "" } }));
+  // Enkel van jou: de items waar jij in staat, bij een verdeling met jouw deel van het getal.
+  if (def.mine) list = onlyMine(fields, def.mine, list, me, def.field);
   const tags = def.by === "tags"
     ? (await db.prepare("SELECT id, name FROM tags WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY name").bind(JSON.stringify(access.chain)).all<{ id: string; name: string }>()).results
     : [];

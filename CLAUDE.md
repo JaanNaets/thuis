@@ -78,11 +78,18 @@ commits en uitleg.
   porties in het formulier, en snel invullen rekent "2 porties" om (`QuickContext.values`). **NEVO** (`shared/nevo.ts`,
   `shared/nevo-data.ts` uit `scripts/nevo.mjs`): gewone voedingsmiddelen zonder netwerk (`nevoByName`,
   `GET /products/nevo`), ongewijzigd en altijd met `nevoCredit` erbij; zonder merk eerst NEVO, dan Open Food Facts.
-- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, groeperen, als agenda; de volgorde altijd met
+- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, groeperen, als agenda, **Ook uit**; de volgorde altijd met
   `orderItems`, optellen enkel waar het zin heeft: `canSum`) en de **agenda** (`shared/agenda.ts`,
   velden met `agenda`) zijn generiek over alle veldsoorten. Een weergave is geen beveiliging: wat iemand niet mag zien,
   krijgt hij niet, en een voorwaarde daarop telt voor hem niet mee. `/agenda` kijkt per item de rechten in zijn
   project na. Wat binnenkomt, gaat door `cleanView`.
+- **Ook uit** (`also` in een weergave of grafiek, `?also=`, `itemsAlso` in `worker/routes/items.ts`): dezelfde lijst uit
+  andere projecten (`alsoFits`: minstens de helft van de velden dezelfde), elk item met de rechten van de lezer in zijn
+  eigen project (geen lidmaatschap = niets) en enkel met de velden die hier hetzelfde zijn (`alsoData`). Delen blijft per
+  project: een project bepaalt wie iets ziet, een veld (Eigenaar, Verdeling) van wie het is; Ook uit toont het samen.
+- **Jouw deel** (`mine` op een totaal of grafiek, `onlyMine` in `shared/totals.ts`): enkel de items waar de lezer in
+  een veld met mensen staat; bij een verdeling telt van het getal enkel zijn deel (tot op de cent). Ben je alleen in
+  een project, dan staan velden die zich met jou invullen niet in het formulier (`selfOnly` in `ItemForm`).
 - **Met subprojecten** (`?sub=1`, `tree` in een weergave): de items van een lijst ook uit de subprojecten
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,

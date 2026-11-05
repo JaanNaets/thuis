@@ -93,6 +93,9 @@ function ItemForm({
   const fields = type.fields;
   const people = project.members.map((m) => m.person);
   const editsType = type.access === "edit";
+  // Ben je de enige (je eigen project), dan vullen Betaald door, Verdeling en Wie zich vanzelf met jou in: die velden
+  // hoeven niet in het formulier. Komt er iemand bij (of staat er al iemand anders in), dan staan ze er weer.
+  const alone = people.length <= 1;
   // Een nieuw item begint met wat de velden zelf invullen (bij een uitgave: jij betaalde, de gewone verdeling) en
   // met vandaag in een datum die zo ingesteld is.
   const fresh = () =>
@@ -866,7 +869,7 @@ function ItemForm({
         {fields.length > 0 && (
           <FieldInputs
             key={refsVersion}
-            defs={fields}
+            defs={alone ? fields.filter((f) => !selfOnly(f, attrs[f.key], person.id)) : fields}
             value={attrs}
             access={type.field_access}
             people={people}
@@ -950,4 +953,11 @@ function MoreOnPhoto({
       </ul>
     </div>
   );
+}
+
+/** Een veld dat zich vanzelf met jou invult (Betaald door, Verdeling, Wie) en leeg is of enkel jou bevat. */
+function selfOnly(f: FieldDef, value: unknown, me: string): boolean {
+  if (f.type === "person" && f.me) return !value || value === me;
+  if (f.type === "share" && f.fill) return !Array.isArray(value) || !value.length || value.every((x) => (x as { person_id?: string })?.person_id === me);
+  return false;
 }
