@@ -1296,6 +1296,7 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
           <span className="label">In</span>
           <select aria-label="In" value={adjust.unit ?? ""} onChange={(e) => onChange({ ...adjust, unit: e.target.value || undefined })}>
             <option value="">Zoals het gekozen item telt</option>
+            <option value="verpakking">verpakking</option>
             {UNITS.map((u) => (
               <option key={u} value={u}>
                 {u}
