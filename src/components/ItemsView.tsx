@@ -13,7 +13,7 @@ import {
 } from "../../shared/fields";
 import type { Item, ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
 import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
-import { apiUrl, useApi } from "../api";
+import { api, apiUrl, useApi } from "../api";
 import { today } from "../format";
 import { useSession } from "../session";
 import { Link, useNavigate } from "../router";
@@ -28,7 +28,7 @@ import { EmptyState } from "./Page";
 import { Sheet } from "./Sheet";
 import { Barcode } from "./Barcode";
 import { addPath } from "../../shared/quickadd";
-import { quickPath } from "../../shared/manifest";
+import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
 import { sharedFile } from "../shared-file";
 import { adjust, ReceiptToStock, RowStepper, StockScanner } from "./Stock";
 import { measureOf } from "../../shared/units";
@@ -69,6 +69,30 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   // Een foto gedeeld vanuit een andere app als kasticket (?kasticket=gedeeld, zie /delen).
   const [sharedReceipt, setSharedReceipt] = useState<File | null>(null);
   const [shortcutText, setShortcutText] = useState("");
+
+  /**
+   * Op je beginscherm: een app (Jouw gegevens → App) naar het formulier van deze lijst, of de app die er al heen gaat,
+   * en die openen in de browser (daar zet je ze op je beginscherm).
+   */
+  async function homeScreen() {
+    // Het venster meteen openen (anders houdt de browser het tegen), het adres zodra de app er is.
+    const opened = window.open("", "_blank");
+    try {
+      const to: Destination = { kind: "form", project: project.project.id, list: type.id, ...(shortcutText.trim() ? { text: shortcutText.trim() } : {}) };
+      let settings = await api.get<AppSettings>("/me/app");
+      if (!settings.apps.some((a) => sameDestination(a.to, to))) {
+        settings = await api.put<AppSettings>("/me/app", { settings: { ...settings, apps: [...settings.apps, { name: type.name, to }] } });
+      }
+      const app = settings.apps.find((a) => sameDestination(a.to, to));
+      if (!app) throw new Error("Die app kon niet gemaakt worden.");
+      const url = `${window.location.origin}${appPath(app.id)}`;
+      if (opened) opened.location.href = url;
+      else window.location.href = url;
+    } catch (err) {
+      opened?.close();
+      toast((err as Error).message, "alert");
+    }
+  }
   async function step(id: string, delta: number) {
     try {
       const value = await adjust(id, counter!.key, delta);
@@ -490,9 +514,9 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
               >
                 <Icon name="download" size={16} /> QR-sticker
               </Link>
-              <a href={`${window.location.origin}${quickPath(project.project.id, type.id)}`} target="_blank" rel="noopener" className="btn btn-outline">
+              <button type="button" className="btn btn-outline" onClick={homeScreen}>
                 <Icon name="home" size={16} /> Op je beginscherm
-              </a>
+              </button>
             </div>
           </div>
         )}

@@ -369,10 +369,14 @@ met een glazen duim die meeveert. Meer dan 4 opties: gebruik een `select`.
 
 ### Zoekpalet: `CommandPalette`
 
-Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk of Zoeken in de onderbalk (`useSession().openSearch()` vanuit
-een scherm): een glazen venster boven een zacht vervaagd scherm. Zoekt zonder op hoofdletters of accenten te letten
-in acties, je projecten en (via `/api/search`) de items die je mag zien. Pijltjes kiezen (een grijs vlak glijdt
-mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als groep in
+Eén veld voor zoeken én toevoegen. Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk of Zoeken in de onderbalk
+(modus zoeken), of met de + op het overzicht (modus toevoegen; `usePalette()("add", tekst)` vanuit een scherm): een
+glazen venster boven een zacht vervaagd scherm. Zoekt zonder op hoofdletters of accenten te letten in acties, je
+projecten en (via `/api/search`) de items die je mag zien, en biedt de lijsten aan om in toe te voegen
+(`GET /me/lists`, `matchTargets`): noemen de eerste woorden een lijst ("uitgave 12 euro"), dan staat **Toevoegen**
+("Uitgave: 12 euro", de rest gaat als `?tekst=` naar het formulier) bovenaan, anders wat je zoekt. Met de + staan de
+lijsten altijd eerst (je meestgebruikte bovenaan) en Nieuw project als laatste. Pijltjes kiezen (een grijs vlak
+glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als groep in
 `CommandPalette.tsx`.
 
 ### Projectboom (zijbalk)
@@ -455,7 +459,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" met **Invullen** (of Enter), daaronder Foto · Uit bestand (· Barcode). Wat je typt, is ook de uitleg bij een foto. Invullen gaat eerst met code (`shared/quickfill.ts`: datums, uren, bedragen, getallen met eenheid, keuzes, personen, items, ja/nee; de naam van de lijst telt niet), een hele zin met de AI (`POST /projects/:id/items/read`); wat de code vond, wint. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). |
+| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" (`QuickInput`) met rechts een stille ✨ (`.ai-button`, `btn-ghost btn-icon`, "Lezen met AI": enkel als je de AI de hele tekst wil laten lezen; wat de code al vond, wint), daaronder het rijtje (`QuickChips`) en Foto · Uit bestand (· Barcode). Enter vult in met code (zonder AI). Wat je typt, is ook de uitleg bij een foto. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). De motor (live lezen, keuzes, verplaatsen) is `useQuickFill`, ook in `QuickAdd`. |
 | `QuickInput` | Het veld "Typ wat je weet" in `LabelScanner` (bij een nieuw item staat de cursor er meteen in). Wat je typt, vult **live** in met code (zonder AI; `quickFill`, met `parts`: welke tekst in welk veld kwam): wis je een woord, dan komt terug wat er stond. Eronder zweven (`.picker-list`, zo breed als de hele rij: `.picker.is-row`) de waarden die passen bij het woord bij de cursor, uit alle velden die je mag wijzigen: items (van de server, per groep lijsten), keuzes, personen, ja/nee en namen van eerder; rechts het label van het veld (`.picker-place`). Staat de cursor in een getal of datum die al ergens staat, dan tonen de keuzes de andere velden waar het naartoe kan; Tab (Shift+Tab) doet dat op een computer. Kiezen vult het veld in zoals zelf invullen (overnemen uit een recept gebeurt ook) en telt als jouw keuze; wis je dat woord, dan vervalt ze. Enter zonder keuze is **Invullen** (een hele zin gaat dan naar de AI). Escape sluit. |
 | `QuickChips` | Het rijtje onder "Typ wat je weet": per veld wat de tekst of je keuzes invulden (`.tag.is-filled`: zacht blauw, het label grijs, een lange waarde afgekapt), in de volgorde van het formulier. Een tik opent een `Sheet` met **Naar …** (de andere velden waar de waarde kan) en **Weghalen** (dan verdwijnt het ook uit je tekst). |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
@@ -490,9 +494,10 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
   item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
   (`datalist`); kies je er een, dan vult de app de rest in zoals de vorige keer. Een datum die met vandaag begint,
-  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`). Boven de naam staat **Vaak**:
-  wat je minstens twee keer toevoegde, het vaakst eerst, hooguit zes, als `tag`-knoppen in een `tag-picker`; één tik
-  doet hetzelfde. Namen die de app zelf gaf ("Weging 30/10/2026") tellen niet mee.
+  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`). **Vaak** staat in het lege
+  invulveld: tik je in "Typ wat je weet" voor je iets typt, dan tonen de keuzes wat je minstens twee keer toevoegde,
+  het vaakst eerst, hooguit zes (rechts "Vaak"); één tik vult in zoals de vorige keer. Namen die de app zelf gaf
+  ("Weging 30/10/2026") tellen niet mee.
 - **Ook op de foto**: herkent de AI meerdere dingen op één foto van eten (een bord met rijst, kip en broccoli), dan
   komt het grootste in het formulier en de rest onder de knoppen als `.receipt-lines` (aanvinken, naam, "180 g · 234
   kcal"). Bij Opslaan wordt elk aangevinkt ding een eigen item met zijn eigen schatting en de rest van het formulier
@@ -905,9 +910,9 @@ hetzelfde) en in `actions` enkel ⋯ (`btn-outline btn-icon`, "Meer opties") →
 Nieuw overzicht, Hernoemen, Verwijderen (een naam vraagt het blad zelf, `form` met één veld). Meer overzichten
 (`shared/overview.ts`: `Board`, tot `MAX_BOARDS`): `Tabs` onder de titel; dit toestel onthoudt welk (`thuis.board`,
 `?bord=`), zo toont de keukentablet "Keuken". Een leeg overzicht: "Leeg overzicht" met Aanpassen. **Toevoegen**
-(`AddPalette`, zelfde opbouw als het zoekpalet): typ waar het heen moet en wat je weet ("bijvulling 3 zakken
-pellets"); jouw meestgebruikte lijsten bovenaan (`GET /me/lists`, `matchTargets`), de rest van je tekst gaat mee naar
-het formulier (`?tekst=`), Nieuw project als laatste. → de blokken die je koos
+(het [zoekpalet](#zoekpalet-commandpalette) in de modus toevoegen): typ waar het heen moet en wat je weet
+("bijvulling 3 zakken pellets"); jouw meestgebruikte lijsten bovenaan, de rest van je tekst gaat mee naar het
+formulier (`?tekst=`), Nieuw project als laatste. → de blokken die je koos
 (`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
 een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
 met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
@@ -941,9 +946,7 @@ lijsten: een lege staat met "Lijst maken".
 **Snel naar een formulier** (`QuickLinks.tsx`, `shared/manifest.ts`): bij een lijst onder Meer opties
 **Snelkoppeling** → een `Sheet` met "Met tekst" (bv. pellets), de QR (`Barcode` in `.sticker`), **QR-sticker** (naar
 `/projecten/:id/sticker`: de sticker groot, Afdrukken; bij afdrukken enkel de sticker, zwart op wit met een rand) en
-**Op je beginscherm** (opent `/snel/:id/:lijst` in de browser: het formulier met een eigen manifest, zodat het icoon
-"Bijvulling" heet en meteen het formulier opent; in de browser staat onder de titel één kaart `.home-hint` met de
-twee handelingen, als app niet). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
+**Op je beginscherm** (maakt een app naar dit formulier, of neemt de app die er al heen gaat, zie Jouw gegevens → App, en opent `/app/:id` in de browser: de naam van de app, Openen en `HomeScreenHint`; zo heet het icoon "Bijvulling" en opent het meteen het formulier; `/snel/:id/:lijst` blijft enkel voor iconen van vroeger). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
 rijen, Kasticket bijtellen (lijsten met een voorraad) en Lezen in (de lijsten, die bij de tekst passen eerst); enkel
 tekst opent Toevoegen. Lang op het app-icoon drukken (Android): je drie meestgebruikte lijsten, Toevoegen en Agenda.
 

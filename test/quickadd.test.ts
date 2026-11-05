@@ -37,9 +37,12 @@ test("toevoegen: de lijst uit de eerste woorden, de rest gaat mee naar het formu
   // Een project, eventueel met een lijst erin.
   assert.deepEqual(names(matchTargets("pelletkachel", lists)), ["Bijvulling|", "Onderhoud|"]);
   assert.deepEqual(names(matchTargets("pelletkachel onderh filter", lists)), ["Onderhoud|filter"]);
-  // Niets herkend: alle lijsten, met de hele tekst.
+  // Niets herkend: alle lijsten, met de hele tekst (en niet "sterk": dan komt zoeken eerst).
   assert.equal(matchTargets("3 zakken pellets", lists)[0].rest, "3 zakken pellets");
   assert.equal(matchTargets("3 zakken pellets", lists).length, 5);
+  assert.equal(matchTargets("3 zakken pellets", lists)[0].strong, false);
+  assert.equal(matchTargets("bijv 3", lists)[0].strong, true);
+  assert.equal(matchTargets("pelletkachel", lists)[0].strong, true);
 });
 
 test("toevoegen: het pad naar het formulier", () => {

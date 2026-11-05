@@ -58,8 +58,9 @@ commits en uitleg.
   project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
 - **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
   velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
-  en wat de code vond, wint. Alles daarna gewoon door het formulier en `prepareData`. De code vult **live** in
-  (`ItemForm`: `runLive`, `applyLive`; `quickFill` geeft met `parts` welke tekst in welk veld kwam, zodat wissen
+  en wat de code vond, wint; de AI enkel met ✨. Alles daarna gewoon door het formulier en `prepareData`. De code vult
+  **live** in (één motor voor formulier en blok: `useQuickFill`; `ItemForm` zet de lezing in zijn velden met `applyLive`,
+  `QuickAdd` stelt er de gegevens mee samen; `quickFill` geeft met `parts` welke tekst in welk veld kwam, zodat wissen
   terugzet wat er stond). `QuickInput` toont keuzes uit de velden (`typedFragments`, `formSuggestions`,
   `matchSuggestions`; items enkel via `GET /items?type=…&q=` of `in=`, nooit een hele lijst) en waar een getal of datum
   naartoe kan (`moveTargets`, `moveValue`); een keuze telt als zelf ingevuld (`setField`, zoals `changeField`), en wat
@@ -77,10 +78,10 @@ commits en uitleg.
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
-- **Snel naar een formulier**: Toevoegen (`AddPalette`, `GET /me/lists` = `addTargets`, `matchTargets` in
-  `shared/quickadd.ts`; de rest van de tekst gaat als `?tekst=` naar het formulier), een QR-sticker en een icoon per
-  lijst (`/snel/:id/:typeId` met een eigen manifest, `GET /projects/:id/manifest/:typeId`, enkel als je er iets mag
-  toevoegen), het manifest van de app per persoon (`GET /me/manifest`: je drie meestgebruikte lijsten als
+- **Snel naar een formulier**: één palet voor zoeken en toevoegen (`CommandPalette`, `usePalette`; `GET /me/lists` =
+  `addTargets`, `matchTargets` in `shared/quickadd.ts`, `strong` zet Toevoegen bovenaan; de rest van de tekst gaat als
+  `?tekst=` naar het formulier), een QR-sticker, Op je beginscherm (maakt of hergebruikt een app, `sameDestination`;
+  `/snel/:id/:typeId` met `GET /projects/:id/manifest/:typeId` blijft enkel voor iconen van vroeger), het manifest van de app per persoon (`GET /me/manifest`: je drie meestgebruikte lijsten als
   snelkoppeling, `share_target` naar `/delen`, opgevangen in `sw/sw.js`). Een gedeelde foto staat even in de cache
   `gedeeld` (`src/shared-file.ts`) en wordt na gebruik opgeruimd. **De app instellen** (`shared/apps.ts`,
   `people.app_settings`, `GET/PUT /me/app`): eigen apps (`/app/:id`, manifest `GET /me/apps/:id/manifest`), eigen

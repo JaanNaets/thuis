@@ -167,3 +167,9 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
 
 /** Het pad van een eigen app (en de id in haar manifest). */
 export const appPath = (appId: string) => `/app/${appId}`;
+
+/** Gaan twee bestemmingen naar hetzelfde? (Een lijst die je op je beginscherm zet, hergebruikt haar app.) */
+export function sameDestination(a: Destination, b: Destination): boolean {
+  const key = (d: Destination) => JSON.stringify(cleanDestination(d));
+  return key(a) === key(b);
+}

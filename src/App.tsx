@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation, useNavigation } from "react-router";
 import type { Me } from "../shared/types";
 import { useApi } from "./api";
-import { CommandPalette } from "./components/CommandPalette";
+import { CommandPalette, PaletteContext, type PaletteMode } from "./components/CommandPalette";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
@@ -28,7 +28,9 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   const outbox = useOutbox(online);
   const { pathname } = useLocation();
   const navigation = useNavigation();
-  const [searching, setSearching] = useState(false);
+  // Het palet (zoeken en toevoegen): dicht, of open in een modus, eventueel met tekst.
+  const [palette, setPalette] = useState<{ mode: PaletteMode; text: string } | null>(null);
+  const openPalette = useCallback((mode: PaletteMode, text = "") => setPalette({ mode, text }), []);
   const navigate = useNavigate();
   const { search } = useLocation();
   // Waar de app opent op dit toestel (zie start.ts); de kiosk keert daar ook naar terug.
@@ -44,7 +46,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setSearching((s) => !s);
+        setPalette((s) => (s ? null : { mode: "search", text: "" }));
       }
     };
     window.addEventListener("keydown", onKey);
@@ -58,19 +60,20 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
     document.querySelector("main")?.scrollTo({ top: 0 });
   }, [pathname]);
 
-  const session = useMemo(() => ({ person: me.person, projects: me.projects, reloadMe, openSearch: () => setSearching(true) }), [me, reloadMe]);
+  const session = useMemo(() => ({ person: me.person, projects: me.projects, reloadMe, openSearch: () => openPalette("search") }), [me, reloadMe]);
 
   // De onderbalk op een gsm: projecten, agenda en zoeken. Jouw gegevens: je letter bij de titel van het overzicht.
   const tabIndex = pathname.startsWith("/agenda") ? 1 : 0;
 
   return (
     <SessionContext value={session}>
+      <PaletteContext value={openPalette}>
       <ToastProvider>
         <ConfirmProvider>
           <div className="app">
             <div className="nav-progress" data-active={navigation.state !== "idle"} aria-hidden="true" />
 
-            <Sidebar onSearch={() => setSearching(true)} />
+            <Sidebar onSearch={() => openPalette("search")} />
 
             <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 3 } as CSSProperties}>
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
@@ -82,7 +85,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
                 <Icon name="calendar" size={21} />
                 <span>Agenda</span>
               </NavLink>
-              <button type="button" className="tab-button" onClick={() => setSearching(true)}>
+              <button type="button" className="tab-button" onClick={() => openPalette("search")}>
                 <Icon name="search" size={21} />
                 <span>Zoeken</span>
               </button>
@@ -99,10 +102,11 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
               <Outlet />
             </main>
 
-            <CommandPalette open={searching} onClose={() => setSearching(false)} />
+            <CommandPalette open={palette !== null} mode={palette?.mode ?? "search"} text={palette?.text} onClose={() => setPalette(null)} />
           </div>
         </ConfirmProvider>
       </ToastProvider>
+      </PaletteContext>
     </SessionContext>
   );
 }

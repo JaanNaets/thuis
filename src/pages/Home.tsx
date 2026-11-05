@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { blockKey, blockProjects, defaultBlocks, type Block, type BoardInfo } from "../../shared/overview";
 import type { Overview } from "../../shared/types";
 import { api, useApi } from "../api";
-import { AddPalette } from "../components/AddPalette";
+import { usePalette } from "../components/CommandPalette";
 import { useConfirm } from "../components/ConfirmDialog";
 import { Tabs } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
@@ -87,8 +87,14 @@ export function Home() {
   const [editing, setEditing] = useState<Block[] | null>(null);
   const masonry = useMasonry();
   const [busy, setBusy] = useState(false);
-  // Toevoegen: ook vanuit een snelkoppeling (?toevoegen=1) of met gedeelde tekst (?tekst=).
-  const [adding, setAdding] = useState(params.get("toevoegen") === "1");
+  // Toevoegen: het palet (ook vanuit een snelkoppeling, ?toevoegen=1, of met gedeelde tekst, ?tekst=).
+  const palette = usePalette();
+  const asked = params.get("toevoegen") === "1";
+  useEffect(() => {
+    if (!asked) return;
+    palette("add", params.get("tekst") ?? "");
+    setParams({}, { replace: true });
+  }, [asked]);
   const [menu, setMenu] = useState<"menu" | "new" | "rename" | null>(null);
   const [boardName, setBoardName] = useState("");
   const boards = base?.boards ?? [];
@@ -183,7 +189,7 @@ export function Home() {
         }
         primary={
           !editing && (
-            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+            <button type="button" className="btn btn-primary" onClick={() => palette("add")}>
               <Icon name="plus" size={16} /> Toevoegen
             </button>
           )
@@ -256,19 +262,10 @@ export function Home() {
       )}
 
       {!editing && (
-        <button type="button" className="fab" aria-label="Toevoegen" onClick={() => setAdding(true)}>
+        <button type="button" className="fab" aria-label="Toevoegen" onClick={() => palette("add")}>
           <Icon name="plus" size={24} />
         </button>
       )}
-
-      <AddPalette
-        open={adding}
-        text={params.get("tekst") ?? ""}
-        onClose={() => {
-          setAdding(false);
-          if (params.has("toevoegen") || params.has("tekst")) setParams({}, { replace: true });
-        }}
-      />
 
       <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>
         {menu === "menu" ? (

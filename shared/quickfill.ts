@@ -396,6 +396,8 @@ export type Suggestion = {
   value: FieldValue;
   /** Verplaatsen: de waarde staat al in dit veld en gaat naar `field` (de tekst blijft zoals ze is). */
   move?: string;
+  /** Vaak: een vorig item (deze id) als begin, zoals de vorige keer (de tekst blijft zoals ze is). */
+  repeat?: string;
 };
 
 /** Zoveel keuzes tegelijk. */

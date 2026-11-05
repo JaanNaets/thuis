@@ -38,6 +38,7 @@ export function QuickInput({
   label,
   placeholder,
   inputRef: outerRef,
+  idle,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -53,6 +54,8 @@ export function QuickInput({
   label: string;
   placeholder: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** In het lege veld: wat je vaak kiest (keuzes met `repeat`). */
+  idle?: Suggestion[];
 }) {
   const id = useId();
   const ownRef = useRef<HTMLInputElement>(null);
@@ -92,13 +95,13 @@ export function QuickInput({
   // Een getal of datum die al ergens staat: de andere velden waar het naartoe kan.
   const here = source && moves && !match ? wordAt(value, caret) : null;
   const moving = useMemo(() => (here && moves ? moves(here.word) : []), [here?.word, moves]);
-  const shown = open ? (match ? match.suggestions : moving) : [];
+  const shown = open ? (match ? match.suggestions : !value.trim() && idle?.length ? idle : moving) : [];
   const current = active < shown.length ? active : -1;
 
   function pick(s: Suggestion) {
     setOpen(false);
     setActive(-1);
-    if (s.move || !match) return onPick(s);
+    if (s.move || s.repeat || !match) return onPick(s);
     const next = insertSuggestion(value, match.start, match.end, s.text);
     onChange(next.text);
     onPick(s);
@@ -152,7 +155,7 @@ export function QuickInput({
         <ul className="picker-list" role="listbox" id={`${id}-list`} aria-label={label}>
           {shown.map((s, i) => (
             <li
-              key={`${s.move ?? ""}:${s.field}:${String(s.value)}`}
+              key={`${s.move ?? s.repeat ?? ""}:${s.field}:${String(s.value)}`}
               id={`${id}-${i}`}
               role="option"
               aria-selected={i === current}

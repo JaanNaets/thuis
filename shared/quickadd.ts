@@ -40,26 +40,28 @@ const startsWith = (name: string, words: string[]) => {
 /**
  * Welke lijsten passen bij wat je typt, en wat er overblijft voor het formulier. De eerste woorden die de naam van
  * een lijst zijn (of het begin ervan), kiezen die lijst; de eerste woorden die een project zijn, de lijsten van dat
- * project. Past er niets, dan alle lijsten, en gaat de hele tekst mee. Zonder tekst: alle lijsten.
+ * project (`strong`: je tekst noemt de lijst of het project). Past er niets, dan alle lijsten, en gaat de hele tekst
+ * mee. Zonder tekst: alle lijsten.
  */
-export function matchTargets<T extends AddTarget>(text: string, targets: T[]): { target: T; rest: string }[] {
+export function matchTargets<T extends AddTarget>(text: string, targets: T[]): { target: T; rest: string; strong: boolean }[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const ranked = rankTargets(targets);
-  if (!words.length) return ranked.map((target) => ({ target, rest: "" }));
+  const all = (rest: string, strong = false) => (list: T[]) => list.map((target) => ({ target, rest, strong }));
+  if (!words.length) return all("")(ranked);
   for (let k = Math.min(3, words.length); k >= 1; k--) {
     const head = words.slice(0, k);
     const rest = words.slice(k).join(" ");
     const byList = ranked.filter((t) => startsWith(t.name, head) || startsWith(t.plural, head));
-    if (byList.length) return byList.map((target) => ({ target, rest }));
+    if (byList.length) return all(rest, true)(byList);
     const byProject = ranked.filter((t) => startsWith(t.project_name, head));
     if (byProject.length) {
       // "pelletkachel bijv": eerst het project, dan de lijst erin.
       const next = words.slice(k, k + 1);
       const inList = next.length ? byProject.filter((t) => startsWith(t.name, next) || startsWith(t.plural, next)) : [];
-      return inList.length ? inList.map((target) => ({ target, rest: words.slice(k + 1).join(" ") })) : byProject.map((target) => ({ target, rest }));
+      return inList.length ? all(words.slice(k + 1).join(" "), true)(inList) : all(rest, true)(byProject);
     }
   }
-  return ranked.map((target) => ({ target, rest: words.join(" ") }));
+  return all(words.join(" "))(ranked);
 }
 
 /** Het formulier voor een lijst, met eventueel tekst om meteen in te vullen. */

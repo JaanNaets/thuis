@@ -1708,7 +1708,9 @@ export function LabelScanner({
   onResult,
   onProduct,
   onCreate,
-  onText,
+  onAi,
+  onFlush,
+  idle,
   quick,
   onPick,
   note,
@@ -1731,7 +1733,12 @@ export function LabelScanner({
   /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
   onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
   /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  onText?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  /** ✨ Lezen met AI: de hele tekst door de AI; geeft eventueel een melding en voorstellen om iets toe te voegen. */
+  onAi?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  /** Enter: meteen invullen met code (zonder AI). */
+  onFlush?: () => void;
+  /** In het lege invulveld: je meestgebruikte items (Vaak). */
+  idle?: Suggestion[];
   /** Keuzes terwijl je typt (zie QuickInput): uit deze velden, en wat je kiest, vult dat veld meteen in. */
   quick?: QuickSource;
   onPick?: (suggestion: Suggestion) => void;
@@ -1820,13 +1827,13 @@ export function LabelScanner({
     }
   }
 
-  /** Getypte tekst invullen: eerst met code, een zin met de AI (zie ItemForm en shared/quickfill.ts). */
+  /** ✨ Lezen met AI (zie ItemForm en shared/quickfill.ts): wat de code al invulde, blijft. */
   async function fill() {
-    if (!onText || !note.trim()) return;
+    if (!onAi || !note.trim()) return;
     setSuggestions([]);
-    setStatus({ tone: "busy", text: "Invullen" });
+    setStatus({ tone: "busy", text: "Lezen met AI" });
     try {
-      const done = await onText(note.trim());
+      const done = await onAi(note.trim());
       setSuggestions(done.create ?? []);
       setStatus(done.message ? { tone: "none", text: done.message } : undefined);
     } catch (err) {
@@ -1854,23 +1861,31 @@ export function LabelScanner({
 
   return (
     <div className="scan-buttons">
-      {/* Typen: op zichzelf (Invullen of Enter), of als uitleg bij een foto. */}
+      {/* Typen: vult live in met code; ✨ laat de AI meelezen. Wat je typt, is ook de uitleg bij een foto. */}
       <div className="picker-row">
         <QuickInput
           value={note}
           label="Typ wat je weet"
           placeholder={products ? "Typ wat je weet, bv. 21-10 komkommer 200 g" : "Typ wat je weet, bv. 21-10 colruyt 23,40 euro"}
           onChange={onNote}
-          onEnter={() => onText && fill()}
-          source={onText ? quick : undefined}
+          onEnter={() => onFlush?.()}
+          source={quick}
           onPick={(s) => onPick?.(s)}
           moves={moves}
           onTab={onTab}
+          idle={idle}
           inputRef={inputRef}
         />
-        {onText && (
-          <button type="button" className="btn btn-outline" style={{ flex: "none" }} disabled={!note.trim() || status?.tone === "busy"} onClick={fill}>
-            Invullen
+        {onAi && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon ai-button"
+            aria-label="Lezen met AI"
+            title="Lezen met AI"
+            disabled={!note.trim() || status?.tone === "busy"}
+            onClick={fill}
+          >
+            <Icon name="sparkles" size={17} />
           </button>
         )}
       </div>

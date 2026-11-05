@@ -67,8 +67,8 @@ export function HomeScreenHint() {
 }
 
 /**
- * Een lijst als eigen icoon op je beginscherm: deze pagina wijst naar haar eigen manifest (naam en start = dit
- * formulier). In de browser staat onder de titel hoe je ze op je beginscherm zet; als app niet meer.
+ * Een lijst als eigen icoon op je beginscherm, zoals het vroeger ging (nieuwe iconen zijn apps, zie AppPage): deze
+ * pagina blijft voor iconen die er al zijn, met haar eigen manifest (naam en start = dit formulier).
  */
 export function QuickLinkPage() {
   const { id, typeId } = useParams();

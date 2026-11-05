@@ -2115,6 +2115,12 @@ input[type="checkbox"] {
   flex-wrap: wrap;
 }
 
+/* ✨ Lezen met AI naast "Typ wat je weet": stil grijs, enkel als je de AI wil laten meelezen. */
+.ai-button {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
 /* Snel invullen: wat je tekst invulde, live onder het veld (QuickChips), zacht blauw zoals een veld dat de app
    invulde; een tik om het naar een ander veld te zetten of weg te halen. */
 .tag.is-filled {

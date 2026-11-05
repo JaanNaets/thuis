@@ -1,21 +1,33 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+// Eén veld voor alles (⌘K, Zoeken onderaan, of de + op het overzicht): zoeken naar een project of een item, en iets
+// toevoegen in een lijst. Typ "bijvulling 3 zakken pellets" en bovenaan staat "Bijvulling: 3 zakken pellets" (het
+// formulier opent met die tekst al ingevuld, zie shared/quickadd.ts); daaronder wat je zoekt. Met de + (modus
+// "add") staan je meestgebruikte lijsten eerst; Nieuw project als laatste. Pijltjes kiezen, Enter opent, Escape sluit.
+
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { addPath, matchTargets, type AddTarget } from "../../shared/quickadd";
+import { fold } from "../../shared/quickfill";
 import type { SearchResult } from "../../shared/types";
-import { api } from "../api";
+import { api, useApi } from "../api";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
 import { Icon, type IconName } from "./Icon";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
+export type PaletteMode = "search" | "add";
 
 const ACTIONS: Entry[] = [
   { key: "home", group: "Ga naar", label: "Overzicht", icon: "project", to: "/" },
+  { key: "agenda", group: "Ga naar", label: "Agenda", icon: "calendar", to: "/agenda" },
   { key: "links", group: "Ga naar", label: "Verbanden", icon: "links", to: "/verbanden" },
   { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
-  { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "plus", to: "/projecten/nieuw" },
 ];
+const NEW_PROJECT: Entry = { key: "new-project", group: "Nieuw", label: "Nieuw project", icon: "project", to: "/projecten/nieuw" };
 
 /** Met zoekterm: hoogstens zoveel per groep. */
 const PER_GROUP = 6;
+/** Zoveel lijsten om in toe te voegen (zonder zoekterm bij zoeken: enkel je meestgebruikte). */
+const ADD_SHOWN = 8;
+const ADD_TOP = 3;
 
 function normalize(text: string): string {
   return text
@@ -24,16 +36,17 @@ function normalize(text: string): string {
     .toLowerCase();
 }
 
-/**
- * Zoekpalet (⌘K of het zoekveld in de zijbalk): springt naar een project of een item in je projecten.
- * Pijltjes kiezen, Enter opent, Escape sluit.
- */
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** Het palet openen vanaf eender waar (de + op het overzicht, een snelkoppeling, gedeelde tekst). */
+export const PaletteContext = createContext<(mode: PaletteMode, text?: string) => void>(() => {});
+export const usePalette = () => useContext(PaletteContext);
+
+export function CommandPalette({ open, mode, text = "", onClose }: { open: boolean; mode: PaletteMode; text?: string; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { projects } = useSession();
-  const [query, setQuery] = useState("");
+  const { data: targets } = useApi<AddTarget[]>(open ? "/me/lists" : null);
+  const [query, setQuery] = useState(text);
   const [active, setActive] = useState(0);
   const [found, setFound] = useState<SearchResult>();
   const [highlight, setHighlight] = useState<{ top: number; height: number }>();
@@ -42,7 +55,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   useLayoutEffect(() => {
     const dialog = ref.current!;
     if (open && !dialog.open) {
-      setQuery("");
+      setQuery(text);
       setActive(0);
       setFound(undefined);
       dialog.showModal();
@@ -69,12 +82,27 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const results = useMemo(() => {
     const q = normalize(query.trim());
-    if (!q) return ACTIONS;
+    const matches = matchTargets(query, targets ?? []);
+    const strong = matches[0]?.strong ?? false;
+    const add: Entry[] = matches
+      .slice(0, mode === "add" || strong ? ADD_SHOWN : ADD_TOP)
+      .map(({ target, rest }) => ({
+        key: `a${target.project_id}/${target.type_id}`,
+        group: "Toevoegen",
+        label: rest ? `${target.name}: ${rest}` : target.name,
+        hint: target.project_name,
+        icon: (target.icon ?? "plus") as IconName,
+        to: addPath(target, rest),
+      }));
+    const f = fold(query);
+    const newProject = !f || "nieuw project".startsWith(f) || "project".startsWith(f) ? [NEW_PROJECT] : [];
+    if (!q) return mode === "add" ? [...add, ...newProject] : [...ACTIONS, ...add, ...newProject];
     const match = (...texts: (string | null | undefined)[]) => texts.some((t) => t && normalize(t).includes(q));
-    const groups: Entry[][] = [
-      ACTIONS.filter((a) => match(a.label)),
-      projects
+    const search: Entry[] = [
+      ...ACTIONS.filter((a) => match(a.label)),
+      ...projects
         .filter((p) => match(p.name, p.description))
+        .slice(0, PER_GROUP)
         .map((p) => ({
           key: `p${p.id}`,
           group: "Projecten",
@@ -84,9 +112,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           to: `/projecten/${p.id}`,
         })),
       // "verbanden" (of "kaart"), eventueel met een projectnaam: de kaart van de verbanden van dat project.
-      /verb|kaart/.test(q)
+      ...(/verb|kaart/.test(q)
         ? projects
             .filter((p) => !p.archived && normalize(p.name).includes(q.replace(/\bverb\w*|\bkaart\w*/g, "").trim()))
+            .slice(0, PER_GROUP)
             .map((p) => ({
               key: `v${p.id}`,
               group: "Verbanden",
@@ -94,8 +123,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               icon: "links" as IconName,
               to: `/projecten/${p.id}/verbanden`,
             }))
-        : [],
-      (found?.items ?? []).map((i) => ({
+        : []),
+      ...(found?.items ?? []).slice(0, PER_GROUP).map((i) => ({
         key: `i${i.id}`,
         group: "Items",
         label: i.name,
@@ -104,8 +133,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         to: `/items/${i.id}`,
       })),
     ];
-    return groups.flatMap((g) => g.slice(0, PER_GROUP));
-  }, [query, projects, found]);
+    // Noemt je tekst een lijst (of je kwam via de +), dan toevoegen eerst; anders wat je zoekt eerst.
+    if (mode === "add" || strong) return [...add, ...newProject, ...search];
+    return [...search, ...newProject];
+  }, [query, projects, found, targets, mode]);
 
   const current = Math.min(active, results.length - 1);
 
@@ -123,11 +154,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     navigate(entry.to);
   };
 
+  const label = mode === "add" ? "Toevoegen" : "Zoeken";
   return (
     <dialog
       ref={ref}
       className="palette"
-      aria-label="Zoeken"
+      aria-label={label}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
@@ -135,12 +167,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="palette-search">
-        <Icon name="search" size={16} />
+        <Icon name={mode === "add" ? "plus" : "search"} size={16} />
         <input
           autoFocus
           value={query}
-          placeholder="Zoek een project of iets erin…"
-          aria-label="Zoeken"
+          placeholder={mode === "add" ? "Wat wil je toevoegen?" : "Zoek of voeg toe…"}
+          aria-label={label}
           aria-controls="palette-list"
           aria-activedescendant={results[current] ? `palette-${results[current].key}` : undefined}
           onChange={(e) => {

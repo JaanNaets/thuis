@@ -469,8 +469,8 @@ en bedragen zonder eenheid, zodat je ermee kan rekenen. In het archief exporteer
 ### Opnieuw
 
 Iets dat je vaker toevoegt (hetzelfde ontbijt, dezelfde fles), hoef je niet opnieuw in te vullen: **Opnieuw** op de
-fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Bovenaan
-staat **Vaak**: wat je het vaakst toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
+fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Tik je
+in "Typ wat je weet" voor je iets typt, dan staat er wat je het **vaakst** toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
 Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
 
 ### Herinneren en herhalen
@@ -495,12 +495,12 @@ bewaart ze in de database (`settings`); er is niets in te stellen.
 
 ### Snel invullen: typ wat je weet
 
-Bovenaan het formulier van een nieuw item typ je wat je weet en tik je **Invullen** (of Enter): "21-10 eten komkommer
-200 g" zet de datum, Wat (uit je voorraad, of als vrije tekst) en Hoeveel. De app doet dat zelf: datums ("21-10",
+Bovenaan het formulier van een nieuw item typ je wat je weet: "21-10 eten komkommer 200 g" zet de datum, Wat (uit je
+voorraad, of als vrije tekst) en Hoeveel. De app doet dat zelf: datums ("21-10",
 "gisteren", "maandag", "21 okt"), uren, bedragen ("€ 5,20", "12 euro"), getallen met hun eenheid, keuzes, personen,
-items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet. Typ je een hele zin ("ik at gisteren
-een halve pizza op restaurant"), dan leest de gratis AI van Cloudflare ze (met dezelfde daglimiet als een foto); wat
-de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
+items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet. Wil je dat de AI je tekst leest
+("ik at gisteren een halve pizza op restaurant"), tik dan op ✨ naast het veld: de gratis AI van Cloudflare leest ze
+(met dezelfde daglimiet als een foto), en wat de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
 
 Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. **Invullen** (of Enter) is nog nodig voor een hele zin: die leest de AI.
 
@@ -508,14 +508,16 @@ Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw it
 
 ### Snel naar het juiste formulier
 
-- **Toevoegen** (de + of de knop bovenaan het overzicht): typ "bijvulling 3 zakken pellets", kies Bijvulling, en het
-  formulier opent met alles ingevuld. Je meestgebruikte lijsten staan bovenaan; Nieuw project is de laatste keuze.
+- **Toevoegen en zoeken in één veld** (de +, Zoeken of ⌘K): typ "bijvulling 3 zakken pellets", kies Bijvulling, en het
+  formulier opent met alles ingevuld. Noem je geen lijst, dan zoek je gewoon. Met de + staan je meestgebruikte lijsten
+  bovenaan; Nieuw project is de laatste keuze.
 - **Meer overzichten** (⋯ → Nieuw overzicht): bv. "Keuken" met snel toevoegen en de voorraad. Elk toestel onthoudt
   welk overzicht het toont. Een blok **Snel toevoegen** bewaart meteen met **Bewaar** (met Ongedaan maken).
 - **QR-sticker** (in een lijst: Meer opties → Snelkoppeling): druk hem af en kleef hem op de pelletkachel; scannen
   opent het formulier, eventueel met tekst ("pellets"). Werkt op iPhone en Android.
-- **Op je beginscherm** (zelfde plek): een eigen icoon "Bijvulling" dat meteen het formulier opent. Op een iPhone
-  heeft elk icoon zijn eigen aanmelding (één keer per sessie van Cloudflare Access, zie Langer ingelogd blijven).
+- **Op je beginscherm** (zelfde plek): maakt een app "Bijvulling" (die je bij Jouw gegevens → App ziet en kan
+  aanpassen) en opent ze in de browser; zet ze daar op je beginscherm. Op een iPhone heeft elk icoon zijn eigen
+  aanmelding (één keer per sessie van Cloudflare Access, zie Langer ingelogd blijven).
 - **Android**: lang op het app-icoon drukken toont je drie meestgebruikte lijsten; een foto (kasticket) of tekst
   deel je vanuit een andere app met Thuis.
 
