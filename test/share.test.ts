@@ -113,3 +113,14 @@ test("Grafiek: Ook uit en Enkel jouw deel", () => {
   assert.ok(data);
   assert.equal(JSON.stringify(data).includes("60000"), true);
 });
+
+test("Een verplichte datum die met vandaag begint, vult de server zelf in (Start in een timerblok)", async () => {
+  const { applyFieldDefaults } = await import("../shared/fields.ts");
+  const fields: FieldDef[] = [
+    { key: "datum", label: "Datum", type: "date", required: true, today: true },
+    { key: "los", label: "Los", type: "date", today: true },
+  ];
+  assert.deepEqual(applyFieldDefaults(fields, {}, ["jaan"], "jaan", true, "2026-11-05"), { datum: "2026-11-05" });
+  assert.deepEqual(applyFieldDefaults(fields, { datum: "2026-11-01" }, ["jaan"], "jaan", true, "2026-11-05"), { datum: "2026-11-01" });
+  assert.deepEqual(applyFieldDefaults(fields, {}, ["jaan"], "jaan", false, "2026-11-05"), {});
+});

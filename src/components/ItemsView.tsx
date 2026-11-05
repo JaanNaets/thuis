@@ -31,7 +31,7 @@ import { Barcode } from "./Barcode";
 import { addPath } from "../../shared/quickadd";
 import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
 import { sharedFile } from "../shared-file";
-import { adjust, ReceiptToStock, RowStepper, StockScanner } from "./Stock";
+import { adjust, check, checkField, ReceiptToStock, RowCheck, RowStepper, StockScanner } from "./Stock";
 import { measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
 
@@ -91,6 +91,18 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       else window.location.href = url;
     } catch (err) {
       opened?.close();
+      toast((err as Error).message, "alert");
+    }
+  }
+  // Een ja/nee-kolom (Gekocht, Klaar) vink je meteen af in de rij; het item blijft staan tot je de lijst opnieuw opent.
+  const ticked = checkField(type.fields, type.field_access);
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  async function tick(item: Item, on: boolean) {
+    setChecks((c) => ({ ...c, [item.id]: on }));
+    try {
+      await check(item.id, ticked!.key, on);
+    } catch (err) {
+      setChecks((c) => ({ ...c, [item.id]: !on }));
       toast((err as Error).message, "alert");
     }
   }
@@ -168,9 +180,11 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   // Het getal met − en + staat al rechts in de rij; dat hoeft geen kolom meer te zijn.
   const visibleFields = fields.filter((f) => type.field_access[f.key] !== "none");
   const vfields = useMemo(() => viewFields(visibleFields, type.name_label ?? "Naam"), [fields, type]);
+  // Wat rechts in de rij staat (− en +, of het vinkje), hoeft geen kolom meer te zijn.
+  const inRow = (f: FieldDef) => !archived && (f === counter || (!counter && f === ticked));
   const columns = def.columns?.length
-    ? def.columns.flatMap((k) => visibleFields.filter((f) => f.key === k && !(f === counter && !archived)))
-    : fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, wideScreen ? 4 : 2);
+    ? def.columns.flatMap((k) => visibleFields.filter((f) => f.key === k && !inRow(f)))
+    : fields.filter((f) => f.column && !inRow(f)).slice(0, wideScreen ? 4 : 2);
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
   const items = useMemo(() => data?.items ?? [], [data]);
@@ -310,6 +324,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
               onStep={(d) => step(item.id, d)}
               measure={counter.measure || counter.unit ? measureOf(counter, item.data) : undefined}
             />
+          ) : ticked && !archived ? (
+            <RowCheck checked={checks[item.id] ?? item.data[ticked.key] === true} label={`${item.name}: ${ticked.label.toLowerCase()}`} onChange={(on) => tick(item, on)} />
           ) : undefined
         }
       />

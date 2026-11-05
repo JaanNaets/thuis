@@ -25,7 +25,7 @@ import { Num, stagger } from "./Motion";
 import { Sheet } from "./Sheet";
 import { projectIcon } from "./Sidebar";
 import { useSortable } from "./Sortable";
-import { adjust, RowStepper } from "./Stock";
+import { adjust, check, checkField, RowCheck, RowStepper } from "./Stock";
 import { formatAmount, measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
 import { shownTotals, TotalsCards } from "./Totals";
@@ -141,6 +141,7 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
   const { data: views } = useViews(project.id, type.id, Boolean(block.view));
   const { data: detail } = useApi<ProjectDetail>(asItems ? `/projects/${project.id}` : null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
   const view = views?.find((v) => v.id === block.view);
   const count = block.view ? data?.count : type.count;
   const href = `/projecten/${project.id}?lijst=${type.id}${block.view ? `&weergave=${block.view}` : ""}`;
@@ -150,7 +151,18 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
 
   const full = detail?.types.find((t) => t.id === type.id);
   const counter = full?.fields.find((f) => f.type === "number" && f.counter && full.field_access[f.key] === "edit");
-  const visible = full?.fields.filter((f) => full.field_access[f.key] !== "none" && f !== counter) ?? [];
+  // Een ja/nee-kolom (Gekocht) vink je meteen af in de rij, zoals in de lijst.
+  const ticked = full && !counter ? checkField(full.fields, full.field_access) : undefined;
+  async function tick(id: string, on: boolean) {
+    setChecks((c) => ({ ...c, [id]: on }));
+    try {
+      await check(id, ticked!.key, on);
+    } catch (err) {
+      setChecks((c) => ({ ...c, [id]: !on }));
+      toast((err as Error).message, "alert");
+    }
+  }
+  const visible = full?.fields.filter((f) => full.field_access[f.key] !== "none" && f !== counter && f !== ticked) ?? [];
   const keys = view?.def.columns?.length ? view.def.columns : visible.filter((f) => f.column).map((f) => f.key);
   const columns = keys.flatMap((k) => visible.filter((f) => f.key === k)).slice(0, block.wide ? 3 : 1);
   const names = namesFrom(data?.people ?? [], data?.refs ?? []);
@@ -220,6 +232,8 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
                         onStep={(d) => step(item.id, d)}
                         measure={counter.measure || counter.unit ? measureOf(counter, item.data) : undefined}
                       />
+                    ) : ticked ? (
+                      <RowCheck checked={checks[item.id] ?? item.data[ticked.key] === true} label={`${item.name}: ${ticked.label.toLowerCase()}`} onChange={(on) => tick(item.id, on)} />
                     ) : undefined
                   }
                 />

@@ -717,7 +717,13 @@ Terugbetalingen zetten het klaar):
 - Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
   echt niet gaat, een eigen onderdeel bovenop de kern.
 
-### Voorraad: `RowStepper`, `StockScanner`, `ReceiptToStock` (`Stock.tsx`)
+### Voorraad en afvinken: `RowStepper`, `RowCheck`, `StockScanner`, `ReceiptToStock` (`Stock.tsx`)
+
+Een **ja/nee-veld als kolom** dat je mag wijzigen (Gekocht, Klaar) is in elke rij rechts een vinkje (`RowCheck`,
+`.row-check`, 44px om op te tikken), in de lijst en in een lijstblok op het overzicht; het is dan geen kolom meer.
+Een tik bewaart meteen (`/items/:id/check`, door dezelfde controle als het formulier: een gekochte boodschap telt
+bij de voorraad), zonder toast. Het item blijft staan tot je de lijst opnieuw opent (zo kan je een tik terugnemen).
+Een lijst met − en + krijgt geen vinkje.
 
 Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) maakt van een lijst een voorraad:
 
@@ -870,7 +876,7 @@ Twee soorten, inline in `Icon.tsx`:
 - **Formulier** (`TimerInput`, breed): Start/Stop, en zodra hij liep Begin en Einde (`datetime-local`) om zelf aan te
   passen. In de lijst instellen: **Doel** (een duur, "16 u") en **Duur in** (een veld Duur van de lijst).
 - **Fiche** (`TimerCard`): een eigen kaart met de naam van het veld als titel, niet bij de gegevens; Start enkel als hij
-  nog nooit liep. **Overzicht** (`TimerBlock`, blok Timer): titel het lopende item (of de lijst), het veld als gegeven,
+  nog nooit liep. **Overzicht** (`TimerBlock`, blok Timer): titel het lopende item (of de lijst), het veld als gegeven (enkel als de lijst meer timers heeft),
   Start maakt een nieuw item, en "Vorige keer: 16 u 30 min · Vasten 4/11" als link (`.timer-last`).
 
 ### Grafieken

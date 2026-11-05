@@ -154,7 +154,7 @@ async function prepareData(
 ): Promise<Attributes> {
   const clean = cleanAttributes(type.fields, incoming);
   const merged = mergeEditable(access.rights, type.id, type.fields, existing, clean);
-  const filled = fillsDefaults(type.fields) ? applyFieldDefaults(type.fields, merged, await membersOf(db, access.chain), personId, isNew) : merged;
+  const filled = fillsDefaults(type.fields) ? applyFieldDefaults(type.fields, merged, await membersOf(db, access.chain), personId, isNew, brusselsToday()) : merged;
   // Een gestopte timer met "Duur in": de duur in dat veld (als je het mag wijzigen).
   const data = applyTimers(type.fields, filled, (k) => fieldAccess(access.rights, type.id, k) === "edit");
   const changed = (key: string) => JSON.stringify(data[key]) !== JSON.stringify(existing[key]);
@@ -529,6 +529,8 @@ projectItems.get("/:id/timer", async (c) => {
     can_edit: fieldAccess(access.rights, type.id, def.key) === "edit",
     def,
     list: { name: type.name, plural: type.plural },
+    // Meer dan één timer in de lijst: dan zegt het blok welke.
+    many: type.fields.filter((f) => f.type === "timer" && fieldAccess(access.rights, type.id, f.key) !== "none").length > 1,
   });
 });
 
@@ -836,6 +838,28 @@ items.put("/:id", async (c) => {
   }
   await db.batch(statements);
   return c.json(await loadDetail(c, row.id));
+});
+
+/**
+ * Een ja/nee-veld afvinken vanuit een rij (`{ field, value }`, bv. Gekocht): enkel als je dat veld mag wijzigen, door
+ * dezelfde controle als bewaren (een boodschap die gekocht is, telt bij de voorraad).
+ */
+items.post("/:id/check", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const { row, access, type } = await requireItem(c, c.req.param("id"));
+  const obj = asObject(await c.req.json());
+  const def = type.fields.find((f) => f.key === obj.field && f.type === "bool");
+  if (!def || fieldAccess(access.rights, type.id, def.key) !== "edit") throw new ForbiddenError("Dit vakje mag je niet aanvinken.");
+  if (typeof obj.value !== "boolean") throw new ValidationError("Aan of uit?");
+  const current = parseData(row.data);
+  const data = await prepareData(db, me, access, type, { ...current, [def.key]: obj.value }, current, false);
+  const applied = await computeEffects(db, me, access.rights, type, row, data);
+  await db.batch([
+    db.prepare("UPDATE items SET data = ?, applied = ?, updated_at = datetime('now') WHERE id = ?").bind(JSON.stringify(data), applied.length ? JSON.stringify(applied) : null, row.id),
+    ...(await effectStatements(db, me, netEffects(parseApplied(row.applied), applied), true)),
+  ]);
+  return c.json({ value: data[def.key] === true });
 });
 
 /**

@@ -982,10 +982,16 @@ export function applyTimers(fields: FieldDef[], data: Attributes, editable: (key
   return out;
 }
 
-export function applyFieldDefaults(fields: FieldDef[], data: Attributes, members: string[], me: string, isNew: boolean): Attributes {
+/**
+ * Wat velden zelf invullen bij bewaren: een Persoon met "Begint met jou" (bij een nieuw item), een Verdeling met "Leeg
+ * = verdelen", en met `today` een verplichte datum die met vandaag begint (een nieuw item dat niet uit het formulier
+ * komt, zoals Start in een timerblok).
+ */
+export function applyFieldDefaults(fields: FieldDef[], data: Attributes, members: string[], me: string, isNew: boolean, today?: string): Attributes {
   const out = { ...data };
   for (const f of fields) {
     if (f.type === "person" && f.me && isNew && out[f.key] === undefined && members.includes(me)) out[f.key] = me;
+    if (f.type === "date" && f.today && f.required && isNew && today && (out[f.key] === undefined || out[f.key] === null)) out[f.key] = today;
     if (f.type === "share" && f.fill && out[f.key] === undefined) {
       const shares = defaultShares(f.default_shares, members);
       if (shares.length) out[f.key] = shares;
@@ -1034,7 +1040,7 @@ export function matchName(candidates: { id: string; name: string }[], text: stri
 }
 
 /** Of velden iets invullen (dan heb je wie in het project zit nodig). */
-export const fillsDefaults = (fields: FieldDef[]) => fields.some((f) => (f.type === "person" && f.me) || (f.type === "share" && f.fill));
+export const fillsDefaults = (fields: FieldDef[]) => fields.some((f) => (f.type === "person" && f.me) || (f.type === "share" && f.fill) || (f.type === "date" && f.today && f.required));
 
 /** "Jana", "Jana en Jaan", "Jana 60% · Jaan 40%". */
 export function sharesText(shares: Share[], name: (id: string) => string): string {

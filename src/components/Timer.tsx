@@ -142,7 +142,7 @@ export function TimerCard({ item, def, canEdit, onChange }: { item: ItemDetail; 
   );
 }
 
-type TimerState = { running: { id: string; name: string; value: TimerValue } | null; last: { id: string; name: string; value: TimerValue } | null; can_create: boolean; can_edit: boolean; def: FieldDef; list: { name: string; plural: string } };
+type TimerState = { running: { id: string; name: string; value: TimerValue } | null; last: { id: string; name: string; value: TimerValue } | null; can_create: boolean; can_edit: boolean; def: FieldDef; list: { name: string; plural: string }; many?: boolean };
 
 /**
  * Een timerblok op je overzicht: loopt er een (het nieuwste item met een lopende timer), dan live en Stop; anders
@@ -182,7 +182,7 @@ export function TimerBlock({ project, list, field }: { project: string; list: st
   }
   return (
     <section className="card dash-card">
-      <CardHead title={running?.name ?? data.list.plural} description={def.label} />
+      <CardHead title={running?.name ?? data.list.plural} description={data.many ? def.label : undefined} />
       <div className="card-body">
         <TimerLive value={running?.value ?? null} def={def} busy={busy} onStart={!running && data.can_create ? start : undefined} onStop={running && data.can_edit ? stop : undefined} />
         {!running && last?.value.end && (

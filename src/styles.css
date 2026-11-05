@@ -6596,3 +6596,14 @@ dialog.palette[open]::backdrop {
   color: var(--muted-foreground);
   font-size: 13px;
 }
+
+/* Het vinkje rechts in een rij (een ja/nee-kolom zoals Gekocht): groot genoeg om op te tikken. */
+.row-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}

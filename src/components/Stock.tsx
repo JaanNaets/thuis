@@ -23,6 +23,23 @@ export async function adjust(itemId: string, key: string, delta: number, alias?:
   return value;
 }
 
+/** Een ja/nee-veld afvinken vanuit een rij (Gekocht, Klaar); geeft de nieuwe waarde. */
+export async function check(itemId: string, field: string, value: boolean): Promise<boolean> {
+  return (await api.post<{ value: boolean }>(`/items/${itemId}/check`, { field, value })).value;
+}
+
+/** Het vinkje rechts in een rij: een ja/nee-kolom die je meteen aan- of afvinkt (44px om op te tikken). */
+export function RowCheck({ checked, label, onChange }: { checked: boolean; label: string; onChange: (on: boolean) => void }) {
+  return (
+    <label className="row-check">
+      <input type="checkbox" checked={checked} aria-label={label} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
+
+/** Het ja/nee-veld dat je in een rij afvinkt: het eerste als kolom dat je mag wijzigen (niet bij een voorraad). */
+export const checkField = (fields: FieldDef[], access: Record<string, string>) => fields.find((f) => f.type === "bool" && f.column && access[f.key] === "edit");
+
 /**
  * − en + rechts in een rij van de lijst. Met een eenheid (`measure`, zie shared/units.ts) staat ze erbij (45 kg) en
  * telt een tik een hele verpakking (een zak van 15 kg); tik op het getal om een hoeveelheid te typen.
