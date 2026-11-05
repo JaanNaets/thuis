@@ -547,7 +547,9 @@ items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet
 ("ik at gisteren een halve pizza op restaurant"), tik dan op ✨ naast het veld: de gratis AI van Cloudflare leest ze
 (met dezelfde daglimiet als een foto), en wat de app zelf al vond, blijft staan. Bij eten herkent ze ook gewoon
 "groentesoep": de voedingswaarde komt uit NEVO of Open Food Facts als ze het daar vindt, anders schat ze die (en
-hoeveel, anders één gewone portie); de melding zegt welk van de twee. Wat je typt, is ook de uitleg bij een foto.
+hoeveel, anders één gewone portie); de melding zegt welk van de twee. Een getal dat je typt, is bij eten altijd
+hoeveel je at ("pizza 300", "soep 250 g"), nooit de kcal per 100 g; "2 boterhammen" is een aantal en blijft in de naam.
+Wat je typt, is ook de uitleg bij een foto.
 
 Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. Enter vult in met code; voor een hele zin tik je op ✨: die leest de AI.
 

@@ -246,7 +246,8 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
       continue;
     }
 
-    // 200 g, 200g, 2 zakken, 4 porties, 3
+    // 200 g, 200g, 2 zakken, 4 porties, 3. Een getal dat je typt, gaat nooit vanzelf naar productinfo (kcal per 100 g,
+    // een portie): die komt uit de databank, je geheugen, de voorraad of ✨; "pizza 300" is hoeveel, geen kcal.
     const withUnit = w.match(/^(\d+(?:[.,]\d+)?)([a-z%]+)$/);
     const number = withUnit ? withUnit[1] : NUMBER.test(w) ? w : null;
     if (number) {
@@ -261,17 +262,21 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
         }
       }
       // Een label dat exact past ("Porties"), gaat voor een dat er enkel mee begint ("Portie").
+      const typable = (f: FieldDef) => f.type === "number" && empty(f) && !f.product;
       const byUnit = unit
-        ? (fields.find((f) => f.type === "number" && empty(f) && unitFits(unit, f)) ??
-          (withUnit
-            ? undefined
-            : (fields.find((f) => f.type === "number" && empty(f) && fold(f.label) === fold(unit)) ?? fields.find((f) => f.type === "number" && empty(f) && labelFits(unit, f)))))
+        ? (fields.find((f) => typable(f) && unitFits(unit, f)) ??
+          (withUnit ? undefined : (fields.find((f) => typable(f) && fold(f.label) === fold(unit)) ?? fields.find((f) => typable(f) && labelFits(unit, f)))))
         : undefined;
       if (byUnit) {
         put(byUnit.key, toNumber(number), i, withUnit ? 1 : 2);
         continue;
       }
-      const plain = firstEmpty("number") ?? firstEmpty("money");
+      // "2 boterhammen", "3 eieren": een aantal stuks, geen gewicht; dat blijft in de naam (✨ schat er het gewicht van).
+      const word = fold(next ?? "");
+      const counted =
+        /^[a-z]{2,}$/.test(word) && !PACKS.test(word) && !(UNITS as readonly string[]).includes(normalizeUnit(word) ?? "") && !(word in RELATIVE) && !WEEKDAYS.includes(word) && !(word in MONTHS);
+      const measured = (f: FieldDef) => ["g", "kg", "mg", "ml", "cl", "l"].includes(fold(f.unit ?? ""));
+      const plain = firstEmpty("number", (f) => !f.product && !(counted && measured(f))) ?? firstEmpty("money");
       if (!withUnit && plain) {
         // "2 zakken": het woord voor de verpakking hoort bij het getal (en wordt geen naam).
         put(plain.key, plain.type === "money" ? Math.round(toNumber(number) * 100) : toNumber(number), i, plain.type === "number" && PACKS.test(next) ? 2 : 1);

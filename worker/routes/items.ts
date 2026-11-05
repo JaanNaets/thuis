@@ -1229,14 +1229,16 @@ projectItems.post("/:id/items/read", async (c) => {
   if (!text) return c.json(empty);
   const limit = await useAiBudget(c.env, c.get("person").id);
   if (limit) return c.json({ ...empty, message: limit });
-  const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
+  const readable = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
+  // Een lijst met productinfo (Eten): de voedingswaarde komt uit een tweede, eigen vraag (zie `estimateFood`), niet uit
+  // de notitie ("pizza 300" is geen 300 kcal per 100 g).
+  const products = readable.some((f) => f.product);
+  const fields = products ? readable.filter((f) => !f.product) : readable;
   const schema = labelSchema(fields);
   const prompt = `Je krijgt een korte notitie van iemand die iets bijhoudt in de lijst "${type.plural}". Haal er de velden uit.
 Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
 - name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)
 ${fields.map(describeField).join("\n")}`;
-  // Een lijst met productinfo (Eten): daarna een tweede, eigen vraag naar de voedingswaarde (zie `estimateFood`).
-  const products = fields.some((f) => f.product);
   try {
     const result = await c.env.AI.run(MODEL, {
       messages: [
@@ -1269,13 +1271,13 @@ ${fields.map(describeField).join("\n")}`;
     if (products && name) {
       // Wat het is: eerst de schatting (zoals een voedingstabel), dan de echte gegevens als we het kennen: een verpakt
       // product in Open Food Facts (op naam en merk), een gerecht of gewoon voedingsmiddel in NEVO.
-      const food = await estimateFood(c.env, fields, text, name).catch(() => null);
+      const food = await estimateFood(c.env, readable, text, name).catch(() => null);
       if (food) {
         // Wat de notitie zelf zei (300 g), wint van een gewone portie.
         Object.assign(scan.data, Object.fromEntries(Object.entries(food.data).filter(([k]) => scan.data[k] === undefined)));
         const info = food.kind === "product" ? await productByName(db, name, food.brand).catch(() => null) : !food.brand ? nevoByName(name) : null;
         if (info) {
-          Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
+          Object.assign(scan.data, cleanAttributes(readable, productData(readable, info)));
           scan.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
         } else if (food.estimated) scan.source = { kind: "estimate" };
       }

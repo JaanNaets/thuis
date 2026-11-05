@@ -257,3 +257,37 @@ test("een persoon ook op een ander woord van de naam, als maar één zo heet", (
   const family = { ...ctx, people: [{ id: "a", name: "Jaan Naets" }, { id: "b", name: "Jana Naets" }] };
   assert.deepEqual(quickFill("naets", who, family).data, {});
 });
+
+test("Eten: een getal gaat naar Hoeveel, nooit vanzelf naar kcal per 100 g of de portie", () => {
+  const eten: FieldDef[] = [
+    { key: "kcal_100", label: "kcal per 100 g", type: "number", unit: "kcal", product: "kcal" },
+    { key: "portie", label: "Portie", type: "number", unit: "g", product: "serving" },
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g", portion: "portie" },
+    { key: "eiwit_100", label: "Eiwit per 100 g", type: "number", unit: "g", product: "protein" },
+  ];
+  const none = { ...ctx, items: () => [] };
+  assert.deepEqual(quickFill("banaan 120 g", eten, none).data, { gram: 120 });
+  assert.deepEqual(quickFill("pizza 300", eten, none).data, { gram: 300 });
+  assert.deepEqual(quickFill("soep 250g", eten, none).data, { gram: 250 });
+  assert.equal(quickFill("pizza 300 kcal", eten, none).data.kcal_100, undefined);
+  // Met een gekende portie: "2 porties" blijft omrekenen naar Hoeveel.
+  assert.deepEqual(quickFill("2 porties soep", eten, { ...none, values: (k: string) => (k === "portie" ? 250 : undefined) }).data, { gram: 500 });
+});
+
+test("Een getal met een gewoon woord erachter is een aantal, geen gewicht", () => {
+  const eten: FieldDef[] = [
+    { key: "kcal_100", label: "kcal per 100 g", type: "number", unit: "kcal", product: "kcal" },
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g", portion: "portie" },
+  ];
+  const none = { ...ctx, items: () => [] };
+  const r = quickFill("2 boterhammen", eten, none);
+  assert.deepEqual(r.data, {});
+  assert.equal(r.name, "2 boterhammen");
+  // Een hele zin gaat naar ✨, ook zonder gewicht erin.
+  assert.equal(quickFill("2 boterhammen met kaas", eten, none).sentence, true);
+  // Een getal met een eenheid of op het einde blijft hoeveel; een datum erna ook.
+  assert.deepEqual(quickFill("soep 300 g", eten, none).data, { gram: 300 });
+  assert.deepEqual(quickFill("pizza 300 gisteren", eten, none).data.gram, 300);
+  // Water in ml: "water 500" blijft 500 ml.
+  assert.deepEqual(quickFill("water 500", [{ key: "ml", label: "Hoeveel", type: "number", unit: "ml" }], none).data, { ml: 500 });
+});
