@@ -15,6 +15,8 @@ export type QuickContext = {
   items: (fieldKey: string) => { id: string; name: string }[];
   /** Woorden die niets betekenen hier, zoals de naam van de lijst ("eten" bij Eten). */
   skip?: string[];
+  /** Wat er nu in het formulier staat (bv. de portie van een product, om "2 porties" om te rekenen). */
+  values?: (key: string) => unknown;
 };
 
 export type QuickResult = {
@@ -249,9 +251,21 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
     const number = withUnit ? withUnit[1] : NUMBER.test(w) ? w : null;
     if (number) {
       const unit = withUnit ? withUnit[2] : next;
+      // "2 porties" bij een getal in porties (Hoeveel per Portie, 30 g): 60 g, als de portie al gekend is.
+      if (!withUnit && /^porties?$/.test(fold(unit ?? ""))) {
+        const perPortion = (f: FieldDef) => (f.portion ? ctx.values?.(f.portion) : undefined);
+        const target = fields.find((f) => f.type === "number" && empty(f) && typeof perPortion(f) === "number" && (perPortion(f) as number) > 0);
+        if (target) {
+          put(target.key, Math.round(toNumber(number) * (perPortion(target) as number) * 10) / 10, i, 2);
+          continue;
+        }
+      }
+      // Een label dat exact past ("Porties"), gaat voor een dat er enkel mee begint ("Portie").
       const byUnit = unit
         ? (fields.find((f) => f.type === "number" && empty(f) && unitFits(unit, f)) ??
-          (withUnit ? undefined : fields.find((f) => f.type === "number" && empty(f) && labelFits(unit, f))))
+          (withUnit
+            ? undefined
+            : (fields.find((f) => f.type === "number" && empty(f) && fold(f.label) === fold(unit)) ?? fields.find((f) => f.type === "number" && empty(f) && labelFits(unit, f)))))
         : undefined;
       if (byUnit) {
         put(byUnit.key, toNumber(number), i, withUnit ? 1 : 2);

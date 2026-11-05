@@ -191,6 +191,8 @@ export type FieldDef = {
   per?: string;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
+  /** Getal: in porties van dit veld (Portie, 30 g): "2 porties" is 60 (snel invullen en de knoppen bij het veld). */
+  portion?: string;
   /** Timer: een doel in minuten (16 u vasten); is het bereikt, dan krijgt wie de timer startte een melding. */
   timer_goal?: number;
   /** Timer: bij het stoppen komt de duur in dit veld (een Duur van deze lijst), om mee te tellen en te tekenen. */
@@ -348,6 +350,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
       if (Object.keys(m).length) def.measure = m;
     }
     if (f.aliases === true && type === "text") def.aliases = true;
+    if (type === "number" && typeof f.portion === "string" && KEY_RE.test(f.portion) && f.portion !== key) def.portion = f.portion;
     if (type === "timer" && typeof f.timer_goal === "number" && Number.isInteger(f.timer_goal) && f.timer_goal > 0 && f.timer_goal < 100_000) def.timer_goal = f.timer_goal;
     if (type === "timer" && typeof f.timer_into === "string" && KEY_RE.test(f.timer_into) && f.timer_into !== key) def.timer_into = f.timer_into;
     if (f.remember === true && type !== "calc") {
@@ -408,6 +411,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     }
     if (f.per && kinds.get(f.per) !== "number") {
       const { per: _p, ...rest } = out;
+      out = rest;
+    }
+    // Porties: enkel van een getal van deze lijst.
+    if (f.portion && kinds.get(f.portion) !== "number") {
+      const { portion: _p, ...rest } = out;
       out = rest;
     }
     // Timer: de duur enkel in een Duur van deze lijst.

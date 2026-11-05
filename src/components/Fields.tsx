@@ -42,7 +42,7 @@ import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
 import { api, ApiError, apiUrl } from "../api";
 import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk, isTouch } from "../device";
-import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
+import { centsToInput, formatCents, formatDate, formatTotal, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
 import { useSession } from "../session";
@@ -78,6 +78,25 @@ type IntervalDraft = { n: string; unit: IntervalUnit };
 /** Wat in een veld staat terwijl je typt. */
 type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft | AmountEntry[] | TimerValue;
 export type AttributeDraft = Record<string, DraftValue>;
+
+/** Bij een getal in porties (Hoeveel per Portie): ½, 1 en 2 porties met één tik, als de portie gekend is. */
+function PortionChips({ per, unit, onPick }: { per: FieldValue | null | undefined; unit?: string; onPick: (n: number) => void }) {
+  if (typeof per !== "number" || per <= 0) return null;
+  const options: [string, number][] = [
+    ["½ portie", 0.5],
+    ["1 portie", 1],
+    ["2 porties", 2],
+  ];
+  return (
+    <span className="portion-chips">
+      {options.map(([label, n]) => (
+        <button key={label} type="button" className="tag" onClick={() => onPick(Math.round(per * n * 10) / 10)}>
+          {label} <span className="muted">{formatTotal(per * n)}{unit ? ` ${unit}` : ""}</span>
+        </button>
+      ))}
+    </span>
+  );
+}
 
 /** Vastzetten van een veld: staat de waarde van nu vast (`pinned`), het label (Vastzetten voor Pasta) en de tik. */
 export type FieldPin = { pinned: boolean; label: string; onToggle: () => void };
@@ -626,6 +645,9 @@ export function FieldInputs({
                       <option key={s} value={s} />
                     ))}
                   </datalist>
+                )}
+                {def.type === "number" && def.portion && !disabled && (
+                  <PortionChips per={draftValue(defs.find((d) => d.key === def.portion) ?? def, value[def.portion])} unit={def.unit} onPick={(n) => set(def.key, String(n).replace(".", ","))} />
                 )}
                 {def.type === "duration" &&
                   typeof raw === "string" &&
@@ -1264,6 +1286,7 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
           }
         : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
+      ...(d.type === "number" && d.portion ? { portion: rename(d.portion) } : {}),
       ...(d.type === "timer" && d.timer_goal ? { timer_goal: d.timer_goal } : {}),
       ...(d.type === "timer" && d.timer_into ? { timer_into: rename(d.timer_into) } : {}),
       // Onthouden: je laatste of een vaste waarde, eventueel per keuze in een ander veld (zie shared/fields.ts).
@@ -1646,6 +1669,21 @@ export function FieldsEditor({
                       label="Begint met vandaag"
                     />
                   )}
+                  {f.type === "number" && value.some((x) => x.type === "number" && x.key !== f.key) && (
+                    <label className="field">
+                      <span className="label">In porties van</span>
+                      <select value={f.portion ?? ""} onChange={(e) => update(i, { portion: e.target.value || undefined })}>
+                        <option value="">Niet</option>
+                        {value
+                          .filter((x) => x.type === "number" && x.key !== f.key)
+                          .map((x) => (
+                            <option key={x.key} value={x.key}>
+                              {x.label.trim() || "Naamloos veld"}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                   {f.type === "timer" && (
                     <div className="field-row">
                       <label className="field">
@@ -1929,7 +1967,7 @@ export function LabelScanner({
         scan.message
           ? { tone: "none", text: scan.message }
           : scan.source?.kind === "database"
-            ? { tone: "ok", ai: true, text: `Herkend met AI als ${scan.source.label}; de gegevens komen uit Open Food Facts. Kijk de hoeveelheid na.` }
+            ? { tone: "ok", ai: true, text: `Herkend met AI als ${scan.source.label}; de gegevens komen uit ${scan.source.db === "nevo" ? (scan.source.credit ?? "NEVO") : "Open Food Facts"}. Kijk de hoeveelheid na.` }
             : scan.source?.kind === "estimate"
               ? { tone: "partial", ai: true, text: "Geschat met AI op basis van de foto (geen gekend product gevonden). Kijk de blauwe velden na." }
               : { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." },

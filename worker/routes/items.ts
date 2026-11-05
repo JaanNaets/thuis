@@ -24,7 +24,9 @@ import {
 import type { ImportResult, Item, ItemDetail, ItemFile, ItemList, ItemRef, ItemType, LabelScan, LogEntry, Person, ReceiptLines, SearchResult, Tag } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { withCalcs } from "../compute";
-import { productByCode, productByName } from "../products";
+import { nevoByName, productByCode, productByName } from "../products";
+import { nevoCredit } from "../../shared/nevo";
+import { NEVO_DATA } from "../../shared/nevo-data";
 import { isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
@@ -1279,16 +1281,19 @@ ${fields.map(describeField).join("\n")}`;
       // dan blijft de schatting staan, en dat zeggen we ook.
       const code = found || (typeof parsed.barcode === "string" ? parsed.barcode.replace(/\D/g, "") : "");
       const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : null;
+      // Een gerecht of gewoon voedingsmiddel (een appel, spaghetti bolognese): in NEVO, als we het daar kennen.
       const info =
         parsed.kind === "product" || found
           ? await (isProductCode(code) ? productByCode(db, code) : Promise.resolve(null))
               .then((found) => found ?? productByName(db, scan.name!, brand))
               .catch(() => null)
-          : null;
+          : parsed.kind !== "unknown" && !brand
+            ? nevoByName(scan.name)
+            : null;
       if (info) {
         scan.name = productLabel(info);
         Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
-        scan.source = { kind: "database", label: productLabel(info) };
+        scan.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
       } else scan.source = { kind: "estimate" };
       // De andere dingen op de foto: geschat, elk een eigen item als je dat wil.
       const others = parsed.kind !== "unknown" && Array.isArray(parsed.others) ? parsed.others.slice(0, MAX_OTHERS) : [];

@@ -232,7 +232,8 @@ export type LabelScan = {
    * Bij een lijst met productinfo: kwamen de gegevens uit Open Food Facts (een herkend product, `label`: welk) of zijn
    * ze geschat op basis van de foto?
    */
-  source?: { kind: "database"; label: string } | { kind: "estimate" };
+  /** `db`: uit welke databank (`credit`: de bronvermelding, bij NEVO de versie van het RIVM). */
+  source?: { kind: "database"; label: string; db?: "off" | "nevo"; credit?: string } | { kind: "estimate" };
   /**
    * Een verwijzing (bv. Verkoper) waarvan de naam op de foto nog niet bestaat: die kan je meteen toevoegen aan de
    * lijst waarnaar het veld wijst (`list`: hoe één item ervan heet), als je daar iets mag toevoegen.

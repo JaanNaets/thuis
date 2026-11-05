@@ -610,6 +610,19 @@ Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), d
 3. **Meerdere dingen op één foto** (een bord met rijst, kip en broccoli): het grootste komt in het formulier, de rest
    staat eronder bij "Ook op de foto". Aangevinkt wordt elk een eigen item, met dezelfde datum, maaltijd en persoon.
 
+**Porties**: Open Food Facts kent vaak de portie van een product (Nutella: 15 g); die komt in een veld met productinfo
+**Portie (g)**. Rekent een getal in porties van dat veld (in de lijst: Hoeveel → **In porties van** Portie), dan staan
+er onder het veld knoppen ½ portie · 1 portie · 2 porties, en rekent snel invullen "2 porties nutella" om naar 30 g.
+Het sjabloon Voeding heeft dat al bij Eten.
+
+**NEVO** (gewone voedingsmiddelen: een appel, gekookte rijst, spaghetti bolognese) is de tweede databank, naast Open
+Food Facts (merkproducten). Typ je in een lijst met productinfo een naam die in NEVO staat, of herkent de AI zo'n
+voedingsmiddel op een foto, dan komen de voedingswaarden daaruit, met de bron erbij ("NEVO-online versie 2025/9.0,
+RIVM, Bilthoven"); je naam blijft staan. NEVO zit in de app zelf (`shared/nevo-data.ts`): wat je typt, gaat nergens
+heen. De gegevens zijn gratis en worden ongewijzigd gebruikt, zoals de voorwaarden van het RIVM vragen. Om ze erin te
+zetten: vraag het bestand aan bij het RIVM, zet het in `data/` en draai `node scripts/nevo.mjs data/<bestand>.csv
+2025/9.0`. Zolang dat niet gebeurde, is NEVO leeg en gebruikt de app enkel Open Food Facts.
+
 Open Food Facts krijgt enkel een barcode of een productnaam, nooit iets van jou. Wat de app opzocht, onthoudt ze 30
 dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en 50 samen per dag
 (`AI_PERSON_LIMIT`, `AI_DAILY_LIMIT`), ruim binnen de gratis hoeveelheid van Workers AI. Daarboven leest de AI niets

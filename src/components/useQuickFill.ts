@@ -26,6 +26,8 @@ export type QuickFillOptions = {
   nameLabel: string;
   /** Tekst om mee te beginnen (?tekst=). */
   initial?: string;
+  /** Wat er nu in het formulier staat (de portie van een product, om "2 porties" om te rekenen). */
+  values?: (key: string) => unknown;
   /** Mag de code dit veld nu vullen? (Het formulier: niet wat je zelf invulde.) Een gekozen veld nooit. */
   open?: (f: FieldDef) => boolean;
   /** Mag de naam uit de tekst komen? (Het formulier: niet als je ze zelf typte.) */
@@ -77,7 +79,7 @@ export function useQuickFill(options: QuickFillOptions) {
     const found = new Map(await Promise.all(refs.map(async (f) => [f.key, await itemsIn(f, rest)] as const)));
     if (n !== seq.current) return null;
     for (const items of found.values()) for (const it of items) itemNames.current.set(it.id, it.name);
-    const read = quickFill(rest, open, { today: today(), people: o.people, items: (k) => found.get(k) ?? [], skip: o.skip });
+    const read = quickFill(rest, open, { today: today(), people: o.people, items: (k) => found.get(k) ?? [], skip: o.skip, values: o.values });
     latest.current.result = read;
     setResult(read);
     o.onResult?.(read, list);

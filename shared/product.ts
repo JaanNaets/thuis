@@ -8,13 +8,14 @@
 
 import type { Attributes, FieldDef, FieldType } from "./fields.ts";
 
-export type ProductKey = "name" | "brand" | "quantity" | "kcal" | "fat" | "saturated" | "carbs" | "sugars" | "fiber" | "protein" | "salt";
+export type ProductKey = "name" | "brand" | "quantity" | "serving" | "kcal" | "fat" | "saturated" | "carbs" | "sugars" | "fiber" | "protein" | "salt";
 
 /** Wat een veld uit productinfo kan krijgen; `off`: de sleutel in de voedingswaarden van Open Food Facts. */
 export const PRODUCT_KEYS = {
   name: { label: "Productnaam", type: "text" },
   brand: { label: "Merk", type: "text" },
   quantity: { label: "Inhoud van de verpakking", type: "text" },
+  serving: { label: "Portie (g)", type: "number" },
   kcal: { label: "Energie (kcal per 100 g)", type: "number", off: "energy-kcal_100g" },
   fat: { label: "Vetten (g per 100 g)", type: "number", off: "fat_100g" },
   saturated: { label: "Waarvan verzadigd (g per 100 g)", type: "number", off: "saturated-fat_100g" },
@@ -40,6 +41,8 @@ export type ProductInfo = {
   values: Partial<Record<ProductKey, number>>;
   /** Hoe vaak het gescand werd in Open Food Facts (hoe gekender, hoe betrouwbaarder). */
   scans: number;
+  /** Uit welke databank: Open Food Facts (merkproducten) of NEVO (gewone voedingsmiddelen, zie shared/nevo.ts). */
+  source?: "off" | "nevo";
 };
 
 /** Een geldige barcode van een product (EAN-8, UPC-A of EAN-13), met een kloppend controlecijfer. */
@@ -69,6 +72,9 @@ export function fromOff(raw: unknown): ProductInfo | null {
   // Enkel kJ? Dan rekenen we om (1 kcal = 4,184 kJ).
   const kj = n["energy-kj_100g"];
   if (values.kcal === undefined && typeof kj === "number" && kj > 0) values.kcal = Math.round(kj / 4.184);
+  // Een portie (30 g), als het product er een opgeeft.
+  const serving = typeof p.serving_quantity === "number" ? p.serving_quantity : typeof p.serving_quantity === "string" ? Number(p.serving_quantity) : NaN;
+  if (Number.isFinite(serving) && serving > 0 && serving < 5000) values.serving = Math.round(serving * 10) / 10;
   if (!name || values.kcal === undefined) return null;
   return {
     code: typeof p.code === "string" && /^\d{8,14}$/.test(p.code) ? p.code : null,
@@ -77,6 +83,7 @@ export function fromOff(raw: unknown): ProductInfo | null {
     quantity: text(p.quantity, 40),
     values,
     scans: typeof p.unique_scans_n === "number" ? p.unique_scans_n : 0,
+    source: "off",
   };
 }
 

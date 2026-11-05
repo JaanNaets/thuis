@@ -6536,6 +6536,19 @@ dialog.palette[open]::backdrop {
   }
 }
 
+/* Porties bij een getal (½ · 1 · 2 porties): kleine tags onder het veld. */
+.portion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.portion-chips .muted {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
 /* ---------- timer (Timer.tsx) ---------- */
 
 .timer {

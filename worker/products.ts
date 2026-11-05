@@ -1,9 +1,11 @@
 // Productinfo opvragen bij Open Food Facts (open en gratis), met een eigen kopie in D1: een product 30 dagen, een
 // zoekvraag zonder resultaat een dag. Open Food Facts vraagt om een herkenbare User-Agent en om zuinig te zijn.
 
+import { NEVO_DATA } from "../shared/nevo-data";
+import { nevoMatch } from "../shared/nevo";
 import { bestMatch, fromOff, isProductCode, type ProductInfo } from "../shared/product";
 
-const FIELDS = "code,product_name,product_name_nl,product_name_fr,product_name_en,brands,quantity,nutriments,unique_scans_n";
+const FIELDS = "code,product_name,product_name_nl,product_name_fr,product_name_en,brands,quantity,serving_quantity,nutriments,unique_scans_n";
 const HEADERS = { "User-Agent": "Thuis/1.0 (huishoud-app op Cloudflare)" };
 const KEEP_DAYS = 30;
 
@@ -44,12 +46,28 @@ export async function productByCode(db: D1Database, code: string): Promise<Produ
   });
 }
 
-/** Een product op naam en merk (wat de app op een foto herkende): de beste match, of null. */
+/** Een gewoon voedingsmiddel op naam in NEVO (zie shared/nevo.ts), zonder netwerk; null als er niets past of geen NEVO is. */
+export function nevoByName(name: string): ProductInfo | null {
+  return NEVO_DATA.foods.length ? nevoMatch(NEVO_DATA, name.slice(0, 80)) : null;
+}
+
+/**
+ * Een product op naam en merk (wat de app op een foto herkende): de beste match, of null. Zonder merk eerst in NEVO
+ * (gewone voedingsmiddelen), dan Open Food Facts; met een merk eerst Open Food Facts, NEVO als laatste.
+ */
 export async function productByName(db: D1Database, name: string, brand: string | null): Promise<ProductInfo | null> {
   const clean = (s: string) => s.replace(/["\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   const q = clean(name);
   const b = brand ? clean(brand) : "";
   if (!q) return null;
+  if (!b) {
+    const nevo = nevoByName(q);
+    if (nevo) return nevo;
+  }
+  return (await offByName(db, q, b)) ?? nevoByName(q);
+}
+
+async function offByName(db: D1Database, q: string, b: string): Promise<ProductInfo | null> {
   return cached(db, `zoek:${q.toLowerCase()}|${b.toLowerCase()}`, async () => {
     const pick = (found: unknown[] | undefined) =>
       bestMatch((found ?? []).map(fromOff).filter((p): p is ProductInfo => p !== null), { name: q, brand: b || null });

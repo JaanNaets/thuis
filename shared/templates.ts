@@ -219,7 +219,8 @@ const FOOD: TypeTemplate = {
       product: "kcal",
       hint: "per 100 g of 100 ml, in kcal (niet kJ): van de voedingstabel, anders geschat",
     },
-    { key: "gram", label: "Hoeveel", type: "number", unit: "g", hint: "wat je at of dronk, in g of ml (niet de hele verpakking)" },
+    { key: "portie", label: "Portie", type: "number", unit: "g", product: "serving", hint: "hoeveel één portie is (uit de databank, of zelf)" },
+    { key: "gram", label: "Hoeveel", type: "number", unit: "g", portion: "portie", hint: "wat je at of dronk, in g of ml (niet de hele verpakking)" },
     { key: "gerecht_kcal_100", label: "kcal per 100 g van het gerecht", type: "calc", unit: "kcal", calc: { kind: "lookup", via: "gerecht", field: "kcal_100" } },
     {
       key: "kcal",

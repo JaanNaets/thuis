@@ -74,6 +74,10 @@ commits en uitleg.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
+  **Porties**: een getal met `portion` (de sleutel van een getal Portie, productinfo `serving`) krijgt ½ · 1 · 2
+  porties in het formulier, en snel invullen rekent "2 porties" om (`QuickContext.values`). **NEVO** (`shared/nevo.ts`,
+  `shared/nevo-data.ts` uit `scripts/nevo.mjs`): gewone voedingsmiddelen zonder netwerk (`nevoByName`,
+  `GET /products/nevo`), ongewijzigd en altijd met `nevoCredit` erbij; zonder merk eerst NEVO, dan Open Food Facts.
 - **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, groeperen, als agenda; de volgorde altijd met
   `orderItems`, optellen enkel waar het zin heeft: `canSum`) en de **agenda** (`shared/agenda.ts`,
   velden met `agenda`) zijn generiek over alle veldsoorten. Een weergave is geen beveiliging: wat iemand niet mag zien,

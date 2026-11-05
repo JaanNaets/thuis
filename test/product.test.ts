@@ -30,6 +30,7 @@ test("een product uit Open Food Facts", () => {
     quantity: "400 g",
     values: { kcal: 539, fat: 30.9, sugars: 56.3, protein: 6.3, salt: 0.1 },
     scans: 900,
+    source: "off",
   });
   assert.equal(productLabel(p), "Nutella");
   assert.equal(productLabel({ ...p, brand: "Ferrero" }), "Nutella (Ferrero)");

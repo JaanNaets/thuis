@@ -227,7 +227,7 @@ function ItemForm({
 
   // Productinfo (echte gegevens uit Open Food Facts) in de velden die je nog niet zelf invulde, en de barcode in een
   // barcodeveld als de lijst er een heeft.
-  function applyProduct(info: ProductInfo, code: string | null, file: File | null) {
+  function applyProduct(info: ProductInfo, code: string | null, file: File | null, rename = true) {
     if (file) setPhoto(file);
     looked.current = code ?? undefined;
     const data: Attributes = productData(fields, info);
@@ -236,10 +236,33 @@ function ItemForm({
     const drafted = attributesDraft(fields, data);
     const keys = Object.keys(data).filter((k) => !touched.current.has(k) && !(k in live.current.set) && type.field_access[k] === "edit");
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, drafted[k]])) }));
-    const named = !touched.current.has("name");
+    const named = rename && !touched.current.has("name");
     if (named) setName(productLabel(info));
     setAuto((a) => new Set([...a, ...keys, ...(named ? ["name"] : [])]));
+    // Nu de portie gekend is: "2 porties" in je tekst opnieuw lezen.
+    engine.refresh();
   }
+
+  // Een gewoon voedingsmiddel dat je typt ("appel"): in NEVO (zonder netwerk naar buiten), als de velden uit
+  // productinfo nog leeg zijn. Je naam blijft staan; de bron staat in de melding.
+  const nevoAsked = useRef("");
+  useEffect(() => {
+    const q = name.trim();
+    if (item || !products || q.length < 3 || nevoAsked.current === q.toLowerCase()) return;
+    const filled = fields.some((f) => f.product && f.product !== "name" && draftValue(f, attrs[f.key]) !== null && draftValue(f, attrs[f.key]) !== undefined);
+    if (filled) return;
+    const timer = setTimeout(() => {
+      nevoAsked.current = q.toLowerCase();
+      api.get<ProductInfo & { credit: string }>(`/products/nevo?naam=${encodeURIComponent(q)}`).then(
+        (info) => {
+          applyProduct(info, null, null, false);
+          toast(`Gevonden in ${info.credit}: ${info.name}`);
+        },
+        () => {},
+      );
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [name]);
 
   // Een barcode zelf getypt of gescand in een barcodeveld: meteen opzoeken (één keer per code).
   async function lookupCode(value: unknown) {
@@ -357,6 +380,11 @@ function ItemForm({
     open: (f) => !touched.current.has(f.key),
     nameOpen: () => !touched.current.has("name"),
     canMoveTo: (key, list) => !touched.current.has(key) || list.some((p) => p.field === key),
+    // Wat nu in het formulier staat (de portie van een product: "2 porties" = 60 g).
+    values: (key) => {
+      const def = defOf(key);
+      return def ? draftValue(def, latest.current.attrs[key]) : undefined;
+    },
     onResult: applyLive,
     onPick: applyPick,
     onUnpick: unpick,

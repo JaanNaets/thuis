@@ -107,6 +107,7 @@ export const FIELD_LINKS = {
   remember: false,
   remember_by: false,
   timer_goal: false,
+  portion: false,
   timer_into: false,
   remember_fixed: false,
   remind: false,
