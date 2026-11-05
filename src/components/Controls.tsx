@@ -123,13 +123,16 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 
 export type AlertTone = "busy" | "ok" | "partial" | "none";
 
-const ALERT_ICONS: Record<AlertTone, IconName> = { busy: "loader", ok: "sparkles", partial: "alert", none: "alert" };
+const ALERT_ICONS: Record<AlertTone, IconName> = { busy: "loader", ok: "check", partial: "alert", none: "alert" };
 
-/** Korte melding in een formulier: bezig, gelukt, half gelukt of niet gelukt. */
-export function Alert({ tone, children }: { tone: AlertTone; children: ReactNode }) {
+/**
+ * Korte melding in een formulier: bezig, gelukt, half gelukt of niet gelukt. `ai`: dit kwam van de AI (✨ in plaats
+ * van een vinkje), zodat je altijd ziet wanneer de AI meelas. ✨ staat nergens anders.
+ */
+export function Alert({ tone, ai, children }: { tone: AlertTone; ai?: boolean; children: ReactNode }) {
   return (
     <p className={`alert alert-${tone}`} role="status">
-      {tone === "busy" ? <Spinner /> : <Icon name={ALERT_ICONS[tone]} size={16} />}
+      {tone === "busy" ? <Spinner /> : <Icon name={ai && tone !== "none" ? "sparkles" : ALERT_ICONS[tone]} size={16} />}
       <span>{children}</span>
     </p>
   );

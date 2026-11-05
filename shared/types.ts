@@ -49,7 +49,11 @@ export type ProjectNode = Project & {
   inherited: boolean;
 };
 
-export type Me = { person: Person; projects: ProjectNode[] };
+/** `ai`: mag de AI voor jou lezen (Jouw gegevens → AI)? Uit: geen ✨-knoppen. */
+export type Me = { person: Person; projects: ProjectNode[]; ai: boolean };
+
+/** Lezen met AI voor jou: aan of uit, en hoe vaak vandaag (van je daglimiet). */
+export type AiState = { on: boolean; used: number; limit: number };
 
 /** Je overzicht: per project de lijsten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
 export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number; can_create: boolean };

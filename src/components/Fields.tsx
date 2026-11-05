@@ -41,7 +41,6 @@ import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk } from "../device";
 import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
-import { clearShared } from "../shared-file";
 import { Link } from "../router";
 import { useSession } from "../session";
 import { BarcodeScanner } from "./BarcodeScanner";
@@ -1752,28 +1751,30 @@ export function LabelScanner({
   onMove?: (key: string, to: string) => void;
   onRemove?: (key: string) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
-  /** Een foto die al klaarligt (gedeeld vanuit een andere app): meteen lezen. */
+  /** Een foto die al klaarligt (gedeeld vanuit een andere app): die wacht tot je ze laat lezen (✨ Foto lezen). */
   initial?: File | null;
 }) {
+  const { ai } = useSession();
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
-  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string }>();
+  // `ai`: de melding komt van de AI (✨); zonder: van de code of uit Open Food Facts.
+  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string; ai?: boolean }>();
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
-  useEffect(() => {
-    if (!initial) return;
-    read(initial);
-    clearShared();
-  }, [initial]);
+  // Een gedeelde foto: nooit vanzelf naar de AI, enkel als je op ✨ Foto lezen tikt.
+  const [pending, setPending] = useState<File | null>(null);
+  const pendingUrl = useMemo(() => (pending?.type.startsWith("image/") ? URL.createObjectURL(pending) : null), [pending]);
+  useEffect(() => () => void (pendingUrl && URL.revokeObjectURL(pendingUrl)), [pendingUrl]);
+  useEffect(() => setPending(initial ?? null), [initial]);
 
   async function read(chosen: File | undefined) {
     if (!chosen) return;
     setSuggestions([]);
-    setStatus({ tone: "busy", text: products ? "Product zoeken" : "Lezen" });
+    setStatus({ tone: "busy", text: products ? "Barcode zoeken" : "Lezen met AI" });
     try {
       // Een PDF (bv. een factuur): de eerste pagina lezen als foto, en de PDF zelf bewaren bij het item.
       const pdf = chosen.type === "application/pdf" ? chosen : null;
@@ -1791,12 +1792,14 @@ export function LabelScanner({
           return found(info);
         }
       }
+      if (!ai) return setStatus({ tone: "none", text: "Lezen met AI staat voor jou uit." });
       const body = new FormData();
       body.set("image", small);
       body.set("type_id", typeId);
       if (note.trim()) body.set("note", note.trim());
       if (code) body.set("code", code);
       setLast({ file: chosen, note: note.trim() });
+      setStatus({ tone: "busy", text: "Lezen met AI" });
       const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
       onResult(scan, photo, pdf);
       setSuggestions(onCreate ? (scan.create ?? []) : []);
@@ -1804,10 +1807,10 @@ export function LabelScanner({
         scan.message
           ? { tone: "none", text: scan.message }
           : scan.source?.kind === "database"
-            ? { tone: "ok", text: `Herkend als ${scan.source.label}: de gegevens komen uit Open Food Facts. Kijk de hoeveelheid na.` }
+            ? { tone: "ok", ai: true, text: `Herkend met AI als ${scan.source.label}; de gegevens komen uit Open Food Facts. Kijk de hoeveelheid na.` }
             : scan.source?.kind === "estimate"
-              ? { tone: "partial", text: "Geschat op basis van de foto (geen gekend product gevonden). Kijk de blauwe velden na." }
-              : { tone: "ok", text: "Gelezen. Kijk de blauwe velden even na." },
+              ? { tone: "partial", ai: true, text: "Geschat met AI op basis van de foto (geen gekend product gevonden). Kijk de blauwe velden na." }
+              : { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." },
       );
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
@@ -1835,7 +1838,7 @@ export function LabelScanner({
     try {
       const done = await onAi(note.trim());
       setSuggestions(done.create ?? []);
-      setStatus(done.message ? { tone: "none", text: done.message } : undefined);
+      setStatus(done.message ? { tone: "none", text: done.message } : { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." });
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
     }
@@ -1861,6 +1864,25 @@ export function LabelScanner({
 
   return (
     <div className="scan-buttons">
+      {/* Een gedeelde foto eerst: ze komt bij het item, en de AI leest ze pas als je op ✨ Foto lezen tikt. */}
+      {pending && (
+        <div className="shared-pending">
+          {pendingUrl ? <img src={pendingUrl} alt="Gedeelde foto" /> : <Icon name="file" size={20} />}
+          {ai && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={status?.tone === "busy"}
+              onClick={() => {
+                setPending(null);
+                read(pending);
+              }}
+            >
+              <Icon name="sparkles" /> Foto lezen
+            </button>
+          )}
+        </div>
+      )}
       {/* Typen: vult live in met code; ✨ laat de AI meelezen. Wat je typt, is ook de uitleg bij een foto. */}
       <div className="picker-row">
         <QuickInput
@@ -1876,7 +1898,7 @@ export function LabelScanner({
           idle={idle}
           inputRef={inputRef}
         />
-        {onAi && (
+        {onAi && ai && (
           <button
             type="button"
             className="btn btn-ghost btn-icon ai-button"
@@ -1890,13 +1912,18 @@ export function LabelScanner({
         )}
       </div>
       {chips && onMove && onRemove && <QuickChips chips={chips} onMove={onMove} onRemove={onRemove} />}
+      {/* Een foto lezen gaat (buiten een barcode) naar de AI: daarom een kleine ✨ op de knop. Uit: geen fotoknoppen. */}
       <div className="btn-row">
-        <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-          <Icon name="camera" /> Foto
-        </button>
-        <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
-          <Icon name="image" /> {products ? "Uit foto" : "Uit bestand"}
-        </button>
+        {ai && (
+          <>
+            <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
+              <Icon name="camera" /> Foto <AiMark />
+            </button>
+            <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
+              <Icon name="image" /> {products ? "Uit foto" : "Uit bestand"} <AiMark />
+            </button>
+          </>
+        )}
         {products && (
           <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
             <Icon name="scan" /> Barcode
@@ -1906,10 +1933,14 @@ export function LabelScanner({
       {input(cameraRef, true)}
       {input(fileRef, false)}
       {scanning && <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />}
-      {status && <Alert tone={status.tone}>{status.text}</Alert>}
-      {last && status?.tone !== "busy" && note.trim() !== last.note && (
+      {status && (
+        <Alert tone={status.tone} ai={status.ai}>
+          {status.text}
+        </Alert>
+      )}
+      {ai && last && status?.tone !== "busy" && note.trim() !== last.note && (
         <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => read(last.file)}>
-          <Icon name="repeat" size={15} /> Opnieuw lezen met deze uitleg
+          <Icon name="repeat" size={15} /> Opnieuw lezen met deze uitleg <AiMark />
         </button>
       )}
       {suggestions.map((s) => (
@@ -1924,6 +1955,11 @@ export function LabelScanner({
       ))}
     </div>
   );
+}
+
+/** De kleine grijze ✨ op een knop die de AI laat lezen (een foto, een kasticket): je ziet vooraf dat de AI meeleest. */
+export function AiMark() {
+  return <Icon name="sparkles" size={13} className="ai-mark" />;
 }
 
 /** Een product op barcode in Open Food Facts; null als het er niet in staat. */

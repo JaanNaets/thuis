@@ -101,7 +101,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       toast((err as Error).message, "alert");
     }
   }
-  const { person, projects } = useSession();
+  const { person, projects, ai } = useSession();
   // Op een breed scherm passen meer kolommen (op gsm staan ze toch in de grijze regel).
   const wideScreen = typeof window !== "undefined" && window.matchMedia("(min-width: 1100px)").matches;
   // Weergaven: filters, sortering en kolommen (shared/views.ts); wat je koos, blijft staan zolang de app openstaat.
@@ -127,7 +127,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const wanted = params.get("weergave");
   const sharedAsked = useRef(false);
   useEffect(() => {
-    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !counter || !type.can_create) return;
+    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !counter || !type.can_create || !ai) return;
     sharedAsked.current = true;
     sharedFile().then((file) => {
       if (!file) return;
@@ -258,7 +258,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   // Wat bij Meer staat: zelden nodig, dus niet als knoppen naast het zoekveld.
   const actions: { icon: IconName; label: string; run?: () => void; to?: string; href?: string }[] = [
     ...(counter && codeField && !archived ? [{ icon: "scan" as const, label: "Scannen", run: () => setSheet("scan") }] : []),
-    ...(counter && type.can_create && live ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
+    // Een kasticket leest de AI: enkel als ze voor jou aan staat.
+    ...(counter && type.can_create && live && ai ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
     ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
     ...(type.can_create && live ? [{ icon: "share" as const, label: "Snelkoppeling", run: () => setSheet("shortcut") }] : []),
     ...(items.length > 0 ? [{ icon: "download" as const, label: "Exporteren", href: apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`) }] : []),

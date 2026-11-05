@@ -2,7 +2,7 @@
 // de lijnen van een kasticket bij je voorraad optellen. Elke aanpassing gaat in één keer naar de database
 // (`/items/:id/adjust`), zodat twee mensen tegelijk elkaar niet overschrijven.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CodeValue, FieldDef } from "../../shared/fields";
 import { convert, formatAmount, measureOf, round3, type Measure } from "../../shared/units";
 import type { Item, ReceiptLines } from "../../shared/types";
@@ -12,6 +12,7 @@ import { formatNumber } from "../format";
 import { prepareForReading } from "../image";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { Alert, Segmented } from "./Controls";
+import { AiMark } from "./Fields";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
@@ -201,8 +202,9 @@ export function StockScanner({
 type Line = Omit<ReceiptLines["lines"][number], "amount"> & { on: boolean; amount: string };
 
 /**
- * Een kasticket bij je voorraad optellen: de AI leest de lijnen, de app koppelt ze aan je items. Jij kiest wat erbij
- * komt (en hoeveel); wat nog niet bestaat, wordt een nieuw item.
+ * Een kasticket bij je voorraad optellen: de AI leest de lijnen (✨ op de knoppen: je ziet vooraf dat de AI meeleest),
+ * de app koppelt ze aan je items. Jij kiest wat erbij komt (en hoeveel); wat nog niet bestaat, wordt een nieuw item.
+ * Enkel als de AI voor jou aan staat (zie ItemsView).
  */
 export function ReceiptToStock({
   projectId,
@@ -215,33 +217,42 @@ export function ReceiptToStock({
   typeId: string;
   counter: FieldDef;
   onDone: () => void;
-  /** Een foto die al klaarligt (gedeeld vanuit een andere app): meteen lezen. */
+  /** Een foto die al klaarligt (gedeeld vanuit een andere app): die wacht tot je ze laat lezen (✨ Kasticket lezen). */
   initial?: File | null;
 }) {
   const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [lines, setLines] = useState<Line[]>();
-  const [status, setStatus] = useState<{ tone: "busy" | "none"; text: string }>();
+  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "none"; text: string }>();
   const [busy, setBusy] = useState(false);
-
+  // Een gedeelde foto: nooit vanzelf naar de AI.
+  const [pending, setPending] = useState<File | null>(null);
+  const pendingUrl = useMemo(() => (pending ? URL.createObjectURL(pending) : null), [pending]);
+  useEffect(() => () => void (pendingUrl && URL.revokeObjectURL(pendingUrl)), [pendingUrl]);
   useEffect(() => {
     if (!initial) return;
-    read(initial);
+    setPending(initial);
     clearShared();
   }, [initial]);
 
   async function read(file: File | undefined) {
     if (!file) return;
     setLines(undefined);
-    setStatus({ tone: "busy", text: "Kasticket lezen" });
+    setStatus({ tone: "busy", text: "Kasticket lezen met AI" });
     try {
       const body = new FormData();
       body.set("image", await prepareForReading(file));
       body.set("type_id", typeId);
       const found = await api.post<ReceiptLines>(`/projects/${projectId}/items/scan-lines`, body);
       setLines(found.lines.map((l) => ({ ...l, on: true, amount: String(l.amount).replace(".", ",") })));
-      setStatus(found.message ? { tone: "none", text: found.message } : undefined);
+      setStatus(
+        found.message
+          ? { tone: "none", text: found.message }
+          : found.lines.length
+            ? { tone: "ok", text: "Gelezen met AI. Kijk de lijnen na." }
+            : { tone: "none", text: "Niets herkend op deze foto." },
+      );
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
     }
@@ -288,17 +299,37 @@ export function ReceiptToStock({
 
   return (
     <div className="form">
+      {pending && pendingUrl && (
+        <div className="shared-pending">
+          <img src={pendingUrl} alt="Gedeelde foto" />
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={status?.tone === "busy"}
+            onClick={() => {
+              setPending(null);
+              read(pending);
+            }}
+          >
+            <Icon name="sparkles" /> Kasticket lezen
+          </button>
+        </div>
+      )}
       <div className="btn-row">
-        <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-          <Icon name="camera" /> Foto
+        <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
+          <Icon name="camera" /> Foto <AiMark />
         </button>
-        <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
-          <Icon name="image" /> Uit foto
+        <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
+          <Icon name="image" /> Uit foto <AiMark />
         </button>
       </div>
       {input(cameraRef, true)}
       {input(fileRef, false)}
-      {status && <Alert tone={status.tone}>{status.text}</Alert>}
+      {status && (
+        <Alert tone={status.tone} ai={status.tone === "ok"}>
+          {status.text}
+        </Alert>
+      )}
       {lines && lines.length > 0 && (
         <>
           <ul className="receipt-lines">

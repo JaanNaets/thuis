@@ -58,7 +58,9 @@ commits en uitleg.
   project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
 - **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
   velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
-  en wat de code vond, wint; de AI enkel met ✨. Alles daarna gewoon door het formulier en `prepareData`. De code vult
+  en wat de code vond, wint; de AI enkel met ✨. **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
+  (`AiMark`), ze start nooit vanzelf (ook een gedeelde foto wacht), de melding zegt "met AI", en per persoon staat ze
+  aan of uit (`AppSettings.ai`, `PUT /me/ai`, `useSession().ai`); uit = geen ✨-knoppen en `useAiBudget` weigert. Alles daarna gewoon door het formulier en `prepareData`. De code vult
   **live** in (één motor voor formulier en blok: `useQuickFill`; `ItemForm` zet de lezing in zijn velden met `applyLive`,
   `QuickAdd` stelt er de gegevens mee samen; `quickFill` geeft met `parts` welke tekst in welk veld kwam, zodat wissen
   terugzet wat er stond). `QuickInput` toont keuzes uit de velden (`typedFragments`, `formSuggestions`,

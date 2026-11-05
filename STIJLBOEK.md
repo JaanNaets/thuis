@@ -459,7 +459,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
-| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" (`QuickInput`) met rechts een stille ✨ (`.ai-button`, `btn-ghost btn-icon`, "Lezen met AI": enkel als je de AI de hele tekst wil laten lezen; wat de code al vond, wint), daaronder het rijtje (`QuickChips`) en Foto · Uit bestand (· Barcode). Enter vult in met code (zonder AI). Wat je typt, is ook de uitleg bij een foto. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). De motor (live lezen, keuzes, verplaatsen) is `useQuickFill`, ook in `QuickAdd`. |
+| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" (`QuickInput`) met rechts een stille ✨ (`.ai-button`, `btn-ghost btn-icon`, "Lezen met AI": enkel als je de AI de hele tekst wil laten lezen; wat de code al vond, wint), daaronder het rijtje (`QuickChips`) en Foto · Uit bestand (· Barcode); Foto en Uit bestand dragen een kleine grijze ✨ (`AiMark`), want een foto leest de AI, Barcode niet. Een gedeelde foto (`initial`) staat er als klein beeld (`.shared-pending`) bovenaan met **✨ Foto lezen**: ze komt bij het item, en de AI leest ze pas na die tik. Staat de AI voor jou uit (`useSession().ai`), dan geen ✨ en geen fotoknoppen. Enter vult in met code (zonder AI). Wat je typt, is ook de uitleg bij een foto. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). De motor (live lezen, keuzes, verplaatsen) is `useQuickFill`, ook in `QuickAdd`. |
 | `QuickInput` | Het veld "Typ wat je weet" in `LabelScanner` (bij een nieuw item staat de cursor er meteen in). Wat je typt, vult **live** in met code (zonder AI; `quickFill`, met `parts`: welke tekst in welk veld kwam): wis je een woord, dan komt terug wat er stond. Eronder zweven (`.picker-list`, zo breed als de hele rij: `.picker.is-row`) de waarden die passen bij het woord bij de cursor, uit alle velden die je mag wijzigen: items (van de server, per groep lijsten), keuzes, personen, ja/nee en namen van eerder; rechts het label van het veld (`.picker-place`). Staat de cursor in een getal of datum die al ergens staat, dan tonen de keuzes de andere velden waar het naartoe kan; Tab (Shift+Tab) doet dat op een computer. Kiezen vult het veld in zoals zelf invullen (overnemen uit een recept gebeurt ook) en telt als jouw keuze; wis je dat woord, dan vervalt ze. Enter zonder keuze is **Invullen** (een hele zin gaat dan naar de AI). Escape sluit. |
 | `QuickChips` | Het rijtje onder "Typ wat je weet": per veld wat de tekst of je keuzes invulden (`.tag.is-filled`: zacht blauw, het label grijs, een lange waarde afgekapt), in de volgorde van het formulier. Een tik opent een `Sheet` met **Naar …** (de andere velden waar de waarde kan) en **Weghalen** (dan verdwijnt het ook uit je tekst). |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
@@ -715,7 +715,8 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
   eenheid, de verpakking, en g/kg of ml/cl/l als dat omrekent) en één knop die zegt wat het wordt ("Wordt 57,5 kg").
 - Bij **Meer opties** van de lijst: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
   Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
-  resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`): een foto, de lijnen worden gekoppeld aan je items
+  resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`, enkel als de AI voor jou aan staat): Foto ·
+  Uit foto met `AiMark` (een gedeelde foto wacht met **✨ Kasticket lezen**), de lijnen worden gekoppeld aan je items
   (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij in de eenheid van het product,
   die rechts in het veld staat), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
@@ -815,7 +816,7 @@ Badges zijn kort: 1–3 woorden.
 | Situatie | Component |
 | --- | --- |
 | Iets is bewaard, verwijderd, verplaatst | `useToast()("Wijn bewaard")`: een glazen pil met een zwart rondje (rood bij `"alert"`), rechtsonder (tablet) of boven de onderbalk |
-| Iets gebeurt of lukte half binnen een formulier | `<Alert tone="busy" \| "ok" \| "partial" \| "none">`: een zacht vlak zonder rand |
+| Iets gebeurt of lukte half binnen een formulier | `<Alert tone="busy" \| "ok" \| "partial" \| "none">`: een zacht vlak zonder rand, gelukt met een vinkje. Kwam het van de AI, dan `ai` (✨ in plaats van het vinkje) en zegt de tekst het: "Gelezen met AI. …" |
 | Iets kan niet ongedaan gemaakt worden | `useConfirm()({ title, body, confirmLabel, danger: true })` |
 | Een korte invoer (notitie in het logboek, iemand toevoegen, een tag) | `<Sheet>`: een glazen onderblad dat los onderaan zweeft (gsm), een glazen venster in het midden (tablet) |
 | Lijst is leeg | `<EmptyState icon title action>`: een zacht vlak met een glazen icoontegel, de titel en hooguit één knop (`btn-outline btn-sm`), zonder uitleg |
@@ -947,7 +948,7 @@ lijsten: een lege staat met "Lijst maken".
 **Snelkoppeling** → een `Sheet` met "Met tekst" (bv. pellets), de QR (`Barcode` in `.sticker`), **QR-sticker** (naar
 `/projecten/:id/sticker`: de sticker groot, Afdrukken; bij afdrukken enkel de sticker, zwart op wit met een rand) en
 **Op je beginscherm** (maakt een app naar dit formulier, of neemt de app die er al heen gaat, zie Jouw gegevens → App, en opent `/app/:id` in de browser: de naam van de app, Openen en `HomeScreenHint`; zo heet het icoon "Bijvulling" en opent het meteen het formulier; `/snel/:id/:lijst` blijft enkel voor iconen van vroeger). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
-rijen, Kasticket bijtellen (lijsten met een voorraad) en Lezen in (de lijsten, die bij de tekst passen eerst); enkel
+rijen, Kasticket bijtellen (lijsten met een voorraad, enkel met de AI aan) en Toevoegen in (de lijsten, die bij de tekst passen eerst; de foto komt bij het item); de AI leest een gedeelde foto nooit vanzelf; enkel
 tekst opent Toevoegen. Lang op het app-icoon drukken (Android): je drie meestgebruikte lijsten, Toevoegen en Agenda.
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
@@ -963,11 +964,13 @@ tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
 **Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder Meldingen, de kaart
+**AI** (`AiCard` in `AppSettings.tsx`: `CardHead` met als gegeven "Vandaag 3 van 25 keer" als ze aan staat, en een
+`Switch` "Lezen met AI", enkel voor jou), de kaart
 **App** (`AppCard` in `AppSettings.tsx`, zie `shared/apps.ts`) en de volgorde van je projecten op het overzicht. De kaart App:
 **Openen op** (per toestel: "Het overzicht" of een bestemming), **Apps** (rijen met naam en bestemming, rechts Op je
 beginscherm; een tik opent een `Sheet` met Naam, de bestemming, Maken/Bewaren en Verwijderen; onderaan Nieuwe app),
 **Snelkoppelingen (Android)** (`Segmented` Vanzelf · Zelf kiezen; zelf: per snelkoppeling een bestemming met ×, tot
-vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen of Kasticket bijtellen in een voorraad). Een
+vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen of Kasticket bijtellen in een voorraad; enkel met de AI aan). Een
 bestemming kies je met `DestinationPicker`: Naar (Overzicht, Agenda, Project, Lijst, Formulier), dan welk, en bij
 een formulier eventueel Met tekst. Een eigen app (`/app/:id`, `AppPage`): als app meteen naar haar bestemming; in de
 browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).
@@ -1026,6 +1029,9 @@ browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de brow
 - Geen klassenamen die al een component zijn (`alert`, `card`, `row`, `tag`, `badge`, `filter`, `tab`, …) als
   losse toevoeging op iets anders: kies een eigen naam.
 - Geen donkere modus (bewuste keuze: Thuis is wit).
+- Geen AI zonder ✨: elke knop die de AI laat lezen, draagt `AiMark` (of is de stille ✨), en de AI start nooit
+  vanzelf (ook niet bij een gedeelde foto). Wat de AI vond, zegt het ook achteraf (`Alert` met `ai`). ✨ betekent enkel
+  AI: niet voor iets anders gebruiken.
 
 ---
 
@@ -1053,4 +1059,6 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.
 - [ ] Geen ondertitel, uitlegzin, "· optioneel" of bijlabel (principe 11). Moet iets uitgelegd worden, pas dan de
       opbouw of het label aan.
+- [ ] Gebruikt iets de AI? Dan een ✨ (`AiMark`) op de knop, nooit vanzelf, "met AI" in de melding achteraf, en
+      verborgen als de AI voor jou uit staat (`useSession().ai`).
 - [ ] Nieuw patroon nodig? Bouw het als component, en **voeg het toe aan dit stijlboek**.

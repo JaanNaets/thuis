@@ -60,7 +60,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
     document.querySelector("main")?.scrollTo({ top: 0 });
   }, [pathname]);
 
-  const session = useMemo(() => ({ person: me.person, projects: me.projects, reloadMe, openSearch: () => openPalette("search") }), [me, reloadMe]);
+  const session = useMemo(() => ({ person: me.person, projects: me.projects, ai: me.ai !== false, reloadMe, openSearch: () => openPalette("search") }), [me, reloadMe]);
 
   // De onderbalk op een gsm: projecten, agenda en zoeken. Jouw gegevens: je letter bij de titel van het overzicht.
   const tabIndex = pathname.startsWith("/agenda") ? 1 : 0;

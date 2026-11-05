@@ -2121,6 +2121,27 @@ input[type="checkbox"] {
   color: var(--muted-foreground);
 }
 
+/* De kleine ✨ op een knop die de AI laat lezen (Foto, Uit bestand, Kasticket): stil grijs, achter het label. */
+.ai-mark {
+  margin-left: -2px;
+  color: var(--muted-foreground);
+}
+
+/* Een gedeelde foto die wacht tot je ze laat lezen: een klein beeld met ✨ Foto lezen ernaast. */
+.shared-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shared-pending img {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
 /* Snel invullen: wat je tekst invulde, live onder het veld (QuickChips), zacht blauw zoals een veld dat de app
    invulde; een tik om het naar een ander veld te zetten of weg te halen. */
 .tag.is-filled {

@@ -16,7 +16,8 @@ import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
 import { enqueue, isOffline } from "../outbox";
-import { sharedFile } from "../shared-file";
+import { prepareUpload } from "../image";
+import { clearShared, sharedFile } from "../shared-file";
 import { useSession } from "../session";
 
 type Draft = AttributeDraft[string];
@@ -361,16 +362,25 @@ function ItemForm({
     onUnpick: unpick,
   });
 
-  // Een foto gedeeld vanuit een andere app (?foto=gedeeld, zie /delen): die leest het formulier meteen.
+  // Een foto gedeeld vanuit een andere app (?foto=gedeeld, zie /delen): ze komt bij het item (een PDF als bestand), en
+  // de AI leest ze enkel als je op ✨ Foto lezen tikt (in LabelScanner). Daarna is ze uit de cache weg.
   const [shared, setShared] = useState<File | null>(null);
   useEffect(() => {
-    if (!item && params.get("foto") === "gedeeld") sharedFile().then(setShared);
+    if (item || params.get("foto") !== "gedeeld") return;
+    sharedFile().then(async (file) => {
+      if (!file) return;
+      clearShared();
+      setShared(file);
+      if (file.type === "application/pdf") setOriginal(file);
+      else setPhoto(await prepareUpload(file).catch(() => file));
+    });
   }, []);
 
-  // Een nieuw item: meteen typen (en wat al getypt is, meteen invullen).
+  // Een nieuw item: meteen typen (en wat al getypt is, meteen invullen). Met een gedeelde foto niet: dan eerst de foto
+  // (en geen toetsenbord of keuzelijst eroverheen).
   useEffect(() => {
     if (item) return;
-    quickRef.current?.focus({ preventScroll: true });
+    if (params.get("foto") !== "gedeeld") quickRef.current?.focus({ preventScroll: true });
     if (engine.note) engine.flush();
   }, []);
 

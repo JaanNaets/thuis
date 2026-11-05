@@ -1,4 +1,7 @@
-// Workers AI: een foto lezen (etiket, typeplaatje). Met een harde daglimiet, ver onder de gratis hoeveelheid.
+// Workers AI: een foto lezen (etiket, typeplaatje). Met een harde daglimiet, ver onder de gratis hoeveelheid, en enkel
+// voor wie de AI niet uitzette (Jouw gegevens → AI).
+
+import { aiAllowed } from "../shared/apps";
 
 // Goedkoop en goed in tekst op foto's, ook in het Nederlands. ±20-30 neurons per foto;
 // de gratis hoeveelheid van Workers AI is 10.000 neurons per dag.
@@ -6,13 +9,36 @@ export const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 
 const AI_DAILY_LIMIT = 50;
 /** Per persoon, zodat niemand de foto's van een ander opgebruikt. */
-const AI_PERSON_LIMIT = 25;
+export const AI_PERSON_LIMIT = 25;
 
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 export const AI_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-/** Telt een AI-oproep; zegt wat er op is als een daglimiet bereikt is (voor iedereen samen, of voor jou). */
+/** Mag de AI voor deze persoon lezen? (Uit in Jouw gegevens → AI: dan nooit.) */
+export async function aiOn(db: D1Database, personId: string): Promise<boolean> {
+  const row = await db.prepare("SELECT app_settings FROM people WHERE id = ?").bind(personId).first<{ app_settings: string | null }>();
+  try {
+    return aiAllowed(row?.app_settings ? JSON.parse(row.app_settings) : null);
+  } catch {
+    return true;
+  }
+}
+
+/** Hoe vaak je de AI vandaag liet lezen (hoogstens je daglimiet; de dag is een UTC-dag, zoals de limiet). */
+export async function aiUsedToday(db: D1Database, personId: string): Promise<number> {
+  const row = await db
+    .prepare("SELECT calls FROM ai_usage_people WHERE day = date('now') AND person_id = ?")
+    .bind(personId)
+    .first<{ calls: number }>();
+  return Math.min(row?.calls ?? 0, AI_PERSON_LIMIT);
+}
+
+/**
+ * Telt een AI-oproep; zegt waarom het niet mag als de AI voor jou uit staat, of wat er op is als een daglimiet
+ * bereikt is (voor iedereen samen, of voor jou). Uit telt niet mee.
+ */
 export async function useAiBudget(env: Env, personId: string): Promise<string | null> {
+  if (!(await aiOn(env.DB, personId))) return "Lezen met AI staat voor jou uit.";
   const [all, mine] = (await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO ai_usage (day, calls) VALUES (date('now'), 1)

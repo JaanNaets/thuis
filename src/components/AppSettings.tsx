@@ -5,12 +5,12 @@
 import { useMemo, useState } from "react";
 import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
 import type { AddTarget } from "../../shared/quickadd";
-import type { Overview } from "../../shared/types";
+import type { AiState, Overview } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useSession } from "../session";
 import { setStartDestination, startDestination } from "../start";
 import { useConfirm } from "./ConfirmDialog";
-import { CardHead, Segmented } from "./Controls";
+import { CardHead, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
@@ -141,6 +141,7 @@ export function DestinationPicker({
 }
 
 export function AppCard() {
+  const { ai } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
   const choices = useChoices();
@@ -282,7 +283,8 @@ export function AppCard() {
           )}
         </div>
 
-        {counters.length > 0 && (
+        {/* Een kasticket leest de AI: deze keuze enkel als ze voor jou aan staat. */}
+        {ai && counters.length > 0 && (
           <label className="field">
             <span className="label">Gedeelde foto (Android)</span>
             <select
@@ -338,6 +340,38 @@ export function AppCard() {
           </div>
         )}
       </Sheet>
+    </section>
+  );
+}
+
+/**
+ * Lezen met AI aan of uit, enkel voor jou (Jouw gegevens → AI). Uit: geen ✨-knoppen meer, en de server weigert elke
+ * AI-vraag van jou. Aan: hoe vaak je de AI vandaag liet lezen, van je daglimiet (gegevens, geen uitleg).
+ */
+export function AiCard() {
+  const { reloadMe } = useSession();
+  const toast = useToast();
+  const { data, mutate } = useApi<AiState>("/me/ai");
+
+  async function set(on: boolean) {
+    if (!data) return;
+    mutate({ ...data, on });
+    try {
+      mutate(await api.put<AiState>("/me/ai", { on }));
+      reloadMe();
+      toast(on ? "Lezen met AI staat aan" : "Lezen met AI staat uit");
+    } catch (err) {
+      mutate(data);
+      toast((err as Error).message, "alert");
+    }
+  }
+
+  return (
+    <section className="card">
+      <CardHead title="AI" description={data?.on ? `Vandaag ${data.used} van ${data.limit} keer` : undefined} />
+      <div className="card-body form">
+        <Switch label="Lezen met AI" checked={data?.on ?? false} onChange={set} />
+      </div>
     </section>
   );
 }

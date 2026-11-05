@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { canCreate, typeAccess } from "../../shared/access";
 import type { IconKey } from "../../shared/templates";
-import { isTone, type Me, type Overview, type Person } from "../../shared/types";
+import { isTone, type AiState, type Me, type Overview, type Person } from "../../shared/types";
 import { blockProjects, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/overview";
 import { MAX_TARGETS, rankTargets, type AddTarget } from "../../shared/quickadd";
 import { appManifest, ownAppManifest } from "../../shared/manifest";
@@ -9,6 +9,7 @@ import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, typ
 import { flattenTree } from "../../shared/tree";
 import { isValidIban, normalizeIban } from "../../shared/payment";
 import { accessibleProjects } from "../context";
+import { AI_PERSON_LIMIT, aiOn, aiUsedToday } from "../ai";
 import type { AppEnv } from "../types";
 import { asObject, NotFoundError, parseOrder, requiredString, ValidationError } from "../validate";
 
@@ -133,15 +134,38 @@ me.get("/manifest", async (c) => {
 /** Je app-instellingen (zie shared/apps.ts): apps, snelkoppelingen en wat er met een gedeelde foto gebeurt. */
 me.get("/app", async (c) => c.json(await appSettingsOf(c.env.DB, c.get("person").id)));
 
-/** Je app-instellingen bewaren: nagekeken, en enkel wat je kan bereiken (een nieuwe app krijgt een id). */
+/**
+ * Je app-instellingen bewaren: nagekeken, en enkel wat je kan bereiken (een nieuwe app krijgt een id). AI aan of uit
+ * verandert hier niet (dat doet PUT /me/ai), zodat een oudere kopie van je instellingen ze niet terugzet.
+ */
 me.put("/app", async (c) => {
   const db = c.env.DB;
   const personId = c.get("person").id;
-  const raw = cleanAppSettings(asObject(await c.req.json()).settings);
+  const raw = { ...cleanAppSettings(asObject(await c.req.json()).settings), ai: await aiOn(db, personId) };
   const settings = keepReachable(raw, await reachFor(db, personId, raw));
   await db.prepare("UPDATE people SET app_settings = ? WHERE id = ?").bind(JSON.stringify(settings), personId).run();
   return c.json(settings);
 });
+
+/** Lezen met AI: aan of uit voor jou, en hoe vaak je de AI vandaag liet lezen. */
+me.get("/ai", async (c) => c.json(await aiState(c.env.DB, c.get("person").id)));
+
+/** Lezen met AI aan- of uitzetten (enkel voor jezelf). Uit: de server weigert elke AI-vraag van jou. */
+me.put("/ai", async (c) => {
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const on = asObject(await c.req.json()).on;
+  if (typeof on !== "boolean") throw new ValidationError("Aan of uit?");
+  const row = await db.prepare("SELECT app_settings FROM people WHERE id = ?").bind(personId).first<{ app_settings: string | null }>();
+  const settings = { ...cleanAppSettings(parseJson(row?.app_settings)), ai: on };
+  await db.prepare("UPDATE people SET app_settings = ? WHERE id = ?").bind(JSON.stringify(settings), personId).run();
+  return c.json(await aiState(db, personId));
+});
+
+async function aiState(db: D1Database, personId: string): Promise<AiState> {
+  const [on, used] = await Promise.all([aiOn(db, personId), aiUsedToday(db, personId)]);
+  return { on, used, limit: AI_PERSON_LIMIT };
+}
 
 /** Het manifest van één eigen app (een eigen icoon op je beginscherm); 404 als ze er niet (meer) is. */
 me.get("/apps/:appId/manifest", async (c) => {
@@ -195,7 +219,8 @@ async function reachFor(db: D1Database, personId: string, s: AppSettings): Promi
 /** Wie je bent en al je projecten, met je rol in elk. */
 me.get("/", async (c) => {
   const person = c.get("person");
-  const result: Me = { person, projects: await accessibleProjects(c.env.DB, person.id) };
+  const [projects, ai] = await Promise.all([accessibleProjects(c.env.DB, person.id), aiOn(c.env.DB, person.id)]);
+  const result: Me = { person, projects, ai };
   return c.json(result);
 });
 

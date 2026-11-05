@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, type Reach } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, type Reach } from "../shared/apps.ts";
 
 const reach: Reach = {
   boards: [
@@ -48,5 +48,17 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
   assert.deepEqual(kept.share, { kind: "receipt", project: "p1", list: "b" });
   assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", project: "p1", list: "o" } }, reach).share, { kind: "ask" });
-  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" } });
+  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true });
+});
+
+test("lezen met AI: staat aan tenzij je ze uitdrukkelijk uitzette, en blijft bij het nakijken", () => {
+  assert.equal(aiAllowed(null), true);
+  assert.equal(aiAllowed({}), true);
+  assert.equal(aiAllowed({ ai: "nee" }), true);
+  assert.equal(aiAllowed({ ai: 0 }), true);
+  assert.equal(aiAllowed({ ai: false }), false);
+  const off = cleanAppSettings({ ai: false });
+  assert.equal(off.ai, false);
+  assert.equal(keepReachable(off, reach).ai, false);
+  assert.equal(cleanAppSettings({ ai: true }).ai, true);
 });

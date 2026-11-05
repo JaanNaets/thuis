@@ -8,6 +8,8 @@ import type { Person, ProjectNode } from "../shared/types";
 export type Session = {
   person: Person;
   projects: ProjectNode[];
+  /** Mag de AI voor jou lezen (Jouw gegevens → AI)? Uit: geen ✨-knoppen (de server weigert dan ook). */
+  ai: boolean;
   reloadMe: () => void;
   openSearch: () => void;
 };
@@ -15,6 +17,7 @@ export type Session = {
 export const SessionContext = createContext<Session>({
   person: { id: "", name: "", email: null, color: null },
   projects: [],
+  ai: false,
   reloadMe: () => {},
   openSearch: () => {},
 });

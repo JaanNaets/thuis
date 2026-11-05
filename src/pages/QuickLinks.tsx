@@ -13,6 +13,7 @@ import { Barcode } from "../components/Barcode";
 import { Icon, type IconName } from "../components/Icon";
 import { EmptyState, PageHead } from "../components/Page";
 import { Link, useNavigate } from "../router";
+import { useSession } from "../session";
 import { sharedFile } from "../shared-file";
 import { ItemFormFor } from "./ItemForm";
 
@@ -167,6 +168,9 @@ export function SharedPage() {
   const [file, setFile] = useState<File | null>();
   const { data: targets } = useApi<AddTarget[]>("/me/lists");
   const { data: settings } = useApi<AppSettings>("/me/app");
+  const { ai } = useSession();
+  // Een kasticket leest de AI: enkel als ze voor jou aan staat (en ook dan pas na een tik op ✨ Kasticket lezen).
+  const receipt = ai && settings?.share.kind === "receipt" ? settings.share : null;
   const preview = useMemo(() => (file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null), [file]);
 
   useEffect(() => {
@@ -175,13 +179,12 @@ export function SharedPage() {
   useEffect(() => {
     if (file === null) navigate(`/?toevoegen=1${text ? `&tekst=${encodeURIComponent(text)}` : ""}`, { replace: true });
     // Gekozen in Jouw gegevens → App: een foto gaat meteen als kasticket naar die voorraad.
-    const share = settings?.share;
-    if (file && share?.kind === "receipt") navigate(`/projecten/${share.project}?lijst=${share.list}&kasticket=gedeeld`, { replace: true });
-  }, [file, settings]);
+    if (file && receipt) navigate(`/projecten/${receipt.project}?lijst=${receipt.list}&kasticket=gedeeld`, { replace: true });
+  }, [file, receipt]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
-  if (!file || !settings || settings.share.kind === "receipt") return null;
-  const counters = (targets ?? []).filter((t) => t.counter);
+  if (!file || !settings || receipt) return null;
+  const counters = ai ? (targets ?? []).filter((t) => t.counter) : [];
   const read = matchTargets(text, targets ?? []).slice(0, 8);
   const row = (key: string, to: string, icon: IconName, title: string, meta: string) => (
     <li key={key}>
@@ -215,7 +218,7 @@ export function SharedPage() {
           </section>
         </>
       )}
-      <h2 className="section-title">Lezen in</h2>
+      <h2 className="section-title">Toevoegen in</h2>
       <section className="card">
         <ul className="rows">
           {read.map(({ target: t, rest }) =>

@@ -1,6 +1,6 @@
 // De app instellen (Jouw gegevens → App): waar ze opent (per toestel), meerdere apps op één toestel (elk een eigen
 // icoon op je beginscherm met een eigen naam, dat naar een eigen pagina gaat), de snelkoppelingen als je lang op het
-// icoon drukt (Android) en wat er met een gedeelde foto gebeurt. Alles verwijst met ids; wat je niet (meer) mag zien,
+// icoon drukt (Android), wat er met een gedeelde foto gebeurt, en of de AI voor jou mag lezen (Jouw gegevens → AI). Alles verwijst met ids; wat je niet (meer) mag zien,
 // valt weg bij het nakijken (`cleanAppSettings`, `keepReachable`) en bij het maken van een manifest.
 
 /** Waar iets naartoe gaat. */
@@ -36,11 +36,16 @@ export type AppSettings = {
   /** null = vanzelf: je meestgebruikte lijsten. */
   shortcuts: Shortcut[] | null;
   share: ShareChoice;
+  /** Mag de AI voor jou lezen (✨)? Uit: geen ✨-knoppen, en de server weigert elke AI-vraag van jou. */
+  ai: boolean;
 };
 
 export const MAX_APPS = 12;
 export const MAX_SHORTCUTS = 4;
-export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" } };
+export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true };
+
+/** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
+export const aiAllowed = (raw: unknown): boolean => !(raw && typeof raw === "object" && (raw as Record<string, unknown>).ai === false);
 
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const id = (v: unknown) => (typeof v === "string" && ID.test(v) ? v : null);
@@ -98,7 +103,7 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
     : null;
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
   const share: ShareChoice = s.kind === "receipt" && id(s.project) && id(s.list) ? { kind: "receipt", project: s.project as string, list: s.list as string } : { kind: "ask" };
-  return { apps, shortcuts, share };
+  return { apps, shortcuts, share, ai: aiAllowed(o) };
 }
 
 /** Het pad van een bestemming in de app. */
@@ -162,6 +167,7 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
     apps: s.apps.filter((a) => reachable(a.to, reach)),
     shortcuts: s.shortcuts && s.shortcuts.filter((x) => reachable(x.to, reach)),
     share,
+    ai: s.ai,
   };
 }
 

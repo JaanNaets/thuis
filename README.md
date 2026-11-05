@@ -502,7 +502,7 @@ items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet
 ("ik at gisteren een halve pizza op restaurant"), tik dan op ✨ naast het veld: de gratis AI van Cloudflare leest ze
 (met dezelfde daglimiet als een foto), en wat de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
 
-Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. **Invullen** (of Enter) is nog nodig voor een hele zin: die leest de AI.
+Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. Enter vult in met code; voor een hele zin tik je op ✨: die leest de AI.
 
 Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw item begint dan met wat jij de vorige keer koos (zacht blauw), bv. de categorie of het aantal zakken. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
 
@@ -519,7 +519,8 @@ Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw it
   aanpassen) en opent ze in de browser; zet ze daar op je beginscherm. Op een iPhone heeft elk icoon zijn eigen
   aanmelding (één keer per sessie van Cloudflare Access, zie Langer ingelogd blijven).
 - **Android**: lang op het app-icoon drukken toont je drie meestgebruikte lijsten; een foto (kasticket) of tekst
-  deel je vanuit een andere app met Thuis.
+  deel je vanuit een andere app met Thuis (Delen → Thuis). Kies dan waar ze heen moet: de foto komt bij het nieuwe
+  item, en de AI leest ze enkel als je op ✨ Foto lezen (of ✨ Kasticket lezen) tikt.
 
 **De app instellen** (Jouw gegevens → App):
 
@@ -528,7 +529,8 @@ Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw it
 - **Apps**: zoveel eigen apps als je wil, elk met een eigen naam en bestemming ("Pellets" → Bijvulling met
   "pellets", "Keuken" → het overzicht Keuken). Met Op je beginscherm zet je elk als eigen icoon op je gsm.
 - **Snelkoppelingen** (Android): vanzelf je meestgebruikte lijsten, of zelf tot vier gekozen.
-- **Gedeelde foto** (Android): telkens vragen, of meteen als kasticket bij een voorraad.
+- **Gedeelde foto** (Android): telkens vragen, of meteen als kasticket bij een voorraad (enkel met de AI aan; ook
+  dan leest ze pas na ✨ Kasticket lezen).
 
 Een iPhone leest het manifest enkel als je het icoon op je beginscherm zet: een app die je daarna aanpast, gaat wel
 naar haar nieuwe bestemming (die vraagt ze bij het openen), maar haar naam onder het icoon blijft. Android neemt
@@ -559,7 +561,15 @@ Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), d
 
 Open Food Facts krijgt enkel een barcode of een productnaam, nooit iets van jou. Wat de app opzocht, onthoudt ze 30
 dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en 50 samen per dag
-(`AI_PERSON_LIMIT`, `AI_DAILY_LIMIT`), ruim binnen de gratis hoeveelheid van Workers AI.
+(`AI_PERSON_LIMIT`, `AI_DAILY_LIMIT`), ruim binnen de gratis hoeveelheid van Workers AI. Daarboven leest de AI niets
+meer tot de volgende dag (een UTC-dag) en vul je het zelf in; de rest van de app werkt gewoon.
+
+**Je ziet altijd wanneer de AI meeleest.** Elke knop die de AI gebruikt, draagt een kleine ✨ (Foto, Uit bestand,
+Kasticket lezen, en de ✨ naast "Typ wat je weet"); een barcode, Open Food Facts en het snel invullen met code niet.
+De AI start nooit vanzelf: een foto die je deelt vanuit een andere app, komt bij het item en wacht op **✨ Foto lezen**.
+Achteraf zegt de melding "Gelezen met AI". Bij **Jouw gegevens → AI** zet je **Lezen met AI** uit (enkel voor jezelf,
+in `people.app_settings`): dan zijn er geen ✨-knoppen meer, en weigert de server elke AI-vraag van jou
+(`useAiBudget`). Staat ze aan, dan zie je er hoe vaak je de AI vandaag liet lezen.
 
 ## Hoe de gegevens ingedeeld zijn
 
