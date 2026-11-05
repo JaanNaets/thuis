@@ -28,7 +28,7 @@ import { nevoByName, productByCode, productByName } from "../products";
 import { nevoCredit } from "../../shared/nevo";
 import { NEVO_DATA } from "../../shared/nevo-data";
 import { foodAnswer, foodQuestion, isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
-import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
+import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, visibleLists, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
 import { brusselsToday } from "../today";
@@ -976,6 +976,56 @@ items.post("/:id/check", async (c) => {
     ...(await effectStatements(db, me, netEffects(parseApplied(row.applied), applied), true)),
   ]);
   return c.json({ value: data[def.key] === true });
+});
+
+/**
+ * Gekocht (`{ ids }`: de producten van een aankoop): open items die naar een van die producten verwijzen, afvinken —
+ * een boodschap "Melk" als je melk kocht. Zoals een tik in de rij (`/items/:id/check`): het eerste ja/nee als kolom
+ * dat je daar mag wijzigen, enkel als het nog uit staat, en enkel in lijsten waar die verwijzing zelf niets telt
+ * (anders telde het kopen twee keer). Elk item met jouw rechten in zijn eigen project. Geeft wat afgevinkt werd.
+ */
+items.post("/bought", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const ids = idList(asObject(await c.req.json()), "ids").slice(0, MAX_BATCH);
+  if (!ids.length) return c.json({ checked: [] });
+  const { results: products } = await db.prepare("SELECT id, type_id, project_id FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<{ id: string; type_id: string; project_id: string }>();
+  const nodes = new Map((await accessibleProjects(db, me)).map((n) => [n.id, n]));
+  const seen = products.filter((p) => nodes.has(p.project_id) && typeAccess(nodes.get(p.project_id)!.rights, p.type_id) !== "none");
+  const kinds = new Set(seen.map((p) => p.type_id));
+  if (!seen.length) return c.json({ checked: [] });
+  // Lijsten met een verwijzing (die niets telt) naar zo'n product en een ja/nee als kolom: Boodschappen.
+  const lists = (await visibleLists(db, me)).flatMap((l) => {
+    const check = l.fields.find((f) => f.type === "bool" && f.column);
+    return check ? l.fields.filter((f) => f.type === "item" && !f.adjust && refLists(f).some((r) => kinds.has(r))).map((f) => ({ list: l, via: f, check })) : [];
+  });
+  const checked: { id: string; name: string; field: string; list: string }[] = [];
+  const statements: D1PreparedStatement[] = [];
+  const accessOf = new Map<string, ProjectAccess | null>();
+  for (const { list, via, check } of lists) {
+    const { results: rows } = await db
+      .prepare(
+        `${ITEM_SELECT} WHERE i.type_id = ?1 AND i.archived = 0 AND json_extract(i.data, ?2) IN (SELECT value FROM json_each(?3)) AND coalesce(json_extract(i.data, ?4), 0) != 1`,
+      )
+      .bind(list.id, `$.${via.key}`, JSON.stringify(seen.map((p) => p.id)), `$.${check.key}`)
+      .all<ItemRow>();
+    for (const row of rows.slice(0, 50)) {
+      if (!accessOf.has(row.project_id)) accessOf.set(row.project_id, await projectAccess(db, me, row.project_id));
+      const access = accessOf.get(row.project_id);
+      const type = access ? (await typesFor(db, access.chain)).find((t) => t.id === row.type_id) : undefined;
+      if (!access || !type || fieldAccess(access.rights, type.id, check.key) !== "edit" || fieldAccess(access.rights, type.id, via.key) === "none") continue;
+      const current = parseData(row.data);
+      const data = await prepareData(db, me, access, type, { ...current, [check.key]: true }, current, false);
+      const applied = await computeEffects(db, me, access.rights, type, row, data);
+      statements.push(
+        db.prepare("UPDATE items SET data = ?, applied = ?, updated_at = datetime('now') WHERE id = ?").bind(JSON.stringify(data), applied.length ? JSON.stringify(applied) : null, row.id),
+        ...(await effectStatements(db, me, netEffects(parseApplied(row.applied), applied), true)),
+      );
+      checked.push({ id: row.id, name: row.name, field: check.key, list: type.plural });
+    }
+  }
+  if (statements.length) await db.batch(statements);
+  return c.json({ checked });
 });
 
 /**

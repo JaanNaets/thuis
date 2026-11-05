@@ -767,8 +767,13 @@ gedeelde foto wacht met **✨ Kasticket lezen**), daarna van boven naar onder:
 - **Totaal** (`.receipt-total`) van wat aan staat; wijkt de som van de lijnen af van het ticket, dan een stille
   `Alert`: "Op het ticket staat € 24,10."
 - **Bewaar 12 uitgaven** (`btn-primary btn-lg`): alles in één keer (`/items/batch`, met het kasticket zelf als
-  `group` als de lijst er een heeft; de foto komt bij het kasticket; een nieuw product met `new_ref`). Toast "12 uitgaven
-  bewaard, 2 nieuwe producten, ook bij Eten".
+  `group` als de lijst er een heeft; de foto komt bij het kasticket; een nieuw product met `new_ref`). Daarna vinkt de
+  app open boodschappen van dezelfde producten af (`/items/bought`). Toast "12 uitgaven bewaard, 2 nieuwe producten, ook
+  bij Eten, 3 afgevinkt bij Boodschappen" met **Ongedaan maken** (enkel met `can_delete`): alles terug, ook de voorraad
+  en de boodschappen.
+- Een voorraad waarbij een aankoop al bijtelt (`boughtVia`), heeft geen **Kasticket bijtellen**: daar staat
+  **Kasticket lezen**, dat het nakijken in die aankopen opent (`?kasticket=lezen`), zodat niets twee keer telt. Ook
+  een gedeelde foto gaat dan naar de aankopen.
 
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)
 

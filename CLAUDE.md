@@ -155,7 +155,11 @@ commits en uitleg.
   enkel aan items die de lezer ziet, bewaart niets. Bewaren met `POST /projects/:id/items/batch` (alles of niets, elk
   item door `prepareData`, met `group`: het kasticket in dezelfde batch; met `new_ref` op een lijn eerst een nieuw
   product, want een verwijzing moet bestaan: lukt de rest niet, dan gaat het weer weg); `POST /items/:id/alias` onthoudt
-  de naam op het ticket.
+  de naam op het ticket. Een gekoppelde lijn staat in de eenheid van het product (`inProductUnit`), en krijgt wat ze
+  vorige keer had (velden met `remember` per naam, enkel als je bovenaan niets kiest). `POST /items/bought` vinkt open
+  items af die naar het gekochte product verwijzen (het eerste ja/nee als kolom, enkel waar die verwijzing niets telt),
+  met de rechten van de lezer per project. Een voorraad waarbij een aankoop al bijtelt (`boughtVia`, `AddTarget.stocks`),
+  krijgt een kasticket via die aankopen, nooit rechtstreeks.
 - **Timer** (veldsoort `timer`, `{ start, end? }` in UTC): `timer_goal` (melding in `sendTimerGoals`, elk kwartier,
   aan wie het item maakte als die het nog ziet), `timer_into` (de duur in een Duur van de lijst, `applyTimers` in
   `prepareData`, enkel als je dat veld mag wijzigen). `POST /items/:id/timer` (start/stop met de tijd van de server),

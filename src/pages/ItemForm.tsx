@@ -4,6 +4,7 @@ import { computeLocal } from "../../shared/calc";
 import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue } from "../../shared/fields";
 import type { QuickResult, Suggestion } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
+import { receiptPlan } from "../../shared/receipt";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
 import { today } from "../format";
@@ -93,6 +94,8 @@ function ItemForm({
   const fields = type.fields;
   const people = project.members.map((m) => m.person);
   const editsType = type.access === "edit";
+  // Een aankoop (een bedrag en een product dat bijtelt, zie shared/receipt.ts): na bewaren boodschappen afvinken.
+  const purchase = useMemo(() => receiptPlan(fields, type.id, () => undefined), [fields, type.id]);
   // Ben je de enige (je eigen project), dan vullen Betaald door, Verdeling en Wie zich vanzelf met jou in: die velden
   // hoeven niet in het formulier. Komt er iemand bij (of staat er al iemand anders in), dan staan ze er weer.
   const alone = people.length <= 1;
@@ -228,6 +231,24 @@ function ItemForm({
     }
   }
 
+  // Een verwijzing die telt met een eenheid per lijn (Wat bij een uitgave): de eenheid van het gekozen product (het veld
+  // met dezelfde sleutel daar), als je ze nog niet zelf koos, en een lege naam wordt de naam van het product. Zo staat
+  // een aankoop in de eenheid van het product en is de prijs per eenheid te vergelijken.
+  async function unitFrom(id: string, key: string) {
+    const def = fields.find((f) => f.key === key);
+    try {
+      const source = await api.get<ItemDetail>(`/items/${id}`);
+      const clean = def && source.data[key] !== undefined ? cleanValue(def, source.data[key]) : null;
+      const unit = def && clean !== null && clean !== undefined && !touched.current.has(key) && type.field_access[key] === "edit";
+      if (unit) setAttrs((a) => ({ ...a, [key]: attributesDraft([def], { [key]: clean })[key] }));
+      const named = !touched.current.has("name") && !latest.current.name.trim();
+      if (named) setName(source.name);
+      setAuto((a) => new Set([...a, ...(unit ? [key] : []), ...(named ? ["name"] : [])]));
+    } catch {
+      // Niet kunnen ophalen: dan kies je de eenheid zelf.
+    }
+  }
+
   // Productinfo (echte gegevens uit Open Food Facts) in de velden die je nog niet zelf invulde, en de barcode in een
   // barcodeveld als de lijst er een heeft.
   function applyProduct(info: ProductInfo, code: string | null, file: File | null, rename = true) {
@@ -332,6 +353,7 @@ function ItemForm({
     const def = fields.find((f) => f.key === key);
     if (def?.type === "code") lookupCode(next[key]);
     if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
+    if (def?.type === "item" && def.adjust?.unit_by && typeof next[key] === "string" && next[key]) unitFrom(next[key] as string, def.adjust.unit_by);
     rescale(next, [key]);
   }
 
@@ -740,10 +762,26 @@ function ItemForm({
         await api.post(`/projects/${project.project.id}/items`, { ...input, name: m.name, data: { ...shared, ...m.data } });
       }
       setMore({ items: [], keys: [] });
+      // Een nieuwe aankoop (een product dat bijtelt): open boodschappen van dat product afvinken.
+      const product = !item && purchase ? built.data[purchase.product.key] : undefined;
+      const ticked =
+        typeof product === "string"
+          ? await api
+              .post<{ checked: { list: string }[] }>("/items/bought", { ids: [product] })
+              .then((r) => r.checked)
+              .catch(() => [])
+          : [];
+      const tickedText = ticked.length ? `, afgevinkt bij ${[...new Set(ticked.map((t) => t.list))].join(" en ")}` : "";
       // Meteen ook (Gegeten): zeg waar het nog bij kwam, met een knop om het te openen.
       const also = saved.spawned?.[0];
       toast(
-        item ? "Bijgewerkt" : others.length ? `${saved.name} en ${others.length === 1 ? others[0].name : `${others.length} andere`} bewaard` : also ? `${saved.name} bewaard, ook bij ${also.list}` : `${saved.name} bewaard`,
+        item
+          ? "Bijgewerkt"
+          : others.length
+            ? `${saved.name} en ${others.length === 1 ? others[0].name : `${others.length} andere`} bewaard`
+            : also
+              ? `${saved.name} bewaard, ook bij ${also.list}${tickedText}`
+              : `${saved.name} bewaard${tickedText}`,
         "check",
         also ? { label: "Openen", run: () => navigate(`/items/${also.id}`) } : undefined,
       );

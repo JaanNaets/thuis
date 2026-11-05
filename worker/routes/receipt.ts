@@ -5,8 +5,9 @@
 
 import { Hono } from "hono";
 import { canCreate, fieldAccess, typeAccess, visibleFields } from "../../shared/access";
-import { matchName, refLists, type Attributes } from "../../shared/fields";
-import { cents, readLines, receiptPlan, validDate, type Candidate } from "../../shared/receipt";
+import { cleanAttributes, matchName, refLists, rememberKey, type Attributes } from "../../shared/fields";
+import { measureOf, type Measure } from "../../shared/units";
+import { cents, commonFields, inProductUnit, niceName, readLines, receiptPlan, validDate, type Candidate, type ReceiptPlan } from "../../shared/receipt";
 import type { ItemType, ProjectNode, ReceiptRead } from "../../shared/types";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { accessibleProjects, projectAccess, requireProject, toItemType, typesFor, type TypeRow } from "../context";
@@ -101,7 +102,24 @@ Sla totalen, tussentotalen, statiegeld, zakjes, spaarpunten en betaalgegevens ov
   const products = await candidates(db, nodes, plan.product.lists, linked);
   const unitField = plan.unit ? type.fields.find((f) => f.key === plan.unit) : undefined;
   const options = unitField?.type === "select" ? unitField.options : undefined;
-  const lines = readLines(parsed.lines, products, options);
+  const read = readLines(parsed.lines, products, options);
+  // Een gekoppelde lijn in de eenheid van het product (dan is de prijs per eenheid eerlijk te vergelijken).
+  const counterKey = type.fields.find((f) => f.key === plan.product.key)?.adjust?.field;
+  const matched = [...new Set(read.flatMap((l) => (l.product ? [l.product.id] : [])))];
+  const measures = new Map<string, Measure>();
+  if (counterKey && matched.length) {
+    const { results } = await db.prepare("SELECT id, type_id, data FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(matched)).all<{ id: string; type_id: string; data: string }>();
+    for (const r of results) {
+      const def = linked.get(r.type_id)?.fields.find((f) => f.key === counterKey && f.type === "number");
+      if (def) measures.set(r.id, measureOf(def, parseJson(r.data)));
+    }
+  }
+  const remembered = await rememberedByName(db, me, access.project.id, type, plan, read.map((l) => l.product?.name ?? niceName(l.name)));
+  const lines = read.map((l, i) => ({
+    ...l,
+    ...((l.product && inProductUnit(l, measures.get(l.product.id) ?? null, options)) || {}),
+    ...(remembered[i] ? { remember: remembered[i] } : {}),
+  }));
 
   // De winkel: een winkel die je al hebt (zelfde naam), anders de naam.
   const storeName = typeof parsed.store === "string" ? parsed.store.trim().slice(0, 120) : "";
@@ -136,6 +154,53 @@ Sla totalen, tussentotalen, statiegeld, zakjes, spaarpunten en betaalgegevens ov
   if (!lines.length) out.message = "Geen lijnen gevonden op deze foto.";
   return c.json(out);
 });
+
+/**
+ * Wat je vorige keer bij dezelfde naam invulde in deze lijst (velden met `remember` per naam die bovenaan staan, die je
+ * mag wijzigen: de categorie), per lijn; een vaste waarde wint. Twee vragen aan de databank voor het hele ticket.
+ */
+async function rememberedByName(db: D1Database, me: string, projectId: string, type: ItemType, plan: ReceiptPlan, names: string[]): Promise<(Attributes | null)[]> {
+  const fields = commonFields(type.fields, plan).filter((f) => f.remember && (f.remember_by ?? "") === "name");
+  if (!fields.length || !names.length) return names.map(() => null);
+  const keys = names.map((n) => rememberKey("name", n));
+  const [{ results: fixed }, { results: rows }] = (await db.batch([
+    db
+      .prepare("SELECT by_value, field_key, value FROM fixed_values WHERE person_id = ? AND type_id = ? AND by_value IN (SELECT value FROM json_each(?))")
+      .bind(me, type.id, JSON.stringify(keys.filter(Boolean))),
+    db.prepare("SELECT name, data FROM items WHERE project_id = ? AND type_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 300").bind(projectId, type.id, me),
+  ])) as [D1Result<{ by_value: string; field_key: string; value: string }>, D1Result<{ name: string; data: string }>];
+  const byKey = new Map<string, Attributes>();
+  for (const row of rows) {
+    const key = rememberKey("name", row.name);
+    if (!key || !keys.includes(key)) continue;
+    const have = byKey.get(key) ?? {};
+    const values = parseJson(row.data);
+    for (const f of fields) if (!(f.key in have) && values[f.key] !== undefined && values[f.key] !== null && values[f.key] !== "") have[f.key] = values[f.key];
+    byKey.set(key, have);
+  }
+  for (const row of fixed) {
+    const def = fields.find((f) => f.key === row.field_key && f.remember_fixed);
+    if (!def) continue;
+    let v: unknown;
+    try {
+      v = JSON.parse(row.value);
+    } catch {
+      continue;
+    }
+    const clean = cleanAttributes([def], { [def.key]: v })[def.key];
+    if (clean !== undefined && clean !== null) byKey.set(row.by_value, { ...(byKey.get(row.by_value) ?? {}), [def.key]: clean });
+  }
+  return keys.map((k) => (k && byKey.get(k) && Object.keys(byKey.get(k)!).length ? byKey.get(k)! : null));
+}
+
+function parseJson(text: string): Attributes {
+  try {
+    const v = JSON.parse(text);
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Attributes) : {};
+  } catch {
+    return {};
+  }
+}
 
 /** Lijsten op id (in eender welk project; wat je ervan mag zien, kijken we per project na). */
 async function listsById(db: D1Database, ids: string[]): Promise<Map<string, ItemType>> {

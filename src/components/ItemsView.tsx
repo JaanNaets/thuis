@@ -28,7 +28,7 @@ import { SkeletonRows, stagger } from "./Motion";
 import { EmptyState } from "./Page";
 import { Sheet } from "./Sheet";
 import { Barcode } from "./Barcode";
-import { addPath } from "../../shared/quickadd";
+import { addPath, boughtVia, type AddTarget } from "../../shared/quickadd";
 import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
 import { sharedFile } from "../shared-file";
 import { adjust, check, checkField, ReceiptToStock, RowCheck, RowStepper, StockScanner } from "./Stock";
@@ -140,16 +140,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const [params] = useSearchParams();
   const wanted = params.get("weergave");
   const sharedAsked = useRef(false);
-  useEffect(() => {
-    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !(counter || perLine) || !type.can_create || !ai) return;
-    sharedAsked.current = true;
-    sharedFile().then((file) => {
-      if (!file) return;
-      setSharedReceipt(file);
-      // Een lijst met een bedrag per product (Uitgaven): elke lijn een item; een voorraad: bijtellen.
-      setSheet(perLine ? "lines" : "receipt");
-    });
-  }, [params]);
+
   const applied = useRef<string | null>(null);
   useEffect(() => {
     const view = wanted && savedViews?.find((v) => v.id === wanted);
@@ -178,6 +169,30 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const counter = type.fields.find((f) => f.type === "number" && f.counter && type.field_access[f.key] === "edit");
   // Een kasticket per lijn: een lijst met een bedrag en een product dat telt (Uitgaven).
   const perLine = readsReceipts(type);
+  // Een voorraad waarbij een aankoop al bijtelt (Uitgaven → Voorraad): een kasticket gaat via die aankopen, nooit
+  // rechtstreeks (anders telt het twee keer).
+  const { data: targets } = useApi<AddTarget[]>(counter && ai && !perLine ? "/me/lists" : null);
+  const via = targets ? boughtVia(targets, type.id) : undefined;
+  useEffect(() => {
+    const asked = params.get("kasticket");
+    if (!asked || sharedAsked.current || !(counter || perLine) || !type.can_create || !ai) return;
+    // Een voorraad: eerst weten of een aankoop er al bijtelt (dan gaat het ticket naar die aankopen).
+    if (!perLine && !targets) return;
+    sharedAsked.current = true;
+    if (!perLine && via) {
+      navigate(`/projecten/${via.project_id}?lijst=${via.type_id}&kasticket=${asked}`, { replace: true });
+      return;
+    }
+    // Vanuit een voorraad (Kasticket lezen): meteen het nakijken openen.
+    if (asked === "lezen") return void (perLine && setSheet("lines"));
+    if (asked !== "gedeeld") return;
+    sharedFile().then((file) => {
+      if (!file) return;
+      setSharedReceipt(file);
+      // Een lijst met een bedrag per product (Uitgaven): elke lijn een item; een voorraad: bijtellen.
+      setSheet(perLine ? "lines" : "receipt");
+    });
+  }, [params, targets]);
   const codeField = type.fields.find((f) => f.type === "code");
   const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
   const fields = type.fields;
@@ -280,7 +295,14 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const actions: { icon: IconName; label: string; run?: () => void; to?: string; href?: string }[] = [
     ...(counter && codeField && !archived ? [{ icon: "scan" as const, label: "Scannen", run: () => setSheet("scan") }] : []),
     // Een kasticket leest de AI: enkel als ze voor jou aan staat.
-    ...(counter && type.can_create && live && ai ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
+    // Pas als gekend is of een aankoop er al bijtelt (anders kon je even toch rechtstreeks bijtellen).
+    ...(counter && !perLine && type.can_create && live && ai && targets
+      ? [
+          via
+            ? { icon: "receipt" as const, label: "Kasticket lezen", to: `/projecten/${via.project_id}?lijst=${via.type_id}&kasticket=lezen` }
+            : { icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") },
+        ]
+      : []),
     ...(perLine && type.can_create && live && ai ? [{ icon: "receipt" as const, label: "Kasticket lezen", run: () => setSheet("lines") }] : []),
     ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
     ...(type.can_create && live ? [{ icon: "share" as const, label: "Snelkoppeling", run: () => setSheet("shortcut") }] : []),

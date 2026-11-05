@@ -20,6 +20,31 @@ import { ItemPicker } from "./ItemPicker";
 import { useToast } from "./Toast";
 
 type Line = ReviewLine & { ticket: string; amountText: string; priceText: string };
+type Checked = { id: string; name: string; field: string; list: string };
+
+/**
+ * Een bewaard kasticket helemaal terugdraaien: de afgevinkte boodschappen weer open, wat in Eten kwam weg, de lijnen weg
+ * (dat draait het bijtellen terug), dan het ticket en de nieuwe producten. Wat niet lukt, blijft staan (en dat zegt de
+ * melding).
+ */
+async function undoReceipt(
+  saved: { lines: string[]; spawned: string[]; group: string | null; created: string[]; ticked: Checked[] },
+  toast: ReturnType<typeof useToast>,
+) {
+  let failed = 0;
+  const run = async (step: () => Promise<unknown>) => {
+    try {
+      await step();
+    } catch {
+      failed++;
+    }
+  };
+  for (const t of saved.ticked) await run(() => api.post(`/items/${t.id}/check`, { field: t.field, value: false }));
+  for (const id of [...saved.spawned, ...saved.lines]) await run(() => api.delete(`/items/${id}`));
+  for (const id of [...(saved.group ? [saved.group] : []), ...saved.created]) await run(() => api.delete(`/items/${id}`));
+  window.dispatchEvent(new Event(REFRESH_EVENT));
+  toast(failed ? `Kasticket ongedaan gemaakt, op ${failed} na` : "Kasticket ongedaan gemaakt", failed ? "alert" : "check");
+}
 
 /** Of een lijst een kasticket per lijn kan lezen (een bedrag en een product dat telt). */
 export const readsReceipts = (type: ItemTypeView) => receiptPlan(type.fields, type.id, () => undefined) !== null;
@@ -100,6 +125,7 @@ export function ReceiptToLines({
           product: l.product,
           // Nog niet gekend: een nieuw product in de eerste lijst waarin je mag toevoegen (Voorraad).
           newIn: l.product ? null : (found.targets[0]?.type_id ?? null),
+          ...(l.remember ? { remember: l.remember } : {}),
           amount: l.amount,
           unit: unitDef ? l.unit : null,
           price: l.price,
@@ -151,7 +177,7 @@ export function ReceiptToLines({
             data: receiptData(read.receipt.fields, type.fields, built.data),
           }
         : undefined;
-      const res = await api.post<{ ids: string[]; group?: string; created: (string | null)[]; spawned: { list: string }[] }>(`/projects/${project.project.id}/items/batch`, {
+      const res = await api.post<{ ids: string[]; group?: string; created: (string | null)[]; spawned: { id: string; list: string }[] }>(`/projects/${project.project.id}/items/batch`, {
         type_id: type.id,
         items,
         ...(group ? { group } : {}),
@@ -167,13 +193,29 @@ export function ReceiptToLines({
         const name = l.product?.name ?? l.name;
         if (id && name.toLowerCase() !== l.ticket.toLowerCase()) api.post(`/items/${id}/alias`, { alias: l.ticket }).catch(() => undefined);
       });
+      // Gekocht: open boodschappen van dezelfde producten afvinken.
+      const products = [...new Set(chosen.flatMap((l, i) => (l.product?.id ?? res.created[i] ? [(l.product?.id ?? res.created[i])!] : [])))];
+      const ticked = products.length ? await api.post<{ checked: Checked[] }>("/items/bought", { ids: products }).then((r) => r.checked).catch(() => []) : [];
       const n = res.ids.length;
       const fresh = res.created.filter(Boolean).length;
       const lists = [...new Set(res.spawned.map((s) => s.list))];
+      const tickedIn = [...new Set(ticked.map((t) => t.list))];
       toast(
         `${n} ${n === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()} bewaard` +
           (fresh ? `, ${fresh} ${fresh === 1 ? "nieuw product" : "nieuwe producten"}` : "") +
-          (lists.length ? `, ook bij ${lists.join(" en ")}` : ""),
+          (lists.length ? `, ook bij ${lists.join(" en ")}` : "") +
+          (ticked.length ? `, ${ticked.length} afgevinkt bij ${tickedIn.join(" en ")}` : ""),
+        "check",
+        type.can_delete
+          ? {
+              label: "Ongedaan maken",
+              run: () =>
+                undoReceipt(
+                  { lines: res.ids, spawned: res.spawned.map((s) => s.id), group: res.group ?? null, created: res.created.filter((x): x is string => Boolean(x)), ticked },
+                  toast,
+                ),
+            }
+          : undefined,
       );
       // Alles opnieuw ophalen (de totalen, de voorraad), niet enkel de lijst.
       window.dispatchEvent(new Event(REFRESH_EVENT));

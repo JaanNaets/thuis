@@ -421,9 +421,13 @@ haar prijs; de app koppelt de lijnen aan je producten (ook op hoe ze vroeger op 
 wordt een **nieuw product in de Voorraad** (met de eenheid van het ticket), zodat je ook daarvan de prijs volgt; tik op
 de lijn om toch een bestaand product te kiezen (heet het op het ticket anders, dan onthoudt de app dat), een andere
 lijst (Wijnen) of "enkel tekst" (batterijen, een cadeau). Een broodje dat je meteen opeet (Gegeten), wordt geen
-product. Bovenaan staat wat voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling), daaronder elke lijn:
-vink uit wat niet hoeft, tik Gegeten of Van mij aan, en tik op een lijn om het product, hoeveel of de prijs aan te
-passen. **Bewaar** zet alles in
+product. Bovenaan staat wat voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling; laat je de categorie
+leeg, dan krijgt elke lijn die van vorige keer), daaronder elke lijn: vink uit wat niet hoeft, tik Gegeten of Van mij
+aan, en tik op een lijn om het product, hoeveel of de prijs aan te passen. Een gekend product staat in zijn eigen
+eenheid (een zak van 5 kg aardappelen = 5 kg), zodat de prijs per eenheid eerlijk te vergelijken is; ook in het
+formulier neemt Eenheid die van het product over. Wat je koopt, vinkt de app af op de **Boodschappen**. Fout gelezen?
+**Ongedaan maken** in de melding draait alles terug. In de Voorraad leidt **Kasticket lezen** naar de Uitgaven, zodat
+niets twee keer telt; ook bij Wijnen en Pellets zie je wanneer je het laatst kocht en wat het kostte. **Bewaar** zet alles in
 Uitgaven, met het ticket zelf (en de foto) in **Kastickets**, dat het totaal en het aantal lijnen toont. De
 **Boodschappen** zijn een takenlijst: afvinken telt niets meer bij, dat doet de aankoop.
 

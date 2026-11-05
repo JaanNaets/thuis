@@ -14,7 +14,7 @@
 
 import type { Attributes, FieldDef } from "./fields.ts";
 import { matchName, refLists } from "./fields.ts";
-import { normalizeUnit, parseSize, round3 } from "./units.ts";
+import { normalizeUnit, parseSize, receiptAmount, round3, type Measure } from "./units.ts";
 
 export type ReceiptPlan = {
   price: string;
@@ -107,6 +107,8 @@ export type ReviewLine = {
   price: number | null;
   eaten: boolean;
   mine: boolean;
+  /** Wat je vorige keer bij dit product invulde (de categorie): geldt als je bovenaan niets kiest. */
+  remember?: Attributes;
 };
 
 /**
@@ -125,6 +127,8 @@ export function lineData(plan: ReceiptPlan, fields: FieldDef[], common: Attribut
   if (plan.unit && line.unit) data[plan.unit] = line.unit;
   if (plan.eaten) data[plan.eaten] = line.eaten;
   if (plan.share && line.mine) data[plan.share] = [{ person_id: me, share: 1 }];
+  // Bovenaan leeg gelaten: wat deze lijn vorige keer had (Wijn → Drank, ook op een ticket van de supermarkt).
+  for (const [k, v] of Object.entries(line.remember ?? {})) if ((data[k] === undefined || data[k] === null || data[k] === "") && !lineKeys(plan).includes(k)) data[k] = v;
   return data;
 }
 
@@ -176,7 +180,17 @@ export const MAX_LINES = 80;
 export type Candidate = { id: string; name: string; item: string; own: boolean };
 
 /** Een gelezen lijn: hoeveel, de eenheid, de prijs in cent en het product (als gekend). */
-export type ReadLine = { name: string; quantity: number; amount: number; unit: string; price: number | null; product: { id: string; name: string } | null };
+export type ReadLine = {
+  name: string;
+  quantity: number;
+  /** De maat zoals op de lijn ("5 kg"), of null. */
+  size: string | null;
+  amount: number;
+  unit: string;
+  price: number | null;
+  product: { id: string; name: string } | null;
+  remember?: Attributes;
+};
 
 /**
  * Wat de AI las, als lijnen: elke lijn met een naam, hoeveel en de eenheid zoals op het ticket (`lineAmount`), de prijs
@@ -192,9 +206,21 @@ export function readLines(raw: unknown, products: Candidate[], options?: string[
     const { amount, unit } = lineAmount({ name, quantity, size: typeof l.size === "string" ? l.size : null }, options);
     const id = matchName(products, name);
     const product = id ? (products.find((p) => p.id === id && p.own) ?? products.find((p) => p.id === id)!) : null;
-    lines.push({ name, quantity, amount, unit, price: cents(l.price), product: product ? { id: product.id, name: product.item } : null });
+    const size = typeof l.size === "string" && l.size.trim() ? l.size.trim().slice(0, 40) : null;
+    lines.push({ name, quantity, size, amount, unit, price: cents(l.price), product: product ? { id: product.id, name: product.item } : null });
   }
   return lines;
+}
+
+/**
+ * Hoeveel van een gekoppelde lijn in de eenheid van het product (`measure`): zo is de prijs per eenheid altijd per kg,
+ * per stuk of per fles van dat product, en vergelijk je aankopen eerlijk ("AARDAPPELEN 5KG" bij aardappelen in kg = 5
+ * kg, "YOG 4X125G" bij yoghurt per stuk van 125 g = 4). Null als het product geen eenheid heeft of het veld hier die
+ * eenheid niet kent: dan blijft het zoals op het ticket.
+ */
+export function inProductUnit(line: Pick<ReadLine, "name" | "quantity" | "size">, measure: Measure | null, options?: string[]): { amount: number; unit: string } | null {
+  if (!measure?.unit || (options?.length && !options.includes(measure.unit))) return null;
+  return { amount: receiptAmount(line.quantity, line.size, line.name, measure).amount, unit: measure.unit };
 }
 
 /** Euro (zoals de AI het geeft) naar cent; niets of iets vreemds = null. */

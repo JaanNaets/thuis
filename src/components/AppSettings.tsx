@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from "react";
 import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
-import type { AddTarget } from "../../shared/quickadd";
+import { boughtVia, type AddTarget } from "../../shared/quickadd";
 import type { AiState, Overview } from "../../shared/types";
 import { api, useApi } from "../api";
 import { useSession } from "../session";
@@ -183,7 +183,7 @@ export function AppCard() {
   }
 
   // Een kasticket: per lijn in een lijst met een bedrag per product (Uitgaven), of bijtellen bij een voorraad.
-  const counters = choices.targets.filter((t) => t.receipt || t.counter);
+  const counters = choices.targets.filter((t) => t.receipt || (t.counter && !boughtVia(choices.targets, t.type_id)));
   const shareKey = settings.share.kind === "receipt" ? `${settings.share.project}/${settings.share.list}` : "";
 
   return (

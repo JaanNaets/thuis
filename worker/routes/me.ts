@@ -105,6 +105,7 @@ export async function addTargets(db: D1Database, personId: string): Promise<AddT
     } catch {
       // Een lijst zonder leesbare velden telt geen voorraad.
     }
+    const plan = receiptPlan(fields, t.id, () => undefined);
     out.push({
       project_id: project,
       project_name: node.name,
@@ -115,7 +116,8 @@ export async function addTargets(db: D1Database, personId: string): Promise<AddT
       used: n,
       last,
       counter: fields.some((f) => f.type === "number" && f.counter),
-      receipt: receiptPlan(fields, t.id, () => undefined) !== null,
+      receipt: plan !== null,
+      stocks: plan?.product.lists ?? [],
     });
   }
   return rankTargets(out).slice(0, MAX_TARGETS);

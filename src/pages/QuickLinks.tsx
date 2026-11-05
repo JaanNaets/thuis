@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { destinationPath, type AppSettings } from "../../shared/apps";
-import { addPath, matchTargets, type AddTarget } from "../../shared/quickadd";
+import { addPath, boughtVia, matchTargets, type AddTarget } from "../../shared/quickadd";
 import type { ProjectDetail } from "../../shared/types";
 import { useApi } from "../api";
 import { Barcode } from "../components/Barcode";
@@ -185,7 +185,8 @@ export function SharedPage() {
 
   if (!file || !settings || receipt) return null;
   const lines = ai ? (targets ?? []).filter((t) => t.receipt) : [];
-  const counters = ai ? (targets ?? []).filter((t) => t.counter && !t.receipt) : [];
+  // Een voorraad waarbij een aankoop al bijtelt, krijgt het ticket via die aankopen (niet twee keer).
+  const counters = ai ? (targets ?? []).filter((t) => t.counter && !t.receipt && !boughtVia(targets ?? [], t.type_id)) : [];
   const read = matchTargets(text, targets ?? []).slice(0, 8);
   const row = (key: string, to: string, icon: IconName, title: string, meta: string) => (
     <li key={key}>

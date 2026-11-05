@@ -20,7 +20,15 @@ export type AddTarget = {
   counter: boolean;
   /** De lijst leest een kasticket per lijn (een bedrag en een product dat telt, zie shared/receipt.ts). */
   receipt: boolean;
+  /** Bij zo'n lijst: de lijsten waarbij een aankoop bijtelt (Voorraad, Wijnen, Pellets). */
+  stocks: string[];
 };
+
+/**
+ * Een voorraad waarbij een aankoop al bijtelt (Uitgaven → Voorraad): een kasticket gaat dan naar die aankopen, niet
+ * rechtstreeks naar de voorraad (anders telt het twee keer). Geeft de lijst met aankopen, of undefined.
+ */
+export const boughtVia = <T extends AddTarget>(targets: T[], stock: string) => targets.find((t) => t.receipt && t.stocks.includes(stock));
 
 /** Zoveel lijsten stuurt de server (de meestgebruikte eerst). */
 export const MAX_TARGETS = 300;

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { cents, commonFields, lineAmount, lineData, linesTotal, newProductData, niceName, readLines, receiptData, receiptPlan, validDate, type ReviewLine } from "../shared/receipt.ts";
+import { cents, commonFields, inProductUnit, lineAmount, lineData, linesTotal, newProductData, niceName, readLines, receiptData, receiptPlan, validDate, type ReviewLine } from "../shared/receipt.ts";
 
 const uitgaven: FieldDef[] = [
   { key: "bedrag", label: "Bedrag", type: "money", required: true },
@@ -115,9 +115,9 @@ test("wat de AI las, als lijnen met een product", () => {
     ["stuk", "kg", "g"],
   );
   assert.deepEqual(lines, [
-    { name: "BONI YOG NAT", quantity: 4, amount: 4, unit: "stuk", price: 356, product: { id: "y1", name: "Yoghurt" } },
-    { name: "AARDAPPELEN 5KG", quantity: 1, amount: 5, unit: "kg", price: 499, product: { id: "a1", name: "Aardappelen" } },
-    { name: "Broodje kaas", quantity: 1, amount: 1, unit: "stuk", price: 450, product: null },
+    { name: "BONI YOG NAT", quantity: 4, size: null, amount: 4, unit: "stuk", price: 356, product: { id: "y1", name: "Yoghurt" } },
+    { name: "AARDAPPELEN 5KG", quantity: 1, size: null, amount: 5, unit: "kg", price: 499, product: { id: "a1", name: "Aardappelen" } },
+    { name: "Broodje kaas", quantity: 1, size: null, amount: 1, unit: "stuk", price: 450, product: null },
   ]);
   assert.deepEqual(readLines("geen lijst", products), []);
 });
@@ -145,4 +145,26 @@ test("een nieuw product van een lijn", () => {
   const plan = receiptPlan(uitgaven, "uitgaven", lists)!;
   const fresh: ReviewLine = { on: true, name: "Boni yog nat", product: null, newIn: "voorraad", amount: 4, unit: "stuk", price: 356, eaten: false, mine: false };
   assert.equal(lineData(plan, uitgaven, {}, fresh, "jaan").wat, undefined);
+});
+
+test("een gekoppelde lijn in de eenheid van het product (eerlijke prijs per eenheid)", () => {
+  const options = ["stuk", "kg", "g", "l", "ml", "zak", "fles"];
+  // Yoghurt per stuk van 125 g: "4X125G" zijn 4 stuks.
+  assert.deepEqual(inProductUnit({ name: "BONI YOG 4X125G", quantity: 1, size: null }, { unit: "stuk", piece: 125 }, options), { amount: 4, unit: "stuk" });
+  // Aardappelen in kg: een zak van 5 kg.
+  assert.deepEqual(inProductUnit({ name: "AARDAPPELEN", quantity: 2, size: "5 kg" }, { unit: "kg" }, options), { amount: 10, unit: "kg" });
+  // Pellets in kg per zak van 15: 3 zakken zonder maat = 45 kg.
+  assert.deepEqual(inProductUnit({ name: "PELLETS", quantity: 3, size: null }, { unit: "kg", pack: 15 }, options), { amount: 45, unit: "kg" });
+  // Geen eenheid bij het product, of een eenheid die dit veld niet kent: zoals op het ticket.
+  assert.equal(inProductUnit({ name: "Wijn", quantity: 6, size: null }, { unit: null }, options), null);
+  assert.equal(inProductUnit({ name: "Iets", quantity: 1, size: null }, { unit: "pot" }, options), null);
+});
+
+test("wat een lijn vorige keer had, geldt als je bovenaan niets koos", () => {
+  const plan = receiptPlan(uitgaven, "uitgaven", lists)!;
+  const wine: ReviewLine = { on: true, name: "Rioja", product: { id: "w1", name: "Rioja" }, newIn: null, amount: 1, unit: "fles", price: 899, eaten: false, mine: false, remember: { categorie: "Restaurant" } };
+  assert.equal(lineData(plan, uitgaven, { datum: "2026-11-05" }, wine, "jaan").categorie, "Restaurant");
+  assert.equal(lineData(plan, uitgaven, { datum: "2026-11-05", categorie: "Boodschappen" }, wine, "jaan").categorie, "Boodschappen");
+  // Wat per lijn verschilt (het bedrag), neemt het geheugen nooit over.
+  assert.equal(lineData(plan, uitgaven, {}, { ...wine, remember: { bedrag: 1 } }, "jaan").bedrag, 899);
 });
