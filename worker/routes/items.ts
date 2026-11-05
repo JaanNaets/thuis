@@ -36,6 +36,7 @@ import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 import { cleanView, EMPTY_VIEW, groupItems, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
 import { fieldsForViews } from "./views";
+import { boardWindow, BOARD_PERIODS, cleanChart, computeChart, type BoardPeriod } from "../../shared/charts";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -379,6 +380,57 @@ projectItems.get("/:id/items", async (c) => {
     refs: all.refs.filter((r) => used.includes(r.id)),
     count: list.length,
   } satisfies ItemList);
+});
+
+/**
+ * Een grafiek over een lijst (zie shared/charts.ts): `?list=` de lijst, `?def=` de grafiek (JSON), `?periode=` een
+ * periode voor het hele overzicht (verslag). Uitgerekend met de rechten van de lezer: enkel de items en velden die hij
+ * ziet (ook in de subprojecten, elk met zijn rol daar), een bewaarde weergave als filter. Kan de grafiek niet (meer)
+ * met wat hij ziet: 404, zoals een blok over iets dat je niet ziet.
+ */
+projectItems.get("/:id/chart", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const types = await typesFor(db, access.chain);
+  const type = types.find((t) => t.id === c.req.query("list") && typeAccess(access.rights, t.id) !== "none");
+  if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(c.req.query("def") ?? "null");
+  } catch {
+    raw = null;
+  }
+  const def = cleanChart(raw);
+  if (!def) throw new ValidationError("Deze grafiek klopt niet.");
+  const fields = fieldsForViews(access, type);
+  let view: ViewDef = EMPTY_VIEW;
+  if (def.view) {
+    const row = await db
+      .prepare("SELECT def FROM views WHERE id = ? AND project_id = ? AND type_id = ? AND (person_id IS NULL OR person_id = ?)")
+      .bind(def.view, access.project.id, type.id, me)
+      .first<{ def: string }>();
+    if (!row) throw new NotFoundError("Die weergave bestaat niet (meer).");
+    try {
+      view = cleanView(JSON.parse(row.def), fields);
+    } catch {
+      // Past niet meer bij de velden: dan alles.
+    }
+  }
+  let list = await itemsIn(db, me, access, [type], false, Boolean(def.sub || view.tree));
+  const all = await namesFor(db, me, access.chain, types, list);
+  const person = new Map(all.people.map((p) => [p.id, p.name]));
+  const ref = new Map(all.refs.map((r) => [r.id, r.name]));
+  const today = brusselsToday();
+  if (def.view) list = list.filter((i) => matchesView(i, view, fields, { today, me, names: { person: (id) => person.get(id) ?? "", item: (id) => ref.get(id) ?? "" } }));
+  const tags = def.by === "tags"
+    ? (await db.prepare("SELECT id, name FROM tags WHERE project_id IN (SELECT value FROM json_each(?)) ORDER BY name").bind(JSON.stringify(access.chain)).all<{ id: string; name: string }>()).results
+    : [];
+  const periode = c.req.query("periode");
+  const period = periode && Object.hasOwn(BOARD_PERIODS, periode) ? boardWindow(periode as BoardPeriod, today) : undefined;
+  const data = computeChart(def, fields, list, { people: all.people, item: (id) => ref.get(id), tags }, today, period);
+  if (!data) throw new NotFoundError("Deze grafiek kan je niet (meer) zien.");
+  return c.json(data);
 });
 
 projectItems.post("/:id/items", async (c) => {

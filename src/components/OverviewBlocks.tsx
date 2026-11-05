@@ -2,6 +2,7 @@
 // waarde van één item. Elk blok haalt op wat het toont met jouw rechten; wat je niet (meer) ziet, blijft weg.
 
 import { useState, type CSSProperties } from "react";
+import type { BoardPeriod, ChartDef } from "../../shared/charts";
 import { formatFieldValue } from "../../shared/fields";
 import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, type Block, type BlockKind } from "../../shared/overview";
 import { totalLabel } from "../../shared/totals";
@@ -14,6 +15,7 @@ import { useSession } from "../session";
 import { CardHead, FilterSelect, Segmented } from "./Controls";
 import { namesFrom } from "./Fields";
 import { QuickAdd } from "./QuickAdd";
+import { ChartBlock, ChartBuilder, chartTitle, newChart, TextBlock, TextBuilder } from "./ChartBlock";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
 import { ItemRow } from "./ItemsView";
@@ -295,7 +297,7 @@ function ValueBlock({ item, field }: { item: string; field: string }) {
 }
 
 /** Eén blok zoals het op je overzicht staat. */
-export function BlockView({ block, lists, index }: { block: Block; lists: Lists; index: number }) {
+export function BlockView({ block, lists, index, period }: { block: Block; lists: Lists; index: number; period?: BoardPeriod | null }) {
   const { projects } = useSession();
   const project = "project" in block ? projects.find((p) => p.id === block.project && !p.archived) : undefined;
   const above = project?.parent_id ? projects.find((p) => p.id === project.parent_id)?.name : undefined;
@@ -319,6 +321,8 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
   else if (block.kind === "add" && project && type?.can_create) body = <QuickAdd projectId={project.id} typeId={type.id} />;
   else if (block.kind === "total" && project) body = <TotalBlock project={project.id} list={block.list} total={block.total} />;
   else if (block.kind === "value") body = <ValueBlock item={block.item} field={block.field} />;
+  else if (block.kind === "chart" && project) body = <ChartBlock block={block} type={type} period={period} />;
+  else if (block.kind === "text") body = <TextBlock block={block} />;
   return body ? (
     <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
       {body}
@@ -338,7 +342,11 @@ function BlockLabel({ block, lists }: { block: Block; lists: Lists }) {
   const title =
     block.kind === "project"
       ? project
-      : block.kind === "add"
+      : block.kind === "chart"
+        ? (block.title ?? chartTitle(block.chart, list))
+        : block.kind === "text"
+          ? (block.title ?? block.text?.slice(0, 40) ?? "Tekst")
+          : block.kind === "add"
         ? `${list?.name ?? "Item"} toevoegen`
         : block.kind === "value"
           ? (it?.name ?? "…")
@@ -365,6 +373,7 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
   const keys = blocks.map(blockKey);
   const byKey = new Map(blocks.map((b) => [blockKey(b), b]));
   const [adding, setAdding] = useState(false);
+  const [edit, setEdit] = useState<Extract<Block, { kind: "chart" | "text" }> | null>(null);
   const sortable = useSortable(
     keys,
     (order) => onChange(order.map((k) => byKey.get(k)!)),
@@ -384,7 +393,12 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
                     <Icon name="grip" size={16} />
                   </button>
                   <BlockLabel block={b} lists={lists} />
-                  {(b.kind === "project" || b.kind === "total" || (b.kind === "list" && b.show === "items")) && (
+                  {(b.kind === "chart" || b.kind === "text") && (
+                    <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Aanpassen" onClick={() => setEdit(b)}>
+                      <Icon name="edit" size={15} />
+                    </button>
+                  )}
+                  {(b.kind === "project" || b.kind === "total" || b.kind === "chart" || b.kind === "text" || (b.kind === "list" && b.show === "items")) && (
                     <button
                       type="button"
                       className="filter wide-only"
@@ -411,6 +425,7 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
         <Icon name="plus" size={16} /> Toevoegen
       </button>
       <AddBlock open={adding} onClose={() => setAdding(false)} onAdd={(b) => onChange([...blocks.filter((x) => blockKey(x) !== blockKey(b)), b])} />
+      <EditBlock block={edit} onClose={() => setEdit(null)} onSave={(b) => onChange(blocks.map((x) => (blockKey(x) === blockKey(b) ? { ...b, wide: x.wide } : x)))} />
     </>
   );
 }
@@ -465,7 +480,10 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
   const [field, setField] = useState("");
   const [view, setView] = useState("");
   const [show, setShow] = useState<"count" | "items">("count");
-  const { data: detail } = useApi<ProjectDetail>(project ? `/projects/${project}` : null);
+  const [chart, setChart] = useState<ChartDef | null>(null);
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState({ title: "", text: "" });
+  const { data: detail } = useApi<ProjectDetail>(project && kind !== "text" ? `/projects/${project}` : null);
   const { data: views } = useViews(project, list, kind === "list");
   const types = detail?.types ?? [];
   const type = types.find((t) => t.id === list);
@@ -488,9 +506,17 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
             ? project && list && total
               ? { kind, project, list, total }
               : null
-            : item && field
-              ? { kind, item, field }
-              : null;
+            : kind === "chart"
+              ? project && list && chart
+                ? { kind, id: crypto.randomUUID().slice(0, 8), project, list, chart, ...(title.trim() ? { title: title.trim() } : {}) }
+                : null
+              : kind === "text"
+                ? note.title.trim() || note.text.trim()
+                  ? { kind, id: crypto.randomUUID().slice(0, 8), ...(note.title.trim() ? { title: note.title.trim() } : {}), ...(note.text.trim() ? { text: note.text.trim() } : {}) }
+                  : null
+                : item && field
+                  ? { kind, item, field }
+                  : null;
   const reset = () => {
     setProject("");
     setList("");
@@ -498,6 +524,9 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
     setTotal("");
     setItem(null);
     setField("");
+    setChart(null);
+    setTitle("");
+    setNote({ title: "", text: "" });
   };
 
   return (
@@ -522,6 +551,7 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
             ))}
           </select>
         </label>
+        {kind !== "text" && (
         <label className="field">
           <span className="label">Project</span>
           <select
@@ -540,7 +570,8 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
             ))}
           </select>
         </label>
-        {kind !== "project" && project && (
+        )}
+        {kind !== "project" && kind !== "text" && project && (
           <label className="field">
             <span className="label">Lijst</span>
             <select
@@ -552,6 +583,8 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
                 setTotal("");
                 setItem(null);
                 setField("");
+                const next = types.find((t) => t.id === e.target.value);
+                setChart(next ? newChart(next.fields.filter((f) => next.field_access[f.key] !== "none")) : null);
               }}
             >
               <option value="">Kies…</option>
@@ -607,6 +640,8 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
             </select>
           </label>
         )}
+        {kind === "chart" && type && chart && <ChartBuilder project={project} type={type} value={chart} onChange={setChart} title={title} onTitle={setTitle} />}
+        {kind === "text" && <TextBuilder title={note.title} text={note.text} onChange={setNote} />}
         {kind === "value" && type && (
           <>
             <div className="field">
@@ -651,5 +686,51 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/** Een grafiek of tekst op je overzicht aanpassen (in Aanpassen). */
+function EditBlock({ block, onClose, onSave }: { block: Extract<Block, { kind: "chart" | "text" }> | null; onClose: () => void; onSave: (b: Block) => void }) {
+  return (
+    <Sheet open={block !== null} title={block?.kind === "text" ? "Tekst" : "Grafiek"} onClose={onClose}>
+      {block && <EditBlockBody key={block.id} block={block} onClose={onClose} onSave={onSave} />}
+    </Sheet>
+  );
+}
+
+function EditBlockBody({ block, onClose, onSave }: { block: Extract<Block, { kind: "chart" | "text" }>; onClose: () => void; onSave: (b: Block) => void }) {
+  const { data: detail } = useApi<ProjectDetail>(block.kind === "chart" ? `/projects/${block.project}` : null);
+  const [chart, setChart] = useState<ChartDef | null>(block.kind === "chart" ? block.chart : null);
+  const [title, setTitle] = useState(block.title ?? "");
+  const [note, setNote] = useState({ title: block.title ?? "", text: block.kind === "text" ? (block.text ?? "") : "" });
+  const type = block.kind === "chart" ? detail?.types.find((t) => t.id === block.list) : undefined;
+  const next: Block | null =
+    block.kind === "chart"
+      ? chart && { ...block, chart, title: title.trim() || undefined }
+      : note.title.trim() || note.text.trim()
+        ? { ...block, title: note.title.trim() || undefined, text: note.text.trim() || undefined }
+        : null;
+  return (
+    <div className="form">
+      {block.kind === "chart" && type && chart && <ChartBuilder project={block.project} type={type} value={chart} onChange={setChart} title={title} onTitle={setTitle} />}
+      {block.kind === "text" && <TextBuilder title={note.title} text={note.text} onChange={setNote} />}
+      <div className="sheet-actions">
+        <button type="button" className="btn btn-ghost" onClick={onClose}>
+          Annuleren
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!next}
+          onClick={() => {
+            if (!next) return;
+            onSave(next);
+            onClose();
+          }}
+        >
+          Bewaren
+        </button>
+      </div>
+    </div>
   );
 }

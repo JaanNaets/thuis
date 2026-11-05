@@ -1,9 +1,12 @@
+import { cleanChart, type ChartDef } from "./charts.ts";
+
 // Wat op je overzicht staat: blokken in jouw volgorde, per persoon bewaard (people.overview). Leeg (null) = vanzelf:
 // elk project met al zijn lijsten. Een blok bewaart enkel ids; wat erin staat, haalt de app op met jouw rechten, dus
 // een blok over iets dat je (niet meer) mag zien, blijft gewoon weg.
 
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
 
 export type Block = (
   /**
@@ -22,6 +25,10 @@ export type Block = (
   | { kind: "total"; project: string; list: string; total: string }
   /** Eén veld van één item, ook een berekening (Pellets · Aantal, Laatst bijgevuld). */
   | { kind: "value"; item: string; field: string }
+  /** Een grafiek over een lijst, helemaal zelf samengesteld (zie shared/charts.ts); `id`: om er meer per lijst te hebben. */
+  | { kind: "chart"; id: string; project: string; list: string; chart: ChartDef; title?: string }
+  /** Een titel en tekst (bv. bovenaan een verslag). */
+  | { kind: "text"; id: string; title?: string; text?: string }
 ) & {
   /** Breed: over twee kolommen (op tablet en computer). */
   wide?: true;
@@ -39,6 +46,8 @@ export const BLOCK_KINDS = {
   add: "Snel toevoegen",
   total: "Totaal",
   value: "Waarde van een item",
+  chart: "Grafiek",
+  text: "Tekst",
 } as const satisfies Record<BlockKind, string>;
 
 export const MAX_BLOCKS = 40;
@@ -56,6 +65,10 @@ export function blockKey(b: Block): string {
       return `total/${b.project}/${b.list}/${b.total}`;
     case "value":
       return `value/${b.item}/${b.field}`;
+    case "chart":
+      return `chart/${b.id}`;
+    case "text":
+      return `text/${b.id}`;
   }
 }
 
@@ -87,6 +100,14 @@ export function cleanBlocks(raw: unknown): Block[] | null {
       b = { kind: "total", project: o.project as string, list: o.list as string, total: o.total as string };
     } else if (o.kind === "value" && id(o.item) && typeof o.field === "string" && KEY.test(o.field)) {
       b = { kind: "value", item: o.item as string, field: o.field };
+    } else if (o.kind === "chart" && id(o.id) && id(o.project) && id(o.list)) {
+      const chart = cleanChart(o.chart);
+      const title = text(o.title, 60);
+      if (chart) b = { kind: "chart", id: o.id as string, project: o.project as string, list: o.list as string, chart, ...(title ? { title } : {}) };
+    } else if (o.kind === "text" && id(o.id)) {
+      const title = text(o.title, 80);
+      const body = typeof o.text === "string" ? o.text.trim().slice(0, 2000) : "";
+      if (title || body) b = { kind: "text", id: o.id as string, ...(title ? { title } : {}), ...(body ? { text: body } : {}) };
     }
     if (b && o.wide === true) b = { ...b, wide: true };
     if (!b || seen.has(blockKey(b))) continue;

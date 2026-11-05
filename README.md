@@ -216,6 +216,24 @@ weergave (Voorraad: 3 te kopen). **Breed** zet een blok over twee kolommen; de b
 gaten.
 **Standaard** zet het terug zoals het vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
 
+### Grafieken, dashboards en een verslag
+
+Een overzicht wordt een dashboard met **grafieken** die je helemaal zelf samenstelt (Aanpassen → Toevoegen →
+Grafiek). Er staat niets vast: je kiest een lijst, en dan
+
+- **Als**: Staafjes of Lijn (over de tijd), Getal (één uitkomst, tegenover de periode ervoor, eventueel met een
+  doelbalk), Per keuze (een staafje per keuze, de grootste eerst) of Verdeling (één geheel in stukken).
+- **Wat**: Aantal, of de Som, het Gemiddelde, het Hoogste of het Laagste van een getal of bedrag (ook een berekening).
+- **Volgens** een datum (of wanneer het toegevoegd werd), **per** dag, week, maand of jaar, de **laatste** zoveel.
+- **Per** of **Apart per** een keuzelijst, persoon, verwijzing, ja/nee of de tags (bv. uitgaven per persoon per week).
+- Eventueel een bewaarde **weergave** als filter, **met subprojecten**, een **doel** en een eigen **titel**.
+
+Een voorbeeld kijkt meteen mee terwijl je kiest. Elke grafiek heeft een tooltip per periode (ook met de pijltjes) en
+kan ook **als tabel**. Een blok **Tekst** zet er een titel en wat uitleg bij. Met **Periode** bovenaan geldt één
+periode voor alle grafieken (bv. Vorige maand), en ⋯ → **Afdrukken of als pdf** maakt er een verslag van: de naam
+van het overzicht en de periode bovenaan, de blokken in twee kolommen. De API rekent elke grafiek uit met jouw
+rechten (`GET /projects/:id/chart`): enkel de items en velden die je ziet, en de browser krijgt enkel de uitkomsten.
+
 ### Wie betaalde wat
 
 Kosten verdelen is gebouwd uit gewone velden en een **totaal dat verrekent** (zie Totalen); de sjablonen Huishouden

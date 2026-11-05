@@ -104,6 +104,11 @@ commits en uitleg.
   projecten in de blokken (`blockProjects`: elk blok met een project, of `?projects=`). Een snel-toevoegen-blok
   (`QuickAdd`) bewaart meteen via de gewone route, met Ongedaan maken (verwijderen, enkel met `can_delete`). Opstarten blijft licht bij 1000 projecten: geen lijst
   of boom die alles tegelijk tekent (de zijbalk tekent een tak pas als hij open gaat).
+- **Grafieken** (`shared/charts.ts`, blok `chart` op een overzicht, `GET /projects/:id/chart`): helemaal zelf samen te
+  stellen (`cleanChart` op vorm, `fitChart` op de velden die de lezer ziet), uitgerekend op de server met
+  `computeChart` over `itemsIn` (rechten per item in zijn project, weergave als filter); de browser krijgt enkel de
+  uitkomsten. Kleuren in vaste volgorde (`--chart-*`), de kleur volgt de keuze. `?periode=` (`BOARD_PERIODS`) voor
+  een verslag van het hele overzicht.
 - **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor het hele web
   over al je projecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
   ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van

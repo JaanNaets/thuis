@@ -87,6 +87,11 @@ De grijzen zijn doorschijnend (`rgb(118 118 128 / …)`): zo werkt hetzelfde vla
 | `--destructive` | #c62a2f | Verwijderen, foutmeldingen (haalt 4,5:1) |
 | `--success*`, `--warning*`, `--danger*` | | Status: loopt / bijna voorbij / voorbij |
 
+**Grafiekkleuren** (`--chart-1` … `--chart-8`, `--chart-other`, `--chart-muted`, `--chart-grid`, `--chart-axis`)
+zijn enkel voor gegevens in een grafiek (staafjes, lijnen, stukken), in vaste volgorde en nagekeken op
+kleurenblindheid: geen tweede accent, en nooit voor tekst. Eén reeks is grijs (`--chart-muted`) met de periode van
+nu zwart (`--primary`); meer reeksen krijgen elk een vaste kleur, de rest is "Overige" (`--chart-other`).
+
 **Tonen** (`tone-peach`, `tone-butter`, `tone-sage`, `tone-mint`, `tone-sky`, `tone-lilac`, `tone-rose`) zijn de
 kleuren van projecten, tags en personen. Ze geven `--tone`, `--tone-soft`, `--tone-line`, `--tone-mid`
 en `--tone-ink`. Gebruik ze **enkel** voor stipjes (`.dot`), avatars, het vierkantje voor een rij (`.row-media`),
@@ -848,6 +853,39 @@ Twee soorten, inline in `Icon.tsx`:
 
 ---
 
+### Grafieken
+
+`ChartBlock`, `ChartBuilder`, `TextBlock` (`ChartBlock.tsx`) en `ChartView`, `ChartTable` (`Chart.tsx`), uit
+`shared/charts.ts`. Een grafiek is een blok op een overzicht; niets staat vast (er is geen grafiek tot je er een
+maakt).
+
+- **Kaart**: `dash-card` met `CardHead`: de titel (eigen titel, of de lijst · wat ze telt: "Uitgaven · Bedrag"), de
+  periode als gegeven eronder ("Laatste 12 weken", "1/10 – 31/10") en rechts een stille knop met het icoon `table`
+  (Als tabel / Als grafiek). Tijdens het herladen blijft de vorige grafiek staan, zachter (`.is-stale`): geen flits.
+- **Staafjes**: hoogstens 24px breed, 4px rond aan de top en recht aan de basis; gestapeld met 2px wit ertussen.
+  **Lijn**: 2px, een punt van 8px met een witte rand aan het eind, één reeks met een zachte vlakte eronder. Haarfijne
+  rasterlijnen (`--chart-grid`), de nullijn iets sterker; een **doel** is de enige stippellijn ("Doel € 1.200,00").
+  Eén waarde staat erbij (de periode van nu), niet bij elke staaf. Vanaf twee reeksen een legende (`.chart-legend`:
+  een vierkantje bij staafjes, een streepje bij lijnen).
+- **Per keuze** (`.chart-ranked`): per keuze een rij (naam, een zwart staafje van 12px, de waarde rechts), de
+  grootste eerst, hoogstens 12 en de rest als Overige. **Verdeling** (`.chart-parts`): één balk van 28px in stukken
+  (hoogstens zes), 2px wit ertussen, het aandeel erin enkel als het past (anders in de tooltip en de tabel), de namen
+  in de legende. **Getal** (`.chart-number`): de uitkomst groot (32px, 600), "+12% tegenover de periode ervoor" in
+  grijs, een doelbalk (`.chart-meter`, rood boven de grens) en een kleine grijze lijn per periode.
+- **Kleur volgt de keuze**, niet haar plaats: een persoon, keuze of tag houdt zijn kleur (de volgorde van de keuzes,
+  de leden, de namen), wat ook de rangorde is.
+- **Tooltip** (`.chart-tip`, glas): per periode één tooltip met alle reeksen, de waarde vooraan en vet; het raakvlak
+  is de hele periode (groter dan het staafje). Met het toetsenbord: focus op de grafiek en ← →. Alles staat ook in
+  de tabel (`.chart-table`): de tooltip is nooit de enige weg naar een getal.
+- **Samenstellen** (`ChartBuilder` in een `Sheet`): Als (Staafjes · Lijn · Getal · Per keuze · Verdeling), Wat en
+  Van, Per (bij Per keuze en Verdeling), Volgens, Per / Periode en Laatste (leeg = Alles), Apart per, Weergave, Doel,
+  Met subprojecten, Titel (de naam vanzelf als placeholder), en eronder een voorbeeld (`.chart-preview`) dat meekijkt.
+- **Overzicht als verslag**: staat er een grafiek op, dan een rij `filters` met `FilterSelect` **Periode** ("Zoals
+  ingesteld" of Deze week, Deze maand, Vorige maand, …) voor alle grafieken; een korte periode neemt een kleinere
+  stap (een maand per week). ⋯ → **Afdrukken of als pdf**: bij afdrukken de naam en de periode bovenaan
+  (`.print-title`), de blokken in twee kolommen met een haarlijn, zonder zijbalk, knoppen of tooltips.
+- **Tekst** (`TextBlock`): een titel en alinea's (`.text-card-p`), bv. bovenaan een verslag.
+
 ## 5. Beweging
 
 Curves (in `:root`): `--ease-out` voor bijna alles · `--spring` voor iets dat naar zijn plaats **veert** (de glazen
@@ -933,8 +971,9 @@ en toont dan tot drie kolommen als tabel. De blokken staan als metselwerk (`useM
 hoog als het is, een kort blok vult een gat erboven. **Aanpassen** (`BlocksEditor`): een `sort-list` met greep en ×,
 bij een project de lijsten als filterpillen (aan = zichtbaar; met bewaarde weergaven een `FilterSelect`: Alles, een
 weergave om te tellen, of Verborgen), een
-filterpil Breed (enkel op tablet, bij een project, totaal of lijst met items), "Toevoegen" in een `Sheet` (bij een
-lijst: Weergave en Toon `Segmented` Aantal · Items), en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in
+filterpil Breed (enkel op tablet, bij een project, totaal, grafiek, tekst of lijst met items), bij een grafiek of
+tekst een potlood (Aanpassen, een `Sheet`), "Toevoegen" in een `Sheet` (bij een
+lijst: Weergave en Toon `Segmented` Aantal · Items; bij een grafiek `ChartBuilder`, zie [Grafieken](#grafieken)), en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in
 de paneelbalk) en "Standaard" (ghost) bij de titel. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met

@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { BOARD_PERIODS, type BoardPeriod } from "../../shared/charts";
 import { blockKey, blockProjects, defaultBlocks, type Block, type BoardInfo } from "../../shared/overview";
 import type { Overview } from "../../shared/types";
 import { api, useApi } from "../api";
 import { usePalette } from "../components/CommandPalette";
 import { useConfirm } from "../components/ConfirmDialog";
-import { Tabs } from "../components/Controls";
+import { FilterSelect, Tabs } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
 import { Sheet } from "../components/Sheet";
 import { BlocksEditor, BlockView } from "../components/OverviewBlocks";
@@ -96,6 +97,8 @@ export function Home() {
     setParams({}, { replace: true });
   }, [asked]);
   const [menu, setMenu] = useState<"menu" | "new" | "rename" | null>(null);
+  // Een periode voor alle grafieken van dit overzicht (bv. vorige maand, om af te drukken als verslag); leeg = elk de zijne.
+  const [period, setPeriod] = useState<BoardPeriod | null>(null);
   const [boardName, setBoardName] = useState("");
   const boards = base?.boards ?? [];
   const current = boards.find((b) => b.id === base?.board);
@@ -229,11 +232,28 @@ export function Home() {
           }
         />
       ) : (
-        <div className="dashboard stagger" ref={masonry}>
-          {blocks.map((b, i) => (
-            <BlockView key={blockKey(b)} block={b} lists={lists} index={i} />
-          ))}
-        </div>
+        <>
+          <h1 className="print-title">
+            {current?.name ?? "Overzicht"}
+            {period && <span> · {BOARD_PERIODS[period]}</span>}
+          </h1>
+          {blocks.some((b) => b.kind === "chart") && (
+            <div className="filters board-filters">
+              <FilterSelect
+                label="Periode"
+                all="Zoals ingesteld"
+                value={period}
+                options={Object.entries(BOARD_PERIODS).map(([value, label]) => ({ value, label }))}
+                onChange={(v) => setPeriod(v as BoardPeriod | null)}
+              />
+            </div>
+          )}
+          <div className="dashboard stagger" ref={masonry}>
+            {blocks.map((b, i) => (
+              <BlockView key={blockKey(b)} block={b} lists={lists} index={i} period={period} />
+            ))}
+          </div>
+        </>
       )}
 
       {archived.length > 0 && !editing && (
@@ -273,6 +293,11 @@ export function Home() {
             {menuRow("sliders", "Aanpassen", () => {
               setMenu(null);
               setEditing(blocks);
+            })}
+            {menuRow("download", "Afdrukken of als pdf", () => {
+              setMenu(null);
+              // Even wachten tot het onderblad dicht is.
+              window.setTimeout(() => window.print(), 350);
             })}
             {menuRow("plus", "Nieuw overzicht", () => {
               setBoardName("");
