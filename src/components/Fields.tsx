@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState, type RefObject } from "react";
 import type { Access } from "../../shared/access";
 import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
@@ -48,7 +48,7 @@ import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
-import { QuickInput, type QuickSource } from "./QuickInput";
+import { QuickChips, QuickInput, type QuickChip, type QuickSource } from "./QuickInput";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
 
@@ -1556,6 +1556,9 @@ export function FieldsEditor({
                     <input value={f.hint ?? ""} maxLength={160} placeholder="Wat hier hoort" onChange={(e) => update(i, { hint: e.target.value })} />
                   </label>
                   {f.type !== "calc" && <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />}
+                  {f.type !== "calc" && (
+                    <Switch checked={Boolean(f.remember)} onChange={(on) => update(i, { remember: on || undefined })} label="Laatste waarde onthouden" />
+                  )}
                   {f.type === "date" && (
                     <Switch
                       checked={Boolean(f.today)}
@@ -1707,6 +1710,14 @@ export function LabelScanner({
   onText,
   quick,
   onPick,
+  note,
+  onNote,
+  moves,
+  onTab,
+  chips,
+  onMove,
+  onRemove,
+  inputRef,
 }: {
   projectId: string;
   typeId: string;
@@ -1718,10 +1729,20 @@ export function LabelScanner({
   /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
   onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
   /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  onText?: (text: string, picked: Suggestion[]) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  onText?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
   /** Keuzes terwijl je typt (zie QuickInput): uit deze velden, en wat je kiest, vult dat veld meteen in. */
   quick?: QuickSource;
   onPick?: (suggestion: Suggestion) => void;
+  /** Wat je typt (ook de uitleg bij een foto); het formulier vult er live mee in. */
+  note: string;
+  onNote: (text: string) => void;
+  moves?: (word: string) => Suggestion[];
+  onTab?: (caret: number, back: boolean) => boolean;
+  /** Wat je tekst invulde (het rijtje onder het veld). */
+  chips?: QuickChip[];
+  onMove?: (key: string, to: string) => void;
+  onRemove?: (key: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1729,10 +1750,6 @@ export function LabelScanner({
   const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string }>();
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
-  const [note, setNote] = useState("");
-  // Wat je koos terwijl je typte: Invullen laat die woorden met rust.
-  const [picked, setPicked] = useState<Suggestion[]>([]);
-  const multiple = (key: string) => ["multi", "people", "items", "amounts"].includes(quick?.fields.find((f) => f.key === key)?.type ?? "");
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
 
@@ -1799,7 +1816,7 @@ export function LabelScanner({
     setSuggestions([]);
     setStatus({ tone: "busy", text: "Invullen" });
     try {
-      const done = await onText(note.trim(), picked.filter((p) => note.includes(p.text)));
+      const done = await onText(note.trim());
       setSuggestions(done.create ?? []);
       setStatus(done.message ? { tone: "none", text: done.message } : undefined);
     } catch (err) {
@@ -1833,13 +1850,13 @@ export function LabelScanner({
           value={note}
           label="Typ wat je weet"
           placeholder={products ? "Typ wat je weet, bv. 21-10 komkommer 200 g" : "Typ wat je weet, bv. 21-10 colruyt 23,40 euro"}
-          onChange={setNote}
+          onChange={onNote}
           onEnter={() => onText && fill()}
           source={onText ? quick : undefined}
-          onPick={(s) => {
-            setPicked((list) => [...list.filter((p) => p.field !== s.field || multiple(s.field)), s]);
-            onPick?.(s);
-          }}
+          onPick={(s) => onPick?.(s)}
+          moves={moves}
+          onTab={onTab}
+          inputRef={inputRef}
         />
         {onText && (
           <button type="button" className="btn btn-outline" style={{ flex: "none" }} disabled={!note.trim() || status?.tone === "busy"} onClick={fill}>
@@ -1847,6 +1864,7 @@ export function LabelScanner({
           </button>
         )}
       </div>
+      {chips && onMove && onRemove && <QuickChips chips={chips} onMove={onMove} onRemove={onRemove} />}
       <div className="btn-row">
         <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
           <Icon name="camera" /> Foto

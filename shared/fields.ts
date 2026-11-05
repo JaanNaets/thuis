@@ -150,6 +150,8 @@ export type FieldDef = {
   measure?: { unit?: string; piece?: string; pack?: string; pack_name?: string };
   /** Tekst: andere namen voor dit item (hoe het op een kasticket staat), om lijnen aan het juiste item te koppelen. */
   aliases?: boolean;
+  /** Een nieuw item begint met wat jij de vorige keer in dit veld invulde (zie GET /projects/:id/items/remembered). */
+  remember?: boolean;
   /** Datum (ook berekend): zoveel dagen vooraf een melding voor wie het mag zien (zie shared/remind.ts). */
   remind?: number;
   /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
@@ -291,6 +293,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
       if (Object.keys(m).length) def.measure = m;
     }
     if (f.aliases === true && type === "text") def.aliases = true;
+    if (f.remember === true && type !== "calc") def.remember = true;
     if (typeof f.remind === "number" && Number.isInteger(f.remind) && f.remind >= 0 && f.remind <= 365 && (type === "date" || type === "calc")) {
       def.remind = f.remind;
     }

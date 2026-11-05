@@ -415,6 +415,9 @@ Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--de
 - **Een lijst heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
   lange tekst als eigen kaart.
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
+- Toetsenbord in een formulier (`ItemForm`): ↓ en ↑ gaan naar het volgende en vorige veld vanuit een tekst- of
+  getalveld, een schakelaar of een keuzeveld zonder open keuzes (in een datum, uur, keuzelijst of lange tekst doen ze
+  wat ze daar al doen); Ctrl/⌘ + Enter bewaart.
 - Fout in een veld: `aria-invalid`. Fout van de server: `<p className="error">` boven de knop.
 - Kant-en-klare velden: `FieldInputs` (alle velden van een lijst), `TagPicker`, `Switch`, `ToneSwatches`,
   `IconPicker`, `FilePicker`, `TreeSelect` en `QuantityField`.
@@ -441,7 +444,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | --- | --- |
 | `AmountsPicker` (`ItemPicker.tsx`) | Hoeveelheden (de ingrediënten van een recept): per regel een `ItemPicker` (met vrije tekst, "zout"), hoeveel en de eenheid (`.amount-row-line`), onderaan een lege regel om toe te voegen. Op de fiche een `.amount-list`: de hoeveelheid grijs voor de naam. Overgenomen uit een recept rekent het mee met de porties (`per`). |
 | `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes zweven eronder als glas (`.picker-list`), met het project erbij als ze uit meer projecten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
-| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling) |
+| `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling, **Laatste waarde onthouden**: een nieuw item begint met wat jij de vorige keer invulde, zacht blauw) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
 | `ChecklistInput`, `ChecklistView` | Takenlijst (`.checklist`): invullen met altijd een lege regel onderaan; op de fiche een eigen kaart waar je meteen afvinkt (bewaart zonder het formulier) |
@@ -453,7 +456,8 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" met **Invullen** (of Enter), daaronder Foto · Uit bestand (· Barcode). Wat je typt, is ook de uitleg bij een foto. Invullen gaat eerst met code (`shared/quickfill.ts`: datums, uren, bedragen, getallen met eenheid, keuzes, personen, items, ja/nee; de naam van de lijst telt niet), een hele zin met de AI (`POST /projects/:id/items/read`); wat de code vond, wint. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). |
-| `QuickInput` | Het veld "Typ wat je weet" in `LabelScanner`: terwijl je typt, zweven eronder (`.picker-list`, zo breed als de hele rij: `.picker.is-row`) de waarden die passen bij het woord bij de cursor, uit alle velden die je mag wijzigen: items (van de server, per groep lijsten), keuzes, personen, ja/nee en namen van eerder; rechts het label van het veld (`.picker-place`), zodat twee velden met dezelfde waarde uit elkaar blijven. Wat ermee begint eerst, eerdere namen als laatste, hoogstens 8. Tik, of ↓ en Enter: de naam komt in je tekst en dat veld staat meteen ingevuld, zoals zelf invullen (overnemen uit een recept gebeurt ook); Enter zonder keuze is **Invullen**, dat aan een gekozen woord niet meer komt. Escape sluit. Geen keuzes na een spatie, bij één letter of een getal. |
+| `QuickInput` | Het veld "Typ wat je weet" in `LabelScanner` (bij een nieuw item staat de cursor er meteen in). Wat je typt, vult **live** in met code (zonder AI; `quickFill`, met `parts`: welke tekst in welk veld kwam): wis je een woord, dan komt terug wat er stond. Eronder zweven (`.picker-list`, zo breed als de hele rij: `.picker.is-row`) de waarden die passen bij het woord bij de cursor, uit alle velden die je mag wijzigen: items (van de server, per groep lijsten), keuzes, personen, ja/nee en namen van eerder; rechts het label van het veld (`.picker-place`). Staat de cursor in een getal of datum die al ergens staat, dan tonen de keuzes de andere velden waar het naartoe kan; Tab (Shift+Tab) doet dat op een computer. Kiezen vult het veld in zoals zelf invullen (overnemen uit een recept gebeurt ook) en telt als jouw keuze; wis je dat woord, dan vervalt ze. Enter zonder keuze is **Invullen** (een hele zin gaat dan naar de AI). Escape sluit. |
+| `QuickChips` | Het rijtje onder "Typ wat je weet": per veld wat de tekst of je keuzes invulden (`.tag.is-filled`: zacht blauw, het label grijs, een lange waarde afgekapt), in de volgorde van het formulier. Een tik opent een `Sheet` met **Naar …** (de andere velden waar de waarde kan) en **Weghalen** (dan verdwijnt het ook uit je tekst). |
 | `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
 | `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
@@ -878,6 +882,7 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 | Vinkje | tekent zichzelf (`draw`) | 0,4 s |
 | Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
 | Indrukken | knop, filter en tag schalen naar 0,96 en veren terug, icoon in menu naar 0,86 | 0,35 s |
+| Ingevuld door de app | veld (`auto`) of chip (`.tag.is-filled`) krijgt een lichtblauwe ring die vervaagt (`auto-flash`, enkel `box-shadow`) | 0,9 s |
 | Hover | vlak wordt iets donkerder, glazen knop en projectkaart komen 1–2px omhoog, pijltje schuift 3px, + draait 90° | 0,2–0,45 s |
 
 Regels:
@@ -948,6 +953,7 @@ het overzicht. Biedt de browser het aan (`useInstall`), dan staat in `actions` "
   kolomkoppen). `--faint` enkel voor iconen en bijzaken.
 - Glas is nooit de enige drager van tekst: wat erop staat, is donker genoeg, ook als het toestel geen vervaging kan.
 - Het zoekpalet is een `listbox` met `aria-activedescendant`; dichtgeklapte boomtakken zijn `inert`.
+- Keuzes onder een veld (`ItemPicker`, `QuickInput`) zijn een `combobox` met `listbox` en `aria-activedescendant`; het rijtje met wat ingevuld is (`QuickChips`) is `aria-live="polite"`.
 
 ---
 

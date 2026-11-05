@@ -395,6 +395,35 @@ projectItems.post("/:id/items", async (c) => {
 });
 
 /**
+ * Geheugen per veld (`remember`): voor een nieuw item in deze lijst, per veld de laatste waarde die jij invulde (uit je
+ * nieuwste items van deze lijst in dit project), enkel van velden die je nu mag wijzigen en zien.
+ */
+projectItems.get("/:id/items/remembered", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const types = await typesFor(db, access.chain);
+  const type = types.find((t) => t.id === c.req.query("type") && typeAccess(access.rights, t.id) !== "none");
+  if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
+  const keys = type.fields.filter((f) => f.remember && f.type !== "calc" && fieldAccess(access.rights, type.id, f.key) === "edit").map((f) => f.key);
+  if (!keys.length) return c.json({ data: {} });
+  const { results } = await db
+    .prepare("SELECT data FROM items WHERE project_id = ? AND type_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 20")
+    .bind(access.project.id, type.id, me)
+    .all<{ data: string }>();
+  const data: Attributes = {};
+  for (const row of results) {
+    const values = parseData(row.data);
+    for (const k of keys) {
+      const v = values[k];
+      if (!(k in data) && v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) data[k] = v;
+    }
+    if (keys.every((k) => k in data)) break;
+  }
+  return c.json({ data: visibleData(access.rights, type.id, type.fields, data) });
+});
+
+/**
  * Een lijst als CSV (?type=), zoals jij ze ziet: de velden die je mag zien, met de berekeningen, de namen van personen
  * en verwijzingen, en de tags. Zonder archief (?archived=1: enkel het archief); ?sub=1 ook uit de subprojecten (met
  * het project erbij).

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue } from "../../shared/fields";
-import { quickFill, type Suggestion } from "../../shared/quickfill";
+import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
+import { hasPiece, moveTargets, moveValue, quickFill, withoutPieces, wordAt, type QuickResult, type Suggestion } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemRef, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -10,12 +10,28 @@ import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
 import { attributesDraft, buildAttributes, FieldInputs, fieldSuggestions, findProduct, LabelScanner, type AttributeDraft } from "../components/Fields";
 import { PageHead } from "../components/Page";
-import type { QuickSource } from "../components/QuickInput";
+import type { QuickChip, QuickSource } from "../components/QuickInput";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
 import { enqueue, isOffline } from "../outbox";
 import { useSession } from "../session";
+
+type Draft = AttributeDraft[string];
+/** Wat er in een veld stond voor de tekst of een keuze er iets in zette. */
+type Before = { value: Draft; auto: boolean };
+/** Een keuze terwijl je typte (of een waarde die je naar een ander veld zette): wat ze erin zette, en wat er stond. */
+type Pick = Suggestion & { set: Draft; before: Before };
+type Live = { result: QuickResult | null; set: Record<string, Draft>; before: Record<string, Before>; name: string | null; nameBefore: Before | null };
+const EMPTY_LIVE: Live = { result: null, set: {}, before: {}, name: null, nameBefore: null };
+/** Een waarde in het rijtje: zonder de eenheid als die al het label is ("Zakken 3", niet "Zakken 3 zakken"). */
+const shownValue = (def: FieldDef, value: FieldValue, names: Names) =>
+  def.type === "number" && def.unit && def.unit.toLowerCase() === def.label.toLowerCase() ? String(value).replace(".", ",") : formatFieldValue(def, value, names);
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? "") === JSON.stringify(b ?? "");
+const ids = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+const options = (v: unknown) => String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+/** Velden waar ↑ en ↓ naar het vorige en volgende veld gaan (in andere doen ze al iets). */
+const NAV_INPUTS = ["text", "email", "url", "tel", "search", "checkbox"];
 
 /** Velden die de app van een foto kan lezen (zie de API). */
 const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool", "item"];
@@ -118,10 +134,10 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       true,
     );
     const drafted = attributesDraft(fields, data);
-    const keys = fields.filter((f) => f.type !== "calc" && type.field_access[f.key] === "edit" && !touched.current.has(f.key)).map((f) => f.key);
+    const keys = fields.filter((f) => f.type !== "calc" && type.field_access[f.key] === "edit" && !touched.current.has(f.key) && !(f.key in live.current.set)).map((f) => f.key);
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, drafted[k]])) }));
     const named = withName && !touched.current.has("name");
-    setAuto(new Set([...keys.filter((k) => data[k] !== undefined), ...(named ? ["name"] : [])]));
+    setAuto((a) => new Set([...a, ...keys.filter((k) => data[k] !== undefined), ...(named ? ["name"] : [])]));
     if (named) setName(source.name);
     if (!touched.current.has("tags")) setTagIds(source.tag_ids.filter((id) => tags.some((t) => t.id === id)));
   }
@@ -165,7 +181,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
       const source = await api.get<ItemDetail>(`/items/${id}`);
       const data: Attributes = {};
       for (const f of fields) {
-        if (f.key === via || f.type === "calc" || type.field_access[f.key] !== "edit" || touched.current.has(f.key)) continue;
+        if (f.key === via || f.type === "calc" || type.field_access[f.key] !== "edit" || touched.current.has(f.key) || f.key in live.current.set) continue;
         const value = source.data[f.key];
         const clean = value === undefined ? null : cleanValue(f, value);
         if (clean !== null && clean !== undefined) data[f.key] = clean;
@@ -201,7 +217,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     const codeField = code ? fields.find((f) => f.type === "code") : undefined;
     if (codeField && code) data[codeField.key] = { text: code, format: code.length === 8 ? "ean_8" : code.length === 12 ? "upc_a" : "ean_13" };
     const drafted = attributesDraft(fields, data);
-    const keys = Object.keys(data).filter((k) => !touched.current.has(k) && type.field_access[k] === "edit");
+    const keys = Object.keys(data).filter((k) => !touched.current.has(k) && !(k in live.current.set) && type.field_access[k] === "edit");
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, drafted[k]])) }));
     const named = !touched.current.has("name");
     if (named) setName(productLabel(info));
@@ -244,18 +260,29 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     if (!item) setMore({ items: (scan.more ?? []).map((m) => ({ ...m, on: true })), keys: Object.keys(scan.data) });
     if (scan.name && !touched.current.has("name")) setName(scan.name);
     const scanned = attributesDraft(fields, scan.data);
-    const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k));
+    // Wat je typte (live) of zelf invulde, wint.
+    const keys = Object.keys(scan.data).filter((k) => !touched.current.has(k) && !(k in live.current.set));
     setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, scanned[k]])) }));
-    setAuto(new Set([...keys, ...(scan.name ? ["name"] : [])]));
+    setAuto((a) => new Set([...a, ...keys, ...(scan.name ? ["name"] : [])]));
     rescale(scanned, keys);
   }
 
   // Een veld dat je zelf invult (of kiest terwijl je typt): het blijft staan, en wat erbij hoort, gebeurt (overnemen,
   // een barcode opzoeken, hoeveelheden meerekenen met de porties).
   function changeField(next: AttributeDraft, key: string) {
+    setAttrs(next);
+    fieldChanged(next, key);
+  }
+
+  /** Eén veld zetten (een keuze terwijl je typt), zonder wat intussen elders ingevuld werd te overschrijven. */
+  function setField(key: string, value: Draft) {
+    setAttrs((a) => ({ ...a, [key]: value }));
+    fieldChanged({ ...latest.current.attrs, [key]: value }, key);
+  }
+
+  function fieldChanged(next: AttributeDraft, key: string) {
     touched.current.add(key);
     setAuto((a) => (a.has(key) ? new Set([...a].filter((k) => k !== key)) : a));
-    setAttrs(next);
     const def = fields.find((f) => f.key === key);
     if (def?.type === "code") lookupCode(next[key]);
     if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
@@ -285,58 +312,361 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     [fields, type, earlier, project.members],
   );
 
-  /** Een keuze terwijl je typt: dat veld meteen invullen (bij meer waarden erbij), zoals zelf invullen. */
-  function pickSuggestion(s: Suggestion) {
-    if (s.field === "name") {
-      touched.current.add("name");
-      setAuto((a) => new Set([...a].filter((k) => k !== "name")));
-      return setName(s.text);
+  // ---------- snel invullen: live, keuzes en verplaatsen ----------
+  // Wat je typt in "Typ wat je weet", vult live in (met code, zonder AI). Wat de tekst invulde, staat in `live` samen
+  // met wat er daarvoor stond: wis je het woord, dan komt dat terug. Wat je koos of naar een ander veld zette (`picks`),
+  // telt als zelf ingevuld; wis je dat woord, dan komt ook daar terug wat er stond. De AI leest enkel een hele zin, als
+  // je zelf op Invullen drukt.
+  const [note, setNote] = useState("");
+  const [picks, setPicks] = useState<Pick[]>([]);
+  const live = useRef<Live>(EMPTY_LIVE);
+  const [liveVersion, setLiveVersion] = useState(0);
+  const itemNames = useRef(new Map<string, string>());
+  const inCache = useRef(new Map<string, ItemRef[]>());
+  const seq = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const quickRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // De laatste stand voor wat na een `await` gebeurt.
+  const latest = useRef({ attrs, name, auto, picks, note });
+  latest.current = { ...latest.current, attrs, name, auto, picks, note };
+  const defOf = (key: string) => fields.find((f) => f.key === key);
+  const multiple = (key: string) => ["multi", "people", "items", "amounts"].includes(defOf(key)?.type ?? "");
+
+  // Een nieuw item: meteen typen.
+  useEffect(() => {
+    if (!item) quickRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // Geheugen (`remember`): een nieuw item begint met wat jij de vorige keer in die velden invulde, zacht blauw. Wat je
+  // typt of zelf invult, wint.
+  const remembers = !item && fields.some((f) => f.remember && type.field_access[f.key] === "edit");
+  const { data: remembered } = useApi<{ data: Attributes }>(remembers ? `/projects/${project.project.id}/items/remembered?type=${type.id}` : null);
+  const memory = useRef<Attributes | null>(null);
+  useEffect(() => {
+    if (!remembered || memory.current) return;
+    memory.current = remembered.data;
+    applyMemory(remembered.data);
+  }, [remembered]);
+
+  function applyMemory(data: Attributes) {
+    const keys = Object.keys(data).filter((k) => defOf(k)?.remember && type.field_access[k] === "edit" && !touched.current.has(k) && !(k in live.current.set));
+    if (!keys.length) return;
+    const drafted = attributesDraft(fields, data);
+    setAttrs((a) => ({ ...a, ...Object.fromEntries(keys.map((k) => [k, drafted[k]])) }));
+    setAuto((a) => new Set([...a, ...keys]));
+  }
+
+  /** Na bewaren: wat je nu invulde, is het geheugen voor het volgende item. */
+  function remember(data: Attributes) {
+    if (!remembers) return;
+    const kept = Object.fromEntries(Object.entries(data).filter(([k, v]) => defOf(k)?.remember && v !== null && v !== "" && !(Array.isArray(v) && !v.length)));
+    memory.current = { ...(memory.current ?? {}), ...kept };
+  }
+
+  async function itemsIn(f: FieldDef, text: string): Promise<ItemRef[]> {
+    if (!/\p{L}{2}/u.test(text)) return [];
+    // Enkel de items waarvan de naam in de tekst staat (ook in een lange lijst).
+    const path = `/items?type=${refLists(f).join(",")}&in=${encodeURIComponent(text)}&limit=50`;
+    const hit = inCache.current.get(path);
+    if (hit) return hit;
+    const found = await api.get<{ items: ItemRef[] }>(path).then((r) => r.items, () => []);
+    inCache.current.set(path, found);
+    return found;
+  }
+
+  /** De tekst met code lezen (zonder wat je koos) en live invullen; enkel de laatste lezing telt. */
+  async function runLive(text: string, list: Pick[]): Promise<QuickResult | null> {
+    const n = ++seq.current;
+    const rest = withoutPieces(text, list.map((x) => x.text));
+    const open = quick.fields.filter((f) => !touched.current.has(f.key));
+    const refs = open.filter((f) => (f.type === "item" || f.type === "items" || f.type === "amounts") && refLists(f).length);
+    const options = new Map(await Promise.all(refs.map(async (f) => [f.key, await itemsIn(f, rest)] as const)));
+    if (n !== seq.current) return null;
+    for (const found of options.values()) for (const o of found) itemNames.current.set(o.id, o.name);
+    const result = quickFill(rest, open, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural] });
+    applyLive(result);
+    return result;
+  }
+
+  function schedule(text: string, list: Pick[], ms = 250) {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      runLive(text, list);
+    }, ms);
+  }
+
+  function applyLive(result: QuickResult) {
+    const { attrs: current, name: currentName, auto: currentAuto, picks: list } = latest.current;
+    const prev = live.current;
+    const drafted = attributesDraft(fields, result.data);
+    const set: Record<string, Draft> = {};
+    const before = { ...prev.before };
+    const patch: AttributeDraft = {};
+    const on: string[] = [];
+    const off: string[] = [];
+    for (const k of Object.keys(prev.set)) {
+      if (k in result.data && !touched.current.has(k)) continue;
+      // Niet meer in de tekst: terug naar wat er stond (tenzij je het intussen zelf aanpaste).
+      if (!touched.current.has(k) && same(current[k], prev.set[k])) {
+        patch[k] = before[k].value;
+        if (!before[k].auto) off.push(k);
+      }
+      delete before[k];
     }
-    const def = fields.find((f) => f.key === s.field);
-    if (!def) return;
-    const now = attrs[def.key];
-    const list = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
-    let value: AttributeDraft[string];
-    if (def.type === "items" || def.type === "people") value = [...new Set([...list(now), String(s.value)])];
+    for (const k of Object.keys(result.data)) {
+      if (touched.current.has(k) || !defOf(k)) continue;
+      before[k] ??= { value: current[k], auto: currentAuto.has(k) };
+      patch[k] = set[k] = drafted[k];
+      on.push(k);
+    }
+    // De naam: wat overbleef, anders een gekozen item ("2 zakken Pellets" → Pellets).
+    const fromPick = list.find((x) => defOf(x.field)?.type === "item")?.text ?? null;
+    const liveName = touched.current.has("name") ? null : (result.name ?? fromPick);
+    let nameBefore = prev.nameBefore;
+    if (liveName !== null) {
+      nameBefore ??= { value: currentName, auto: currentAuto.has("name") };
+      if (liveName !== currentName) setName(liveName);
+      on.push("name");
+    } else if (prev.name !== null && !touched.current.has("name")) {
+      if (currentName === prev.name) {
+        setName(String(nameBefore?.value ?? ""));
+        if (!nameBefore?.auto) off.push("name");
+      }
+      nameBefore = null;
+    }
+    live.current = { result, set, before, name: liveName, nameBefore };
+    if (Object.keys(patch).length) setAttrs((a) => ({ ...a, ...patch }));
+    setAuto((a) => {
+      const next = new Set(a);
+      for (const k of off) next.delete(k);
+      for (const k of on) next.add(k);
+      return next;
+    });
+    rescale({ ...current, ...patch }, Object.keys(patch));
+    setLiveVersion((v) => v + 1);
+  }
+
+  function onNote(text: string) {
+    setNote(text);
+    latest.current.note = text;
+    // Een gekozen woord dat je weer wist: de keuze vervalt ook.
+    const list = latest.current.picks;
+    const gone = list.filter((x) => !hasPiece(text, x.text));
+    const kept = gone.length ? list.filter((x) => !gone.includes(x)) : list;
+    if (gone.length) {
+      gone.forEach(unpick);
+      setPicks(kept);
+      latest.current.picks = kept;
+    }
+    schedule(text, kept);
+  }
+
+  /** Een keuze of verplaatste waarde in haar veld zetten, zoals zelf invullen. */
+  function applyPick(s: Suggestion): Pick | null {
+    const { attrs: current, name: currentName, auto: a } = latest.current;
+    if (s.field === "name") {
+      const before = live.current.nameBefore ?? { value: currentName, auto: a.has("name") };
+      touched.current.add("name");
+      setAuto((x) => new Set([...x].filter((k) => k !== "name")));
+      setName(s.text);
+      latest.current.name = s.text;
+      return { ...s, set: s.text, before };
+    }
+    const def = defOf(s.field);
+    if (!def) return null;
+    const now = current[def.key];
+    let value: Draft;
+    if (def.type === "items" || def.type === "people") value = [...new Set([...ids(now), String(s.value)])];
     else if (def.type === "amounts") value = [...(Array.isArray(now) ? (now as AmountEntry[]) : []), { item: String(s.value) }];
-    else if (def.type === "multi") {
-      const chosen = String(now ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-      value = [...new Set([...chosen, String(s.value)])].join(", ");
-    } else if (def.type === "bool") value = true;
-    else value = String(s.value);
-    changeField({ ...attrs, [def.key]: value }, def.key);
+    else if (def.type === "multi") value = [...new Set([...options(now), String(s.value)])].join(", ");
+    else value = attributesDraft([def], { [def.key]: s.value })[def.key];
+    // Stond hier iets van de tekst, dan komt bij het wissen terug wat er dáárvoor stond.
+    const before = live.current.before[def.key] ?? { value: now, auto: a.has(def.key) };
+    delete live.current.set[def.key];
+    delete live.current.before[def.key];
+    if (typeof s.value === "string") itemNames.current.set(s.value, s.text);
+    setField(def.key, value);
+    latest.current.attrs = { ...current, [def.key]: value };
+    return { ...s, set: value, before };
+  }
+
+  /** Een keuze die niet meer geldt: terug wat er stond, als het veld nog is wat de keuze erin zette. */
+  function unpick(x: Pick) {
+    if (x.field === "name") {
+      if (latest.current.name === x.text) setName(String(x.before.value ?? ""));
+      touched.current.delete("name");
+      return;
+    }
+    const def = defOf(x.field);
+    if (!def) return;
+    const now = latest.current.attrs[x.field];
+    let value: Draft;
+    if (def.type === "items" || def.type === "people") value = ids(now).filter((v) => v !== String(x.value));
+    else if (def.type === "amounts") {
+      const list = Array.isArray(now) ? (now as AmountEntry[]) : [];
+      const at = list.findIndex((e) => e.item === String(x.value));
+      value = at < 0 ? list : [...list.slice(0, at), ...list.slice(at + 1)];
+    } else if (def.type === "multi") value = options(now).filter((v) => v !== String(x.value)).join(", ");
+    else if (same(now, x.set)) value = x.before.value;
+    else return;
+    const emptied = !multiple(x.field) || same(value, x.before.value) || (Array.isArray(value) ? !value.length : !value);
+    if (emptied) touched.current.delete(x.field);
+    setAttrs((a) => ({ ...a, [x.field]: value }));
+    latest.current.attrs = { ...latest.current.attrs, [x.field]: value };
+    if (emptied && x.before.auto) setAuto((a) => new Set([...a, x.field]));
+  }
+
+  function onPick(s: Suggestion) {
+    if (s.move) return moveFilled(s.move, s.field);
+    const x = applyPick(s);
+    if (!x) return;
+    const list = [...latest.current.picks.filter((y) => y.field !== s.field || multiple(s.field)), x];
+    setPicks(list);
+    latest.current.picks = list;
+    schedule(latest.current.note, list, 0);
+  }
+
+  /** Een waarde die de tekst (of een keuze) ergens zette, naar een ander veld: daarna telt ze als zelf ingevuld. */
+  function moveFilled(fromKey: string, toKey: string) {
+    const from = defOf(fromKey);
+    const to = defOf(toKey);
+    if (!from || !to) return;
+    const picked = latest.current.picks.find((x) => x.field === fromKey && !multiple(fromKey));
+    const raw = picked ? picked.value : live.current.result?.data[fromKey];
+    const text = picked ? picked.text : live.current.result?.parts[fromKey]?.[0];
+    if (raw === undefined || !text) return;
+    let list = latest.current.picks;
+    if (picked) {
+      unpick(picked);
+      list = list.filter((x) => x !== picked);
+    }
+    const x = applyPick({ field: toKey, label: to.label, text, value: moveValue(from, to, raw) });
+    if (x) list = [...list.filter((y) => y.field !== toKey), x];
+    setPicks(list);
+    latest.current.picks = list;
+    schedule(latest.current.note, list, 0);
+  }
+
+  // Het rijtje onder het invulveld: wat de tekst en je keuzes invulden, in de volgorde van het formulier.
+  const chips = useMemo(() => {
+    const out: (QuickChip & { pieces: string[]; order: number })[] = [];
+    const names: Names = {
+      person: (id) => people.find((x) => x.id === id)?.name ?? "?",
+      item: (id) => itemNames.current.get(id) ?? "…",
+    };
+    const targets = (key: string, value: FieldValue) =>
+      moveTargets(quick.fields, key, value)
+        .filter((f) => !touched.current.has(f.key) || picks.some((x) => x.field === f.key))
+        .map((f) => ({ key: f.key, label: f.label }));
+    const order = (key: string) => (key === "name" ? -1 : fields.findIndex((f) => f.key === key));
+    const r = live.current.result;
+    if (r && live.current.name !== null && r.name) out.push({ key: "name", label: type.name_label ?? "Naam", value: r.name, targets: [], pieces: r.parts.name ?? [], order: -1 });
+    for (const k of Object.keys(live.current.set)) {
+      const def = defOf(k);
+      if (!def || !r) continue;
+      out.push({ key: k, label: def.label, value: shownValue(def, r.data[k], names), targets: multiple(k) ? [] : targets(k, r.data[k]), pieces: r.parts[k] ?? [], order: order(k) });
+    }
+    picks.forEach((x, i) => {
+      const def = defOf(x.field);
+      const label = def?.label ?? type.name_label ?? "Naam";
+      const shown = !def || ["item", "items", "amounts", "person", "people", "select", "multi"].includes(def.type) ? x.text : shownValue(def, x.value, names);
+      out.push({ key: multiple(x.field) ? `${x.field}#${i}` : x.field, label, value: shown, targets: def && !multiple(x.field) ? targets(x.field, x.value) : [], pieces: [x.text], order: order(x.field) });
+    });
+    return out.sort((a, b) => a.order - b.order);
+  }, [liveVersion, picks]);
+
+  /** Het woord bij de cursor staat al in een veld: de andere velden waar het naartoe kan (in de keuzes). */
+  function movesFor(word: string): Suggestion[] {
+    const chip = chips.find((c) => c.targets.length && c.pieces.some((x) => hasPiece(x, word)));
+    return chip ? chip.targets.map((t) => ({ field: t.key, label: t.label, text: chip.value, value: "", move: chip.key })) : [];
+  }
+
+  /** Tab bij een woord dat al in een veld staat: naar het volgende veld waar het kan (Shift+Tab: het vorige). */
+  function tabMove(caret: number, back: boolean): boolean {
+    const text = latest.current.note;
+    const w = wordAt(text, caret) ?? (text[caret - 1] === " " ? wordAt(text, caret - 1) : null);
+    const chip = w && chips.find((c) => c.targets.length && c.pieces.some((x) => hasPiece(x, w.word)));
+    if (!chip) return false;
+    const place = (k: string) => fields.findIndex((f) => f.key === k);
+    const ring = [chip.key, ...chip.targets.map((t) => t.key)].sort((a, b) => place(a) - place(b));
+    const at = ring.indexOf(chip.key);
+    moveFilled(chip.key, ring[(at + (back ? -1 : 1) + ring.length) % ring.length]);
+    return true;
+  }
+
+  function removeChip(key: string) {
+    const chip = chips.find((c) => c.key === key);
+    if (chip) onNote(withoutPieces(latest.current.note, chip.pieces));
+  }
+
+  function resetQuick() {
+    seq.current++;
+    clearTimeout(timer.current);
+    timer.current = undefined;
+    setNote("");
+    setPicks([]);
+    latest.current = { ...latest.current, note: "", picks: [] };
+    live.current = EMPTY_LIVE;
+    setLiveVersion((v) => v + 1);
+    requestAnimationFrame(() => quickRef.current?.focus({ preventScroll: true }));
   }
 
   /**
-   * Getypte tekst invullen ("21-10 komkommer 200 g"): eerst met code (shared/quickfill.ts); is wat overblijft een zin,
-   * dan leest de AI het (wat de code vond, wint). Enkel velden die je mag wijzigen. Wat je terwijl je typte koos
-   * (`picked`), staat al in zijn veld: die woorden slaat de code over, en de AI zet die keuze niet in een ander veld.
+   * Invullen (of Enter): de tekst nog eens met code, en is wat overblijft een hele zin, dan leest de AI ze. Wat de tekst
+   * of jij al invulde, blijft; de AI zet een gekozen item niet in een ander veld.
    */
-  async function fillText(text: string, picked: Suggestion[] = []): Promise<{ message?: string; create?: LabelScan["create"] }> {
-    const editable = fields.filter((f) => type.field_access[f.key] === "edit");
-    const refs = editable.filter((f) => f.type === "item" || f.type === "items");
-    const options = new Map(
-      // Enkel de items waarvan de naam in de tekst staat (ook in een lange lijst).
-      await Promise.all(
-        refs.map(async (f) => {
-          const path = `/items?type=${refLists(f).join(",")}&in=${encodeURIComponent(text)}&limit=50`;
-          return [f.key, await api.get<{ items: ItemRef[] }>(path).then((r) => r.items, () => [])] as const;
-        }),
-      ),
-    );
-    const quick = quickFill(text, editable, { today: today(), people, items: (k) => options.get(k) ?? [], skip: [type.name, type.plural, ...picked.map((p) => p.text)] });
-    let scan: LabelScan = { name: quick.name, data: quick.data };
-    let message: string | undefined;
-    if (quick.sentence) {
-      const ai = await api.post<LabelScan>(`/projects/${project.project.id}/items/read`, { type_id: type.id, text, today: today() });
-      scan = { name: ai.name ?? scan.name, data: { ...ai.data, ...quick.data }, ...(ai.create ? { create: ai.create } : {}) };
-      message = ai.message;
+  async function fillText(text: string): Promise<{ message?: string; create?: LabelScan["create"] }> {
+    clearTimeout(timer.current);
+    timer.current = undefined;
+    const result = await runLive(text, latest.current.picks);
+    if (!result) return {};
+    if (!result.sentence) {
+      const found = Object.keys(result.data).length + latest.current.picks.length + (result.name ? 1 : 0);
+      return found ? {} : { message: "Niets herkend. Vul het zelf in." };
     }
-    const chosen = new Set(picked.map((p) => String(p.value)));
-    for (const [k, v] of Object.entries(scan.data)) if (typeof v === "string" && chosen.has(v) && !picked.some((p) => p.field === k)) delete scan.data[k];
-    applyScan(scan);
-    const found = Object.keys(scan.data).length + (scan.name ? 1 : 0);
-    return { message: message ?? (found ? undefined : "Niets herkend. Vul het zelf in."), create: scan.create };
+    const ai = await api.post<LabelScan>(`/projects/${project.project.id}/items/read`, { type_id: type.id, text, today: today() });
+    const chosen = new Set(latest.current.picks.map((x) => String(x.value)));
+    const data = Object.fromEntries(
+      Object.entries(ai.data).filter(([k, v]) => !(k in result.data) && !touched.current.has(k) && !(typeof v === "string" && chosen.has(v))),
+    );
+    applyScan({ ...ai, data, name: touched.current.has("name") ? null : ai.name });
+    return { message: ai.message, create: ai.create };
+  }
+
+  /** Ctrl/⌘ + Enter: wat je nog typte eerst invullen, dan opslaan. */
+  async function saveNow() {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      await runLive(latest.current.note, latest.current.picks);
+    }
+    requestAnimationFrame(() => formRef.current?.requestSubmit());
+  }
+
+  /**
+   * Door het formulier met de pijltjes: ↓ naar het volgende veld, ↑ naar het vorige, vanuit een tekst- of getalveld,
+   * een schakelaar of een keuzeveld zonder open keuzes. In een datum, uur, keuzelijst of lange tekst doen de pijltjes
+   * wat ze daar al doen.
+   */
+  function onFormKey(e: KeyboardEvent<HTMLFormElement>) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      saveNow();
+      return;
+    }
+    if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement) || !NAV_INPUTS.includes(el.type) || el.getAttribute("aria-expanded") === "true") return;
+    const all = [...e.currentTarget.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")].filter(
+      (x) => !x.disabled && x.type !== "hidden" && x.type !== "file" && x.offsetParent !== null,
+    );
+    const next = all[all.indexOf(el) + (e.key === "ArrowDown" ? 1 : -1)];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
   }
 
   async function onSubmit(e: FormEvent, next = false) {
@@ -376,6 +706,9 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         setPhoto(null);
         setOriginal(null);
         setSaving(false);
+        resetQuick();
+        remember(built.data);
+        if (memory.current) applyMemory(memory.current);
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
@@ -393,6 +726,9 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         setPhoto(null);
         setOriginal(null);
         setSaving(false);
+        resetQuick();
+        remember(built.data);
+        if (memory.current) applyMemory(memory.current);
         return;
       }
       setError((err as Error).message);
@@ -401,7 +737,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   }
 
   return (
-    <form className="form page" onSubmit={onSubmit}>
+    <form ref={formRef} className="form page" onSubmit={onSubmit} onKeyDown={onFormKey}>
       <PageHead title={item ? `${item.name} bewerken` : `${type.name} toevoegen`} back={{ to: -1, label: item?.name ?? project.project.name }} />
 
       {creatable.length > 1 && creatable.length <= 4 && (
@@ -439,7 +775,15 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             onCreate={createRef}
             onText={fillText}
             quick={quick}
-            onPick={pickSuggestion}
+            onPick={onPick}
+            note={note}
+            onNote={onNote}
+            moves={movesFor}
+            onTab={tabMove}
+            chips={chips}
+            onMove={moveFilled}
+            onRemove={removeChip}
+            inputRef={quickRef}
           />
           {more.items.length > 0 && <MoreOnPhoto fields={fields} more={more.items} onToggle={(i, on) => setMore((m) => ({ ...m, items: m.items.map((x, k) => (k === i ? { ...x, on } : x)) }))} />}
         </section>

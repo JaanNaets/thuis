@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { FieldDef } from "../shared/fields.ts";
-import { formSuggestions, insertSuggestion, matchSuggestions, nameIn, nameMatches, quickFill, readDate, suggestionLists, typedFragments, type Suggestion } from "../shared/quickfill.ts";
+import type { FieldDef, FieldValue } from "../shared/fields.ts";
+import { formSuggestions, hasPiece, insertSuggestion, matchSuggestions, moveTargets, moveValue, nameIn, nameMatches, quickFill, readDate, suggestionLists, typedFragments, withoutPieces, wordAt, type Suggestion } from "../shared/quickfill.ts";
 
 const eten: FieldDef[] = [
   { key: "datum", label: "Datum", type: "date", today: true },
@@ -188,4 +188,72 @@ test("2 zakken: het verpakkingswoord hoort bij het getal", () => {
   const r = quickFill("40 euro 2 zakken", fields, { ...ctx, items: () => [] });
   assert.deepEqual(r.data, { bedrag: 4000, stuks: 2 });
   assert.equal(r.name, null);
+});
+
+test("welke tekst in welk veld kwam (om te tonen, te verplaatsen of terug te nemen)", () => {
+  const r = quickFill("gisteren 2 zakken Jana", [
+    { key: "datum", label: "Datum", type: "date" },
+    { key: "zakken", label: "Zakken", type: "number", unit: "zakken" },
+    { key: "wie", label: "Wie", type: "person" },
+  ], ctx);
+  assert.deepEqual(r.parts, { datum: ["gisteren"], zakken: ["2 zakken"], wie: ["Jana"] });
+  assert.deepEqual(quickFill("komkommer 200 g", eten, { ...ctx, items: () => [] }).parts, { hoeveel: ["200 g"], wat: ["komkommer"], name: ["komkommer"] });
+});
+
+test("ingrediënten uit één zin: een lijst met komma's, of één stuk als niets anders het kan nemen", () => {
+  const recept: FieldDef[] = [
+    { key: "porties", label: "Porties", type: "number" },
+    { key: "ingredienten", label: "Ingrediënten", type: "amounts", ref_type: "V" },
+  ];
+  const stock = { ...ctx, items: (k: string) => (k === "ingredienten" ? [{ id: "a", name: "Aardappelen" }, { id: "e", name: "Eieren" }] : []) };
+  const r = quickFill("4 porties 400 g aardappelen, 2 eieren, zout", recept, stock);
+  assert.deepEqual(r.data, {
+    porties: 4,
+    ingredienten: [{ item: "a", amount: 400, unit: "g" }, { item: "e", amount: 2 }, { text: "zout" }],
+  });
+  assert.equal(r.name, null);
+  // Eén stuk bij een recept: een ingrediënt; bij Eten (met een verwijzing naar dezelfde lijst) een product en een gewicht.
+  assert.deepEqual(quickFill("1,5 kg aardappelen", recept, stock).data, { ingredienten: [{ item: "a", amount: 1.5, unit: "kg" }] });
+  const maaltijd: FieldDef[] = [{ key: "voorraad", label: "Uit voorraad", type: "item", ref_type: "V" }, { key: "gram", label: "Hoeveel", type: "number", unit: "g" }, ...recept];
+  const both = { ...ctx, items: (k: string) => [{ id: "a", name: "Aardappelen" }, { id: "e", name: "Eieren" }].filter(() => k !== "") };
+  assert.deepEqual(quickFill("200 g aardappelen", maaltijd, both).data, { gram: 200, voorraad: "a" });
+  assert.deepEqual(quickFill("200 g aardappelen, 2 eieren", maaltijd, both).data, {
+    ingredienten: [{ item: "a", amount: 200, unit: "g" }, { item: "e", amount: 2 }],
+  });
+});
+
+test("stukken uit de tekst halen en waarden naar een ander veld", () => {
+  assert.equal(withoutPieces("40 euro 2 zakken Pellets", ["2 zakken", "pellets"]), "40 euro");
+  assert.equal(withoutPieces("rode wijn rood", ["rood"]), "rode wijn");
+  assert.ok(hasPiece("2 zakken Pellets", "pellets"));
+  assert.ok(!hasPiece("2 zakken Pelletskorrels", "pellets"));
+  const fields: FieldDef[] = [
+    { key: "bedrag", label: "Bedrag", type: "money" },
+    { key: "stuks", label: "Aantal", type: "number" },
+    { key: "datum", label: "Datum", type: "date" },
+    { key: "tht", label: "Houdbaar tot", type: "date" },
+    { key: "van", label: "Van", type: "person" },
+    { key: "aan", label: "Aan", type: "person" },
+    { key: "soort", label: "Soort", type: "select", options: ["Rood", "Wit"] },
+    { key: "kleur", label: "Kleur", type: "select", options: ["Rood", "Blauw"] },
+  ];
+  const keys = (key: string, v: FieldValue) => moveTargets(fields, key, v).map((f) => f.key);
+  assert.deepEqual(keys("stuks", 2), ["bedrag"]);
+  assert.deepEqual(keys("datum", "2026-11-04"), ["tht"]);
+  assert.deepEqual(keys("van", "p1"), ["aan"]);
+  assert.deepEqual(keys("soort", "Rood"), ["kleur"]);
+  assert.deepEqual(keys("soort", "Wit"), []);
+  assert.equal(moveValue(fields[0], fields[1], 4000), 40);
+  assert.equal(moveValue(fields[1], fields[0], 2.5), 250);
+  assert.deepEqual(wordAt("40 euro 2 zakken", 9), { word: "2", start: 8, end: 9 });
+  assert.equal(wordAt("40 euro ", 8), null);
+});
+
+test("een persoon ook op een ander woord van de naam, als maar één zo heet", () => {
+  const who: FieldDef[] = [{ key: "wie", label: "Wie", type: "person" }];
+  const two = { ...ctx, people: [{ id: "a", name: "Pellet Jaan" }, { id: "b", name: "Pellet Jana" }] };
+  assert.deepEqual(quickFill("jana", who, two).data, { wie: "b" });
+  // Een familienaam die bij beiden past: dan niet.
+  const family = { ...ctx, people: [{ id: "a", name: "Jaan Naets" }, { id: "b", name: "Jana Naets" }] };
+  assert.deepEqual(quickFill("naets", who, family).data, {});
 });

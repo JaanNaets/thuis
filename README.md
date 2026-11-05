@@ -502,7 +502,9 @@ items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet
 een halve pizza op restaurant"), dan leest de gratis AI van Cloudflare ze (met dezelfde daglimiet als een foto); wat
 de app zelf al vond, blijft staan. Wat je typt, is ook de uitleg bij een foto.
 
-Terwijl je typt, verschijnt eronder wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en ook namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat meteen ingevuld; een recept kiezen neemt zijn ingrediënten over. **Invullen** doet daarna de rest en laat wat je koos staan. Een getal met de naam van het veld erachter ("4 porties") of een verpakking ("2 zakken") hoort bij dat getal.
+Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. **Invullen** (of Enter) is nog nodig voor een hele zin: die leest de AI.
+
+Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw item begint dan met wat jij de vorige keer koos (zacht blauw), bv. de categorie of het aantal zakken. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
 
 ### Een foto lezen: etiket, kasticket, factuur, product
 

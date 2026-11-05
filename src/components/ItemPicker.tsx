@@ -93,7 +93,8 @@ function Combo({
     setOpen(false);
   };
   const key = (e: KeyboardEvent) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    // Zonder keuzes gaan de pijltjes naar het vorige of volgende veld (zie ItemForm).
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && matches.length) {
       e.preventDefault();
       setOpen(true);
       const next = Math.max(0, Math.min(matches.length - 1, current + (e.key === "ArrowDown" ? 1 : -1)));

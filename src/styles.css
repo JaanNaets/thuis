@@ -2115,6 +2115,28 @@ input[type="checkbox"] {
   flex-wrap: wrap;
 }
 
+/* Snel invullen: wat je tekst invulde, live onder het veld (QuickChips), zacht blauw zoals een veld dat de app
+   invulde; een tik om het naar een ander veld te zetten of weg te halen. */
+.tag.is-filled {
+  max-width: 100%;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--foreground);
+  animation: auto-flash 0.9s var(--ease-out);
+}
+
+.tag.is-filled .tag-label {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.tag.is-filled .tag-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .scan-buttons .btn-ghost {
   flex: none;
 }
