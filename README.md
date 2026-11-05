@@ -409,6 +409,20 @@ app om naar de eenheid van het product ("AARDAPPELEN 5KG" is 5 kg, "COLA 6X33CL"
 aan een product koppelt, onthoudt dat product (bij **Op het kasticket**): het volgende ticket koppelt vanzelf. Wat je moet kopen, zie je met de
 filter **Kopen: Ja**.
 
+### Aankopen: een kasticket per lijn
+
+In **Uitgaven** (Geld) is elke lijn een gekocht product: **Wat** kies je uit de Voorraad, de Wijnen of de Pellets
+(of je typt het), met hoeveel, de eenheid en het bedrag. Bewaren telt het bij de voorraad (2 zakken pellets = 30 kg),
+en bij het product zie je wanneer je het laatst kocht, de gemiddelde en de laagste prijs (per eenheid). Met **Gegeten**
+aan komt het ook in je Eten (een broodje onderweg), met **Van mij** betaal je het alleen.
+
+Een heel ticket in één keer: **Meer opties → Kasticket lezen** (✨). De AI leest de winkel, de datum en elke lijn met
+haar prijs; de app koppelt de lijnen aan je producten (ook op hoe ze vroeger op een ticket stonden). Bovenaan staat wat
+voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling), daaronder elke lijn: vink uit wat niet hoeft, tik
+Gegeten of Van mij aan, en tik op een lijn om het product, hoeveel of de prijs aan te passen. **Bewaar** zet alles in
+Uitgaven, met het ticket zelf (en de foto) in **Kastickets**, dat het totaal en het aantal lijnen toont. De
+**Boodschappen** zijn een takenlijst: afvinken telt niets meer bij, dat doet de aankoop.
+
 ### Items
 
 Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):

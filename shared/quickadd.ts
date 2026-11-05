@@ -18,6 +18,8 @@ export type AddTarget = {
   last: string | null;
   /** De lijst telt een voorraad (een getal met − en +): daar kan een kasticket naartoe. */
   counter: boolean;
+  /** De lijst leest een kasticket per lijn (een bedrag en een product dat telt, zie shared/receipt.ts). */
+  receipt: boolean;
 };
 
 /** Zoveel lijsten stuurt de server (de meestgebruikte eerst). */

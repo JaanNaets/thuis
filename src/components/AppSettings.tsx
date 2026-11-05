@@ -182,7 +182,8 @@ export function AppCard() {
     if (await save({ ...settings, apps: settings.apps.filter((a) => a.id !== app.id) }, `${app.name} verwijderd`)) setEditing(null);
   }
 
-  const counters = choices.targets.filter((t) => t.counter);
+  // Een kasticket: per lijn in een lijst met een bedrag per product (Uitgaven), of bijtellen bij een voorraad.
+  const counters = choices.targets.filter((t) => t.receipt || t.counter);
   const shareKey = settings.share.kind === "receipt" ? `${settings.share.project}/${settings.share.list}` : "";
 
   return (
@@ -297,7 +298,7 @@ export function AppCard() {
               <option value="">Telkens vragen</option>
               {counters.map((t) => (
                 <option key={`${t.project_id}/${t.type_id}`} value={`${t.project_id}/${t.type_id}`}>
-                  Kasticket bijtellen · {t.plural} · {t.project_name}
+                  {t.receipt ? "Kasticket lezen" : "Kasticket bijtellen"} · {t.plural} · {t.project_name}
                 </option>
               ))}
             </select>

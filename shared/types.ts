@@ -3,6 +3,7 @@
 import type { NotifyDef } from "./notify";
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef, Interval } from "./fields";
+import type { ReadLine } from "./receipt";
 import type { TotalDef, Transfer } from "./totals";
 import type { Block, BoardInfo } from "./overview";
 import type { IconKey } from "./templates";
@@ -223,6 +224,20 @@ export type ImportResult = { created: number; skipped: { row: number; error: str
  */
 export type ReceiptLines = {
   lines: { name: string; quantity: number; amount: number; unit: string | null; pack?: number; item_id: string | null; item_name: string | null }[];
+  message?: string;
+};
+
+/**
+ * Een kasticket per lijn, gelezen (zie shared/receipt.ts): de winkel (een winkel die je al hebt, of de naam), de datum,
+ * het totaal en elke lijn met hoeveel, de eenheid, de prijs (in cent) en het product dat erbij hoort (als gekend).
+ * `receipt`: waar het kasticket zelf komt, als je daar mag toevoegen.
+ */
+export type ReceiptRead = {
+  store: { id: string | null; name: string } | null;
+  date: string | null;
+  total: number | null;
+  lines: ReadLine[];
+  receipt?: { key: string; type_id: string; name: string; fields: FieldDef[] };
   message?: string;
 };
 

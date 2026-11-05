@@ -2314,6 +2314,88 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+/* Een kasticket per lijn nakijken: per lijn het vinkje, de naam (tik: aanpassen) en de prijs; eronder Gegeten en
+   Van mij, en open het product, hoeveel, de eenheid en de prijs. */
+.receipt-review li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  gap: 8px;
+}
+
+.receipt-line-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.receipt-line-main {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.receipt-line-main .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipt-line-price {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+}
+
+.receipt-review li[data-off="true"] .receipt-line-price {
+  color: var(--muted-foreground);
+}
+
+/* Ingesprongen tot onder de naam (het vinkje is 18px, de ruimte 12px). */
+.receipt-line-tags,
+.receipt-line-edit {
+  padding-left: 30px;
+}
+
+.receipt-line-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.receipt-line-edit {
+  display: grid;
+  gap: 12px;
+  animation: fade-in 0.2s;
+}
+
+.receipt-line-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.receipt-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-total strong {
+  font-size: 17px;
+}
+
 /* Een naam van de foto die nog niet bestaat (een nieuwe winkel): uitleg links, "Toevoegen" rechts. */
 .scan-suggestion {
   display: flex;

@@ -12,6 +12,7 @@ const t = (type_id: string, name: string, plural: string, project_name: string, 
   used,
   last,
   counter: false,
+  receipt: false,
 });
 const lists = [
   t("b", "Bijvulling", "Bijvullen", "Pelletkachel", 12, "2026-11-04"),

@@ -748,6 +748,24 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
   die rechts in het veld staat), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
 
+### Kasticket per lijn: `ReceiptToLines` (`Receipt.tsx`)
+
+Een lijst met een bedrag en een product dat telt (Uitgaven: Wat → Voorraad, Wijnen, Pellets; zie `shared/receipt.ts`)
+heeft bij **Meer opties** **Kasticket lezen** (enkel met de AI aan). Een `Sheet`: Foto · Uit foto met `AiMark` (een
+gedeelde foto wacht met **✨ Kasticket lezen**), daarna van boven naar onder:
+
+- **Voor alle lijnen**: gewoon `FieldInputs` met de velden die niet per lijn verschillen (datum en winkel van het
+  ticket, Betaald door, Categorie, Verdeling), ingevuld zoals een nieuw item.
+- **De lijnen** (`.receipt-lines.receipt-review`): per lijn een vinkje, de naam (het product, of de naam van het ticket
+  leesbaar gemaakt: "Broodje kaas") met eronder hoeveel en wat er op het ticket stond (of "nieuw"), rechts de prijs.
+  Daaronder twee `tag`-knoppen (`aria-pressed`): het ja/nee met Meteen ook (**Gegeten**) en **Van mij** (de verdeling
+  enkel jij; enkel met meer mensen in het project). Een tik op de naam klapt open (`.receipt-line-edit`): het product
+  (`ItemPicker`), hoeveel, de eenheid en het bedrag.
+- **Totaal** (`.receipt-total`) van wat aan staat; wijkt de som van de lijnen af van het ticket, dan een stille
+  `Alert`: "Op het ticket staat € 24,10."
+- **Bewaar 12 uitgaven** (`btn-primary btn-lg`): alles in één keer (`/items/batch`, met het kasticket zelf als
+  `group` als de lijst er een heeft; de foto komt bij het kasticket). Toast "12 uitgaven bewaard, ook bij Eten".
+
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)
 
 De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen), en over al je
@@ -780,7 +798,7 @@ zijn kleur (`.lm-swatch`).
 
 `<ItemsView project={detail} type={type} />` is één lijst in een project: het zoekveld met één knop **Meer opties**
 (`dots`), de filters uit de velden en Tag, en de tabel `.table-items`. Wat zelden nodig is, staat bij Meer opties in
-een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen, Importeren, Exporteren), met daaronder de
+een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen of Kasticket lezen, Importeren, Exporteren), met daaronder de
 schakelaars Met subprojecten en Archief en Ook uit; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
 (één tik zet hem uit). Geen rij iconknoppen naast het zoekveld. Gebruik `ItemsView` overal waar items van een lijst
 staan; bouw geen eigen lijst (op het overzicht hergebruikt `ListBlock` haar `ItemRow`).
@@ -1024,7 +1042,7 @@ lijsten: een lege staat met "Lijst maken".
 **Snelkoppeling** → een `Sheet` met "Met tekst" (bv. pellets), de QR (`Barcode` in `.sticker`), **QR-sticker** (naar
 `/projecten/:id/sticker`: de sticker groot, Afdrukken; bij afdrukken enkel de sticker, zwart op wit met een rand) en
 **Op je beginscherm** (maakt een app naar dit formulier, of neemt de app die er al heen gaat, zie Jouw gegevens → App, en opent `/app/:id` in de browser: de naam van de app, Openen en `HomeScreenHint`; zo heet het icoon "Bijvulling" en opent het meteen het formulier; `/snel/:id/:lijst` blijft enkel voor iconen van vroeger). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
-rijen, Kasticket bijtellen (lijsten met een voorraad, enkel met de AI aan) en Toevoegen in (de lijsten, die bij de tekst passen eerst; de foto komt bij het item); de AI leest een gedeelde foto nooit vanzelf; enkel
+rijen, Kasticket lezen (lijsten met een bedrag per product, zoals Uitgaven) en Kasticket bijtellen (lijsten met een voorraad), beide enkel met de AI aan, en Toevoegen in (de lijsten, die bij de tekst passen eerst; de foto komt bij het item); de AI leest een gedeelde foto nooit vanzelf; enkel
 tekst opent Toevoegen. Lang op het app-icoon drukken (Android): je drie meestgebruikte lijsten, Toevoegen en Agenda.
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
@@ -1046,7 +1064,7 @@ een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 **Openen op** (per toestel: "Het overzicht" of een bestemming), **Apps** (rijen met naam en bestemming, rechts Op je
 beginscherm; een tik opent een `Sheet` met Naam, de bestemming, Maken/Bewaren en Verwijderen; onderaan Nieuwe app),
 **Snelkoppelingen (Android)** (`Segmented` Vanzelf · Zelf kiezen; zelf: per snelkoppeling een bestemming met ×, tot
-vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen of Kasticket bijtellen in een voorraad; enkel met de AI aan). Een
+vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen, Kasticket lezen in Uitgaven of Kasticket bijtellen in een voorraad; enkel met de AI aan). Een
 bestemming kies je met `DestinationPicker`: Naar (Overzicht, Agenda, Project, Lijst, Formulier), dan welk, en bij
 een formulier eventueel Met tekst. Een eigen app (`/app/:id`, `AppPage`): als app meteen naar haar bestemming; in de
 browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).

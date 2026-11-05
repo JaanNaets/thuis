@@ -32,6 +32,7 @@ import { addPath } from "../../shared/quickadd";
 import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
 import { sharedFile } from "../shared-file";
 import { adjust, check, checkField, ReceiptToStock, RowCheck, RowStepper, StockScanner } from "./Stock";
+import { readsReceipts, ReceiptToLines } from "./Receipt";
 import { measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
 
@@ -66,7 +67,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const [archived, setArchived] = useState(false);
   const toast = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [sheet, setSheet] = useState<"scan" | "receipt" | "more" | "shortcut">();
+  const [sheet, setSheet] = useState<"scan" | "receipt" | "lines" | "more" | "shortcut">();
   // Een foto gedeeld vanuit een andere app als kasticket (?kasticket=gedeeld, zie /delen).
   const [sharedReceipt, setSharedReceipt] = useState<File | null>(null);
   const [shortcutText, setShortcutText] = useState("");
@@ -140,12 +141,13 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const wanted = params.get("weergave");
   const sharedAsked = useRef(false);
   useEffect(() => {
-    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !counter || !type.can_create || !ai) return;
+    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !(counter || perLine) || !type.can_create || !ai) return;
     sharedAsked.current = true;
     sharedFile().then((file) => {
       if (!file) return;
       setSharedReceipt(file);
-      setSheet("receipt");
+      // Een lijst met een bedrag per product (Uitgaven): elke lijn een item; een voorraad: bijtellen.
+      setSheet(perLine ? "lines" : "receipt");
     });
   }, [params]);
   const applied = useRef<string | null>(null);
@@ -174,6 +176,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
 
   // Een voorraad: een getal met − en + dat je mag wijzigen, eventueel met een barcode om te scannen.
   const counter = type.fields.find((f) => f.type === "number" && f.counter && type.field_access[f.key] === "edit");
+  // Een kasticket per lijn: een lijst met een bedrag en een product dat telt (Uitgaven).
+  const perLine = readsReceipts(type);
   const codeField = type.fields.find((f) => f.type === "code");
   const names = useMemo(() => namesFrom(data?.people ?? [], data?.refs ?? []), [data]);
   const fields = type.fields;
@@ -277,6 +281,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     ...(counter && codeField && !archived ? [{ icon: "scan" as const, label: "Scannen", run: () => setSheet("scan") }] : []),
     // Een kasticket leest de AI: enkel als ze voor jou aan staat.
     ...(counter && type.can_create && live && ai ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
+    ...(perLine && type.can_create && live && ai ? [{ icon: "receipt" as const, label: "Kasticket lezen", run: () => setSheet("lines") }] : []),
     ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
     ...(type.can_create && live ? [{ icon: "share" as const, label: "Snelkoppeling", run: () => setSheet("shortcut") }] : []),
     ...(items.length > 0 ? [{ icon: "download" as const, label: "Exporteren", href: apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`) }] : []),
@@ -577,6 +582,21 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         )}
       </Sheet>
 
+      {perLine && (
+        <Sheet open={sheet === "lines"} title="Kasticket lezen" onClose={() => setSheet(undefined)}>
+          {sheet === "lines" && (
+            <ReceiptToLines
+              project={project}
+              type={type}
+              initial={sharedReceipt}
+              onDone={() => {
+                setSheet(undefined);
+                reload();
+              }}
+            />
+          )}
+        </Sheet>
+      )}
       {counter && (
         <>
           <Sheet open={sheet === "scan"} title="Scannen" onClose={() => setSheet(undefined)}>

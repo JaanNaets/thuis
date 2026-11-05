@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { appManifest, listManifest, quickPath, SHARE_PATH, SHORTCUT_LISTS } from "../shared/manifest.ts";
 import type { AddTarget } from "../shared/quickadd.ts";
 
-const t = (type_id: string, name: string): AddTarget => ({ project_id: "p", project_name: "Thuis", type_id, name, plural: name, icon: null, used: 1, last: null, counter: false });
+const t = (type_id: string, name: string): AddTarget => ({ project_id: "p", project_name: "Thuis", type_id, name, plural: name, icon: null, used: 1, last: null, counter: false, receipt: false });
 
 test("het manifest van de app: je meestgebruikte lijsten als snelkoppeling, en delen met Thuis", () => {
   const m = appManifest([t("a", "Bijvulling"), t("b", "Uitgave"), t("c", "Eten"), t("d", "Wijn")]);

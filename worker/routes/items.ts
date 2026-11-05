@@ -541,8 +541,9 @@ projectItems.get("/:id/timer", async (c) => {
  * Een nieuw item als statements (nog niet uitgevoerd): nagekeken zoals altijd (`prepareData`, tags), met wat het
  * aanpast (verwijzingen die tellen), het geheugen en wat Meteen ook erbij maakt. Voor één item of een hele batch.
  */
-async function createStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, input: ItemInput) {
-  const data = await prepareData(db, me, access, type, input.data, {}, true);
+async function createStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, input: ItemInput, extra: Attributes = {}) {
+  // `extra`: een waarde die al nagekeken is (de verwijzing naar het kasticket dat in dezelfde batch ontstaat).
+  const data = { ...(await prepareData(db, me, access, type, input.data, {}, true)), ...extra };
   await assertTags(db, access.chain, input.tag_ids);
   const id = crypto.randomUUID();
   // Verwijzingen die tellen (bv. eten uit de voorraad): samen met het item, of niets.
@@ -584,8 +585,9 @@ const MAX_BATCH = 80;
 
 /**
  * Meer items tegelijk in één lijst (de lijnen van een kasticket): elk nagekeken zoals een gewoon nieuw item, en alles
- * in één batch (alles of niets). Eén melding voor allemaal ("Jana voegde 24 uitgaven toe"). Geeft de ids en wat Meteen
- * ook erbij maakte.
+ * in één batch (alles of niets). Eén melding voor allemaal. Met `group` ontstaat in dezelfde batch ook het item waar
+ * ze samen bij horen (het kasticket, in een lijst waarnaar een verwijzing van deze lijst wijst), en wijst die
+ * verwijzing in elke lijn ernaar. Geeft de ids, die van de groep en wat Meteen ook erbij maakte.
  */
 projectItems.post("/:id/items/batch", async (c) => {
   const obj = asObject(await c.req.json());
@@ -598,18 +600,63 @@ projectItems.post("/:id/items/batch", async (c) => {
   const raw = Array.isArray(obj.items) ? obj.items : [];
   if (!raw.length) throw new ValidationError("Niets om te bewaren.");
   if (raw.length > MAX_BATCH) throw new ValidationError(`Hoogstens ${MAX_BATCH} tegelijk.`);
+  const group = obj.group === undefined || obj.group === null ? null : await groupStatements(db, me, access, type, asObject(obj.group));
   const made: Awaited<ReturnType<typeof createStatements>>[] = [];
   for (const [i, r] of raw.entries()) {
     try {
-      made.push(await createStatements(db, me, access, type, parseItemInput({ ...(r as object), type_id: type.id })));
+      made.push(await createStatements(db, me, access, type, parseItemInput({ ...(r as object), type_id: type.id }), group ? { [group.field]: group.made.id } : {}));
     } catch (err) {
       throw new ValidationError(`Lijn ${i + 1}: ${(err as Error).message}`);
     }
   }
-  await db.batch(made.flatMap((m) => m.statements));
+  await db.batch([...(group?.made.statements ?? []), ...made.flatMap((m) => m.statements)]);
   const last = made[made.length - 1];
   if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id: last.id, name: last.name, data: last.data }).catch((err) => console.warn("Melding niet verstuurd", err)));
-  return c.json({ ids: made.map((m) => m.id), spawned: made.flatMap((m) => m.spawned) }, 201);
+  return c.json({ ids: made.map((m) => m.id), ...(group ? { group: group.made.id } : {}), spawned: made.flatMap((m) => m.spawned) }, 201);
+});
+
+/**
+ * Het item waar de lijnen van een batch bij horen (het kasticket): `field` is een verwijzing van de lijst die je mag
+ * wijzigen, `type_id` een lijst waarnaar ze wijst en waarin je mag toevoegen (in dit project als ze erboven staat,
+ * anders in haar eigen project). Nagekeken zoals een gewoon nieuw item.
+ */
+async function groupStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, raw: Record<string, unknown>) {
+  const field = type.fields.find((f) => f.key === raw.field && f.type === "item");
+  if (!field || fieldAccess(access.rights, type.id, field.key) !== "edit") throw new ForbiddenError("Dat veld mag je hier niet invullen.");
+  const typeId = typeof raw.type_id === "string" ? raw.type_id : "";
+  if (!refLists(field).includes(typeId)) throw new ValidationError("Daar verwijst dat veld niet naar.");
+  let target: ProjectAccess | null = access;
+  let list = (await typesFor(db, access.chain)).find((t) => t.id === typeId);
+  if (!list) {
+    const row = await db.prepare("SELECT project_id FROM item_types WHERE id = ?").bind(typeId).first<{ project_id: string }>();
+    target = row ? await projectAccess(db, me, row.project_id) : null;
+    list = target ? (await typesFor(db, target.chain)).find((t) => t.id === typeId) : undefined;
+  }
+  if (!target || !list) throw new NotFoundError("Die lijst bestaat niet (meer), of je hebt er geen toegang toe.");
+  if (!canCreate(target.rights, list.id)) throw new ForbiddenError(`Je mag geen ${list.plural.toLowerCase()} toevoegen.`);
+  const made = await createStatements(db, me, target, list, parseItemInput({ name: raw.name, data: raw.data, tag_ids: [], type_id: list.id }));
+  return { field: field.key, made };
+}
+
+/**
+ * Een andere naam onthouden voor een item (hoe het op een kasticket stond), in een tekstveld met `aliases` dat je mag
+ * wijzigen. Zo koppelt het volgende ticket vanzelf.
+ */
+async function rememberAlias(db: D1Database, row: ItemRow, access: ProjectAccess, type: ItemType, alias: string) {
+  const aliasField = type.fields.find((f) => f.type === "text" && f.aliases && fieldAccess(access.rights, type.id, f.key) === "edit");
+  if (!alias || !aliasField) return;
+  const data = parseData(row.data);
+  const have = typeof data[aliasField.key] === "string" ? (data[aliasField.key] as string).split(";").map((a) => a.trim()) : [];
+  if (alias.toLowerCase() === row.name.toLowerCase() || have.some((a) => a.toLowerCase() === alias.toLowerCase())) return;
+  const next = [...have.filter(Boolean), alias].join("; ").slice(0, 300);
+  await db.prepare("UPDATE items SET data = json_set(data, ?2, ?3) WHERE id = ?1").bind(row.id, `$.${aliasField.key}`, next).run();
+}
+
+items.post("/:id/alias", async (c) => {
+  const { row, access, type } = await requireItem(c, c.req.param("id"));
+  const obj = asObject(await c.req.json());
+  await rememberAlias(c.env.DB, row, access, type, typeof obj.alias === "string" ? obj.alias.trim().slice(0, 120) : "");
+  return c.json({ ok: true });
 });
 
 /**
@@ -850,18 +897,8 @@ items.post("/:id/adjust", async (c) => {
   )
     .bind(row.id, path, delta)
     .first<{ value: number }>();
-  // Een lijn van een kasticket gekoppeld aan dit item: die naam onthouden (een tekstveld met `aliases`), als je dat
-  // veld mag wijzigen. Zo koppelt het volgende ticket vanzelf.
-  const alias = typeof obj.alias === "string" ? obj.alias.trim().slice(0, 120) : "";
-  const aliasField = type.fields.find((f) => f.type === "text" && f.aliases && fieldAccess(access.rights, type.id, f.key) === "edit");
-  if (alias && aliasField) {
-    const data = parseData(row.data);
-    const have = typeof data[aliasField.key] === "string" ? (data[aliasField.key] as string).split(";").map((a) => a.trim()) : [];
-    if (alias.toLowerCase() !== row.name.toLowerCase() && !have.some((a) => a.toLowerCase() === alias.toLowerCase())) {
-      const next = [...have.filter(Boolean), alias].join("; ").slice(0, 300);
-      await c.env.DB.prepare("UPDATE items SET data = json_set(data, ?2, ?3) WHERE id = ?1").bind(row.id, `$.${aliasField.key}`, next).run();
-    }
-  }
+  // Een lijn van een kasticket gekoppeld aan dit item: die naam onthouden.
+  await rememberAlias(c.env.DB, row, access, type, typeof obj.alias === "string" ? obj.alias.trim().slice(0, 120) : "");
   return c.json({ value: updated?.value ?? 0 });
 });
 

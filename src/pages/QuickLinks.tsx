@@ -184,7 +184,8 @@ export function SharedPage() {
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   if (!file || !settings || receipt) return null;
-  const counters = ai ? (targets ?? []).filter((t) => t.counter) : [];
+  const lines = ai ? (targets ?? []).filter((t) => t.receipt) : [];
+  const counters = ai ? (targets ?? []).filter((t) => t.counter && !t.receipt) : [];
   const read = matchTargets(text, targets ?? []).slice(0, 8);
   const row = (key: string, to: string, icon: IconName, title: string, meta: string) => (
     <li key={key}>
@@ -208,6 +209,16 @@ export function SharedPage() {
     <div className="page">
       <PageHead title="Gedeeld" back={{ to: "/", label: "Overzicht" }} />
       {preview && <img className="shared-photo" src={preview} alt="" />}
+      {lines.length > 0 && (
+        <>
+          <h2 className="section-title">Kasticket lezen</h2>
+          <section className="card">
+            <ul className="rows">
+              {lines.map((t) => row(`r${t.project_id}${t.type_id}`, `/projecten/${t.project_id}?lijst=${t.type_id}&kasticket=gedeeld`, "receipt", t.plural, t.project_name))}
+            </ul>
+          </section>
+        </>
+      )}
       {counters.length > 0 && (
         <>
           <h2 className="section-title">Kasticket bijtellen</h2>

@@ -4,6 +4,8 @@ import type { IconKey } from "../../shared/templates";
 import { isTone, type AiState, type Me, type Overview, type Person } from "../../shared/types";
 import { blockProjects, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/overview";
 import { MAX_TARGETS, rankTargets, type AddTarget } from "../../shared/quickadd";
+import type { FieldDef } from "../../shared/fields";
+import { receiptPlan } from "../../shared/receipt";
 import { appManifest, ownAppManifest } from "../../shared/manifest";
 import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type Reach } from "../../shared/apps";
 import { flattenTree } from "../../shared/tree";
@@ -97,7 +99,7 @@ export async function addTargets(db: D1Database, personId: string): Promise<AddT
     const node = byId.get(project);
     const t = typeById.get(type);
     if (!node || !t || !canCreate(node.rights, t.id)) continue;
-    let fields: { type?: string; counter?: boolean }[] = [];
+    let fields: FieldDef[] = [];
     try {
       fields = JSON.parse(t.fields);
     } catch {
@@ -113,6 +115,7 @@ export async function addTargets(db: D1Database, personId: string): Promise<AddT
       used: n,
       last,
       counter: fields.some((f) => f.type === "number" && f.counter),
+      receipt: receiptPlan(fields, t.id, () => undefined) !== null,
     });
   }
   return rankTargets(out).slice(0, MAX_TARGETS);
