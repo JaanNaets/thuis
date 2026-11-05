@@ -31,6 +31,8 @@ export type Block = (
   | { kind: "text"; id: string; title?: string; text?: string }
   /** Een timer van een lijst (veldsoort Timer): starten (een nieuw item) en stoppen met één tik. */
   | { kind: "timer"; project: string; list: string; field: string }
+  /** Wie moet wie in een project (met alles eronder), zoals op het project zelf. */
+  | { kind: "balance"; project: string }
 ) & {
   /** Breed: over twee kolommen (op tablet en computer). */
   wide?: true;
@@ -51,6 +53,7 @@ export const BLOCK_KINDS = {
   chart: "Grafiek",
   text: "Tekst",
   timer: "Timer",
+  balance: "Wie moet wie",
 } as const satisfies Record<BlockKind, string>;
 
 export const MAX_BLOCKS = 40;
@@ -74,6 +77,8 @@ export function blockKey(b: Block): string {
       return `text/${b.id}`;
     case "timer":
       return `timer/${b.project}/${b.list}/${b.field}`;
+    case "balance":
+      return `balance/${b.project}`;
   }
 }
 
@@ -111,6 +116,8 @@ export function cleanBlocks(raw: unknown): Block[] | null {
       if (chart) b = { kind: "chart", id: o.id as string, project: o.project as string, list: o.list as string, chart, ...(title ? { title } : {}) };
     } else if (o.kind === "timer" && id(o.project) && id(o.list) && typeof o.field === "string" && KEY.test(o.field)) {
       b = { kind: "timer", project: o.project as string, list: o.list as string, field: o.field };
+    } else if (o.kind === "balance" && id(o.project)) {
+      b = { kind: "balance", project: o.project as string };
     } else if (o.kind === "text" && id(o.id)) {
       const title = text(o.title, 80);
       const body = typeof o.text === "string" ? o.text.trim().slice(0, 2000) : "";

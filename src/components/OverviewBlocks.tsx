@@ -17,6 +17,7 @@ import { namesFrom } from "./Fields";
 import { QuickAdd } from "./QuickAdd";
 import { ChartBlock, ChartBuilder, chartTitle, newChart, TextBlock, TextBuilder } from "./ChartBlock";
 import { TimerBlock } from "./Timer";
+import { BalanceCard } from "./Balance";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
 import { ItemRow } from "./ItemsView";
@@ -325,6 +326,7 @@ export function BlockView({ block, lists, index, period }: { block: Block; lists
   else if (block.kind === "chart" && project) body = <ChartBlock block={block} type={type} period={period} />;
   else if (block.kind === "text") body = <TextBlock block={block} />;
   else if (block.kind === "timer" && project && type) body = <TimerBlock project={project.id} list={block.list} field={block.field} />;
+  else if (block.kind === "balance" && project) body = <BalanceCard projectId={project.id} className="dash-card" />;
   return body ? (
     <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
       {body}
@@ -342,7 +344,7 @@ function BlockLabel({ block, lists }: { block: Block; lists: Lists }) {
   const list = "list" in block ? lists.get(block.project)?.find((t) => t.id === block.list) : undefined;
   const viewName = views?.find((v) => v.id === view)?.name;
   const title =
-    block.kind === "project"
+    block.kind === "project" || block.kind === "balance"
       ? project
       : block.kind === "chart"
         ? (block.title ?? chartTitle(block.chart, list))
@@ -360,7 +362,7 @@ function BlockLabel({ block, lists }: { block: Block; lists: Lists }) {
       <span className="row-title">{title ?? "Verborgen"}</span>
       <span className="row-meta">
         <span>{block.kind === "list" && block.show === "items" ? "Items" : BLOCK_KINDS[block.kind]}</span>
-        {block.kind !== "project" && project && <span>{project}</span>}
+        {block.kind !== "project" && block.kind !== "balance" && project && <span>{project}</span>}
       </span>
     </span>
   );
@@ -492,7 +494,7 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
   const nodes = projectTree(projects);
 
   const block: Block | null =
-    kind === "project"
+    kind === "project" || kind === "balance"
       ? project
         ? { kind, project }
         : null
@@ -577,7 +579,7 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
           </select>
         </label>
         )}
-        {kind !== "project" && kind !== "text" && project && (
+        {kind !== "project" && kind !== "balance" && kind !== "text" && project && (
           <label className="field">
             <span className="label">Lijst</span>
             <select

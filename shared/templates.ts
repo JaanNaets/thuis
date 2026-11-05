@@ -40,6 +40,9 @@ export const ICONS = [
   "clock",
   "sparkles",
   "repeat",
+  "car",
+  "moon",
+  "wrench",
 ] as const;
 export type IconKey = (typeof ICONS)[number];
 

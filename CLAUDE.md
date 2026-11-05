@@ -107,7 +107,7 @@ commits en uitleg.
   (`Board`, `cleanBoards`: het oude formaat wordt het eerste; `PUT /me/boards` hernoemt, schikt, voegt toe en haalt
   weg, er blijft er altijd één; `?board=`), elk met blokken (project met
   verborgen lijsten en per lijst eventueel een weergave om te tellen, lijst, snel toevoegen, totaal, waarde van een
-  item; een lijst met een bewaarde weergave en als aantal of als items, elk blok eventueel breed), enkel ids,
+  item, Wie moet wie; een lijst met een bewaarde weergave en als aantal of als items, elk blok eventueel breed), enkel ids,
   nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
   de eerste items en het aantal (`GET /projects/:id/items?type=&view=&limit=`, met `count`), nooit de hele lijst. Een
   blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:

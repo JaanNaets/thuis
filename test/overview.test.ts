@@ -86,3 +86,12 @@ test("overzichten hernoemen, schikken, toevoegen en weghalen", () => {
   // Een onbekende id maakt niets nieuw.
   assert.deepEqual(renameBoards(boards, [{ id: "zzz", name: "Raar" }], () => "x").map((b) => b.id), ["main"]);
 });
+
+test("Blok Wie moet wie: één per project", () => {
+  const blocks = cleanBlocks([
+    { kind: "balance", project: "huis" },
+    { kind: "balance", project: "huis" },
+    { kind: "balance" },
+  ]);
+  assert.deepEqual(blocks, [{ kind: "balance", project: "huis" }]);
+});

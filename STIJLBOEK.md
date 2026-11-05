@@ -845,7 +845,7 @@ Tekst: wat er gebeurde, in de verleden tijd of als korte vaststelling ("12 wijne
 
 Twee soorten, inline in `Icon.tsx`:
 
-- **Gevuld voor dingen** (bon, kaart, doos, portefeuille, speld, tandwiel, vlam, …): Phosphor "fill" (phosphoricons.com).
+- **Gevuld voor dingen** (bon, kaart, doos, portefeuille, speld, tandwiel, vlam, wagen, maan, sleutel, …): Phosphor "fill" (phosphoricons.com).
   Grijs (`--muted-foreground`) in menu en ghostknoppen; in de kleur van de tekst in een knop; donker als het item
   actief is.
 - **Lijnen voor richtingen en handelingen** (plus, min, kruis, vinkje, chevrons, pijl, zoeken, downloaden, delen,
@@ -982,7 +982,8 @@ opent het formulier, eronder `QuickInput` met `QuickChips` en **Bewaar**: meteen
 de toast; ontbreekt er iets verplichts, dan heet de knop Verder en opent het formulier met je tekst; de kaart komt
 niet omhoog bij aanwijzen), een totaal
 (`TotalsCards only`), één waarde (`.dash-value`, groot; de naam van het item als titel, het veld eronder, − en + bij
-een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen) en **één lijst** (`ListBlock`):
+een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen), **Wie moet wie** (`BalanceCard`
+van een project, met alles eronder; niets te verrekenen: geen blok) en **één lijst** (`ListBlock`):
 als rij met het aantal, of met een bewaarde **weergave** ("Te kopen" · Voorraad · project, met het aantal dat erin
 past), of met **Items** de eerste `BLOCK_ITEMS` items zelf in een `dash-card` met kop (opent de lijst met die
 weergave, `?weergave=`) en `ItemRow`s eronder (− en + bij een voorraad; een gegroepeerde weergave met de groepen
