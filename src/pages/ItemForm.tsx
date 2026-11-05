@@ -671,7 +671,7 @@ function ItemForm({
    * ✨ Lezen met AI: de tekst nog eens met code, en dan leest de AI ze helemaal. Wat de tekst of jij al invulde, blijft;
    * de AI zet een gekozen item niet in een ander veld.
    */
-  async function aiText(text: string): Promise<{ message?: string; create?: LabelScan["create"] }> {
+  async function aiText(text: string): Promise<{ message?: string; create?: LabelScan["create"]; source?: LabelScan["source"] }> {
     const result = await engine.flush();
     if (!result) return {};
     const ai = await api.post<LabelScan>(`/projects/${project.project.id}/items/read`, { type_id: type.id, text, today: today() });
@@ -681,7 +681,7 @@ function ItemForm({
     );
     applyScan({ ...ai, data, name: touched.current.has("name") || result.name ? null : ai.name });
     const found = Object.keys(data).length + Object.keys(result.data).length + (ai.name || result.name ? 1 : 0);
-    return { message: ai.message ?? (found ? undefined : "Niets herkend. Vul het zelf in."), create: ai.create };
+    return { message: ai.message ?? (found ? undefined : "Niets herkend. Vul het zelf in."), create: ai.create, source: ai.source };
   }
 
   /** Ctrl/⌘ + Enter: wat je nog typte eerst invullen, dan opslaan. */

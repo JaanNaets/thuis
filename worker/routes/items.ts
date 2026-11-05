@@ -1208,10 +1208,30 @@ projectItems.post("/:id/items/read", async (c) => {
   if (limit) return c.json({ ...empty, message: limit });
   const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
   const schema = labelSchema(fields);
+  // Een lijst met productinfo (Eten): de AI herkent ook in tekst wat het is ("groentesoep") en schat de voedingswaarde
+  // per 100 g en hoeveel (staat het er niet, één gewone portie), zoals bij een foto; een gekend product of
+  // voedingsmiddel krijgt daarna de echte gegevens. Andere getallen raadt ze nooit.
+  const products = fields.some((f) => f.product);
+  // Wat geschat mag: de voedingswaarden (productinfo) en hoeveel je at (het getal met porties).
+  const estimated = products ? fields.filter((f) => f.type === "number" && (f.product || f.portion)) : [];
+  if (products) {
+    Object.assign(schema.properties, {
+      kind: { type: "string", enum: ["product", "dish", "unknown"] },
+      brand: { type: ["string", "null"] },
+      ...Object.fromEntries(estimated.map((f) => [f.key, { type: "number" }])),
+    });
+    schema.required = Object.keys(schema.properties);
+  }
   const prompt = `Je krijgt een korte notitie van iemand die iets bijhoudt in de lijst "${type.plural}". Haal er de velden uit.
-Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
-- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)
-${fields.map(describeField).join("\n")}`;
+Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum${estimated.length ? ` (behalve ${estimated.map((f) => f.key).join(", ")}: zie onder)` : ""}. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
+- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)${products ? ", bij een verpakt product de naam met merk en smaak" : ""}
+${products ? `- kind: "product" voor een verpakt product van een merk, "dish" voor een gerecht of gewoon voedingsmiddel (groentesoep, een appel, spaghetti), anders "unknown"
+- brand: het merk als de notitie het noemt, anders null
+` : ""}${fields.map((f) => describeField(f) + (f.product ? ` (${PRODUCT_KEYS[f.product].label})` : "")).join("\n")}${
+    estimated.length
+      ? `\nVul ${estimated.map((f) => f.key).join(" en ")} altijd in: de waarden per 100 g of 100 ml zoals een voedingstabel ze geeft voor wat er staat, en hoeveel zoals in de notitie (300 g, een kom, twee sneden) of anders één gewone portie, in g of ml. Bij "unknown" mag je 0 geven.`
+      : ""
+  }`;
   try {
     const result = await c.env.AI.run(MODEL, {
       messages: [
@@ -1238,9 +1258,22 @@ ${fields.map(describeField).join("\n")}`;
       if (f.type === "item" && f.free && !(f.key in refs.data) && typeof parsed[f.key] === "string" && (parsed[f.key] as string).trim())
         raw[f.key] = { text: parsed[f.key] };
     }
+    // Niets eetbaars herkend: dan zijn de verplichte schattingen niets waard.
+    if (parsed.kind === "unknown") for (const f of estimated) raw[f.key] = null;
     const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
     const create = refs.create.filter((r) => !fields.find((f) => f.key === r.key)?.free);
-    return c.json({ name, data: cleanAttributes(fields, raw), ...(create.length ? { create } : {}) } satisfies LabelScan);
+    const scan: LabelScan = { name, data: cleanAttributes(fields, raw), ...(create.length ? { create } : {}) };
+    if (products && name && parsed.kind !== "unknown") {
+      // Zoals bij een foto: een verpakt product in Open Food Facts (op naam en merk), een gerecht of gewoon
+      // voedingsmiddel in NEVO. Lukt dat niet, dan blijft de schatting staan, en dat zeggen we ook.
+      const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : null;
+      const info = parsed.kind === "product" ? await productByName(db, name, brand).catch(() => null) : !brand ? nevoByName(name) : null;
+      if (info) {
+        Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
+        scan.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
+      } else if (estimated.some((f) => scan.data[f.key] !== undefined)) scan.source = { kind: "estimate" };
+    }
+    return c.json(scan);
   } catch (err) {
     console.error("Tekst lezen mislukt", err);
     return c.json({ ...empty, message: "Lezen lukte niet. Vul het zelf in." } satisfies LabelScan);

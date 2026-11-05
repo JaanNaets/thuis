@@ -1843,6 +1843,17 @@ export function FieldsEditor({
 // ---------- foto's ----------
 
 /**
+ * Wat de AI deed, in één zin: herkend en uit de databank (met de bron), geschat (geen gekend product), of gelezen.
+ * `from`: waarop een schatting steunt ("op basis van de foto").
+ */
+function aiStatus(source: LabelScan["source"], from?: string): { tone: "ok" | "partial"; ai: true; text: string } {
+  if (source?.kind === "database")
+    return { tone: "ok", ai: true, text: `Herkend met AI als ${source.label}; de gegevens komen uit ${source.db === "nevo" ? (source.credit ?? "NEVO") : "Open Food Facts"}. Kijk de hoeveelheid na.` };
+  if (source?.kind === "estimate") return { tone: "partial", ai: true, text: `Geschat met AI${from ? ` ${from}` : ""} (geen gekend product gevonden). Kijk de blauwe velden na.` };
+  return { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." };
+}
+
+/**
  * Foto van een etiket (of typeplaatje): de app leest naam en velden van de lijst.
  * `onResult` krijgt ook de foto, om bij het item te bewaren.
  */
@@ -1879,7 +1890,7 @@ export function LabelScanner({
   onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
   /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
   /** ✨ Lezen met AI: de hele tekst door de AI; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  onAi?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"] }>;
+  onAi?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"]; source?: LabelScan["source"] }>;
   /** Enter: meteen invullen met code (zonder AI). */
   onFlush?: () => void;
   /** In het lege invulveld: je meestgebruikte items (Vaak). */
@@ -1963,15 +1974,7 @@ export function LabelScanner({
       const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
       onResult(scan, photo, pdf);
       setSuggestions(onCreate ? (scan.create ?? []) : []);
-      setStatus(
-        scan.message
-          ? { tone: "none", text: scan.message }
-          : scan.source?.kind === "database"
-            ? { tone: "ok", ai: true, text: `Herkend met AI als ${scan.source.label}; de gegevens komen uit ${scan.source.db === "nevo" ? (scan.source.credit ?? "NEVO") : "Open Food Facts"}. Kijk de hoeveelheid na.` }
-            : scan.source?.kind === "estimate"
-              ? { tone: "partial", ai: true, text: "Geschat met AI op basis van de foto (geen gekend product gevonden). Kijk de blauwe velden na." }
-              : { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." },
-      );
+      setStatus(scan.message ? { tone: "none", text: scan.message } : aiStatus(scan.source, "op basis van de foto"));
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
     }
@@ -2010,7 +2013,7 @@ export function LabelScanner({
     try {
       const done = await onAi(note.trim());
       setSuggestions(done.create ?? []);
-      setStatus(done.message ? { tone: "none", text: done.message } : { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." });
+      setStatus(done.message ? { tone: "none", text: done.message } : aiStatus(done.source));
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
     }
