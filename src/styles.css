@@ -6535,3 +6535,51 @@ dialog.palette[open]::backdrop {
     border: 1px solid var(--border-strong);
   }
 }
+
+/* ---------- timer (Timer.tsx) ---------- */
+
+.timer {
+  display: grid;
+  gap: 10px;
+}
+
+.timer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* De tijd groot; de cijfers even breed, zodat ze niet verspringen terwijl hij loopt. */
+.timer-time {
+  color: var(--muted-foreground);
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.timer-time.is-running {
+  color: var(--foreground);
+}
+
+.timer-goal {
+  display: grid;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.timer-input {
+  display: grid;
+  gap: 12px;
+}
+
+.timer-last {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}

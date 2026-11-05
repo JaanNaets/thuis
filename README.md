@@ -491,6 +491,16 @@ fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt
 in "Typ wat je weet" voor je iets typt, dan staat er wat je het **vaakst** toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
 Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
 
+### Een timer
+
+Een veld **Timer** start en stop je met één tik: vasten, slapen, de auto laden, werkuren. Terwijl hij loopt, telt hij
+live op (tot op de seconde). In het lijstformulier geef je hem eventueel een **Doel** (bv. 16 u: dan zie je wat er nog
+rest, en krijgt wie hem startte een melding als het zover is; de server kijkt elk kwartier) en **Duur in** (een veld
+Duur van dezelfde lijst: bij het stoppen komt de duur daarin, zodat totalen, grafieken en weergaven er gewoon mee
+werken). Op de fiche staat de timer in een eigen kaart; een blok **Timer** op je overzicht toont de timer die nu loopt
+met Stop, of Start (dat maakt meteen een nieuw item, "Vasten 5/11"), en de vorige keer. In een grafiek kan je per
+dag waarop hij startte tellen.
+
 ### Een melding bij een nieuw item
 
 In het formulier van een lijst kies je **Melden bij een nieuw item**: Niet, Aan iedereen die de lijst ziet, of Aan

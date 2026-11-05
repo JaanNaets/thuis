@@ -72,7 +72,7 @@ export const NUMBER_TYPES: FieldType[] = ["number", "money", "duration", "score"
 /** Velden waarin je kiest (een as of reeksen per keuze). */
 export const GROUP_TYPES: FieldType[] = ["select", "multi", "person", "people", "item", "items", "bool"];
 /** Velden met een datum. */
-export const DATE_TYPES: FieldType[] = ["date", "date_range"];
+export const DATE_TYPES: FieldType[] = ["date", "date_range", "timer"];
 
 const kind = (f: FieldDef): FieldType | undefined => (f.type === "calc" ? f.result : f.type);
 export const isNumberField = (f: FieldDef) => NUMBER_TYPES.includes(kind(f) as FieldType);
@@ -256,6 +256,9 @@ function dayOf(item: ChartItem, date: FieldDef | undefined): string | null {
   const v = item.data[date.key];
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
   if (Array.isArray(v) && typeof v[0] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v[0])) return v[0];
+  // Een timer: de dag (in België) waarop hij startte.
+  const start = v && typeof v === "object" && !Array.isArray(v) ? (v as unknown as { start?: unknown }).start : undefined;
+  if (typeof start === "string" && /^\d{4}-\d{2}-\d{2}T/.test(start)) return brusselsDay(start);
   const from = v && typeof v === "object" && !Array.isArray(v) ? (v as unknown as { from?: unknown }).from : undefined;
   if (typeof from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(from)) return from;
   return null;

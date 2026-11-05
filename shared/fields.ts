@@ -37,6 +37,7 @@ export const FIELD_TYPES = {
   date_range: { label: "Periode", group: "time", hint: "Van een datum tot een datum, zoals een reis of een huurcontract. Je kan filteren op wat nu loopt." },
   time: { label: "Uur", group: "time", hint: "Een tijdstip, zoals 18:30." },
   duration: { label: "Duur", group: "time", hint: "Hoe lang iets duurt, zoals 1 u 30 min of 45 min." },
+  timer: { label: "Timer", group: "time", hint: "Start en stop met één tik, zoals vasten, slapen of de auto laden. Met een doel krijg je een melding." },
   year: { label: "Jaar", group: "time", hint: "Een jaartal, zoals een jaargang of een bouwjaar." },
   year_range: {
     label: "Van–tot (jaren)",
@@ -79,6 +80,8 @@ export const INTERVAL_UNITS = {
 } as const;
 export type IntervalUnit = keyof typeof INTERVAL_UNITS;
 export type Interval = { n: number; unit: IntervalUnit };
+/** Een timer: wanneer hij startte en (gestopt) wanneer hij stopte, als tijdstip (UTC, "2026-11-05T17:30:00Z"). */
+export type TimerValue = { start: string; end?: string };
 export type ChecklistEntry = { text: string; done: boolean };
 
 /** Namen volgens de Barcode Detection API (wat de scanner teruggeeft), met het symbool in bwip-js (om te tekenen). */
@@ -188,6 +191,10 @@ export type FieldDef = {
   per?: string;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
+  /** Timer: een doel in minuten (16 u vasten); is het bereikt, dan krijgt wie de timer startte een melding. */
+  timer_goal?: number;
+  /** Timer: bij het stoppen komt de duur in dit veld (een Duur van deze lijst), om mee te tellen en te tekenen. */
+  timer_into?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
   calc?: CalcDef;
   result?: CalcResult;
@@ -218,6 +225,7 @@ export type FieldValue =
   | TextValue
   | Share[]
   | Interval
+  | TimerValue
   | ChecklistEntry[]
   | AmountEntry[];
 export type Attributes = Record<string, FieldValue>;
@@ -340,6 +348,8 @@ export function cleanFields(raw: unknown): FieldDef[] {
       if (Object.keys(m).length) def.measure = m;
     }
     if (f.aliases === true && type === "text") def.aliases = true;
+    if (type === "timer" && typeof f.timer_goal === "number" && Number.isInteger(f.timer_goal) && f.timer_goal > 0 && f.timer_goal < 100_000) def.timer_goal = f.timer_goal;
+    if (type === "timer" && typeof f.timer_into === "string" && KEY_RE.test(f.timer_into) && f.timer_into !== key) def.timer_into = f.timer_into;
     if (f.remember === true && type !== "calc") {
       def.remember = true;
       if (f.remember_fixed === true) def.remember_fixed = true;
@@ -398,6 +408,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     }
     if (f.per && kinds.get(f.per) !== "number") {
       const { per: _p, ...rest } = out;
+      out = rest;
+    }
+    // Timer: de duur enkel in een Duur van deze lijst.
+    if (f.timer_into && kinds.get(f.timer_into) !== "duration") {
+      const { timer_into: _t, ...rest } = out;
       out = rest;
     }
     // Geheugen per keuze: enkel per de naam of een veld van deze lijst waarin je kiest.
@@ -516,6 +531,14 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
       const [from, to] = value.map((v) => (typeof v === "string" && isDate(v) ? v : null));
       if (from === null && to === null) return null;
       return from !== null && to !== null && to < from ? [to, from] : [from, to];
+    }
+    case "timer": {
+      const v = (value ?? {}) as Partial<TimerValue>;
+      const at = (t: unknown) => (typeof t === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/.test(t) && !Number.isNaN(Date.parse(t)) ? new Date(t).toISOString().replace(/\.\d{3}Z$/, "Z") : null);
+      const start = at(v.start);
+      if (typeof v !== "object" || !start) return null;
+      const end = at(v.end);
+      return end && end >= start ? { start, end } : { start };
     }
     case "interval": {
       const v = (value ?? {}) as Partial<Interval>;
@@ -654,6 +677,9 @@ export function parseFieldText(def: FieldDef, text: string): FieldValue | null |
     }
     case "interval":
       return cleanValue(def, parseInterval(s)) ?? undefined;
+    case "timer":
+      // Een timer start en stop je in de app; uit tekst lezen we hem niet.
+      return undefined;
     case "checklist":
       // Eén taak per regel (of gescheiden door ;). "[x] Paspoort" is al afgevinkt.
       return (
@@ -841,6 +867,11 @@ export function formatFieldValue(def: FieldDef, value: FieldValue | undefined, n
     }
     case "interval":
       return value && typeof value === "object" && "unit" in value ? formatInterval(value as Interval) : "";
+    case "timer": {
+      if (!value || typeof value !== "object" || !("start" in value)) return "";
+      const t = value as TimerValue;
+      return t.end ? formatDuration(timerMinutes(t)) : `loopt sinds ${brusselsClock(t.start)}`;
+    }
     case "checklist": {
       if (!Array.isArray(value)) return "";
       const list = value as ChecklistEntry[];
@@ -911,6 +942,38 @@ export function defaultShares(preferred: Share[] | undefined, members: string[])
  * Wat velden zelf invullen als het leeg is: een verdeling (`fill`) altijd, en bij een nieuw item jij in een persoon
  * met `me` (als je in het project zit). Wat ingevuld is, blijft. `members`: wie in het project zit.
  */
+/** Hoeveel minuten een timer liep (tot nu, als hij nog loopt). */
+export function timerMinutes(t: TimerValue, now: number = Date.now()): number {
+  const end = t.end ? Date.parse(t.end) : now;
+  return Math.max(0, Math.round((end - Date.parse(t.start)) / 60000));
+}
+
+/** Een tijdstip als dag en uur in België ("5/11 18:30"; vandaag enkel het uur). */
+export function brusselsClock(iso: string, now: number = Date.now()): string {
+  const part = (d: number, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("nl-BE", { timeZone: "Europe/Brussels", ...o }).format(d);
+  const at = Date.parse(iso);
+  const time = part(at, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const day = part(at, { day: "numeric", month: "numeric" });
+  return day === part(now, { day: "numeric", month: "numeric" }) ? time : `${day} ${time}`;
+}
+
+/**
+ * Een gestopte timer met "Duur in" (`timer_into`): de duur komt in dat veld (een Duur van deze lijst), zodat totalen,
+ * grafieken en weergaven er gewoon mee werken. `editable`: enkel in een veld dat je mag wijzigen.
+ */
+export function applyTimers(fields: FieldDef[], data: Attributes, editable: (key: string) => boolean = () => true): Attributes {
+  let out = data;
+  for (const f of fields) {
+    if (f.type !== "timer" || !f.timer_into || !editable(f.timer_into)) continue;
+    const into = fields.find((x) => x.key === f.timer_into && x.type === "duration");
+    const t = data[f.key] as TimerValue | undefined;
+    if (!into || !t || typeof t !== "object" || !("start" in t) || !t.end) continue;
+    const minutes = timerMinutes(t);
+    if (minutes > 0 && out[into.key] !== minutes) out = { ...out, [into.key]: minutes };
+  }
+  return out;
+}
+
 export function applyFieldDefaults(fields: FieldDef[], data: Attributes, members: string[], me: string, isNew: boolean): Attributes {
   const out = { ...data };
   for (const f of fields) {

@@ -12,6 +12,7 @@ import { Icon } from "../components/Icon";
 import { stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
 import { RepeatCard, RepeatForm } from "../components/Repeat";
+import { TimerCard } from "../components/Timer";
 import { Sheet } from "../components/Sheet";
 import { useToast } from "../components/Toast";
 import { formatBytes, formatDate, today } from "../format";
@@ -51,6 +52,8 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
   const codes = type.fields.filter((f) => f.type === "code" && item.data[f.key]);
   const texts = type.fields.filter((f) => f.type === "longtext" && item.data[f.key]);
   const checklists = type.fields.filter((f) => f.type === "checklist" && item.data[f.key]);
+  // Een timer staat in een eigen kaart (live, met Start en Stop), niet bij de gegevens.
+  const timers = type.fields.filter((f) => f.type === "timer" && item.field_access[f.key] !== "none");
   const back = `/projecten/${p.project.id}?lijst=${type.id}`;
 
   // Een taak afvinken bewaart meteen (het item met dat ene veld anders). Lukt het niet, dan gaat het vinkje terug.
@@ -145,7 +148,7 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
               }}
             />
             <dl className="dl">
-              <AttributeRows defs={type.fields} data={item.data} names={names} refs={item.refs} lists={p.types} />
+              <AttributeRows defs={type.fields.filter((f) => f.type !== "timer")} data={item.data} names={names} refs={item.refs} lists={p.types} />
             </dl>
             {tags.length > 0 && (
               <p className="tag-line" style={{ paddingTop: 4 }}>
@@ -159,6 +162,10 @@ function ItemWithProject({ item, reload, mutate }: { item: ItemDetail; reload: (
           </section>
 
           {item.repeat && <RepeatCard repeat={item.repeat} onEdit={item.can_repeat ? () => setRepeating(true) : undefined} />}
+
+          {timers.map((f) => (
+            <TimerCard key={f.key} item={item} def={f} canEdit={item.field_access[f.key] === "edit"} onChange={mutate} />
+          ))}
 
           {texts.map((f) => (
             <section key={f.key} className="card">

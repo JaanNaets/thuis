@@ -13,8 +13,10 @@ import {
   INTERVAL_UNITS,
   isCodeFormat,
   normalizeShares,
+  parseDuration,
   parseFieldText,
   REMEMBER_BY,
+  type TimerValue,
   type Attributes,
   type AmountEntry,
   type ChecklistEntry,
@@ -49,6 +51,7 @@ import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { TimerInput } from "./Timer";
 import { QuickChips, QuickInput, type QuickChip, type QuickSource } from "./QuickInput";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
@@ -73,7 +76,7 @@ export type SharesDraft = { mode: "none" | "equal" | "percent" | "amount"; peopl
 type IntervalDraft = { n: string; unit: IntervalUnit };
 
 /** Wat in een veld staat terwijl je typt. */
-type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft | AmountEntry[];
+type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft | AmountEntry[] | TimerValue;
 export type AttributeDraft = Record<string, DraftValue>;
 
 /** Vastzetten van een veld: staat de waarde van nu vast (`pinned`), het label (Vastzetten voor Pasta) en de tik. */
@@ -154,6 +157,9 @@ export function attributesDraft(defs: FieldDef[], attributes: Attributes): Attri
       case "duration":
         draft[def.key] = typeof v === "number" ? formatDuration(v) : "";
         break;
+      case "timer":
+        draft[def.key] = v && typeof v === "object" && "start" in v ? (v as TimerValue) : null;
+        break;
       case "interval":
         draft[def.key] = v && typeof v === "object" && "unit" in v ? { n: String((v as Interval).n), unit: (v as Interval).unit } : { n: "", unit: "month" };
         break;
@@ -212,6 +218,8 @@ export function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldVal
     }
     case "amounts":
       return cleanValue(def, raw);
+    case "timer":
+      return raw ? cleanValue(def, raw) : null;
     case "interval": {
       const v = raw as IntervalDraft;
       if (!v.n?.trim()) return null;
@@ -434,6 +442,13 @@ export function FieldInputs({
               </div>
             );
           }
+          case "timer":
+            return (
+              <div key={def.key} className="field wide">
+                {label}
+                <TimerInput def={def} value={(raw as TimerValue | null) ?? null} disabled={disabled} onChange={(v) => set(def.key, v)} />
+              </div>
+            );
           case "date_range": {
             const [from, to] = Array.isArray(raw) ? (raw as [string, string]) : ["", ""];
             return (
@@ -1249,6 +1264,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
           }
         : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
+      ...(d.type === "timer" && d.timer_goal ? { timer_goal: d.timer_goal } : {}),
+      ...(d.type === "timer" && d.timer_into ? { timer_into: rename(d.timer_into) } : {}),
       // Onthouden: je laatste of een vaste waarde, eventueel per keuze in een ander veld (zie shared/fields.ts).
       ...(d.remember && d.type !== "calc"
         ? {
@@ -1628,6 +1645,34 @@ export function FieldsEditor({
                       onChange={(on) => update(i, { today: on })}
                       label="Begint met vandaag"
                     />
+                  )}
+                  {f.type === "timer" && (
+                    <div className="field-row">
+                      <label className="field">
+                        <span className="label">Doel</span>
+                        <input
+                          defaultValue={f.timer_goal ? formatDuration(f.timer_goal) : ""}
+                          placeholder="bv. 16 u"
+                          onBlur={(e) => {
+                            const n = e.target.value.trim() ? parseDuration(e.target.value) : 0;
+                            update(i, { timer_goal: n > 0 ? n : undefined });
+                          }}
+                        />
+                      </label>
+                      <label className="field">
+                        <span className="label">Duur in</span>
+                        <select value={f.timer_into ?? ""} onChange={(e) => update(i, { timer_into: e.target.value || undefined })}>
+                          <option value="">Geen veld</option>
+                          {value
+                            .filter((x) => x.type === "duration")
+                            .map((x) => (
+                              <option key={x.key} value={x.key}>
+                                {x.label.trim() || "Naamloos veld"}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    </div>
                   )}
                   {(f.type === "date" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
                     <label className="field">

@@ -854,6 +854,17 @@ Twee soorten, inline in `Icon.tsx`:
 
 ---
 
+### Timer: `TimerInput`, `TimerLive`, `TimerCard`, `TimerBlock` (`Timer.tsx`)
+
+- **Live** (`.timer`): de tijd groot (32px, 600, `tabular-nums` zodat ze niet verspringt; grijs als hij niet loopt,
+  zwart als hij loopt: "1:23:45"), rechts **Start** of **Stop** (`btn-primary`); met een doel eronder een dunne
+  doelbalk (`.chart-meter`) en "Nog 2 u 10 min · doel 16 u" of "Doel 16 u bereikt".
+- **Formulier** (`TimerInput`, breed): Start/Stop, en zodra hij liep Begin en Einde (`datetime-local`) om zelf aan te
+  passen. In de lijst instellen: **Doel** (een duur, "16 u") en **Duur in** (een veld Duur van de lijst).
+- **Fiche** (`TimerCard`): een eigen kaart met de naam van het veld als titel, niet bij de gegevens; Start enkel als hij
+  nog nooit liep. **Overzicht** (`TimerBlock`, blok Timer): titel het lopende item (of de lijst), het veld als gegeven,
+  Start maakt een nieuw item, en "Vorige keer: 16 u 30 min · Vasten 4/11" als link (`.timer-last`).
+
 ### Grafieken
 
 `ChartBlock`, `ChartBuilder`, `TextBlock` (`ChartBlock.tsx`) en `ChartView`, `ChartTable` (`Chart.tsx`), uit

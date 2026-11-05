@@ -5,10 +5,10 @@
 
 import { fieldAccess, typeAccess, type Rights } from "../shared/access";
 import { computeLocal, fieldDeps } from "../shared/calc";
-import type { Attributes } from "../shared/fields";
+import { formatDuration, type Attributes } from "../shared/fields";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText, type Reminder } from "../shared/remind";
 import type { ItemType } from "../shared/types";
-import { accessibleProjects, toItemType, type TypeRow } from "./context";
+import { accessibleProjects, projectAccess, toItemType, type TypeRow } from "./context";
 import { notify } from "./push";
 import { createRepeated } from "./routes/items";
 import { brusselsMoment, brusselsToday } from "./today";
@@ -35,6 +35,36 @@ export async function quarter(db: D1Database, at = new Date()): Promise<void> {
   const morning = `${to.slice(0, 10)}T${MORNING}`;
   if (morning >= from && morning < to) await daily(db, to.slice(0, 10));
   await sendTimedReminders(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
+  await sendTimerGoals(db, new Date(at.getTime() - 15 * 60_000), at).catch((err) => console.error("Timers lukte niet", err));
+}
+
+/**
+ * Een timer met een doel (`timer_goal`, 16 u vasten) die nog loopt en zijn doel in het kwartier `[from, to)` haalde:
+ * een melding aan wie hem startte (wie het item maakte), als die de lijst en de timer nog mag zien.
+ */
+export async function sendTimerGoals(db: D1Database, from: Date, to: Date): Promise<number> {
+  const { results: rows } = await db.prepare(`SELECT * FROM item_types WHERE fields LIKE '%"timer_goal"%'`).all<TypeRow>();
+  let sent = 0;
+  for (const type of rows.map(toItemType)) {
+    for (const f of type.fields.filter((x) => x.type === "timer" && x.timer_goal)) {
+      const path = `$.${f.key}`;
+      const { results } = await db
+        .prepare(
+          `SELECT id, name, project_id, created_by, json_extract(data, ? || '.start') AS start FROM items
+           WHERE type_id = ? AND archived = 0 AND json_extract(data, ? || '.start') IS NOT NULL AND json_extract(data, ? || '.end') IS NULL`,
+        )
+        .bind(path, type.id, path, path)
+        .all<{ id: string; name: string; project_id: string; created_by: string; start: string }>();
+      for (const it of results) {
+        const reached = Date.parse(it.start) + f.timer_goal! * 60_000;
+        if (!(reached >= from.getTime() && reached < to.getTime())) continue;
+        const access = await projectAccess(db, it.created_by, it.project_id);
+        if (!access || typeAccess(access.rights, type.id) === "none" || fieldAccess(access.rights, type.id, f.key) === "none") continue;
+        sent += await notify(db, it.created_by, { title: `${f.label}: ${formatDuration(f.timer_goal!)} bereikt`, body: it.name, url: `/items/${it.id}`, tag: `timer-${it.id}` });
+      }
+    }
+  }
+  return sent;
 }
 
 type RepeatRow = { item_id: string; every_n: number; every_unit: "day" | "week" | "month" | "year"; next_on: string; created_by: string; archived: number };

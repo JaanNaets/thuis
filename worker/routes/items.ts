@@ -12,7 +12,9 @@ import {
   MAX_REF_LISTS,
   referencedPeople,
   refLists,
+  applyTimers,
   rememberKey,
+  type TimerValue,
   repeatData,
   type Attributes,
   type AmountEntry,
@@ -149,7 +151,9 @@ async function prepareData(
 ): Promise<Attributes> {
   const clean = cleanAttributes(type.fields, incoming);
   const merged = mergeEditable(access.rights, type.id, type.fields, existing, clean);
-  const data = fillsDefaults(type.fields) ? applyFieldDefaults(type.fields, merged, await membersOf(db, access.chain), personId, isNew) : merged;
+  const filled = fillsDefaults(type.fields) ? applyFieldDefaults(type.fields, merged, await membersOf(db, access.chain), personId, isNew) : merged;
+  // Een gestopte timer met "Duur in": de duur in dat veld (als je het mag wijzigen).
+  const data = applyTimers(type.fields, filled, (k) => fieldAccess(access.rights, type.id, k) === "edit");
   const changed = (key: string) => JSON.stringify(data[key]) !== JSON.stringify(existing[key]);
 
   const people = referencedPeople(
@@ -432,6 +436,43 @@ projectItems.get("/:id/chart", async (c) => {
   const data = computeChart(def, fields, list, { people: all.people, item: (id) => ref.get(id), tags }, today, period);
   if (!data) throw new NotFoundError("Deze grafiek kan je niet (meer) zien.");
   return c.json(data);
+});
+
+/**
+ * Een timerblok (zie Timer.tsx): het nieuwste item in deze lijst (in dit project) met een lopende timer in `?field=`,
+ * de vorige keer, en of je er een mag starten of stoppen. Enkel als je de lijst en dat veld ziet.
+ */
+projectItems.get("/:id/timer", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === c.req.query("list") && typeAccess(access.rights, t.id) !== "none");
+  const def = type?.fields.find((f) => f.key === c.req.query("field") && f.type === "timer");
+  if (!type || !def || fieldAccess(access.rights, type.id, def.key) === "none") throw new NotFoundError("Die timer bestaat hier niet.");
+  const path = `$.${def.key}`;
+  const one = (running: boolean) =>
+    db
+      .prepare(
+        `SELECT id, name, json_extract(data, ?) AS value FROM items WHERE project_id = ? AND type_id = ? AND archived = 0
+           AND json_extract(data, ? || '.start') IS NOT NULL AND (json_extract(data, ? || '.end') IS ${running ? "" : "NOT "}NULL)
+         ORDER BY ${running ? "json_extract(data, ? || '.start')" : "json_extract(data, ? || '.end')"} DESC LIMIT 1`,
+      )
+      .bind(path, access.project.id, type.id, path, path, path)
+      .first<{ id: string; name: string; value: string }>();
+  const [running, last] = await Promise.all([one(true), one(false)]);
+  const parse = (r: { id: string; name: string; value: string } | null) => {
+    if (!r) return null;
+    const value = cleanAttributes([def], { [def.key]: parseJsonValue(r.value) })[def.key] as TimerValue | undefined;
+    return value ? { id: r.id, name: r.name, value } : null;
+  };
+  return c.json({
+    running: parse(running),
+    last: parse(last),
+    can_create: canCreate(access.rights, type.id),
+    can_edit: fieldAccess(access.rights, type.id, def.key) === "edit",
+    def,
+    list: { name: type.name, plural: type.plural },
+  });
 });
 
 projectItems.post("/:id/items", async (c) => {
@@ -737,6 +778,36 @@ items.put("/:id", async (c) => {
     statements.push(...tagStatements(db, row.id, input.tag_ids));
   }
   await db.batch(statements);
+  return c.json(await loadDetail(c, row.id));
+});
+
+/**
+ * Een timer starten of stoppen (`{ field, action: "start" | "stop" }`), met de tijd van de server: enkel als je dat
+ * veld mag wijzigen. Gaat door dezelfde controle als bewaren (de duur komt in "Duur in").
+ */
+items.post("/:id/timer", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const { row, access, type } = await requireItem(c, c.req.param("id"));
+  const obj = asObject(await c.req.json());
+  const def = type.fields.find((f) => f.key === obj.field && f.type === "timer");
+  if (!def || fieldAccess(access.rights, type.id, def.key) !== "edit") throw new ForbiddenError("Deze timer mag je niet bedienen.");
+  const current = parseData(row.data);
+  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const t = current[def.key] as TimerValue | undefined;
+  const running = Boolean(t && typeof t === "object" && "start" in t && !t.end);
+  let next: TimerValue;
+  if (obj.action === "start") next = running ? t! : { start: now };
+  else if (obj.action === "stop") {
+    if (!running) throw new ValidationError(`${def.label} loopt niet.`);
+    next = { start: t!.start, end: now };
+  } else throw new ValidationError("Start of stop?");
+  const data = await prepareData(db, me, access, type, { ...current, [def.key]: next }, current, false);
+  const applied = await computeEffects(db, me, access.rights, type, row, data);
+  await db.batch([
+    db.prepare("UPDATE items SET data = ?, applied = ?, updated_at = datetime('now') WHERE id = ?").bind(JSON.stringify(data), applied.length ? JSON.stringify(applied) : null, row.id),
+    ...(await effectStatements(db, me, netEffects(parseApplied(row.applied), applied), true)),
+  ]);
   return c.json(await loadDetail(c, row.id));
 });
 

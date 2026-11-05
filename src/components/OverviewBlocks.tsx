@@ -16,6 +16,7 @@ import { CardHead, FilterSelect, Segmented } from "./Controls";
 import { namesFrom } from "./Fields";
 import { QuickAdd } from "./QuickAdd";
 import { ChartBlock, ChartBuilder, chartTitle, newChart, TextBlock, TextBuilder } from "./ChartBlock";
+import { TimerBlock } from "./Timer";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
 import { ItemRow } from "./ItemsView";
@@ -323,6 +324,7 @@ export function BlockView({ block, lists, index, period }: { block: Block; lists
   else if (block.kind === "value") body = <ValueBlock item={block.item} field={block.field} />;
   else if (block.kind === "chart" && project) body = <ChartBlock block={block} type={type} period={period} />;
   else if (block.kind === "text") body = <TextBlock block={block} />;
+  else if (block.kind === "timer" && project && type) body = <TimerBlock project={project.id} list={block.list} field={block.field} />;
   return body ? (
     <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
       {body}
@@ -510,6 +512,10 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
               ? project && list && chart
                 ? { kind, id: crypto.randomUUID().slice(0, 8), project, list, chart, ...(title.trim() ? { title: title.trim() } : {}) }
                 : null
+              : kind === "timer"
+                ? project && list && field
+                  ? { kind, project, list, field }
+                  : null
               : kind === "text"
                 ? note.title.trim() || note.text.trim()
                   ? { kind, id: crypto.randomUUID().slice(0, 8), ...(note.title.trim() ? { title: note.title.trim() } : {}), ...(note.text.trim() ? { text: note.text.trim() } : {}) }
@@ -589,7 +595,9 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
             >
               <option value="">Kies…</option>
               {types
-                .filter((t) => (kind === "add" ? t.can_create : kind === "total" ? shownTotals(t).length > 0 : true))
+                .filter((t) =>
+                  kind === "add" ? t.can_create : kind === "total" ? shownTotals(t).length > 0 : kind === "timer" ? t.fields.some((f) => f.type === "timer" && t.field_access[f.key] !== "none") : true,
+                )
                 .map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.plural}
@@ -642,6 +650,21 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
         )}
         {kind === "chart" && type && chart && <ChartBuilder project={project} type={type} value={chart} onChange={setChart} title={title} onTitle={setTitle} />}
         {kind === "text" && <TextBuilder title={note.title} text={note.text} onChange={setNote} />}
+        {kind === "timer" && type && (
+          <label className="field">
+            <span className="label">Timer</span>
+            <select aria-label="Timer" value={field} onChange={(e) => setField(e.target.value)}>
+              <option value="">Kies…</option>
+              {type.fields
+                .filter((f) => f.type === "timer" && type.field_access[f.key] !== "none")
+                .map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
         {kind === "value" && type && (
           <>
             <div className="field">

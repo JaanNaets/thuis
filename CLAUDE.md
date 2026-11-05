@@ -129,6 +129,10 @@ commits en uitleg.
   per regel een item (of tekst), hoeveel en de eenheid; met `adjust` trekt elke regel af (een maaltijd uit een recept),
   met `per` (porties) rekent overnemen uit een recept mee. Waar code `item`/`items` behandelt, hoort `amounts` erbij. Een kasticket rekent de maat op de lijn om
   (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
+- **Timer** (veldsoort `timer`, `{ start, end? }` in UTC): `timer_goal` (melding in `sendTimerGoals`, elk kwartier,
+  aan wie het item maakte als die het nog ziet), `timer_into` (de duur in een Duur van de lijst, `applyTimers` in
+  `prepareData`, enkel als je dat veld mag wijzigen). `POST /items/:id/timer` (start/stop met de tijd van de server),
+  `GET /projects/:id/timer` voor het blok `timer`.
 - **Melding bij een nieuw item** (`shared/notify.ts`, `item_types.notify`, `worker/notify.ts`): per lijst niet, aan
   iedereen die de lijst ziet, of aan wie in een veld met mensen staat; nooit aan wie het toevoegde of wie het project
   (of een erboven) stilzette (`AppSettings.muted`, `PUT /me/muted`); per ontvanger zijn eigen rechten
