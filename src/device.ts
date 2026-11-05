@@ -20,6 +20,13 @@ function readKioskMode(): boolean {
 
 export const isKiosk = readKioskMode();
 
+/**
+ * Een toestel met een vinger als aanwijzer (gsm, tablet). Daar opent een knop die enkel foto's aanvaardt de fotokiezer
+ * van het toestel (met je albums, ook uit Google Foto's); laat ze ook een PDF toe, dan krijg je enkel Camera en
+ * Bestanden.
+ */
+export const isTouch = (): boolean => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
 /** Event waarop useApi opnieuw ophaalt; de kiosk vuurt het af wanneer niemand de tablet gebruikt. */
 export const REFRESH_EVENT = "huishouden:refresh";
 

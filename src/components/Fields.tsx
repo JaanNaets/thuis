@@ -38,7 +38,7 @@ import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
 import { api, ApiError, apiUrl } from "../api";
 import { detectInImage, type ScanResult } from "../barcode-detect";
-import { isKiosk } from "../device";
+import { isKiosk, isTouch } from "../device";
 import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
 import { Link } from "../router";
@@ -1758,6 +1758,13 @@ export function LabelScanner({
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
+  // Een PDF (factuur) enkel op een computer: op een gsm of tablet opent een knop met enkel foto's de fotokiezer (met
+  // Google Foto's); een PDF komt daar via Delen → Thuis. Productlijsten lezen nooit een PDF.
+  const pdfs = useMemo(() => !products && !isTouch(), [products]);
+  // Productlijsten: één camera voor een barcode (live, zonder AI) en een foto (✨). Codes die niet in Open Food Facts
+  // staan, meldt de camera niet opnieuw; dan trek je een foto.
+  const [scanHint, setScanHint] = useState<string>();
+  const tried = useRef(new Set<string>());
   // `ai`: de melding komt van de AI (✨); zonder: van de code of uit Open Food Facts.
   const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string; ai?: boolean }>();
   const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
@@ -1786,13 +1793,20 @@ export function LabelScanner({
       if (products && onProduct) {
         const read = (await detectInImage(file).catch(() => null))?.rawValue;
         code = read && isProductCode(read) ? read : undefined;
-        const info = code && !note.trim() ? await findProduct(code) : null;
+        // Met uitleg leest de AI de rest (met die barcode erbij); zonder AI telt enkel de barcode. Een code die de camera
+        // al opzocht en niet vond, niet nog eens; lukt opzoeken niet, dan leest de AI gewoon de foto.
+        const look = code && (!note.trim() || !ai) && !tried.current.has(code);
+        const info = look ? await findProduct(code!).catch((err) => (ai ? null : Promise.reject(err))) : null;
         if (info) {
           onProduct(info, code!, photo);
           return found(info);
         }
       }
-      if (!ai) return setStatus({ tone: "none", text: "Lezen met AI staat voor jou uit." });
+      if (!ai)
+        return setStatus({
+          tone: "none",
+          text: code ? "Dit product staat (nog) niet in Open Food Facts. Vul het zelf in." : products ? "Geen barcode gevonden op deze foto." : "Lezen met AI staat voor jou uit.",
+        });
       const body = new FormData();
       body.set("image", small);
       body.set("type_id", typeId);
@@ -1817,12 +1831,24 @@ export function LabelScanner({
     }
   }
 
+  /** Een barcode in de camera van een productlijst: gevonden = invullen (zonder AI), anders blijft de camera open. */
+  async function liveCode(code: string) {
+    tried.current.add(code);
+    setScanHint("Product opzoeken");
+    const info = isProductCode(code) ? await findProduct(code).catch(() => null) : null;
+    if (!info) return setScanHint("Niet in Open Food Facts. Trek een foto.");
+    setScanning(false);
+    setScanHint(undefined);
+    onProduct?.(info, code, null);
+    found(info);
+  }
+
   async function scanned(code: string) {
     setScanning(false);
     setStatus({ tone: "busy", text: "Product opzoeken" });
     try {
       const info = isProductCode(code) ? await findProduct(code) : null;
-      if (!info) return setStatus({ tone: "none", text: "Dit product staat (nog) niet in Open Food Facts. Vul het zelf in, of trek een foto." });
+      if (!info) return setStatus({ tone: "none", text: `Dit product staat (nog) niet in Open Food Facts. Vul het zelf in${ai ? ", of trek een foto" : ""}.` });
       onProduct?.(info, code, null);
       found(info);
     } catch (err) {
@@ -1852,7 +1878,7 @@ export function LabelScanner({
     <input
       ref={ref}
       type="file"
-      accept={camera ? "image/*" : "image/*,application/pdf"}
+      accept={camera || !pdfs ? "image/*" : "image/*,application/pdf"}
       capture={camera ? "environment" : undefined}
       hidden
       onChange={(e) => {
@@ -1868,7 +1894,7 @@ export function LabelScanner({
       {pending && (
         <div className="shared-pending">
           {pendingUrl ? <img src={pendingUrl} alt="Gedeelde foto" /> : <Icon name="file" size={20} />}
-          {ai && (
+          {(ai || products) && (
             <button
               type="button"
               className="btn btn-outline"
@@ -1878,7 +1904,15 @@ export function LabelScanner({
                 read(pending);
               }}
             >
-              <Icon name="sparkles" /> Foto lezen
+              {ai ? (
+                <>
+                  <Icon name="sparkles" /> Foto lezen
+                </>
+              ) : (
+                <>
+                  <Icon name="scan" /> Barcode zoeken
+                </>
+              )}
             </button>
           )}
         </div>
@@ -1912,27 +1946,58 @@ export function LabelScanner({
         )}
       </div>
       {chips && onMove && onRemove && <QuickChips chips={chips} onMove={onMove} onRemove={onRemove} />}
-      {/* Een foto lezen gaat (buiten een barcode) naar de AI: daarom een kleine ✨ op de knop. Uit: geen fotoknoppen. */}
+      {/* Een foto lezen gaat (buiten een barcode) naar de AI: daarom een kleine ✨ op de knop. In een productlijst is
+          Foto één camera: een barcode leest ze live (zonder AI), de ontspanknop trekt een foto voor de AI. AI uit: in
+          een productlijst Barcode en Uit foto (enkel de barcode op de foto), elders geen fotoknoppen. */}
       <div className="btn-row">
-        {ai && (
-          <>
-            <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-              <Icon name="camera" /> Foto <AiMark />
-            </button>
-            <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
-              <Icon name="image" /> {products ? "Uit foto" : "Uit bestand"} <AiMark />
-            </button>
-          </>
+        {products && ai && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            title="Barcode, of een foto lezen met AI"
+            disabled={status?.tone === "busy"}
+            onClick={() => {
+              setScanHint(undefined);
+              setScanning(true);
+            }}
+          >
+            <Icon name="camera" /> Foto <AiMark />
+          </button>
         )}
-        {products && (
+        {products && !ai && (
           <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
             <Icon name="scan" /> Barcode
+          </button>
+        )}
+        {!products && ai && (
+          <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
+            <Icon name="camera" /> Foto <AiMark />
+          </button>
+        )}
+        {(ai || products) && (
+          <button type="button" className="btn btn-outline" title={ai ? "Lezen met AI" : undefined} disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
+            <Icon name="image" /> {pdfs ? "Uit bestand" : "Uit foto"} {ai && <AiMark />}
           </button>
         )}
       </div>
       {input(cameraRef, true)}
       {input(fileRef, false)}
-      {scanning && <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />}
+      {scanning &&
+        (products && ai ? (
+          <BarcodeScanner
+            continuous
+            hint={scanHint ?? "Hou de barcode in beeld, of trek een foto"}
+            skip={(code) => tried.current.has(code)}
+            onClose={() => setScanning(false)}
+            onResult={(r) => liveCode(r.rawValue)}
+            onPhoto={(file) => {
+              setScanning(false);
+              read(file);
+            }}
+          />
+        ) : (
+          <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />
+        ))}
       {status && (
         <Alert tone={status.tone} ai={status.ai}>
           {status.text}

@@ -3132,6 +3132,54 @@ dialog.sheet[open]::backdrop {
   text-align: center;
 }
 
+/* Foto of barcode (productlijsten): het hele beeld blijft zichtbaar (de hoeken tonen waar de barcode leest), met
+   onderaan een witte ontspanknop met ✨: de foto leest de AI. */
+.scanner.is-photo .scanner-frame {
+  box-shadow: none;
+}
+
+/* Een zachte waas boven en onder, zodat sluiten, de hint en de ontspanknop ook op een wit beeld zichtbaar zijn. */
+.scanner-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgb(0 0 0 / 0.4), transparent 20%, transparent 62%, rgb(0 0 0 / 0.55));
+  pointer-events: none;
+}
+
+.scanner.is-photo .scanner-hint {
+  bottom: calc(132px + env(safe-area-inset-bottom));
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+}
+
+.scanner-shutter {
+  position: absolute;
+  left: 50%;
+  bottom: calc(36px + env(safe-area-inset-bottom));
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-left: -38px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--primary);
+  box-shadow:
+    0 0 0 5px rgb(255 255 255 / 0.4),
+    0 0 0 6px rgb(0 0 0 / 0.2),
+    0 6px 20px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-out), opacity 0.2s;
+}
+
+.scanner-shutter:active {
+  transform: scale(0.92);
+}
+
+.scanner-shutter:disabled {
+  opacity: 0.5;
+}
+
 .scanner-close {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));

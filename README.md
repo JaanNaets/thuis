@@ -545,6 +545,10 @@ zoals **Verkoper** koppelt ze op naam aan een verkoper die je al hebt ("COLRUYT 
 staat de winkel er nog niet in, dan voeg je ze met één tik toe. Wat de AI zegt, gaat door dezelfde controle als wat
 je zelf typt; er wordt nooit iets bewaard zonder dat je op **Opslaan** drukt.
 
+Op een gsm of tablet opent **Uit foto** de fotokiezer van je toestel (op een recente Android met je albums uit Google
+Foto's); een PDF (een factuur uit je mail) deel je daar met Thuis (Delen → Thuis). Op een computer heet de knop **Uit
+bestand** en kan je ook een PDF kiezen.
+
 Bij de foto kan je de AI een korte **uitleg** meegeven ("ik at de helft", "enkel de boodschappen, niet de tankbeurt").
 Pas je die achteraf aan, dan laat je de foto opnieuw lezen (dat telt als een extra lezing). Staat er een barcode op de
 foto en geef je uitleg, dan komen de gegevens uit de barcode en leest de AI enkel de rest (zoals hoeveel je at).
@@ -552,7 +556,9 @@ foto en geef je uitleg, dan komen de gegevens uit de barcode en leest de AI enke
 Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), dan zoekt de app echte gegevens op in
 [Open Food Facts](https://world.openfoodfacts.org), een open en gratis databank, zo zuinig mogelijk:
 
-1. **Barcode**: scan ze, of trek een foto waarop ze staat. De app leest ze zelf (zonder AI) en het product is exact.
+1. **Barcode**: tik op **Foto** en hou de barcode in beeld: de camera leest ze live (zonder AI), het product is exact
+   en de velden staan meteen ingevuld. Staat het product niet in Open Food Facts, dan blijft de camera open en trek
+   je met de ontspanknop (✨) een foto die de AI leest. Een barcode op een foto uit je album leest de app ook zelf.
 2. **Foto zonder barcode**: de AI herkent wat erop staat. Een gekend product (bv. Nutella van Ferrero) zoekt de app
    op naam en merk op in Open Food Facts; een gerecht of iets dat niet gevonden wordt, blijft een schatting. De app
    zegt altijd welk van de twee, en welk product ze vond. Hoeveel je at, blijft een schatting: kijk het na.

@@ -24,9 +24,13 @@ async function cached(db: D1Database, key: string, load: () => Promise<ProductIn
   return found;
 }
 
-/** Een vraag aan Open Food Facts; gooit een fout als het niet lukt (dat onthouden we niet als "niets gevonden"). */
-async function getJson(url: string, seconds = 8): Promise<unknown> {
+/**
+ * Een vraag aan Open Food Facts; gooit een fout als het niet lukt (dat onthouden we niet als "niets gevonden"). Een
+ * onbekende barcode beantwoordt Open Food Facts met 404 (en `status: 0`): met `missing` is dat gewoon niets gevonden.
+ */
+async function getJson(url: string, seconds = 8, missing = false): Promise<unknown> {
   const res = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(seconds * 1000) });
+  if (missing && res.status === 404) return { status: 0 };
   if (!res.ok) throw new Error(`Open Food Facts: ${res.status}`);
   return res.json();
 }
@@ -35,7 +39,7 @@ async function getJson(url: string, seconds = 8): Promise<unknown> {
 export async function productByCode(db: D1Database, code: string): Promise<ProductInfo | null> {
   if (!isProductCode(code)) return null;
   return cached(db, `code:${code}`, async () => {
-    const body = (await getJson(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=${FIELDS}`)) as { status?: number; product?: unknown };
+    const body = (await getJson(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=${FIELDS}`, 8, true)) as { status?: number; product?: unknown };
     return body.status === 1 ? fromOff({ ...(body.product as object), code }) : null;
   });
 }
