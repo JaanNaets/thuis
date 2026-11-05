@@ -110,5 +110,65 @@ export function defaultBlocks(projects: { id: string; parent_id: string | null }
   return shown.map((p) => ({ kind: "project", project: p.id }));
 }
 
-/** De projecten waarvan de blokken de lijsten nodig hebben (een projectblok toont ze). */
-export const blockProjects = (blocks: Block[]): string[] => [...new Set(blocks.flatMap((b) => (b.kind === "project" ? [b.project] : [])))];
+/**
+ * De projecten waarvan de blokken de lijsten nodig hebben: een projectblok toont ze, een lijst-, snel-toevoegen- of
+ * totaalblok zoekt er zijn lijst in (ook zonder projectblok erbij, bv. op een overzicht "Keuken").
+ */
+export const blockProjects = (blocks: Block[]): string[] => [...new Set(blocks.flatMap((b) => ("project" in b ? [b.project] : [])))];
+
+// ---------- meerdere overzichten ----------
+
+/** Een overzicht met een naam ("Thuis", "Keuken", "Kelder"), elk met zijn eigen blokken (null = vanzelf). */
+export type Board = { id: string; name: string; blocks: Block[] | null };
+export type BoardInfo = { id: string; name: string };
+
+export const MAX_BOARDS = 8;
+/** Het eerste overzicht (ook het oude, van voor er meer konden). */
+export const MAIN_BOARD = "main";
+
+const boardName = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, 30) : "");
+
+/**
+ * Wat in people.overview staat, nagekeken: altijd minstens één overzicht. Het oude formaat (enkel blokken, of null)
+ * wordt het eerste overzicht "Overzicht".
+ */
+export function cleanBoards(raw: unknown): Board[] {
+  const fallback = (blocks: Block[] | null): Board[] => [{ id: MAIN_BOARD, name: "Overzicht", blocks }];
+  if (raw === null || raw === undefined) return fallback(null);
+  if (Array.isArray(raw)) return fallback(cleanBlocks(raw));
+  const list = raw && typeof raw === "object" ? (raw as { boards?: unknown }).boards : null;
+  if (!Array.isArray(list)) return fallback(null);
+  const seen = new Set<string>();
+  const out: Board[] = [];
+  for (const b of list) {
+    if (!b || typeof b !== "object") continue;
+    const o = b as Record<string, unknown>;
+    const id = typeof o.id === "string" && ID.test(o.id) ? o.id : null;
+    const name = boardName(o.name);
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, blocks: cleanBlocks(o.blocks) });
+    if (out.length === MAX_BOARDS) break;
+  }
+  return out.length ? out : fallback(null);
+}
+
+/**
+ * Nieuwe namen en volgorde van je overzichten (`wanted`: id en naam; zonder id = een nieuw, leeg overzicht). Wat er
+ * niet meer in staat, valt weg; er blijft er altijd minstens één.
+ */
+export function renameBoards(current: Board[], wanted: unknown, newId: () => string): Board[] {
+  if (!Array.isArray(wanted)) return current;
+  const byId = new Map(current.map((b) => [b.id, b]));
+  const out: Board[] = [];
+  for (const w of wanted.slice(0, MAX_BOARDS)) {
+    if (!w || typeof w !== "object") continue;
+    const o = w as Record<string, unknown>;
+    const name = boardName(o.name);
+    if (!name) continue;
+    const old = typeof o.id === "string" ? byId.get(o.id) : undefined;
+    if (old && !out.some((b) => b.id === old.id)) out.push({ ...old, name });
+    else if (!old && o.id === undefined) out.push({ id: newId(), name, blocks: [] });
+  }
+  return out.length ? out : current.slice(0, 1);
+}

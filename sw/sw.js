@@ -40,9 +40,36 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Delen met Thuis (Android, share_target in het manifest): een foto bewaren we even in een eigen cache, de tekst gaat
+// mee in het adres; de app neemt het over op /delen (zie src/shared-file.ts en src/pages/QuickLinks.tsx).
+const SHARE_PATH = "/delen";
+const SHARE_CACHE = "gedeeld";
+const SHARE_KEY = "/gedeeld/foto";
+
+async function receiveShare(request) {
+  const form = await request.formData();
+  const file = form.get("foto");
+  const text = ["title", "text", "url"]
+    .map((k) => form.get(k))
+    .filter((v) => typeof v === "string" && v.trim())
+    .join(" ")
+    .slice(0, 300);
+  const cache = await caches.open(SHARE_CACHE);
+  if (file && typeof file === "object" && file.size) {
+    await cache.put(SHARE_KEY, new Response(file, { headers: { "content-type": file.type || "image/jpeg", "x-name": encodeURIComponent(file.name || "gedeeld") } }));
+  } else {
+    await cache.delete(SHARE_KEY);
+  }
+  return Response.redirect(`${SHARE_PATH}${text ? `?tekst=${encodeURIComponent(text)}` : ""}`, 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
+  if (request.method === "POST" && url.origin === self.location.origin && url.pathname === SHARE_PATH) {
+    event.respondWith(receiveShare(request));
+    return;
+  }
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
   // Pagina's: eerst het netwerk (zo werkt de Access-login gewoon), offline de bewaarde app.

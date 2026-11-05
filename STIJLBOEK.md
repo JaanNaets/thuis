@@ -878,7 +878,7 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 | Totaal verschijnt | telt op (`useCountUp`) | 0,9 s |
 | Balk of meter | groeit vanaf links / van onder (`.total-bar`, `.total-history`, `LevelMeter`) | 0,5–1 s |
 | Onderblad, venster, zoekpalet | glijdt (onderblad) of veert (venster, palet) in en uit (`@starting-style`) | 0,4–0,6 s |
-| Toast | veert omhoog, glijdt weg | 0,55 / 0,25 s |
+| Toast | veert omhoog, glijdt weg (met een knop zoals Ongedaan maken: `.toast-action`, 7 s in beeld) | 0,55 / 0,25 s |
 | Vinkje | tekent zichzelf (`draw`) | 0,4 s |
 | Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
 | Indrukken | knop, filter en tag schalen naar 0,96 en veren terug, icoon in menu naar 0,86 | 0,35 s |
@@ -900,11 +900,21 @@ Regels:
 
 ## 6. Patronen per scherm
 
-**Overzicht** (`/`): `PageHead` met `primary` "Nieuw project" en `actions` "Aanpassen" → de blokken die je koos
+**Overzicht** (`/`): `PageHead` met de naam van het overzicht als titel, `primary` **Toevoegen** (en de `fab` met
+hetzelfde) en in `actions` enkel ⋯ (`btn-outline btn-icon`, "Meer opties") → een `Sheet` met `sheet-menu`: Aanpassen,
+Nieuw overzicht, Hernoemen, Verwijderen (een naam vraagt het blad zelf, `form` met één veld). Meer overzichten
+(`shared/overview.ts`: `Board`, tot `MAX_BOARDS`): `Tabs` onder de titel; dit toestel onthoudt welk (`thuis.board`,
+`?bord=`), zo toont de keukentablet "Keuken". Een leeg overzicht: "Leeg overzicht" met Aanpassen. **Toevoegen**
+(`AddPalette`, zelfde opbouw als het zoekpalet): typ waar het heen moet en wat je weet ("bijvulling 3 zakken
+pellets"); jouw meestgebruikte lijsten bovenaan (`GET /me/lists`, `matchTargets`), de rest van je tekst gaat mee naar
+het formulier (`?tekst=`), Nieuw project als laatste. → de blokken die je koos
 (`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
 een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
 met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
-→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: snel toevoegen (een rij met +), een totaal
+→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: **snel toevoegen** (`QuickAdd`: de kop
+opent het formulier, eronder `QuickInput` met `QuickChips` en **Bewaar**: meteen bewaard, met **Ongedaan maken** in
+de toast; ontbreekt er iets verplichts, dan heet de knop Verder en opent het formulier met je tekst; de kaart komt
+niet omhoog bij aanwijzen), een totaal
 (`TotalsCards only`), één waarde (`.dash-value`, groot; de naam van het item als titel, het veld eronder, − en + bij
 een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen) en **één lijst** (`ListBlock`):
 als rij met het aantal, of met een bewaarde **weergave** ("Te kopen" · Voorraad · project, met het aantal dat erin
@@ -927,6 +937,15 @@ een lijst is die verrekent), Subprojecten en Wie (met de rol, en "via …" als h
 beeld: daarboven één regel `LeadSummary` (`.lead-summary`, zacht vlak `--subtle`: per totaal het label en de waarde,
 en "Je krijgt nog" / "Je moet nog"; een pijltje klapt de kaarten van de totalen en Wie moet wie open). Zonder
 lijsten: een lege staat met "Lijst maken".
+
+**Snel naar een formulier** (`QuickLinks.tsx`, `shared/manifest.ts`): bij een lijst onder Meer opties
+**Snelkoppeling** → een `Sheet` met "Met tekst" (bv. pellets), de QR (`Barcode` in `.sticker`), **QR-sticker** (naar
+`/projecten/:id/sticker`: de sticker groot, Afdrukken; bij afdrukken enkel de sticker, zwart op wit met een rand) en
+**Op je beginscherm** (opent `/snel/:id/:lijst` in de browser: het formulier met een eigen manifest, zodat het icoon
+"Bijvulling" heet en meteen het formulier opent; in de browser staat onder de titel één kaart `.home-hint` met de
+twee handelingen, als app niet). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
+rijen, Kasticket bijtellen (lijsten met een voorraad) en Lezen in (de lijsten, die bij de tekst passen eerst); enkel
+tekst opent Toevoegen. Lang op het app-icoon drukken (Android): je drie meestgebruikte lijsten, Toevoegen en Agenda.
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
 `dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het

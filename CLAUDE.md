@@ -77,14 +77,23 @@ commits en uitleg.
   (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
-- **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
+- **Snel naar een formulier**: Toevoegen (`AddPalette`, `GET /me/lists` = `addTargets`, `matchTargets` in
+  `shared/quickadd.ts`; de rest van de tekst gaat als `?tekst=` naar het formulier), een QR-sticker en een icoon per
+  lijst (`/snel/:id/:typeId` met een eigen manifest, `GET /projects/:id/manifest/:typeId`, enkel als je er iets mag
+  toevoegen), het manifest van de app per persoon (`GET /me/manifest`: je drie meestgebruikte lijsten als
+  snelkoppeling, `share_target` naar `/delen`, opgevangen in `sw/sw.js`). Een gedeelde foto staat even in de cache
+  `gedeeld` (`src/shared-file.ts`) en wordt na gebruik opgeruimd.
+- **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon één of meer overzichten
+  (`Board`, `cleanBoards`: het oude formaat wordt het eerste; `PUT /me/boards` hernoemt, schikt, voegt toe en haalt
+  weg, er blijft er altijd één; `?board=`), elk met blokken (project met
   verborgen lijsten en per lijst eventueel een weergave om te tellen, lijst, snel toevoegen, totaal, waarde van een
   item; een lijst met een bewaarde weergave en als aantal of als items, elk blok eventueel breed), enkel ids,
   nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
   de eerste items en het aantal (`GET /projects/:id/items?type=&view=&limit=`, met `count`), nooit de hele lijst. Een
   blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:
   elk project, of bij meer dan `DEFAULT_ALL` enkel die bovenaan). `GET /me/overview` geeft enkel de lijsten van de
-  projecten in de blokken (`blockProjects`, of `?projects=`). Opstarten blijft licht bij 1000 projecten: geen lijst
+  projecten in de blokken (`blockProjects`: elk blok met een project, of `?projects=`). Een snel-toevoegen-blok
+  (`QuickAdd`) bewaart meteen via de gewone route, met Ongedaan maken (verwijderen, enkel met `can_delete`). Opstarten blijft licht bij 1000 projecten: geen lijst
   of boom die alles tegelijk tekent (de zijbalk tekent een tak pas als hij open gaat).
 - **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor het hele web
   over al je projecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer

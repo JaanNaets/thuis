@@ -8,7 +8,7 @@
 // dat je typt; de woorden ervoor zoeken daarin verder ("rode wi" → Rode wijn).
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import type { FieldDef } from "../../shared/fields";
+import { formatFieldValue, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
 import { formSuggestions, insertSuggestion, matchSuggestions, suggestionLists, typedFragments, wordAt, type Suggestion } from "../../shared/quickfill";
 import type { ItemRef } from "../../shared/types";
 import { api } from "../api";
@@ -173,6 +173,10 @@ export function QuickInput({
     </div>
   );
 }
+
+/** Een waarde in het rijtje: zonder de eenheid als die al het label is ("Zakken 3", niet "Zakken 3 zakken"). */
+export const chipValue = (def: FieldDef, value: FieldValue, names: Names) =>
+  def.type === "number" && def.unit && def.unit.toLowerCase() === def.label.toLowerCase() ? String(value).replace(".", ",") : formatFieldValue(def, value, names);
 
 /** Wat de tekst invulde: per veld het label en de waarde. */
 export type QuickChip = {

@@ -2,11 +2,12 @@
 // de lijnen van een kasticket bij je voorraad optellen. Elke aanpassing gaat in één keer naar de database
 // (`/items/:id/adjust`), zodat twee mensen tegelijk elkaar niet overschrijven.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CodeValue, FieldDef } from "../../shared/fields";
 import { convert, formatAmount, measureOf, round3, type Measure } from "../../shared/units";
 import type { Item, ReceiptLines } from "../../shared/types";
 import { api } from "../api";
+import { clearShared } from "../shared-file";
 import { formatNumber } from "../format";
 import { prepareForReading } from "../image";
 import { BarcodeScanner } from "./BarcodeScanner";
@@ -208,11 +209,14 @@ export function ReceiptToStock({
   typeId,
   counter,
   onDone,
+  initial,
 }: {
   projectId: string;
   typeId: string;
   counter: FieldDef;
   onDone: () => void;
+  /** Een foto die al klaarligt (gedeeld vanuit een andere app): meteen lezen. */
+  initial?: File | null;
 }) {
   const toast = useToast();
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -220,6 +224,12 @@ export function ReceiptToStock({
   const [lines, setLines] = useState<Line[]>();
   const [status, setStatus] = useState<{ tone: "busy" | "none"; text: string }>();
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!initial) return;
+    read(initial);
+    clearShared();
+  }, [initial]);
 
   async function read(file: File | undefined) {
     if (!file) return;

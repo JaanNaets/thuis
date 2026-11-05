@@ -506,6 +506,19 @@ Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het vel
 
 Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw item begint dan met wat jij de vorige keer koos (zacht blauw), bv. de categorie of het aantal zakken. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
 
+### Snel naar het juiste formulier
+
+- **Toevoegen** (de + of de knop bovenaan het overzicht): typ "bijvulling 3 zakken pellets", kies Bijvulling, en het
+  formulier opent met alles ingevuld. Je meestgebruikte lijsten staan bovenaan; Nieuw project is de laatste keuze.
+- **Meer overzichten** (⋯ → Nieuw overzicht): bv. "Keuken" met snel toevoegen en de voorraad. Elk toestel onthoudt
+  welk overzicht het toont. Een blok **Snel toevoegen** bewaart meteen met **Bewaar** (met Ongedaan maken).
+- **QR-sticker** (in een lijst: Meer opties → Snelkoppeling): druk hem af en kleef hem op de pelletkachel; scannen
+  opent het formulier, eventueel met tekst ("pellets"). Werkt op iPhone en Android.
+- **Op je beginscherm** (zelfde plek): een eigen icoon "Bijvulling" dat meteen het formulier opent. Op een iPhone
+  heeft elk icoon zijn eigen aanmelding (één keer per sessie van Cloudflare Access, zie Langer ingelogd blijven).
+- **Android**: lang op het app-icoon drukken toont je drie meestgebruikte lijsten; een foto (kasticket) of tekst
+  deel je vanuit een andere app met Thuis.
+
 ### Een foto lezen: etiket, kasticket, factuur, product
 
 Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de

@@ -12,6 +12,7 @@ import { allLinks, projectLinks } from "./routes/links";
 import { projectViews, views } from "./routes/views";
 import { people, projects, roles, tags, types } from "./routes/projects";
 import type { AppEnv } from "./types";
+import { SHARE_PATH } from "../shared/manifest";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "./validate";
 
 const app = new Hono<AppEnv>().basePath("/api");
@@ -57,7 +58,12 @@ app.onError((err, c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  fetch: (request, env, ctx) => {
+    // Delen met Thuis zonder service worker (de allereerste keer): naar /delen, zonder de foto.
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === SHARE_PATH) return Response.redirect(new URL(SHARE_PATH, url).toString(), 303);
+    return app.fetch(request, env, ctx);
+  },
   // Elk kwartier: herinneringen met een uur, en om 7 u herhalen en herinneren (zie cron.ts en wrangler.jsonc).
   scheduled: (event, env, ctx) => ctx.waitUntil(quarter(env.DB, new Date(event.scheduledTime))),
 } satisfies ExportedHandler<AppEnv["Bindings"]>;

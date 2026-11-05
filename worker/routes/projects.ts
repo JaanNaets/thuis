@@ -39,6 +39,7 @@ import {
 } from "../../shared/template-file";
 import { isIconKey, isTemplateKey, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate, type TemplatePlan } from "../../shared/templates";
 import { descendantIds } from "../../shared/tree";
+import { listManifest } from "../../shared/manifest";
 import { itemsAsSeen, type SeenItem } from "../compute";
 import { isTone, type Balance, type ItemType, type Member, type Person, type ProjectDetail, type ProjectNode, type Role, type Tag } from "../../shared/types";
 import {
@@ -506,6 +507,20 @@ projects.put("/:id/types/order", async (c) => {
     ids.map((id, i) => db.prepare("UPDATE item_types SET sort_order = ? WHERE id = ? AND project_id = ?").bind((i + 1) * 10, id, access.project.id)),
   );
   return c.json({ ok: true });
+});
+
+/**
+ * Het manifest om één lijst als eigen icoon op je beginscherm te zetten (zie shared/manifest.ts): enkel voor een lijst
+ * van dit project of erboven waarin je iets mag toevoegen.
+ */
+projects.get("/:id/manifest/:typeId", async (c) => {
+  const db = c.env.DB;
+  const access = await requireProject(db, c.get("person").id, c.req.param("id"));
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === c.req.param("typeId"));
+  if (!type || !canCreate(access.rights, type.id)) throw new NotFoundError("Die lijst bestaat hier niet.");
+  return c.body(JSON.stringify(listManifest({ project_id: access.project.id, type_id: type.id, name: type.name })), 200, {
+    "content-type": "application/manifest+json",
+  });
 });
 
 /**

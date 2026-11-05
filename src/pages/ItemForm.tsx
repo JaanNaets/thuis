@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
 import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
@@ -10,11 +10,12 @@ import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
 import { attributesDraft, buildAttributes, FieldInputs, fieldSuggestions, findProduct, LabelScanner, type AttributeDraft } from "../components/Fields";
 import { PageHead } from "../components/Page";
-import type { QuickChip, QuickSource } from "../components/QuickInput";
+import { chipValue, type QuickChip, type QuickSource } from "../components/QuickInput";
 import { TagPicker } from "../components/TagPicker";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "../router";
 import { enqueue, isOffline } from "../outbox";
+import { sharedFile } from "../shared-file";
 import { useSession } from "../session";
 
 type Draft = AttributeDraft[string];
@@ -24,9 +25,6 @@ type Before = { value: Draft; auto: boolean };
 type Pick = Suggestion & { set: Draft; before: Before };
 type Live = { result: QuickResult | null; set: Record<string, Draft>; before: Record<string, Before>; name: string | null; nameBefore: Before | null };
 const EMPTY_LIVE: Live = { result: null, set: {}, before: {}, name: null, nameBefore: null };
-/** Een waarde in het rijtje: zonder de eenheid als die al het label is ("Zakken 3", niet "Zakken 3 zakken"). */
-const shownValue = (def: FieldDef, value: FieldValue, names: Names) =>
-  def.type === "number" && def.unit && def.unit.toLowerCase() === def.label.toLowerCase() ? String(value).replace(".", ",") : formatFieldValue(def, value, names);
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? "") === JSON.stringify(b ?? "");
 const ids = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
 const options = (v: unknown) => String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -54,20 +52,39 @@ function EditItem({ itemId }: { itemId: string }) {
   return <WithProject projectId={item.project_id} item={item} />;
 }
 
-function WithProject({ projectId, item }: { projectId: string; item?: ItemDetail }) {
+/** Het formulier voor een nieuw item in één vaste lijst (een icoon op je beginscherm, zie /snel/:id/:typeId). */
+export function ItemFormFor({ projectId, typeId, notice }: { projectId: string; typeId: string; notice?: ReactNode }) {
+  return <WithProject projectId={projectId} typeId={typeId} notice={notice} />;
+}
+
+function WithProject({ projectId, item, typeId, notice }: { projectId: string; item?: ItemDetail; typeId?: string; notice?: ReactNode }) {
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${projectId}`);
   const [params] = useSearchParams();
   // Kwam je via "Wijn toevoegen", dan ligt de lijst vast; anders kies je ze bovenaan (en dat blijft zo).
-  const [choose] = useState(() => !item && !params.get("lijst"));
+  const wanted = typeId ?? params.get("lijst");
+  const [choose] = useState(() => !item && !wanted);
   if (error) return <p className="error page">{error}</p>;
   if (!p) return null;
   const creatable = p.types.filter((t) => t.can_create);
-  const type = item ? p.types.find((t) => t.id === item.type_id) : (creatable.find((t) => t.id === params.get("lijst")) ?? creatable[0]);
+  const type = item ? p.types.find((t) => t.id === item.type_id) : (creatable.find((t) => t.id === wanted) ?? creatable[0]);
   if (!type) return <p className="error page">{item ? "Dit item mag je niet bewerken." : "Je kan hier niets toevoegen."}</p>;
-  return <ItemForm key={type.id} project={p} type={type} item={item} creatable={choose ? creatable : []} />;
+  return <ItemForm key={type.id} project={p} type={type} item={item} creatable={choose ? creatable : []} notice={notice} />;
 }
 
-function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; type: ItemTypeView; item?: ItemDetail; creatable: ItemTypeView[] }) {
+function ItemForm({
+  project,
+  type,
+  item,
+  creatable,
+  notice,
+}: {
+  project: ProjectDetail;
+  type: ItemTypeView;
+  item?: ItemDetail;
+  creatable: ItemTypeView[];
+  /** Iets onder de titel (bij een icoon op je beginscherm: hoe je het daar zet). */
+  notice?: ReactNode;
+}) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const toast = useToast();
@@ -317,7 +334,8 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   // met wat er daarvoor stond: wis je het woord, dan komt dat terug. Wat je koos of naar een ander veld zette (`picks`),
   // telt als zelf ingevuld; wis je dat woord, dan komt ook daar terug wat er stond. De AI leest enkel een hele zin, als
   // je zelf op Invullen drukt.
-  const [note, setNote] = useState("");
+  // ?tekst= (Toevoegen, een QR-sticker, een icoon op je beginscherm): meteen invullen.
+  const [note, setNote] = useState(() => (item ? "" : (params.get("tekst") ?? "").slice(0, 300)));
   const [picks, setPicks] = useState<Pick[]>([]);
   const live = useRef<Live>(EMPTY_LIVE);
   const [liveVersion, setLiveVersion] = useState(0);
@@ -333,9 +351,17 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   const defOf = (key: string) => fields.find((f) => f.key === key);
   const multiple = (key: string) => ["multi", "people", "items", "amounts"].includes(defOf(key)?.type ?? "");
 
-  // Een nieuw item: meteen typen.
+  // Een foto gedeeld vanuit een andere app (?foto=gedeeld, zie /delen): die leest het formulier meteen.
+  const [shared, setShared] = useState<File | null>(null);
   useEffect(() => {
-    if (!item) quickRef.current?.focus({ preventScroll: true });
+    if (!item && params.get("foto") === "gedeeld") sharedFile().then(setShared);
+  }, []);
+
+  // Een nieuw item: meteen typen (en wat al getypt is, meteen invullen).
+  useEffect(() => {
+    if (item) return;
+    quickRef.current?.focus({ preventScroll: true });
+    if (note) schedule(note, [], 0);
   }, []);
 
   // Geheugen (`remember`): een nieuw item begint met wat jij de vorige keer in die velden invulde, zacht blauw. Wat je
@@ -566,12 +592,12 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
     for (const k of Object.keys(live.current.set)) {
       const def = defOf(k);
       if (!def || !r) continue;
-      out.push({ key: k, label: def.label, value: shownValue(def, r.data[k], names), targets: multiple(k) ? [] : targets(k, r.data[k]), pieces: r.parts[k] ?? [], order: order(k) });
+      out.push({ key: k, label: def.label, value: chipValue(def, r.data[k], names), targets: multiple(k) ? [] : targets(k, r.data[k]), pieces: r.parts[k] ?? [], order: order(k) });
     }
     picks.forEach((x, i) => {
       const def = defOf(x.field);
       const label = def?.label ?? type.name_label ?? "Naam";
-      const shown = !def || ["item", "items", "amounts", "person", "people", "select", "multi"].includes(def.type) ? x.text : shownValue(def, x.value, names);
+      const shown = !def || ["item", "items", "amounts", "person", "people", "select", "multi"].includes(def.type) ? x.text : chipValue(def, x.value, names);
       out.push({ key: multiple(x.field) ? `${x.field}#${i}` : x.field, label, value: shown, targets: def && !multiple(x.field) ? targets(x.field, x.value) : [], pieces: [x.text], order: order(x.field) });
     });
     return out.sort((a, b) => a.order - b.order);
@@ -739,6 +765,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   return (
     <form ref={formRef} className="form page" onSubmit={onSubmit} onKeyDown={onFormKey}>
       <PageHead title={item ? `${item.name} bewerken` : `${type.name} toevoegen`} back={{ to: -1, label: item?.name ?? project.project.name }} />
+      {notice}
 
       {creatable.length > 1 && creatable.length <= 4 && (
         <Segmented
@@ -784,6 +811,7 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
             onMove={moveFilled}
             onRemove={removeChip}
             inputRef={quickRef}
+            initial={shared}
           />
           {more.items.length > 0 && <MoreOnPhoto fields={fields} more={more.items} onToggle={(i, on) => setMore((m) => ({ ...m, items: m.items.map((x, k) => (k === i ? { ...x, on } : x)) }))} />}
         </section>

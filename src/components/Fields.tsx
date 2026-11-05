@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Access } from "../../shared/access";
 import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
@@ -41,6 +41,7 @@ import { detectInImage, type ScanResult } from "../barcode-detect";
 import { isKiosk } from "../device";
 import { centsToInput, formatCents, formatDate, parseEuro } from "../format";
 import { prepareForReading, prepareUpload } from "../image";
+import { clearShared } from "../shared-file";
 import { Link } from "../router";
 import { useSession } from "../session";
 import { BarcodeScanner } from "./BarcodeScanner";
@@ -1718,6 +1719,7 @@ export function LabelScanner({
   onMove,
   onRemove,
   inputRef,
+  initial,
 }: {
   projectId: string;
   typeId: string;
@@ -1743,6 +1745,8 @@ export function LabelScanner({
   onMove?: (key: string, to: string) => void;
   onRemove?: (key: string) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** Een foto die al klaarligt (gedeeld vanuit een andere app): meteen lezen. */
+  initial?: File | null;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1752,6 +1756,12 @@ export function LabelScanner({
   // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
   const [last, setLast] = useState<{ file: File; note: string }>();
   const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
+
+  useEffect(() => {
+    if (!initial) return;
+    read(initial);
+    clearShared();
+  }, [initial]);
 
   async function read(chosen: File | undefined) {
     if (!chosen) return;

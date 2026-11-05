@@ -3,7 +3,7 @@
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef, Interval } from "./fields";
 import type { TotalDef, Transfer } from "./totals";
-import type { Block } from "./overview";
+import type { Block, BoardInfo } from "./overview";
 import type { IconKey } from "./templates";
 
 /** Pastelkleuren voor personen, projecten en tags. */
@@ -54,7 +54,13 @@ export type Me = { person: Person; projects: ProjectNode[] };
 /** Je overzicht: per project de lijsten die je er ziet, met hoeveel items er (niet gearchiveerd) in zitten. */
 export type OverviewType = { id: string; name: string; plural: string; icon: IconKey | null; count: number; can_create: boolean };
 /** Je overzicht: per project zijn lijsten, en de blokken die je zelf koos (null = vanzelf, zie shared/overview.ts). */
-export type Overview = { projects: { id: string; types: OverviewType[] }[]; blocks: Block[] | null };
+export type Overview = {
+  projects: { id: string; types: OverviewType[] }[];
+  blocks: Block[] | null;
+  /** Al je overzichten (naam en volgorde), en welk dit is. */
+  boards: BoardInfo[];
+  board: string;
+};
 
 export type ProjectInput = {
   name: string;

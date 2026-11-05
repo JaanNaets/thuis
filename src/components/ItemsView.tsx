@@ -26,6 +26,10 @@ import { Icon, type IconName } from "./Icon";
 import { SkeletonRows, stagger } from "./Motion";
 import { EmptyState } from "./Page";
 import { Sheet } from "./Sheet";
+import { Barcode } from "./Barcode";
+import { addPath } from "../../shared/quickadd";
+import { quickPath } from "../../shared/manifest";
+import { sharedFile } from "../shared-file";
 import { adjust, ReceiptToStock, RowStepper, StockScanner } from "./Stock";
 import { measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
@@ -61,7 +65,10 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const [archived, setArchived] = useState(false);
   const toast = useToast();
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [sheet, setSheet] = useState<"scan" | "receipt" | "more">();
+  const [sheet, setSheet] = useState<"scan" | "receipt" | "more" | "shortcut">();
+  // Een foto gedeeld vanuit een andere app als kasticket (?kasticket=gedeeld, zie /delen).
+  const [sharedReceipt, setSharedReceipt] = useState<File | null>(null);
+  const [shortcutText, setShortcutText] = useState("");
   async function step(id: string, delta: number) {
     try {
       const value = await adjust(id, counter!.key, delta);
@@ -94,6 +101,16 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   // Een weergave uit het adres (?weergave=, bv. vanaf een blok op het overzicht): één keer kiezen als ze er is.
   const [params] = useSearchParams();
   const wanted = params.get("weergave");
+  const sharedAsked = useRef(false);
+  useEffect(() => {
+    if (params.get("kasticket") !== "gedeeld" || sharedAsked.current || !counter || !type.can_create) return;
+    sharedAsked.current = true;
+    sharedFile().then((file) => {
+      if (!file) return;
+      setSharedReceipt(file);
+      setSheet("receipt");
+    });
+  }, [params]);
   const applied = useRef<string | null>(null);
   useEffect(() => {
     const view = wanted && savedViews?.find((v) => v.id === wanted);
@@ -219,6 +236,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     ...(counter && codeField && !archived ? [{ icon: "scan" as const, label: "Scannen", run: () => setSheet("scan") }] : []),
     ...(counter && type.can_create && live ? [{ icon: "receipt" as const, label: "Kasticket bijtellen", run: () => setSheet("receipt") }] : []),
     ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
+    ...(type.can_create && live ? [{ icon: "share" as const, label: "Snelkoppeling", run: () => setSheet("shortcut") }] : []),
     ...(items.length > 0 ? [{ icon: "download" as const, label: "Exporteren", href: apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`) }] : []),
   ];
 
@@ -455,6 +473,31 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
         </div>
       </Sheet>
 
+      <Sheet open={sheet === "shortcut"} title={`${type.name} toevoegen`} onClose={() => setSheet(undefined)}>
+        {sheet === "shortcut" && (
+          <div className="form">
+            <label className="field">
+              <span className="label">Met tekst</span>
+              <input value={shortcutText} maxLength={120} placeholder="bv. pellets" onChange={(e) => setShortcutText(e.target.value)} />
+            </label>
+            <div className="sticker">
+              <Barcode format="qr_code" value={`${window.location.origin}${addPath({ project_id: project.project.id, type_id: type.id }, shortcutText)}`} />
+            </div>
+            <div className="btn-row">
+              <Link
+                to={`/projecten/${project.project.id}/sticker?lijst=${type.id}${shortcutText.trim() ? `&tekst=${encodeURIComponent(shortcutText.trim())}` : ""}`}
+                className="btn btn-outline"
+              >
+                <Icon name="download" size={16} /> QR-sticker
+              </Link>
+              <a href={`${window.location.origin}${quickPath(project.project.id, type.id)}`} target="_blank" rel="noopener" className="btn btn-outline">
+                <Icon name="home" size={16} /> Op je beginscherm
+              </a>
+            </div>
+          </div>
+        )}
+      </Sheet>
+
       <Sheet open={editing} title={active ? active.name : "Filters"} onClose={() => setEditing(false)}>
         {editing && (
           <ViewEditor
@@ -503,6 +546,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
                 projectId={project.project.id}
                 typeId={type.id}
                 counter={counter}
+                initial={sharedReceipt}
                 onDone={() => {
                   setSheet(undefined);
                   setCounts({});

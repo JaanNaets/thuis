@@ -1,8 +1,13 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { blockKey, blockProjects, defaultBlocks, type Block } from "../../shared/overview";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
+import { blockKey, blockProjects, defaultBlocks, type Block, type BoardInfo } from "../../shared/overview";
 import type { Overview } from "../../shared/types";
 import { api, useApi } from "../api";
-import { Icon } from "../components/Icon";
+import { AddPalette } from "../components/AddPalette";
+import { useConfirm } from "../components/ConfirmDialog";
+import { Tabs } from "../components/Controls";
+import { Icon, type IconName } from "../components/Icon";
+import { Sheet } from "../components/Sheet";
 import { BlocksEditor, BlockView } from "../components/OverviewBlocks";
 import { EmptyState, PageHead } from "../components/Page";
 import { projectIcon } from "../components/Sidebar";
@@ -46,21 +51,48 @@ function useMasonry() {
   return ref;
 }
 
+/** Welk overzicht dit toestel toont (de keukentablet "Keuken", je gsm "Thuis"); ?bord= kiest er een. */
+const BOARD_KEY = "thuis.board";
+function storedBoard(): string | null {
+  try {
+    return localStorage.getItem(BOARD_KEY);
+  } catch {
+    return null;
+  }
+}
+function storeBoard(id: string) {
+  try {
+    localStorage.setItem(BOARD_KEY, id);
+  } catch {
+    // Zonder opslag begint dit toestel gewoon bij het eerste overzicht.
+  }
+}
+
 /**
- * Je overzicht: de blokken die je koos (zie shared/overview.ts), of vanzelf elk project met zijn lijsten. Met
- * Aanpassen schik je ze, verberg je lijsten en voeg je een lijst, snel toevoegen, een totaal of een waarde toe; Klaar
- * bewaart (enkel voor jou). De volgorde van je projecten in de boom zet je bij Jouw gegevens.
+ * Je overzichten (zie shared/overview.ts): elk met de blokken die je koos, of vanzelf elk project met zijn lijsten.
+ * Bovenaan wissel je tussen je overzichten (dit toestel onthoudt welk). Toevoegen (+) opent het palet om in een lijst
+ * iets toe te voegen of een nieuw project te maken; onder ⋯ pas je een overzicht aan, maak je er een nieuw, of
+ * hernoem en verwijder je het. De volgorde van je projecten in de boom zet je bij Jouw gegevens.
  */
 export function Home() {
   const { projects } = useSession();
   const toast = useToast();
-  const { data: base, mutate } = useApi<Overview>("/me/overview");
+  const confirm = useConfirm();
+  const [params, setParams] = useSearchParams();
+  const [boardId, setBoardId] = useState(() => params.get("bord") ?? storedBoard());
+  const { data: base, mutate, error } = useApi<Overview>(`/me/overview${boardId ? `?board=${encodeURIComponent(boardId)}` : ""}`);
   const tree = projectTree(projects, true);
   const active = tree.filter((p) => !p.archived);
   const archived = tree.filter((p) => p.archived);
   const [editing, setEditing] = useState<Block[] | null>(null);
   const masonry = useMasonry();
   const [busy, setBusy] = useState(false);
+  // Toevoegen: ook vanuit een snelkoppeling (?toevoegen=1) of met gedeelde tekst (?tekst=).
+  const [adding, setAdding] = useState(params.get("toevoegen") === "1");
+  const [menu, setMenu] = useState<"menu" | "new" | "rename" | null>(null);
+  const [boardName, setBoardName] = useState("");
+  const boards = base?.boards ?? [];
+  const current = boards.find((b) => b.id === base?.board);
   const blocks = editing ?? base?.blocks ?? defaultBlocks(active);
   // De server stuurt enkel de lijsten van de projecten in je blokken; een project dat je net toevoegde, komt apart.
   const missing = base ? blockProjects(blocks).filter((id) => !base.projects.some((p) => p.id === id)) : [];
@@ -68,10 +100,21 @@ export function Home() {
   const overview = base && { ...base, projects: [...base.projects, ...(extra?.projects ?? [])] };
   const lists = new Map(overview?.projects.map((p) => [p.id, p.types]));
 
+  // Het gekozen overzicht onthouden op dit toestel (ook als het via ?bord= kwam).
+  useEffect(() => {
+    if (base?.board) storeBoard(base.board);
+  }, [base?.board]);
+
+  function chooseBoard(id: string) {
+    setEditing(null);
+    setBoardId(id);
+    if (params.has("bord")) setParams({}, { replace: true });
+  }
+
   async function save(next: Block[] | null) {
     setBusy(true);
     try {
-      const { blocks: saved } = await api.put<{ blocks: Block[] | null }>("/me/overview", { blocks: next });
+      const { blocks: saved } = await api.put<{ blocks: Block[] | null }>("/me/overview", { board: base?.board, blocks: next });
       if (overview) mutate({ ...overview, blocks: saved });
       setEditing(null);
       toast("Overzicht bewaard");
@@ -82,10 +125,46 @@ export function Home() {
     }
   }
 
+  /** Je overzichten met nieuwe namen of volgorde (een nieuw zonder id); daarna naar `go` (of blijven). */
+  async function saveBoards(next: { id?: string; name: string }[], go?: (saved: BoardInfo[]) => string) {
+    setBusy(true);
+    try {
+      const { boards: saved } = await api.put<{ boards: BoardInfo[] }>("/me/boards", { boards: next });
+      setMenu(null);
+      const to = go?.(saved);
+      if (to && to !== base?.board) chooseBoard(to);
+      else if (overview) mutate({ ...overview, boards: saved });
+      return true;
+    } catch (err) {
+      toast((err as Error).message, "alert");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeBoard() {
+    if (!current || !(await confirm({ title: `${current.name} verwijderen?`, confirmLabel: "Verwijderen", danger: true }))) return;
+    if (await saveBoards(boards.filter((b) => b.id !== current.id), (saved) => saved[0].id)) toast(`${current.name} verwijderd`);
+  }
+
+  const menuRow = (icon: IconName, label: string, run: () => void) => (
+    <li key={label}>
+      <button type="button" className="row" onClick={run}>
+        <span className="cell-main">
+          <span className="row-media">
+            <Icon name={icon} size={16} />
+          </span>
+          <span className="row-title">{label}</span>
+        </span>
+      </button>
+    </li>
+  );
+
   return (
     <div className="page">
       <PageHead
-        title="Overzicht"
+        title={current?.name ?? "Overzicht"}
         actions={
           active.length > 0 &&
           overview &&
@@ -94,20 +173,25 @@ export function Home() {
               Standaard
             </button>
           ) : (
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(blocks)}>
-              <Icon name="sliders" size={15} /> Aanpassen
+            <button type="button" className="btn btn-outline btn-icon" aria-label="Meer opties" aria-haspopup="dialog" onClick={() => setMenu("menu")}>
+              <Icon name="dots" size={16} />
             </button>
           ))
         }
         primary={
           !editing && (
-            <Link to="/projecten/nieuw" className="btn btn-primary">
-              <Icon name="plus" size={16} /> Nieuw project
-            </Link>
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <Icon name="plus" size={16} /> Toevoegen
+            </button>
           )
         }
       />
 
+      {boards.length > 1 && !editing && (
+        <Tabs label="Overzicht" value={base?.board ?? boards[0].id} tabs={boards.map((b) => ({ value: b.id, label: b.name }))} onChange={chooseBoard} />
+      )}
+
+      {error && <p className="error">{error}</p>}
       {active.length === 0 ? (
         <EmptyState
           icon="project"
@@ -125,6 +209,16 @@ export function Home() {
             Klaar
           </button>
         </div>
+      ) : base && blocks.length === 0 ? (
+        <EmptyState
+          icon="sliders"
+          title="Leeg overzicht"
+          action={
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing([])}>
+              <Icon name="sliders" size={15} /> Aanpassen
+            </button>
+          }
+        />
       ) : (
         <div className="dashboard stagger" ref={masonry}>
           {blocks.map((b, i) => (
@@ -133,7 +227,7 @@ export function Home() {
         </div>
       )}
 
-      {archived.length > 0 && (
+      {archived.length > 0 && !editing && (
         <>
           <h2 className="section-title">Gearchiveerd</h2>
           <div className="card">
@@ -159,10 +253,64 @@ export function Home() {
       )}
 
       {!editing && (
-        <Link to="/projecten/nieuw" className="fab" aria-label="Nieuw project">
+        <button type="button" className="fab" aria-label="Toevoegen" onClick={() => setAdding(true)}>
           <Icon name="plus" size={24} />
-        </Link>
+        </button>
       )}
+
+      <AddPalette
+        open={adding}
+        text={params.get("tekst") ?? ""}
+        onClose={() => {
+          setAdding(false);
+          if (params.has("toevoegen") || params.has("tekst")) setParams({}, { replace: true });
+        }}
+      />
+
+      <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>
+        {menu === "menu" ? (
+          <ul className="rows sheet-menu">
+            {menuRow("sliders", "Aanpassen", () => {
+              setMenu(null);
+              setEditing(blocks);
+            })}
+            {menuRow("plus", "Nieuw overzicht", () => {
+              setBoardName("");
+              setMenu("new");
+            })}
+            {menuRow("edit", "Hernoemen", () => {
+              setBoardName(current?.name ?? "");
+              setMenu("rename");
+            })}
+            {boards.length > 1 && menuRow("trash", "Verwijderen", removeBoard)}
+          </ul>
+        ) : (
+          menu && (
+            <form
+              className="form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const name = boardName.trim();
+                if (!name) return;
+                if (menu === "new") {
+                  const before = new Set(boards.map((b) => b.id));
+                  if (await saveBoards([...boards, { name }], (saved) => saved.find((b) => !before.has(b.id))?.id ?? saved[0].id)) toast(`${name} gemaakt`);
+                } else if (current) {
+                  if (await saveBoards(boards.map((b) => (b.id === current.id ? { ...b, name } : b)))) toast("Hernoemd");
+                }
+              }}
+            >
+              <label className="field">
+                <span className="label">Naam</span>
+                <input autoFocus required maxLength={30} value={boardName} placeholder="bv. Keuken" onChange={(e) => setBoardName(e.target.value)} />
+              </label>
+              <button type="submit" className="btn btn-primary" disabled={busy || !boardName.trim()}>
+                {menu === "new" ? "Maken" : "Bewaren"}
+              </button>
+            </form>
+          )
+        )}
+      </Sheet>
     </div>
   );
 }

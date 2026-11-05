@@ -13,6 +13,7 @@ import { Link } from "../router";
 import { useSession } from "../session";
 import { CardHead, FilterSelect, Segmented } from "./Controls";
 import { namesFrom } from "./Fields";
+import { QuickAdd } from "./QuickAdd";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
 import { ItemRow } from "./ItemsView";
@@ -315,23 +316,7 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
           </ul>
         </section>
       );
-  else if (block.kind === "add" && project && type?.can_create)
-    body = (
-      <section className="card dash-card">
-        <Link to={`/projecten/${project.id}/nieuw?lijst=${type.id}`} className="dash-head">
-          <span className="row-media">
-            <Icon name="plus" size={16} />
-          </span>
-          <span className="row-main">
-            <span className="row-title">{type.name} toevoegen</span>
-            <span className="row-meta">
-              <span>{project.name}</span>
-            </span>
-          </span>
-          <Icon name="next" size={16} className="row-chevron" />
-        </Link>
-      </section>
-    );
+  else if (block.kind === "add" && project && type?.can_create) body = <QuickAdd projectId={project.id} typeId={type.id} />;
   else if (block.kind === "total" && project) body = <TotalBlock project={project.id} list={block.list} total={block.total} />;
   else if (block.kind === "value") body = <ValueBlock item={block.item} field={block.field} />;
   return body ? (

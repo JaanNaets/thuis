@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { blockKey, blockProjects, cleanBlocks, DEFAULT_ALL, defaultBlocks, MAX_BLOCKS } from "../shared/overview.ts";
+import { blockKey, blockProjects, cleanBlocks, cleanBoards, DEFAULT_ALL, defaultBlocks, MAIN_BOARD, MAX_BLOCKS, renameBoards } from "../shared/overview.ts";
 
 test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
   const out = cleanBlocks([
@@ -55,8 +55,34 @@ test("leeg is vanzelf; te veel valt weg", () => {
       { kind: "project", project: "a" },
       { kind: "list", project: "b", list: "l" },
       { kind: "project", project: "a", hide: ["x"] },
+      { kind: "value", item: "i", field: "f" },
     ]),
-    ["a"],
+    ["a", "b"],
   );
   assert.equal(blockKey({ kind: "value", item: "i", field: "f" }), "value/i/f");
+});
+
+test("meerdere overzichten: het oude formaat wordt het eerste, en altijd minstens één", () => {
+  const block = { kind: "project", project: "p1" };
+  assert.deepEqual(cleanBoards(null), [{ id: MAIN_BOARD, name: "Overzicht", blocks: null }]);
+  assert.deepEqual(cleanBoards([block]), [{ id: MAIN_BOARD, name: "Overzicht", blocks: [block] }]);
+  assert.deepEqual(
+    cleanBoards({ boards: [{ id: "main", name: " Thuis ", blocks: null }, { id: "k1", name: "Keuken", blocks: [block, block] }, { id: "k1", name: "Dubbel" }, { id: "x", name: "" }] }),
+    [
+      { id: "main", name: "Thuis", blocks: null },
+      { id: "k1", name: "Keuken", blocks: [block] },
+    ],
+  );
+  assert.equal(cleanBoards({ boards: [] }).length, 1);
+});
+
+test("overzichten hernoemen, schikken, toevoegen en weghalen", () => {
+  const boards = cleanBoards({ boards: [{ id: "main", name: "Thuis", blocks: null }, { id: "k1", name: "Keuken", blocks: [] }] });
+  let n = 0;
+  const next = renameBoards(boards, [{ id: "k1", name: "Keuken" }, { id: "main", name: "Alles" }, { name: "Kelder" }], () => `n${++n}`);
+  assert.deepEqual(next.map((b) => [b.id, b.name, b.blocks]), [["k1", "Keuken", []], ["main", "Alles", null], ["n1", "Kelder", []]]);
+  // Alles weg: het eerste blijft.
+  assert.deepEqual(renameBoards(boards, [], () => "x").map((b) => b.id), ["main"]);
+  // Een onbekende id maakt niets nieuw.
+  assert.deepEqual(renameBoards(boards, [{ id: "zzz", name: "Raar" }], () => "x").map((b) => b.id), ["main"]);
 });
