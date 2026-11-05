@@ -29,7 +29,7 @@ projectReceipt.post("/:id/items/scan-receipt", async (c) => {
   const plan = receiptPlan(type.fields, type.id, (id) => linked.get(id)?.fields);
   if (!plan) throw new ValidationError("Deze lijst heeft geen bedrag en geen product dat telt.");
   const image = form.get("image");
-  const none: ReceiptRead = { store: null, date: null, total: null, lines: [] };
+  const none: ReceiptRead = { store: null, date: null, total: null, lines: [], targets: [] };
   if (!(image instanceof File)) return c.json({ error: "Geen foto ontvangen" }, 400);
   if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES) return c.json({ ...none, message: "Deze foto kan niet gelezen worden." });
   const limit = await useAiBudget(c.env, me);
@@ -123,7 +123,16 @@ Sla totalen, tussentotalen, statiegeld, zakjes, spaarpunten en betaalgegevens ov
       receipt = { key: plan.receipt.key, type_id: list.id, name: list.name, fields: visibleFields(target.rights, list.id, list.fields) };
   }
 
-  const out: ReceiptRead = { store, date: validDate(parsed.date, brusselsToday()), total: cents(parsed.total), lines, ...(receipt ? { receipt } : {}) };
+  // Waar een nieuw product kan komen: de lijsten van het product waarin je mag toevoegen (Voorraad, Wijnen, Pellets).
+  const targets: ReceiptRead["targets"] = [];
+  for (const id of plan.product.lists) {
+    const list = linked.get(id);
+    const target = list && (access.chain.includes(list.project_id) ? access : await projectAccess(db, me, list.project_id));
+    if (list && target && canCreate(target.rights, list.id))
+      targets.push({ type_id: list.id, plural: list.plural, project_name: target.project.name, fields: visibleFields(target.rights, list.id, list.fields) });
+  }
+
+  const out: ReceiptRead = { store, date: validDate(parsed.date, brusselsToday()), total: cents(parsed.total), lines, targets, ...(receipt ? { receipt } : {}) };
   if (!lines.length) out.message = "Geen lijnen gevonden op deze foto.";
   return c.json(out);
 });

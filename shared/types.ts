@@ -230,7 +230,7 @@ export type ReceiptLines = {
 /**
  * Een kasticket per lijn, gelezen (zie shared/receipt.ts): de winkel (een winkel die je al hebt, of de naam), de datum,
  * het totaal en elke lijn met hoeveel, de eenheid, de prijs (in cent) en het product dat erbij hoort (als gekend).
- * `receipt`: waar het kasticket zelf komt, als je daar mag toevoegen.
+ * `receipt`: waar het kasticket zelf komt, als je daar mag toevoegen; `targets`: waar een nieuw product kan komen.
  */
 export type ReceiptRead = {
   store: { id: string | null; name: string } | null;
@@ -238,6 +238,8 @@ export type ReceiptRead = {
   total: number | null;
   lines: ReadLine[];
   receipt?: { key: string; type_id: string; name: string; fields: FieldDef[] };
+  /** Waar een nieuw product kan komen (de lijsten van het product waarin je mag toevoegen), met hun velden. */
+  targets: { type_id: string; plural: string; project_name: string; fields: FieldDef[] }[];
   message?: string;
 };
 

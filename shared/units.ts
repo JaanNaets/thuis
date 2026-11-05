@@ -67,6 +67,17 @@ export function convert(amount: number, from: string | null | undefined, to: Mea
   return amount;
 }
 
+/**
+ * Kan `amount` in `from` echt omgerekend worden naar `to`? Stuks (stuk, zak, pot, …) naar gewicht of inhoud enkel met
+ * de inhoud per stuk (`convert` geeft dan het getal zoals het is, "liever iets dan niets"; dit zegt of dat klopt).
+ */
+export function converts(from: string | null | undefined, to: Measure): boolean {
+  const source = normalizeUnit(from);
+  const target = normalizeUnit(to.unit);
+  if (!source || !target || source === target) return true;
+  return !(baseOf(source) === null && baseOf(target) !== null && !(to.piece && to.piece > 0));
+}
+
 /** Afronden op drie cijfers na de komma (zo blijft 0,1 + 0,2 gewoon 0,3). */
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
 

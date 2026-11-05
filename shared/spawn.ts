@@ -12,7 +12,7 @@
 
 import type { Attributes, FieldDef } from "./fields.ts";
 import { refLists } from "./fields.ts";
-import { convert, measureOf } from "./units.ts";
+import { convert, converts, measureOf } from "./units.ts";
 
 /** Zoveel lijsten hoogstens bij Meteen ook. */
 export const MAX_SPAWN = 10;
@@ -61,7 +61,9 @@ export function spawnData(source: { fields: FieldDef[]; data: Attributes; name: 
       // Eerst naar de eenheid van het product, dan naar die van de andere lijst (g bij Eten).
       const inProduct = unit ? convert(amount, unit, measure) : amount;
       const goal = t.adjust?.unit;
-      data[into] = Math.round((goal ? convert(inProduct, measure.unit, { unit: goal, piece: measure.piece }) : inProduct) * 1000) / 1000;
+      // Een broodje (per stuk, zonder inhoud per stuk) is niet in gram om te rekenen: dan blijft Hoeveel leeg.
+      if (!goal || converts(measure.unit, { unit: goal, piece: measure.piece }))
+        data[into] = Math.round((goal ? convert(inProduct, measure.unit, { unit: goal, piece: measure.piece }) : inProduct) * 1000) / 1000;
     }
     break;
   }

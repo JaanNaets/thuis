@@ -587,7 +587,9 @@ const MAX_BATCH = 80;
  * Meer items tegelijk in één lijst (de lijnen van een kasticket): elk nagekeken zoals een gewoon nieuw item, en alles
  * in één batch (alles of niets). Eén melding voor allemaal. Met `group` ontstaat in dezelfde batch ook het item waar
  * ze samen bij horen (het kasticket, in een lijst waarnaar een verwijzing van deze lijst wijst), en wijst die
- * verwijzing in elke lijn ernaar. Geeft de ids, die van de groep en wat Meteen ook erbij maakte.
+ * verwijzing in elke lijn ernaar; met `new_ref` op een lijn eerst een nieuw item waarnaar die lijn verwijst (een
+ * product dat nog niet bestond). Geeft de ids, die van de groep, de nieuwe items per lijn (`created`) en wat Meteen ook
+ * erbij maakte.
  */
 projectItems.post("/:id/items/batch", async (c) => {
   const obj = asObject(await c.req.json());
@@ -600,27 +602,53 @@ projectItems.post("/:id/items/batch", async (c) => {
   const raw = Array.isArray(obj.items) ? obj.items : [];
   if (!raw.length) throw new ValidationError("Niets om te bewaren.");
   if (raw.length > MAX_BATCH) throw new ValidationError(`Hoogstens ${MAX_BATCH} tegelijk.`);
-  const group = obj.group === undefined || obj.group === null ? null : await groupStatements(db, me, access, type, asObject(obj.group));
-  const made: Awaited<ReturnType<typeof createStatements>>[] = [];
+  // Een lijn met `new_ref` (een product dat nog niet bestaat): eerst die nieuwe items, want een lijn kan enkel naar een
+  // item verwijzen dat er is (en zo tellen bijtellen, Meteen ook en aftrekken gewoon mee). Lukt de rest niet, dan
+  // gaan ze weer weg: alles of niets.
+  const fresh: (Awaited<ReturnType<typeof newItemStatements>> | null)[] = [];
   for (const [i, r] of raw.entries()) {
+    const ref = (r as { new_ref?: unknown } | null)?.new_ref;
     try {
-      made.push(await createStatements(db, me, access, type, parseItemInput({ ...(r as object), type_id: type.id }), group ? { [group.field]: group.made.id } : {}));
+      fresh.push(ref ? await newItemStatements(db, me, access, type, asObject(ref)) : null);
     } catch (err) {
       throw new ValidationError(`Lijn ${i + 1}: ${(err as Error).message}`);
     }
   }
-  await db.batch([...(group?.made.statements ?? []), ...made.flatMap((m) => m.statements)]);
-  const last = made[made.length - 1];
-  if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id: last.id, name: last.name, data: last.data }).catch((err) => console.warn("Melding niet verstuurd", err)));
-  return c.json({ ids: made.map((m) => m.id), ...(group ? { group: group.made.id } : {}), spawned: made.flatMap((m) => m.spawned) }, 201);
+  const created = fresh.flatMap((f) => (f ? [f.made.id] : []));
+  if (created.length) await db.batch(fresh.flatMap((f) => f?.made.statements ?? []));
+  try {
+    const group = obj.group === undefined || obj.group === null ? null : await newItemStatements(db, me, access, type, asObject(obj.group));
+    const made: Awaited<ReturnType<typeof createStatements>>[] = [];
+    for (const [i, r] of raw.entries()) {
+      const item = asObject(r);
+      const ref = fresh[i];
+      try {
+        const data = ref ? { ...asObject(item.data ?? {}), [ref.field]: ref.made.id } : item.data;
+        made.push(await createStatements(db, me, access, type, parseItemInput({ ...item, data, type_id: type.id }), group ? { [group.field]: group.made.id } : {}));
+      } catch (err) {
+        throw new ValidationError(`Lijn ${i + 1}: ${(err as Error).message}`);
+      }
+    }
+    await db.batch([...(group?.made.statements ?? []), ...made.flatMap((m) => m.statements)]);
+    const last = made[made.length - 1];
+    if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id: last.id, name: last.name, data: last.data }).catch((err) => console.warn("Melding niet verstuurd", err)));
+    return c.json(
+      { ids: made.map((m) => m.id), ...(group ? { group: group.made.id } : {}), created: fresh.map((f) => f?.made.id ?? null), spawned: made.flatMap((m) => m.spawned) },
+      201,
+    );
+  } catch (err) {
+    if (created.length) await db.prepare("DELETE FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(created)).run();
+    throw err;
+  }
 });
 
 /**
- * Het item waar de lijnen van een batch bij horen (het kasticket): `field` is een verwijzing van de lijst die je mag
- * wijzigen, `type_id` een lijst waarnaar ze wijst en waarin je mag toevoegen (in dit project als ze erboven staat,
- * anders in haar eigen project). Nagekeken zoals een gewoon nieuw item.
+ * Een nieuw item waarnaar een verwijzing van deze lijst gaat wijzen: het kasticket waar de lijnen bij horen (`group`),
+ * of een nieuw product (`new_ref`). `field` is een verwijzing van de lijst die je mag wijzigen, `type_id` een lijst
+ * waarnaar ze wijst en waarin je mag toevoegen (in dit project als ze erboven staat, anders in haar eigen project).
+ * Nagekeken zoals een gewoon nieuw item.
  */
-async function groupStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, raw: Record<string, unknown>) {
+async function newItemStatements(db: D1Database, me: string, access: ProjectAccess, type: ItemType, raw: Record<string, unknown>) {
   const field = type.fields.find((f) => f.key === raw.field && f.type === "item");
   if (!field || fieldAccess(access.rights, type.id, field.key) !== "edit") throw new ForbiddenError("Dat veld mag je hier niet invullen.");
   const typeId = typeof raw.type_id === "string" ? raw.type_id : "";

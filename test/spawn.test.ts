@@ -49,6 +49,12 @@ test("Een broodje zonder product: enkel de naam en de datum", () => {
   assert.deepEqual(made, { name: "Broodje kaas", data: { datum: "2026-11-05" } });
 });
 
+test("Een product per stuk zonder inhoud per stuk: Hoeveel blijft leeg (geen verzonnen gram)", () => {
+  const broodje: SpawnProduct = { ...yoghurt, id: "b1", data: { aantal: 1, eenheid: "stuk" } };
+  const made = spawnData({ fields: uitgave, data: { bedrag: 450, datum: "2026-11-05", wat: "b1", hoeveel: 1, eenheid: "stuk", gegeten: true }, name: "Broodje kaas" }, eten, new Map([["b1", broodje]]));
+  assert.deepEqual(made, { name: "Broodje kaas", data: { datum: "2026-11-05", voorraad: "b1" } });
+});
+
 test("Verbanden: Meteen ook toont een verband naar de andere lijst", () => {
   const links = listLinks({ id: "uitgaven", fields: uitgave, totals: [] });
   assert.ok(links.some((l) => l.to === "eten-jaan" && l.texts[0].includes("Gegeten")));

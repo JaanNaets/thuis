@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyFieldDefaults, type FieldDef } from "../../shared/fields";
-import { commonFields, lineData, linesTotal, niceName, receiptData, receiptPlan, type ReviewLine } from "../../shared/receipt";
+import { commonFields, lineData, linesTotal, newProductData, niceName, receiptData, receiptPlan, type ReviewLine } from "../../shared/receipt";
 import type { ItemRef, ItemTypeView, ProjectDetail, ReceiptRead } from "../../shared/types";
 import { api } from "../api";
 import { REFRESH_EVENT } from "../device";
@@ -98,6 +98,8 @@ export function ReceiptToLines({
           ticket: l.name,
           name: niceName(l.name),
           product: l.product,
+          // Nog niet gekend: een nieuw product in de eerste lijst waarin je mag toevoegen (Voorraad).
+          newIn: l.product ? null : (found.targets[0]?.type_id ?? null),
           amount: l.amount,
           unit: unitDef ? l.unit : null,
           price: l.price,
@@ -114,6 +116,13 @@ export function ReceiptToLines({
   }
 
   const set = (i: number, patch: Partial<Line>) => setLines((list) => list.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const targets = read?.targets ?? [];
+  // Twee lijsten met dezelfde naam (Wijnen hier en in de Wijnkelder): met het project erbij.
+  const targetName = (id: string | null) => {
+    const t = targets.find((x) => x.type_id === id);
+    if (!t) return "";
+    return targets.filter((x) => x.plural === t.plural).length > 1 ? `${t.plural} · ${t.project_name}` : t.plural;
+  };
   const chosen = lines.filter((l) => l.on);
   const total = linesTotal(lines);
   const ticketTotal = read?.total ?? null;
@@ -124,7 +133,15 @@ export function ReceiptToLines({
     if (!chosen.length) return;
     setBusy(true);
     try {
-      const items = chosen.map((l) => ({ name: l.product?.name ?? l.name, data: lineData(plan, type.fields, built.data, l, person.id) }));
+      const items = chosen.map((l) => {
+        const target = !l.product && l.newIn ? targets.find((t) => t.type_id === l.newIn) : undefined;
+        return {
+          name: l.product?.name ?? l.name,
+          data: lineData(plan, type.fields, built.data, l, person.id),
+          // Een nieuw product: het ontstaat bij het bewaren, en de lijn verwijst ernaar (zie /items/batch).
+          ...(target ? { new_ref: { field: plan.product.key, type_id: target.type_id, name: l.name, data: newProductData(target.fields, l) } } : {}),
+        };
+      });
       const storeText = plan.store ? built.data[plan.store.key] : undefined;
       const group = read?.receipt
         ? {
@@ -134,7 +151,7 @@ export function ReceiptToLines({
             data: receiptData(read.receipt.fields, type.fields, built.data),
           }
         : undefined;
-      const res = await api.post<{ ids: string[]; group?: string; spawned: { list: string }[] }>(`/projects/${project.project.id}/items/batch`, {
+      const res = await api.post<{ ids: string[]; group?: string; created: (string | null)[]; spawned: { list: string }[] }>(`/projects/${project.project.id}/items/batch`, {
         type_id: type.id,
         items,
         ...(group ? { group } : {}),
@@ -145,10 +162,19 @@ export function ReceiptToLines({
         body.set("file", await prepareUpload(photo));
         await api.put(`/items/${res.group}/photo`, body).catch(() => toast("De foto kon niet bewaard worden", "alert"));
       }
-      for (const l of chosen) if (l.product && l.product.name.toLowerCase() !== l.ticket.toLowerCase()) api.post(`/items/${l.product.id}/alias`, { alias: l.ticket }).catch(() => undefined);
+      chosen.forEach((l, i) => {
+        const id = l.product?.id ?? res.created[i];
+        const name = l.product?.name ?? l.name;
+        if (id && name.toLowerCase() !== l.ticket.toLowerCase()) api.post(`/items/${id}/alias`, { alias: l.ticket }).catch(() => undefined);
+      });
       const n = res.ids.length;
+      const fresh = res.created.filter(Boolean).length;
       const lists = [...new Set(res.spawned.map((s) => s.list))];
-      toast(`${n} ${n === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()} bewaard${lists.length ? `, ook bij ${lists.join(" en ")}` : ""}`);
+      toast(
+        `${n} ${n === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()} bewaard` +
+          (fresh ? `, ${fresh} ${fresh === 1 ? "nieuw product" : "nieuwe producten"}` : "") +
+          (lists.length ? `, ook bij ${lists.join(" en ")}` : ""),
+      );
       // Alles opnieuw ophalen (de totalen, de voorraad), niet enkel de lijst.
       window.dispatchEvent(new Event(REFRESH_EVENT));
       onDone();
@@ -222,7 +248,7 @@ export function ReceiptToLines({
                   <button type="button" className="receipt-line-main" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}>
                     <span className="receipt-line-name">{l.product?.name ?? l.name}</span>
                     <span className="hint">
-                      {[l.amount !== null ? `${String(l.amount).replace(".", ",")}${l.unit && l.unit !== "stuk" ? ` ${l.unit}` : l.amount !== 1 ? "×" : ""}` : "", l.product ? (l.product.name.toLowerCase() !== l.ticket.toLowerCase() ? l.ticket : "") : "nieuw"]
+                      {[l.amount !== null ? `${String(l.amount).replace(".", ",")}${l.unit && l.unit !== "stuk" ? ` ${l.unit}` : l.amount !== 1 ? "×" : ""}` : "", l.product ? (l.product.name.toLowerCase() !== l.ticket.toLowerCase() ? l.ticket : "") : l.newIn ? `nieuw in ${targetName(l.newIn)}` : ""]
                         .filter(Boolean)
                         .join(" · ")}
                     </span>
@@ -232,7 +258,13 @@ export function ReceiptToLines({
                 {(plan.eaten || (plan.share && many)) && l.on && (
                   <div className="receipt-line-tags">
                     {plan.eaten && (
-                      <button type="button" className="tag" aria-pressed={l.eaten} onClick={() => set(i, { eaten: !l.eaten })}>
+                      <button
+                        type="button"
+                        className="tag"
+                        aria-pressed={l.eaten}
+                        // Meteen opgegeten en nog geen product (een broodje): geen voorraad, dus enkel tekst.
+                        onClick={() => set(i, { eaten: !l.eaten, ...(l.product ? {} : { newIn: l.eaten ? (targets[0]?.type_id ?? null) : null }) })}
+                      >
                         {l.eaten && <Icon name="check" size={13} />} {type.fields.find((f) => f.key === plan.eaten)?.label}
                       </button>
                     )}
@@ -252,7 +284,7 @@ export function ReceiptToLines({
                         value={l.product ? l.product.id : { text: l.name }}
                         disabled={false}
                         onChange={(v) => {
-                          if (typeof v !== "string") return set(i, { product: null, name: v?.text ?? l.name });
+                          if (typeof v !== "string") return set(i, { product: null, name: v?.text ?? l.name, newIn: l.product ? (targets[0]?.type_id ?? null) : l.newIn });
                           set(i, { product: { id: v, name: l.product?.id === v ? l.product.name : l.name } });
                           // De naam van wat je koos (de keuzelijst geeft enkel de id).
                           api
@@ -262,6 +294,19 @@ export function ReceiptToLines({
                         }}
                       />
                     </label>
+                    {!l.product && targets.length > 0 && (
+                      <label className="field">
+                        <span className="label">Nieuw product in</span>
+                        <select value={l.newIn ?? ""} onChange={(e) => set(i, { newIn: e.target.value || null })}>
+                          {targets.map((t) => (
+                            <option key={t.type_id} value={t.type_id}>
+                              {targetName(t.type_id)}
+                            </option>
+                          ))}
+                          <option value="">Geen, enkel tekst</option>
+                        </select>
+                      </label>
+                    )}
                     <div className="receipt-line-numbers">
                       {plan.amount && (
                         <label className="field">

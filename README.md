@@ -417,9 +417,13 @@ en bij het product zie je wanneer je het laatst kocht, de gemiddelde en de laags
 aan komt het ook in je Eten (een broodje onderweg), met **Van mij** betaal je het alleen.
 
 Een heel ticket in één keer: **Meer opties → Kasticket lezen** (✨). De AI leest de winkel, de datum en elke lijn met
-haar prijs; de app koppelt de lijnen aan je producten (ook op hoe ze vroeger op een ticket stonden). Bovenaan staat wat
-voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling), daaronder elke lijn: vink uit wat niet hoeft, tik
-Gegeten of Van mij aan, en tik op een lijn om het product, hoeveel of de prijs aan te passen. **Bewaar** zet alles in
+haar prijs; de app koppelt de lijnen aan je producten (ook op hoe ze vroeger op een ticket stonden). Wat ze niet kent,
+wordt een **nieuw product in de Voorraad** (met de eenheid van het ticket), zodat je ook daarvan de prijs volgt; tik op
+de lijn om toch een bestaand product te kiezen (heet het op het ticket anders, dan onthoudt de app dat), een andere
+lijst (Wijnen) of "enkel tekst" (batterijen, een cadeau). Een broodje dat je meteen opeet (Gegeten), wordt geen
+product. Bovenaan staat wat voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling), daaronder elke lijn:
+vink uit wat niet hoeft, tik Gegeten of Van mij aan, en tik op een lijn om het product, hoeveel of de prijs aan te
+passen. **Bewaar** zet alles in
 Uitgaven, met het ticket zelf (en de foto) in **Kastickets**, dat het totaal en het aantal lijnen toont. De
 **Boodschappen** zijn een takenlijst: afvinken telt niets meer bij, dat doet de aankoop.
 

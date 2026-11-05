@@ -757,14 +757,18 @@ gedeelde foto wacht met **✨ Kasticket lezen**), daarna van boven naar onder:
 - **Voor alle lijnen**: gewoon `FieldInputs` met de velden die niet per lijn verschillen (datum en winkel van het
   ticket, Betaald door, Categorie, Verdeling), ingevuld zoals een nieuw item.
 - **De lijnen** (`.receipt-lines.receipt-review`): per lijn een vinkje, de naam (het product, of de naam van het ticket
-  leesbaar gemaakt: "Broodje kaas") met eronder hoeveel en wat er op het ticket stond (of "nieuw"), rechts de prijs.
+  leesbaar gemaakt en zonder maat: "AARDAPPELEN 5KG" → "Aardappelen") met eronder hoeveel en wat er op het ticket
+  stond, of "nieuw in Voorraad" (een lijn die de app niet kent, wordt een nieuw product), rechts de prijs.
   Daaronder twee `tag`-knoppen (`aria-pressed`): het ja/nee met Meteen ook (**Gegeten**) en **Van mij** (de verdeling
-  enkel jij; enkel met meer mensen in het project). Een tik op de naam klapt open (`.receipt-line-edit`): het product
-  (`ItemPicker`), hoeveel, de eenheid en het bedrag.
+  enkel jij; enkel met meer mensen in het project). Gegeten bij een lijn zonder product maakt er tekst van (een broodje
+  is geen voorraad). Een tik op de naam klapt open (`.receipt-line-edit`): het product (`ItemPicker`: een bestaand
+  kiezen of de naam aanpassen), zonder product **Nieuw product in** (een `select` met de lijsten waarin je mag toevoegen
+  en "Geen, enkel tekst"), hoeveel, de eenheid en het bedrag.
 - **Totaal** (`.receipt-total`) van wat aan staat; wijkt de som van de lijnen af van het ticket, dan een stille
   `Alert`: "Op het ticket staat € 24,10."
 - **Bewaar 12 uitgaven** (`btn-primary btn-lg`): alles in één keer (`/items/batch`, met het kasticket zelf als
-  `group` als de lijst er een heeft; de foto komt bij het kasticket). Toast "12 uitgaven bewaard, ook bij Eten".
+  `group` als de lijst er een heeft; de foto komt bij het kasticket; een nieuw product met `new_ref`). Toast "12 uitgaven
+  bewaard, 2 nieuwe producten, ook bij Eten".
 
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)
 

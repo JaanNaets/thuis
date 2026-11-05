@@ -97,8 +97,10 @@ const VOLUME: Record<string, number> = { ml: 1, cl: 10, dl: 100, l: 1000 };
 export type ReviewLine = {
   on: boolean;
   name: string;
-  /** Het gekozen product (een item), of null: dan de naam als vrije tekst (als het veld dat toelaat). */
+  /** Het gekozen product (een item), of null: dan een nieuw product in `newIn`, of de naam als vrije tekst. */
   product: { id: string; name: string } | null;
+  /** Zonder product: de lijst waarin het een nieuw product wordt (null = enkel tekst). */
+  newIn: string | null;
   amount: number | null;
   unit: string | null;
   /** In cent. */
@@ -109,7 +111,8 @@ export type ReviewLine = {
 
 /**
  * De waarden van een lijn om te bewaren: wat voor alle lijnen geldt, en wat bij deze lijn hoort. "Van mij" maakt de
- * verdeling enkel jij. Een lijn zonder product: de naam als vrije tekst als het veld dat toelaat.
+ * verdeling enkel jij. Een lijn zonder product: de naam als vrije tekst als het veld dat toelaat (een nieuw product
+ * vult de server in, zie `newProductData`).
  */
 export function lineData(plan: ReceiptPlan, fields: FieldDef[], common: Attributes, line: ReviewLine, me: string): Attributes {
   const product = fields.find((f) => f.key === plan.product.key);
@@ -117,12 +120,25 @@ export function lineData(plan: ReceiptPlan, fields: FieldDef[], common: Attribut
   for (const k of lineKeys(plan)) delete data[k];
   if (line.price !== null) data[plan.price] = line.price;
   if (line.product) data[plan.product.key] = line.product.id;
-  else if (product?.free && line.name.trim()) data[plan.product.key] = { text: line.name.trim() };
+  else if (!line.newIn && product?.free && line.name.trim()) data[plan.product.key] = { text: line.name.trim() };
   if (plan.amount && line.amount !== null) data[plan.amount] = line.amount;
   if (plan.unit && line.unit) data[plan.unit] = line.unit;
   if (plan.eaten) data[plan.eaten] = line.eaten;
   if (plan.share && line.mine) data[plan.share] = [{ person_id: me, share: 1 }];
   return data;
+}
+
+/**
+ * Wat een nieuw product van een lijn krijgt: de eenheid van het ticket in het veld dat zegt waarin het getal telt
+ * (`measure.unit` op een getal, bv. Eenheid in Voorraad), als dat veld die eenheid kent. Het aantal zelf begint leeg:
+ * de aankoop telt het erbij, zoals bij elk product.
+ */
+export function newProductData(fields: FieldDef[], line: Pick<ReviewLine, "unit">): Attributes {
+  const key = fields.find((f) => f.type === "number" && f.measure?.unit)?.measure?.unit;
+  const unit = key ? fields.find((f) => f.key === key) : undefined;
+  if (!unit || !line.unit) return {};
+  if (unit.type === "select") return unit.options?.includes(line.unit) ? { [unit.key]: line.unit } : {};
+  return unit.type === "text" ? { [unit.key]: line.unit } : {};
 }
 
 /** Wat het kasticket zelf krijgt: de velden met dezelfde sleutel en soort als "voor alle lijnen" (datum, winkel). */
@@ -135,9 +151,16 @@ export function receiptData(receiptFields: FieldDef[], lineFields: FieldDef[], c
   return data;
 }
 
-/** Een naam zoals op het ticket, leesbaar: "AARDAPPELEN 5KG" → "Aardappelen 5kg"; gewone tekst blijft zoals ze is. */
+/**
+ * Een naam zoals op het ticket, leesbaar en zonder de maat (die staat al in hoeveel): "AARDAPPELEN 5KG" →
+ * "Aardappelen", "COLA 6X33CL" → "Cola"; gewone tekst blijft zoals ze is (behalve de maat).
+ */
 export function niceName(text: string): string {
-  const t = text.trim().replace(/\s+/g, " ");
+  const t = text
+    .trim()
+    .replace(/\s*\b\d+(?:[.,]\d+)?\s*(?:[x×*]\s*\d+(?:[.,]\d+)?\s*)?(?:kg|gr|g|mg|ml|cl|dl|lt|l|liter|kilo)\b\.?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || text.trim();
   if (!/[A-Z]/.test(t) || t !== t.toUpperCase()) return t;
   const lower = t.toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);

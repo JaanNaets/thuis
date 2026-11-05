@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { cents, commonFields, lineAmount, lineData, linesTotal, niceName, readLines, receiptData, receiptPlan, validDate, type ReviewLine } from "../shared/receipt.ts";
+import { cents, commonFields, lineAmount, lineData, linesTotal, newProductData, niceName, readLines, receiptData, receiptPlan, validDate, type ReviewLine } from "../shared/receipt.ts";
 
 const uitgaven: FieldDef[] = [
   { key: "bedrag", label: "Bedrag", type: "money", required: true },
@@ -73,10 +73,10 @@ test("hoeveel en de eenheid van een lijn", () => {
 test("wat elke lijn bewaart", () => {
   const plan = receiptPlan(uitgaven, "uitgaven", lists)!;
   const common = { datum: "2026-11-05", categorie: "Boodschappen", winkel: "colruyt", verdeling: [{ person_id: "jaan", share: 1 }, { person_id: "jana", share: 1 }] };
-  const line: ReviewLine = { on: true, name: "Yoghurt", product: { id: "y1", name: "Yoghurt" }, amount: 4, unit: "stuk", price: 356, eaten: false, mine: false };
+  const line: ReviewLine = { on: true, name: "Yoghurt", product: { id: "y1", name: "Yoghurt" }, newIn: null, amount: 4, unit: "stuk", price: 356, eaten: false, mine: false };
   assert.deepEqual(lineData(plan, uitgaven, common, line, "jaan"), { ...common, bedrag: 356, wat: "y1", hoeveel: 4, eenheid: "stuk", gegeten: false });
   // Een broodje voor mij alleen, meteen opgegeten, nog geen product: de naam als tekst.
-  const broodje: ReviewLine = { on: true, name: "Broodje kaas", product: null, amount: 1, unit: "stuk", price: 450, eaten: true, mine: true };
+  const broodje: ReviewLine = { on: true, name: "Broodje kaas", product: null, newIn: null, amount: 1, unit: "stuk", price: 450, eaten: true, mine: true };
   const data = lineData(plan, uitgaven, common, broodje, "jaan");
   assert.deepEqual(data.wat, { text: "Broodje kaas" });
   assert.deepEqual(data.verdeling, [{ person_id: "jaan", share: 1 }]);
@@ -89,7 +89,10 @@ test("het kasticket krijgt de datum en de winkel", () => {
 });
 
 test("een naam van het ticket, leesbaar", () => {
-  assert.equal(niceName("AARDAPPELEN  5KG"), "Aardappelen 5kg");
+  assert.equal(niceName("AARDAPPELEN  5KG"), "Aardappelen");
+  assert.equal(niceName("COLA 6X33CL"), "Cola");
+  assert.equal(niceName("Melk 1,5 l halfvol"), "Melk halfvol");
+  assert.equal(niceName("5KG"), "5kg");
   assert.equal(niceName("Boni yoghurt"), "Boni yoghurt");
   assert.equal(niceName("123"), "123");
 });
@@ -127,4 +130,19 @@ test("bedragen en datums van het ticket", () => {
   assert.equal(validDate("2026-11-06", "2026-11-05"), null);
   assert.equal(validDate("2026-02-30", "2026-11-05"), null);
   assert.equal(validDate("4/11/2026", "2026-11-05"), null);
+});
+
+test("een nieuw product van een lijn", () => {
+  const voorraad: FieldDef[] = [
+    { key: "aantal", label: "Aantal", type: "number", counter: true, measure: { unit: "eenheid", piece: "inhoud" } },
+    { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "kg", "g"] },
+  ];
+  assert.deepEqual(newProductData(voorraad, { unit: "kg" }), { eenheid: "kg" });
+  assert.deepEqual(newProductData(voorraad, { unit: "ml" }), {});
+  // Wijnen tellen flessen, zonder eenheid.
+  assert.deepEqual(newProductData([{ key: "aantal", label: "Aantal", type: "number" }], { unit: "stuk" }), {});
+  // Een nieuw product: de lijn krijgt geen tekst (de server zet de verwijzing naar het nieuwe item).
+  const plan = receiptPlan(uitgaven, "uitgaven", lists)!;
+  const fresh: ReviewLine = { on: true, name: "Boni yog nat", product: null, newIn: "voorraad", amount: 4, unit: "stuk", price: 356, eaten: false, mine: false };
+  assert.equal(lineData(plan, uitgaven, {}, fresh, "jaan").wat, undefined);
 });

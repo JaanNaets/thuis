@@ -153,8 +153,9 @@ commits en uitleg.
   volgt uit de velden (`receiptPlan`: het eerste geldveld, de eerste verwijzing die telt, het kasticket = een verwijzing
   naar een lijst met een datum die deze lijnen optelt); `POST /projects/:id/items/scan-receipt` leest (AI) en koppelt
   enkel aan items die de lezer ziet, bewaart niets. Bewaren met `POST /projects/:id/items/batch` (alles of niets, elk
-  item door `prepareData`, met `group`: het kasticket in dezelfde batch); `POST /items/:id/alias` onthoudt de naam op het
-  ticket.
+  item door `prepareData`, met `group`: het kasticket in dezelfde batch; met `new_ref` op een lijn eerst een nieuw
+  product, want een verwijzing moet bestaan: lukt de rest niet, dan gaat het weer weg); `POST /items/:id/alias` onthoudt
+  de naam op het ticket.
 - **Timer** (veldsoort `timer`, `{ start, end? }` in UTC): `timer_goal` (melding in `sendTimerGoals`, elk kwartier,
   aan wie het item maakte als die het nog ziet), `timer_into` (de duur in een Duur van de lijst, `applyTimers` in
   `prepareData`, enkel als je dat veld mag wijzigen). `POST /items/:id/timer` (start/stop met de tijd van de server),
