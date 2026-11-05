@@ -154,7 +154,8 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
   for (let i = 0; i < chosen.length + linked.length; i++) {
     const l = i < chosen.length ? chosen[i] : linked[i - chosen.length];
     for (const f of l.fields) {
-      const target = (f.type === "item" || f.type === "items") && !included.has(f.ref_type!) ? lists.find((x) => x.id === f.ref_type) : undefined;
+      const target =
+        (f.type === "item" || f.type === "items" || f.type === "amounts") && !included.has(f.ref_type!) ? lists.find((x) => x.id === f.ref_type) : undefined;
       if (!target) continue;
       included.set(target.id, target);
       linked.push(target);
@@ -172,7 +173,7 @@ export function buildTemplateFile(projects: ExportProject[], lists: ItemType[], 
     const fields: TemplateField[] = [];
     for (const def of l.fields) {
       const { ref_type, ref_also: _also, result: _result, ...f } = def;
-      if (f.type === "item" || f.type === "items") {
+      if (f.type === "item" || f.type === "items" || f.type === "amounts") {
         const key = ref_type ? keys.get(ref_type) : undefined;
         if (key) fields.push({ ...f, ref: key });
       } else if (f.type === "calc" && f.calc?.kind === "rollup" && f.calc.from === "backlinks") {

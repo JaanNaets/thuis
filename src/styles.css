@@ -2153,6 +2153,51 @@ input[type="checkbox"] {
   }
 }
 
+/* Hoeveelheden (AmountsPicker): per regel het item, hoeveel en de eenheid; onderaan een lege regel om toe te voegen. */
+.amount-rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.amount-row-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 68px;
+  align-items: start;
+  gap: 8px;
+}
+
+.amount-row-line:last-child:not(:has(.amount-qty-input)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.amount-qty-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Op de fiche: de hoeveelheid voor de naam, als stille kolom. */
+.amount-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.amount-list li {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.amount-qty {
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Een hoeveelheid typen: het getal en de eenheid naast elkaar. */
 .amount-row {
   display: grid;

@@ -115,7 +115,7 @@ export function cleanTypeFields(raw: unknown, available: ItemType[], selfId: str
   }
   const ids = new Set([...available.map((t) => t.id), selfId]);
   for (const f of fields) {
-    if ((f.type === "item" || f.type === "items") && !refLists(f).every((id) => ids.has(id)))
+    if ((f.type === "item" || f.type === "items" || f.type === "amounts") && !refLists(f).every((id) => ids.has(id)))
       throw new ValidationError(`"${f.label}" verwijst naar een lijst die niet (meer) bestaat, of die je niet ziet`);
     // Aftrekken of bijtellen gebeurt op sleutel: elke lijst moet dat getal hebben.
     for (const id of f.adjust ? (f.ref_also ?? []) : []) {

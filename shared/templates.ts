@@ -200,6 +200,17 @@ const FOOD: TypeTemplate = {
       hint: "een product uit je voorraad: het neemt de voedingswaarde over en trekt af wat je opat (omgerekend naar de eenheid van het product)",
     },
     { key: "gerecht", label: "Gerecht", type: "item", ref: "gerecht", hint: "iets dat je zelf maakte: de kcal komt uit zijn ingrediënten" },
+    { key: "recept", label: "Recept", type: "item", ref: "recept", copy: true, hint: "een recept: zijn ingrediënten komen hieronder, voor de porties die je at" },
+    { key: "porties", label: "Porties", type: "number" },
+    {
+      key: "ingredienten",
+      label: "Ingrediënten",
+      type: "amounts",
+      ref: "product",
+      per: "porties",
+      adjust: { field: "aantal", sign: -1 },
+      hint: "wat er uit de voorraad gaat (omgerekend naar de eenheid van elk product)",
+    },
     {
       key: "kcal_100",
       label: "kcal per 100 g",
@@ -290,11 +301,11 @@ const RECIPE: TypeTemplate = {
   icon: "note",
   fields: [
     { key: "bron", label: "Bron", type: "url" },
-    { key: "personen", label: "Voor", type: "number", unit: "personen" },
+    { key: "porties", label: "Porties", type: "number" },
     { key: "duur", label: "Bereiding", type: "duration", column: true },
     { key: "soort", label: "Soort", type: "select", options: ["Voorgerecht", "Hoofdgerecht", "Dessert", "Soep", "Bijgerecht", "Ontbijt"], filter: true },
     { key: "score", label: "Score", type: "score", column: true },
-    { key: "ingredienten", label: "Ingrediënten", type: "checklist" },
+    { key: "ingredienten", label: "Ingrediënten", type: "amounts", ref: "product", per: "porties", hint: "uit je voorraad (of gewoon tekst), met hoeveel voor de porties hierboven" },
     { key: "bereiding", label: "Bereiding", type: "longtext" },
   ],
 };
@@ -770,8 +781,10 @@ export function resolveTemplateLists(plans: TemplatePlan[], byName: Record<strin
       name: list.name,
       plural: list.plural,
       fields: list.fields.flatMap(({ ref, alt: _alt, ...field }): FieldDef[] => {
-        if (field.type === "item" || field.type === "items") {
+        if (field.type === "item" || field.type === "items" || field.type === "amounts") {
           const to = target(refs, ref);
+          // Hoeveelheden zonder lijst om naar te wijzen: enkel tekst (en niets om af te trekken).
+          if (!to && field.type === "amounts" && !field.adjust) return [{ ...field }];
           return to ? [{ ...field, ref_type: to }] : [];
         }
         if (field.type === "calc" && field.calc?.kind === "rollup" && field.calc.from === "backlinks") {

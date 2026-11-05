@@ -7,7 +7,7 @@
 // Wat werd toegepast, onthoudt het item (`applied`). Bij wijzigen past de app enkel het verschil toe, bij verwijderen
 // draait ze het terug; zo klopt het getal daar altijd met wat hier staat.
 
-import type { Attributes, FieldDef } from "./fields.ts";
+import type { AmountEntry, Attributes, FieldDef } from "./fields.ts";
 import { convert, type Measure } from "./units.ts";
 
 /** Wat een item aan een ander item deed: bij `target` het veld `field` met `delta` (in de eenheid van dat item). */
@@ -19,7 +19,14 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Wat een item met deze waarden (met de berekeningen al uitgerekend) aanpast. */
 export function effectsOf(fields: FieldDef[], data: Attributes): Effect[] {
-  return fields.flatMap((f) => {
+  return fields.flatMap((f): Effect[] => {
+    // Hoeveelheden (een recept dat je at): elke regel met een item en een hoeveelheid, in haar eigen eenheid.
+    if (f.type === "amounts" && f.adjust && Array.isArray(data[f.key])) {
+      const adjust = f.adjust;
+      return (data[f.key] as AmountEntry[]).flatMap((e) =>
+        e.item && e.amount ? [{ target: e.item, field: adjust.field, delta: round(adjust.sign * e.amount), ...(e.unit ? { unit: e.unit } : {}) }] : [],
+      );
+    }
     if (f.type !== "item" || !f.adjust || typeof data[f.key] !== "string") return [];
     const amount = f.adjust.by ? data[f.adjust.by] : 1;
     if (typeof amount !== "number" || !Number.isFinite(amount) || amount === 0) return [];

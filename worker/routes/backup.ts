@@ -29,7 +29,7 @@ import {
   type BackupItem,
 } from "../../shared/backup";
 import { effectsOf } from "../../shared/effects";
-import { cleanAttributes, cleanFields, INTERVAL_UNITS, refLists, type Attributes, type FieldDef, type Share } from "../../shared/fields";
+import { cleanAttributes, cleanFields, INTERVAL_UNITS, refLists, type AmountEntry, type Attributes, type FieldDef, type Share } from "../../shared/fields";
 import { isIconKey } from "../../shared/templates";
 import { sourceMisfit, visibleTotals, type TotalDef } from "../../shared/totals";
 import { isTone, type Item, type ItemType } from "../../shared/types";
@@ -180,7 +180,7 @@ function salvageFields(raw: unknown, available: ItemType[], selfId: string): Fie
   const ids = new Set([...available.map((t) => t.id), selfId]);
   const list = (Array.isArray(raw) ? raw : []).flatMap((f) => {
     const def = f as FieldDef;
-    if (!def || typeof def !== "object" || (def.type !== "item" && def.type !== "items")) return [def];
+    if (!def || typeof def !== "object" || (def.type !== "item" && def.type !== "items" && def.type !== "amounts")) return [def];
     const lists = refLists(def).filter((id) => ids.has(id));
     if (!lists.length) return [];
     const [ref_type, ...ref_also] = lists;
@@ -441,7 +441,9 @@ backup.post("/", async (c) => {
             ? [data[f.key] as string]
             : f.type === "items" && Array.isArray(data[f.key])
               ? (data[f.key] as string[])
-              : [],
+              : f.type === "amounts" && Array.isArray(data[f.key])
+                ? (data[f.key] as AmountEntry[]).flatMap((e) => (e.item ? [e.item] : []))
+                : [],
         ),
       ),
     ),
@@ -472,6 +474,11 @@ backup.post("/", async (c) => {
       if (f.type === "items") {
         const list = (v as string[]).filter((id) => refOk(f, id));
         if (list.length) data[f.key] = list;
+        continue;
+      }
+      // Hoeveelheden: een regel met een item dat niet (meer) klopt, wordt tekst zonder item (zout blijft zout).
+      if (f.type === "amounts") {
+        data[f.key] = (v as AmountEntry[]).flatMap(({ item: ref, ...rest }) => (ref && refOk(f, ref) ? [{ item: ref, ...rest }] : rest.text ? [rest] : []));
         continue;
       }
       data[f.key] = v;
@@ -655,7 +662,7 @@ backup.post("/", async (c) => {
   const effects: D1PreparedStatement[] = [];
   const groups = new Map<string, typeof items>();
   for (const item of items) {
-    if (!item.type.fields.some((f) => f.type === "item" && f.adjust)) continue;
+    if (!item.type.fields.some((f) => (f.type === "item" || f.type === "amounts") && f.adjust)) continue;
     const key = `${item.type.id}|${item.project}`;
     groups.set(key, [...(groups.get(key) ?? []), item]);
   }

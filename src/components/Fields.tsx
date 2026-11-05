@@ -15,6 +15,7 @@ import {
   normalizeShares,
   parseFieldText,
   type Attributes,
+  type AmountEntry,
   type ChecklistEntry,
   type CodeFormat,
   type CodeValue,
@@ -43,7 +44,7 @@ import { Link } from "../router";
 import { useSession } from "../session";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { CalcEditor } from "./CalcEditor";
-import { ItemPicker, ItemsPicker } from "./ItemPicker";
+import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Alert, Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { useSortable } from "./Sortable";
@@ -69,7 +70,7 @@ export type SharesDraft = { mode: "none" | "equal" | "percent" | "amount"; peopl
 type IntervalDraft = { n: string; unit: IntervalUnit };
 
 /** Wat in een veld staat terwijl je typt. */
-type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft;
+type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft | AmountEntry[];
 export type AttributeDraft = Record<string, DraftValue>;
 
 export function sharesDraft(shares: Share[] | undefined): SharesDraft {
@@ -157,6 +158,9 @@ export function attributesDraft(defs: FieldDef[], attributes: Attributes): Attri
       case "checklist":
         draft[def.key] = Array.isArray(v) ? (v as ChecklistEntry[]) : [];
         break;
+      case "amounts":
+        draft[def.key] = Array.isArray(v) ? (v as AmountEntry[]) : [];
+        break;
       case "calc":
         // Wordt uitgerekend, niet ingevuld.
         break;
@@ -200,6 +204,8 @@ function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldValue | nu
       const list = (Array.isArray(raw) ? (raw as ChecklistEntry[]) : []).filter((e) => e.text.trim()).map((e) => ({ text: e.text.trim(), done: e.done }));
       return list.length ? list : null;
     }
+    case "amounts":
+      return cleanValue(def, raw);
     case "interval": {
       const v = raw as IntervalDraft;
       if (!v.n?.trim()) return null;
@@ -237,7 +243,7 @@ export function buildAttributes(defs: FieldDef[], draft: AttributeDraft): { data
 }
 
 /** Velden die kort zijn, staan per twee naast elkaar. */
-const WIDE: FieldType[] = ["text", "longtext", "address", "multi", "year_range", "date_range", "bool", "share", "code", "item", "items", "people", "checklist"];
+const WIDE: FieldType[] = ["text", "longtext", "address", "multi", "year_range", "date_range", "bool", "share", "code", "item", "items", "amounts", "people", "checklist"];
 const PLACEHOLDERS: Partial<Record<FieldType, string>> = {
   year: "bv. 2019",
   money: "€ 0,00 of 45 USD",
@@ -350,6 +356,13 @@ export function FieldInputs({
               <div key={def.key} className={`field ${wide}`}>
                 {label}
                 <ItemsPicker def={def} value={Array.isArray(raw) ? (raw as string[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
+              </div>
+            );
+          case "amounts":
+            return (
+              <div key={def.key} className={`field ${wide}`}>
+                {label}
+                <AmountsPicker def={def} value={Array.isArray(raw) ? (raw as AmountEntry[]) : []} onChange={(v) => set(def.key, v)} disabled={disabled} />
               </div>
             );
           case "checklist":
@@ -1029,6 +1042,17 @@ function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; valu
         ))}
       </span>
     );
+  if (d.type === "amounts" && Array.isArray(v))
+    return (
+      <ul className="amount-list">
+        {(v as AmountEntry[]).map((e, i) => (
+          <li key={i}>
+            <span className="amount-qty">{e.amount !== undefined ? formatAmount(e.amount, e.unit) : ""}</span>
+            {e.item ? refLink(e.item) : <span>{e.text}</span>}
+          </li>
+        ))}
+      </ul>
+    );
   if (typeof v === "string" && (d.type === "url" || (d.type === "text" && WEB_ADDRESS.test(v)))) return <WebLink url={v} />;
   if (typeof v === "string" && d.type === "email") return <OutLink href={`mailto:${v}`} text={v} />;
   if (typeof v === "string" && d.type === "phone") return <OutLink href={`tel:${v.replace(/[^\d+]/g, "")}`} text={v} />;
@@ -1175,7 +1199,8 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       type: d.type,
       ...((d.type === "select" || d.type === "multi") && options.length ? { options } : {}),
       ...((d.type === "number" || d.type === "calc") && d.unit?.trim() ? { unit: d.unit.trim() } : {}),
-      ...(d.type === "item" || d.type === "items" ? { ref_type: d.ref_type, ...refAlso(d) } : {}),
+      ...(d.type === "item" || d.type === "items" || (d.type === "amounts" && d.ref_type) ? { ref_type: d.ref_type, ...refAlso(d) } : {}),
+      ...(d.type === "amounts" && d.per ? { per: rename(d.per) } : {}),
       ...(d.type === "item" && d.free ? { free: true } : {}),
       ...(d.type === "code" && d.format ? { format: d.format } : {}),
       ...(d.type === "calc" && d.calc ? { calc: renameCalc(d.calc, rename, refOf, selfId) } : {}),
@@ -1191,13 +1216,13 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
       ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
       ...(d.type === "item" && d.copy ? { copy: true } : {}),
-      ...(d.type === "item" && d.adjust
+      ...((d.type === "item" || d.type === "amounts") && d.adjust
         ? {
             adjust: {
               field: d.adjust.field,
               sign: d.adjust.sign,
-              ...(d.adjust.by ? { by: rename(d.adjust.by) } : {}),
-              ...(d.adjust.by && d.adjust.unit ? { unit: d.adjust.unit } : {}),
+              ...(d.type === "item" && d.adjust.by ? { by: rename(d.adjust.by) } : {}),
+              ...(d.type === "item" && d.adjust.by && d.adjust.unit ? { unit: d.adjust.unit } : {}),
             },
           }
         : {}),
@@ -1250,7 +1275,7 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
           ))}
         </select>
       </label>
-      {adjust && (
+      {adjust && field.type === "item" && (
         <label className="field">
           <span className="label">Met</span>
           <select
@@ -1266,7 +1291,7 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
           </select>
         </label>
       )}
-      {adjust?.by && (
+      {adjust?.by && field.type === "item" && (
         <label className="field">
           <span className="label">In</span>
           <select aria-label="In" value={adjust.unit ?? ""} onChange={(e) => onChange({ ...adjust, unit: e.target.value || undefined })}>
@@ -1450,7 +1475,7 @@ export function FieldsEditor({
                       />
                     </label>
                   )}
-                  {(f.type === "item" || f.type === "items") && (
+                  {(f.type === "item" || f.type === "items" || f.type === "amounts") && (
                     <div className="field">
                       <span className="label">Verwijst naar</span>
                       {[f.ref_type ?? "", ...(f.ref_also ?? [])].map((ref, k) => (
@@ -1571,7 +1596,24 @@ export function FieldsEditor({
                       label="Lege velden overnemen van het gekozen item"
                     />
                   )}
-                  {f.type === "item" && f.ref_type && <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />}
+                  {(f.type === "item" || f.type === "amounts") && f.ref_type && (
+                    <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />
+                  )}
+                  {f.type === "amounts" && (
+                    <label className="field">
+                      <span className="label">Hoeveelheden voor</span>
+                      <select aria-label="Hoeveelheden voor" value={f.per ?? ""} onChange={(e) => update(i, { per: e.target.value || undefined })}>
+                        <option value="">Zoals ze staan</option>
+                        {value
+                          .filter((x) => x !== f && x.type === "number" && x.label.trim())
+                          .map((x) => (
+                            <option key={x.key} value={x.key}>
+                              {x.label}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                   {f.type === "number" && (
                     <Switch
                       checked={Boolean(f.counter)}

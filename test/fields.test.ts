@@ -44,9 +44,11 @@ test("sjablonen: elke lijst heeft geldige velden, verwijzingen en berekeningen",
         fields.map(({ result: _r, ...f }) => f),
         `${t.label} › ${ty.name}`,
       );
-      // Een verwijzing naar een lijst buiten het sjabloon (Eten → de Voorraad van je huishouden) valt hier weg.
+      // Een verwijzing naar een lijst buiten het sjabloon (Eten → de Voorraad van je huishouden) valt hier weg;
+      // hoeveelheden die niets aftrekken blijven als tekst (de ingrediënten van een recept zonder voorraad).
       const inside = new Set(t.types.map((x) => x.key));
-      assert.equal(fields.length, ty.fields.filter((f) => !f.ref || inside.has(f.ref)).length, `${t.label} › ${ty.name}: alles gevonden`);
+      const kept = (f: (typeof ty.fields)[number]) => !f.ref || inside.has(f.ref) || (f.type === "amounts" && !f.adjust);
+      assert.equal(fields.length, ty.fields.filter(kept).length, `${t.label} › ${ty.name}: alles gevonden`);
     }
   }
   for (const ty of LIST_TEMPLATES) assert.equal(resolve([ty])[`id-${ty.key}`].length, ty.fields.length, ty.name);

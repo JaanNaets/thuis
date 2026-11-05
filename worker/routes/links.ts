@@ -47,7 +47,7 @@ async function problemsFor(
   const edges: AdjustEdge[] = [];
   for (const s of lists.values()) {
     for (const f of s.fields) {
-      if (f.type !== "item" || !f.adjust) continue;
+      if ((f.type !== "item" && f.type !== "amounts") || !f.adjust) continue;
       for (const to of refLists(f)) {
         const t = lists.get(to);
         if (!t || !drawn.has(`${s.id}|${to}`) || !rightsIn(s.project_id)?.members || !rightsIn(t.project_id)?.members) continue;

@@ -14,6 +14,7 @@ import {
   refLists,
   repeatData,
   type Attributes,
+  type AmountEntry,
   type FieldDef,
   type IntervalUnit,
 } from "../../shared/fields";
@@ -249,7 +250,10 @@ async function loadDetail(c: Context<AppEnv>, id: string): Promise<ItemDetail> {
     // Via een veld dat je daar mag zien.
     const field = allTypes.get(cand.type_id)?.fields.find((f) => {
       const v = data[f.key];
-      const points = (f.type === "item" && v === id) || (f.type === "items" && Array.isArray(v) && (v as string[]).includes(id));
+      const points =
+        (f.type === "item" && v === id) ||
+        (f.type === "items" && Array.isArray(v) && (v as string[]).includes(id)) ||
+        (f.type === "amounts" && Array.isArray(v) && (v as AmountEntry[]).some((e) => e.item === id));
       return points && canSee(cand, f.key);
     });
     if (field) backlinks.push({ id: cand.id, name: cand.name, type_id: cand.type_id, project_id: cand.project_id, field_label: field.label });

@@ -9,6 +9,7 @@
 /** Groepen in de keuzelijst van veldsoorten. */
 import type { CalcDef, CalcResult } from "./calc.ts";
 import { isProductKey, productFits, type ProductKey } from "./product.ts";
+import { formatAmount } from "./units.ts";
 
 export const FIELD_GROUPS = {
   text: "Tekst",
@@ -55,7 +56,12 @@ export const FIELD_TYPES = {
   people: { label: "Personen", group: "link", hint: "Meerdere mensen uit het project, zoals wie meegaat." },
   share: { label: "Personen met aandeel", group: "link", hint: "Wie welk deel heeft, samen 100%: van wie iets is of hoe een uitgave verdeeld wordt." },
   item: { label: "Verwijzing", group: "link", hint: "Eén item uit een andere lijst (of dezelfde), zoals de verkoper van een aankoop." },
-  items: { label: "Verwijzingen", group: "link", hint: "Meerdere items uit een andere lijst, zoals de ingrediënten van een recept." },
+  items: { label: "Verwijzingen", group: "link", hint: "Meerdere items uit een andere lijst, zoals de boeken in een reeks." },
+  amounts: {
+    label: "Hoeveelheden",
+    group: "link",
+    hint: "Items uit een andere lijst, elk met een hoeveelheid, zoals de ingrediënten van een recept (500 g aardappelen). Kan ook aftrekken van een voorraad.",
+  },
   calc: {
     label: "Berekening",
     group: "calc",
@@ -158,6 +164,11 @@ export type FieldDef = {
   adjust?: { field: string; by?: string; sign: 1 | -1; unit?: string };
   /** Verwijzing: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde sleutel daar. */
   copy?: boolean;
+  /**
+   * Hoeveelheden: de hoeveelheden gelden voor zoveel als het getal `per` hier zegt (porties). Neem je ze over van een
+   * item met hetzelfde veld (een recept), dan rekent de app om naar het getal hier (4 porties van een recept voor 2: ×2).
+   */
+  per?: string;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
   hint?: string;
   /** Berekening: wat de app uitrekent (zie shared/calc.ts), en de soort van de uitkomst (zet de API). */
@@ -170,6 +181,8 @@ export type Share = { person_id: string; share: number };
 export type CodeValue = { text: string; format: CodeFormat };
 /** Vrije tekst in een verwijzing met `free` (er was geen passend item). */
 export type TextValue = { text: string };
+/** Eén hoeveelheid: een item (of een tekst als het nergens staat, zoals "zout"), hoeveel en in welke eenheid. */
+export type AmountEntry = { item?: string; text?: string; amount?: number; unit?: string };
 
 /**
  * text, longtext, url, email, phone, address, select, date, time ("18:30"), person (id), item (id): tekst ·
@@ -188,7 +201,8 @@ export type FieldValue =
   | TextValue
   | Share[]
   | Interval
-  | ChecklistEntry[];
+  | ChecklistEntry[]
+  | AmountEntry[];
 export type Attributes = Record<string, FieldValue>;
 
 // ---------- velden nakijken ----------
@@ -240,7 +254,8 @@ export function cleanFields(raw: unknown): FieldDef[] {
     const def: FieldDef = { key, label, type };
     if (options && (type === "select" || type === "multi") && options.length) def.options = options;
     if (typeof f.unit === "string" && f.unit.trim() && (type === "number" || type === "calc")) def.unit = f.unit.trim().slice(0, 12);
-    if (type === "item" || type === "items") {
+    // Hoeveelheden mogen zonder lijst: dan enkel tekst (zout, peper), zonder iets af te trekken.
+    if ((type === "item" || type === "items" || (type === "amounts" && f.ref_type)) && !(type === "amounts" && !f.ref_type)) {
       if (typeof f.ref_type !== "string" || !f.ref_type) throw new Error(`Kies naar welke lijst "${label}" verwijst`);
       def.ref_type = f.ref_type.slice(0, 64);
       const also = Array.isArray(f.ref_also)
@@ -289,7 +304,15 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (typeof f.hint === "string" && f.hint.trim()) def.hint = f.hint.trim().slice(0, 160);
     if (f.copy === true && type === "item") def.copy = true;
     const adjust = f.adjust as Record<string, unknown> | undefined;
-    if (type === "item" && adjust && typeof adjust === "object" && typeof adjust.field === "string" && KEY_RE.test(adjust.field) && (adjust.sign === 1 || adjust.sign === -1)) {
+    if (type === "amounts" && typeof f.per === "string" && KEY_RE.test(f.per)) def.per = f.per;
+    if (
+      (type === "item" || type === "amounts") &&
+      adjust &&
+      typeof adjust === "object" &&
+      typeof adjust.field === "string" &&
+      KEY_RE.test(adjust.field) &&
+      (adjust.sign === 1 || adjust.sign === -1)
+    ) {
       const unit = typeof adjust.unit === "string" ? adjust.unit.trim().toLowerCase().slice(0, 12) : "";
       def.adjust = {
         field: adjust.field,
@@ -307,7 +330,12 @@ export function cleanFields(raw: unknown): FieldDef[] {
   const fits = { unit: ["select", "text"], pack_name: ["select", "text"], piece: ["number"], pack: ["number"] } as const;
   return fields.map((f) => {
     let out = f;
-    if (f.adjust?.by && !amounts.has(f.adjust.by)) out = { ...out, adjust: { field: f.adjust.field, sign: f.adjust.sign } };
+    // Bij hoeveelheden telt elke regel met zijn eigen hoeveelheid en eenheid.
+    if (f.adjust?.by && (f.type === "amounts" || !amounts.has(f.adjust.by))) out = { ...out, adjust: { field: f.adjust.field, sign: f.adjust.sign } };
+    if (f.per && kinds.get(f.per) !== "number") {
+      const { per: _p, ...rest } = out;
+      out = rest;
+    }
     if (f.measure) {
       const m = Object.fromEntries(Object.entries(f.measure).filter(([k, v]) => (fits[k as keyof typeof fits] as readonly string[]).includes(kinds.get(v) ?? "")));
       const { measure: _m, ...rest } = out;
@@ -431,6 +459,21 @@ export function cleanValue(def: FieldDef, value: unknown): FieldValue | null {
       const ids = [...new Set(value.filter((v): v is string => typeof v === "string" && ID_RE.test(v)))].slice(0, def.type === "people" ? 50 : 100);
       return ids.length ? ids : null;
     }
+    case "amounts": {
+      if (!Array.isArray(value)) return null;
+      const list = value
+        .flatMap((v): AmountEntry[] => {
+          const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+          const item = typeof o.item === "string" && ID_RE.test(o.item) ? o.item : undefined;
+          const text = !item && typeof o.text === "string" && o.text.trim() ? o.text.trim().slice(0, 120) : undefined;
+          if (!item && !text) return [];
+          const amount = typeof o.amount === "number" && Number.isFinite(o.amount) && o.amount > 0 && o.amount < 1e7 ? Math.round(o.amount * 1000) / 1000 : undefined;
+          const unit = typeof o.unit === "string" && o.unit.trim() ? o.unit.trim().toLowerCase().slice(0, 12) : undefined;
+          return [{ ...(item ? { item } : { text }), ...(amount !== undefined ? { amount } : {}), ...(unit ? { unit } : {}) }];
+        })
+        .slice(0, 60);
+      return list.length ? list : null;
+    }
     case "checklist": {
       if (!Array.isArray(value)) return null;
       const list = value
@@ -484,6 +527,7 @@ export function referencedItems(defs: FieldDef[], data: Attributes): { id: strin
     const v = data[d.key];
     if (d.type === "item" && typeof v === "string") return [{ id: v, lists: refLists(d), key: d.key }];
     if (d.type === "items" && Array.isArray(v)) return (v as string[]).map((id) => ({ id, lists: refLists(d), key: d.key }));
+    if (d.type === "amounts" && Array.isArray(v)) return (v as AmountEntry[]).flatMap((e) => (e.item ? [{ id: e.item, lists: refLists(d), key: d.key }] : []));
     return [];
   });
 }
@@ -709,6 +753,13 @@ export function formatFieldValue(def: FieldDef, value: FieldValue | undefined, n
       return Array.isArray(value) ? (value as string[]).map(names.person).join(", ") : "";
     case "items":
       return Array.isArray(value) ? (value as string[]).map(names.item).join(", ") : "";
+    case "amounts":
+      // "500 g Aardappelen, 2 stuks Ui, zout"
+      return Array.isArray(value)
+        ? (value as AmountEntry[])
+            .map((e) => [e.amount !== undefined ? formatAmount(e.amount, e.unit) : "", e.item ? names.item(e.item) : (e.text ?? "")].filter(Boolean).join(" "))
+            .join(", ")
+        : "";
     case "url":
       return typeof value === "string" ? value.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "") : "";
     case "duration":

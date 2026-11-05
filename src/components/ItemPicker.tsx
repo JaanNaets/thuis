@@ -5,7 +5,8 @@
 // terwijl je typt. Wat al gekozen is maar niet op de eerste bladzijde staat, haalt de naam apart op.
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { refLists, type FieldDef, type TextValue } from "../../shared/fields";
+import { refLists, type AmountEntry, type FieldDef, type TextValue } from "../../shared/fields";
+import { UNITS } from "../../shared/units";
 import { nameMatches } from "../../shared/quickfill";
 import type { ItemRef } from "../../shared/types";
 import { useApi } from "../api";
@@ -260,5 +261,66 @@ export function ItemsPicker({ def, value, onChange, disabled }: { def: FieldDef;
       )}
       {error && <span className="hint error">{error}</span>}
     </>
+  );
+}
+
+/**
+ * Hoeveelheden (de ingrediënten van een recept): per regel een item (of vrije tekst, zoals "zout"), hoeveel en in
+ * welke eenheid, met een regel erbij onderaan. Zie FieldDef `amounts` en shared/units.ts.
+ */
+export function AmountsPicker({
+  def,
+  value,
+  onChange,
+  disabled,
+}: {
+  def: FieldDef;
+  value: AmountEntry[];
+  onChange: (v: AmountEntry[]) => void;
+  disabled: boolean;
+}) {
+  const rows = disabled ? value : [...value, {}];
+  const asPicker: FieldDef = { ...def, type: "item", free: true };
+  const set = (i: number, patch: Partial<AmountEntry> | null) => {
+    const next = rows.map((r, k) => (k === i ? (patch === null ? null : { ...r, ...patch }) : r)).filter((r): r is AmountEntry => Boolean(r && (r.item || r.text)));
+    onChange(next);
+  };
+  return (
+    <ul className="amount-rows">
+      {rows.map((row, i) => (
+        <li key={i} className="amount-row-line">
+          <ItemPicker
+            def={{ ...asPicker, label: i < value.length ? `${def.label} ${i + 1}` : `${def.label}: toevoegen` }}
+            value={row.item ?? (row.text ? { text: row.text } : null)}
+            disabled={disabled}
+            onChange={(v) => (v === null ? set(i, null) : typeof v === "string" ? set(i, { item: v, text: undefined }) : set(i, { item: undefined, text: v.text }))}
+          />
+          {i < value.length && (
+            <>
+              <input
+                className="amount-qty-input"
+                inputMode="decimal"
+                aria-label={`Hoeveel ${i + 1}`}
+                placeholder="0"
+                disabled={disabled}
+                value={row.amount !== undefined ? String(row.amount).replace(".", ",") : ""}
+                onChange={(e) => {
+                  const n = Number(e.target.value.replace(",", "."));
+                  set(i, { amount: e.target.value.trim() && Number.isFinite(n) ? n : undefined });
+                }}
+              />
+              <select aria-label={`Eenheid ${i + 1}`} disabled={disabled} value={row.unit ?? ""} onChange={(e) => set(i, { unit: e.target.value || undefined })}>
+                <option value="">—</option>
+                {UNITS.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -12,7 +12,7 @@ import { ForbiddenError } from "./validate";
 
 /** Wat een item met deze waarden aanpast, met de berekeningen (ook opzoekingen) zoals de bewerker ze ziet. */
 export async function computeEffects(db: D1Database, personId: string, rights: Rights, type: ItemType, item: Pick<Item, "id" | "project_id">, data: Attributes) {
-  if (!type.fields.some((f) => f.type === "item" && f.adjust)) return [];
+  if (!type.fields.some((f) => (f.type === "item" || f.type === "amounts") && f.adjust)) return [];
   const temp = { ...item, type_id: type.id, name: "", tag_ids: [], data: { ...data } } as unknown as Item;
   await withCalcs(db, personId, type, rights, [temp]);
   return inTargetUnits(db, effectsOf(type.fields, temp.data));

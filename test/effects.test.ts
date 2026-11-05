@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { convertEffects, effectsOf, netEffects, parseApplied } from "../shared/effects.ts";
-import { cleanFields, type FieldDef } from "../shared/fields.ts";
+import { cleanFields, cleanValue, formatFieldValue, type FieldDef } from "../shared/fields.ts";
 
 // Eten uit de voorraad: − gram ÷ inhoud van het product. Een winkellijst: + aantal als gekocht.
 const eten: FieldDef[] = [
@@ -82,4 +82,43 @@ test("tellen in eenheden: 500 g van een voorraad in kg, 30 g van een pot van 400
   // Een verpakking moet een getal zijn: "eenheid" (een keuze) valt weg.
   assert.deepEqual(clean[0].measure, { unit: "eenheid", piece: "inhoud" });
   assert.deepEqual(cleanFields(eten2)[0].adjust, { field: "aantal", by: "gram", sign: -1, unit: "g" });
+});
+
+test("hoeveelheden: een recept dat je at, trekt elk ingrediënt af in zijn eigen eenheid", () => {
+  const maaltijd = cleanFields([
+    { key: "porties", label: "Porties", type: "number" },
+    { key: "ingredienten", label: "Ingrediënten", type: "amounts", ref_type: "voorraad", per: "porties", adjust: { field: "aantal", sign: -1, by: "porties" } },
+  ]);
+  // Bij hoeveelheden telt elke regel zelf: "met" valt weg; `per` blijft (een getal van deze lijst).
+  assert.deepEqual(maaltijd[1].adjust, { field: "aantal", sign: -1 });
+  assert.equal(maaltijd[1].per, "porties");
+  const value = cleanValue(maaltijd[1], [
+    { item: "aardappelen", amount: 800, unit: "G" },
+    { text: " zout " },
+    { item: "ui", amount: 2, unit: "stuk" },
+    { amount: 3 },
+    "rommel",
+  ]);
+  assert.deepEqual(value, [
+    { item: "aardappelen", amount: 800, unit: "g" },
+    { text: "zout" },
+    { item: "ui", amount: 2, unit: "stuk" },
+  ]);
+  const effects = effectsOf(maaltijd, { porties: 4, ingredienten: value! });
+  assert.deepEqual(effects, [
+    { target: "aardappelen", field: "aantal", delta: -800, unit: "g" },
+    { target: "ui", field: "aantal", delta: -2, unit: "stuk" },
+  ]);
+  const measures: Record<string, { unit: string; piece?: number }> = { aardappelen: { unit: "kg" }, ui: { unit: "kg", piece: 150 } };
+  assert.deepEqual(
+    convertEffects(effects, (t) => measures[t]),
+    [
+      { target: "aardappelen", field: "aantal", delta: -0.8 },
+      { target: "ui", field: "aantal", delta: -0.3 },
+    ],
+  );
+  const names = { person: () => "", item: (id: string) => ({ aardappelen: "Aardappelen", ui: "Ui" })[id] ?? "?" };
+  assert.equal(formatFieldValue(maaltijd[1], value!, names), "800 g Aardappelen, zout, 2 stuks Ui");
+  // Zonder lijst: enkel tekst.
+  assert.deepEqual(cleanFields([{ key: "i", label: "Ingrediënten", type: "amounts" }]), [{ key: "i", label: "Ingrediënten", type: "amounts" }]);
 });

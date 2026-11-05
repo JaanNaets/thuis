@@ -365,6 +365,11 @@ begint, mag de naam leeg ("Weging 30/10/2026"), en staat het nieuwste bovenaan.
 
 ### Voorraad
 
+Een **recept** heeft ingrediënten met hoeveelheden (400 g aardappelen, 30 g Nutella, zout) voor een aantal porties.
+Eet je het (een Maaltijd, of Eten in Voeding), kies dan het recept en hoeveel porties: de ingrediënten komen in het
+formulier, omgerekend naar je porties, en je past ze nog aan voor je bewaart. Bewaren trekt ze af van de voorraad, elk
+in de eenheid van het product (800 g van aardappelen in kg is 0,8 kg; 60 g van een pot van 400 g is 0,15 pot).
+
 Een product telt in zijn eigen **eenheid**: pellets in kg (met als verpakking een zak van 15 kg), aardappelen in kg,
 Nutella per pot (van 400 g), eieren per stuk. Eén product, ook als de zak de ene keer 15 kg en de andere keer 5 kg is:
 + in de lijst telt een hele verpakking bij, en een tik op het getal laat je een hoeveelheid typen (Eraf 500 g). Wat

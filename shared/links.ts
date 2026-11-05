@@ -109,6 +109,7 @@ export const FIELD_LINKS = {
   agenda: true,
   adjust: true,
   copy: true,
+  per: false,
   hint: false,
   calc: true,
   result: false,
@@ -159,9 +160,9 @@ export function listLinks(list: LinkList, fieldsOf: (listId: string) => FieldDef
     if (from && to && from !== to) out.push({ kind, from, to, texts: [text] });
   };
   for (const f of list.fields) {
-    for (const to of f.type === "item" || f.type === "items" ? refLists(f) : []) {
+    for (const to of f.type === "item" || f.type === "items" || f.type === "amounts" ? refLists(f) : []) {
       if (f.adjust) {
-        const by = f.adjust.by ? labelOf(list.fields, f.adjust.by) : "1";
+        const by = f.type === "amounts" ? f.label : f.adjust.by ? labelOf(list.fields, f.adjust.by) : "1";
         const target = labelOf(fieldsOf(to), f.adjust.field);
         const text =
           f.adjust.sign < 0

@@ -181,7 +181,7 @@ export function kindOf(def: FieldDef): Kind {
   if (type === "person") return "person";
   if (type === "people" || type === "share") return "people";
   if (type === "item") return "item";
-  if (type === "items") return "items";
+  if (type === "items" || type === "amounts") return "items";
   if (type === "checklist") return "checklist";
   if (type === "date_range" || type === "year_range") return "range";
   return "text";
@@ -247,7 +247,13 @@ function idsOf(v: FieldValue | undefined): string[] {
   if (typeof v === "string") return [v];
   if (!Array.isArray(v)) return [];
   return (v as unknown[]).flatMap((x) =>
-    typeof x === "string" ? [x] : x && typeof x === "object" && "person_id" in x ? [String((x as { person_id: string }).person_id)] : [],
+    typeof x === "string"
+      ? [x]
+      : x && typeof x === "object" && "person_id" in x
+        ? [String((x as { person_id: string }).person_id)]
+        : x && typeof x === "object" && "item" in x
+          ? [String((x as { item: string }).item)]
+          : [],
   );
 }
 

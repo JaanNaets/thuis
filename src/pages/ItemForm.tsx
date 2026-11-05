@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type Attributes, type CodeValue } from "../../shared/fields";
+import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue } from "../../shared/fields";
 import { quickFill } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemRef, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
@@ -20,6 +20,10 @@ import { useSession } from "../session";
 const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool", "item"];
 
 /** /projecten/:id/nieuw?lijst= (nieuw) of /items/:itemId/bewerken. */
+/** Hoeveelheden met `factor` (4 porties van een recept voor 2: ×2), op drie cijfers na de komma. */
+const scaleAmounts = (list: AmountEntry[], factor: number): AmountEntry[] =>
+  list.map((e) => (e.amount !== undefined ? { ...e, amount: Math.round(e.amount * factor * 1000) / 1000 } : e));
+
 export function ItemFormPage() {
   const { id, itemId } = useParams();
   return itemId ? <EditItem itemId={itemId} /> : <WithProject projectId={id!} />;
@@ -92,6 +96,8 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
   // Na een nieuw item in een andere lijst (een nieuwe winkel): de keuzelijsten opnieuw laden.
   const [refsVersion, setRefsVersion] = useState(0);
   const touched = useRef(new Set<string>());
+  // Overgenomen hoeveelheden en voor hoeveel porties ze waren (om mee te rekenen als je de porties aanpast).
+  const scaleBase = useRef<Record<string, { amounts: AmountEntry[]; per: number }>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const readable = editsType && fields.some((f) => READABLE.includes(f.type) && type.field_access[f.key] === "edit");
@@ -162,6 +168,18 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
         const value = source.data[f.key];
         const clean = value === undefined ? null : cleanValue(f, value);
         if (clean !== null && clean !== undefined) data[f.key] = clean;
+      }
+      // Hoeveelheden voor zoveel porties (`per`): omrekenen naar de porties hier (staat er nog niets, dan die van daar).
+      for (const f of fields) {
+        const amounts = data[f.key];
+        const per = f.per ? source.data[f.per] : undefined;
+        if (f.type !== "amounts" || !Array.isArray(amounts) || typeof per !== "number" || per <= 0) continue;
+        scaleBase.current[f.key] = { amounts: amounts as AmountEntry[], per };
+        const here = Number(String(attrs[f.per!] ?? "").replace(",", "."));
+        if (here > 0) {
+          data[f.key] = scaleAmounts(amounts as AmountEntry[], here / per);
+          delete data[f.per!];
+        }
       }
       const drafted = attributesDraft(fields, data);
       setAttrs((a) => ({ ...a, ...Object.fromEntries(Object.keys(data).map((k) => [k, drafted[k]])) }));
@@ -429,6 +447,14 @@ function ItemForm({ project, type, item, creatable }: { project: ProjectDetail; 
               const def = fields.find((f) => f.key === key);
               if (def?.type === "code") lookupCode(next[key]);
               if (def?.type === "item" && def.copy && typeof next[key] === "string" && next[key]) copyFrom(next[key] as string, def.key);
+              // Andere porties: de overgenomen hoeveelheden (een recept) rekenen mee, zolang je ze niet zelf aanpaste.
+              for (const f of fields) {
+                const base = scaleBase.current[f.key];
+                if (f.type !== "amounts" || f.per !== key || !base || touched.current.has(f.key)) continue;
+                const now = Number(String(next[key] ?? "").replace(",", "."));
+                if (!(now > 0)) continue;
+                setAttrs((a) => ({ ...a, [f.key]: scaleAmounts(base.amounts, now / base.per) }));
+              }
             }}
           />
         )}

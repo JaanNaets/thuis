@@ -325,7 +325,9 @@ test("sjablonen: hun totalen passen bij hun velden", async () => {
     const ids = Object.fromEntries(lists.map((l) => [l.key, `id-${l.key}`]));
     const resolved = resolveTemplateLists(lists.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })), {});
     for (const list of lists) {
-      assert.equal(resolved[ids[list.key]].length, list.fields.filter((f) => !f.ref || ids[f.ref]).length, `${list.name}: alle velden kloppen`);
+      // Hoeveelheden zonder lijst (en zonder aftrekken) blijven als tekst.
+      const kept = list.fields.filter((f) => !f.ref || ids[f.ref] || (f.type === "amounts" && !f.adjust));
+      assert.equal(resolved[ids[list.key]].length, kept.length, `${list.name}: alle velden kloppen`);
       if (list.totals) assert.deepEqual(cleanTotals(list.totals, resolved[ids[list.key]]), list.totals, list.name);
     }
   }
