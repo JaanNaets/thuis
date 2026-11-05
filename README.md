@@ -519,6 +519,19 @@ Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw it
 - **Android**: lang op het app-icoon drukken toont je drie meestgebruikte lijsten; een foto (kasticket) of tekst
   deel je vanuit een andere app met Thuis.
 
+**De app instellen** (Jouw gegevens → App):
+
+- **Openen op**: per toestel waar de app opent (een overzicht, de agenda, een project, een lijst of een formulier),
+  bv. de keukentablet op Keuken en je gsm op Uitgave toevoegen. De kiosk keert daar ook naar terug.
+- **Apps**: zoveel eigen apps als je wil, elk met een eigen naam en bestemming ("Pellets" → Bijvulling met
+  "pellets", "Keuken" → het overzicht Keuken). Met Op je beginscherm zet je elk als eigen icoon op je gsm.
+- **Snelkoppelingen** (Android): vanzelf je meestgebruikte lijsten, of zelf tot vier gekozen.
+- **Gedeelde foto** (Android): telkens vragen, of meteen als kasticket bij een voorraad.
+
+Een iPhone leest het manifest enkel als je het icoon op je beginscherm zet: een app die je daarna aanpast, gaat wel
+naar haar nieuwe bestemming (die vraagt ze bij het openen), maar haar naam onder het icoon blijft. Android neemt
+nieuwe snelkoppelingen over binnen een dag.
+
 ### Een foto lezen: etiket, kasticket, factuur, product
 
 Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de

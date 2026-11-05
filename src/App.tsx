@@ -9,7 +9,8 @@ import { Sidebar } from "./components/Sidebar";
 import { ToastProvider } from "./components/Toast";
 import { isKiosk, useIdleReset, useOnline } from "./device";
 import { useOutbox } from "./outbox";
-import { NavLink } from "./router";
+import { NavLink, useNavigate } from "./router";
+import { openingPath, startPath } from "./start";
 import { SessionContext } from "./session";
 
 const KIOSK_IDLE_MS = 5 * 60 * 1000;
@@ -28,7 +29,15 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   const { pathname } = useLocation();
   const navigation = useNavigation();
   const [searching, setSearching] = useState(false);
-  useIdleReset(isKiosk, KIOSK_IDLE_MS, "/");
+  const navigate = useNavigate();
+  const { search } = useLocation();
+  // Waar de app opent op dit toestel (zie start.ts); de kiosk keert daar ook naar terug.
+  const [home] = useState(startPath);
+  useIdleReset(isKiosk, KIOSK_IDLE_MS, home);
+  useEffect(() => {
+    const to = openingPath(pathname, search);
+    if (to) navigate(to, { replace: true });
+  }, []);
 
   // ⌘K / Ctrl K opent het zoekpalet, overal.
   useEffect(() => {

@@ -959,8 +959,15 @@ tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
 `?tab=mensen`), één kaart per tab (Algemeen heeft er ook een voor de volgorde van de subprojecten). Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
 een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
 
-**Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder de volgorde van je projecten op
-het overzicht. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).
+**Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder Meldingen, de kaart
+**App** (`AppCard` in `AppSettings.tsx`, zie `shared/apps.ts`) en de volgorde van je projecten op het overzicht. De kaart App:
+**Openen op** (per toestel: "Het overzicht" of een bestemming), **Apps** (rijen met naam en bestemming, rechts Op je
+beginscherm; een tik opent een `Sheet` met Naam, de bestemming, Maken/Bewaren en Verwijderen; onderaan Nieuwe app),
+**Snelkoppelingen (Android)** (`Segmented` Vanzelf · Zelf kiezen; zelf: per snelkoppeling een bestemming met ×, tot
+vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen of Kasticket bijtellen in een voorraad). Een
+bestemming kies je met `DestinationPicker`: Naar (Overzicht, Agenda, Project, Lijst, Formulier), dan welk, en bij
+een formulier eventueel Met tekst. Een eigen app (`/app/:id`, `AppPage`): als app meteen naar haar bestemming; in de
+browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).
 
 ## 7. Toegankelijkheid
 

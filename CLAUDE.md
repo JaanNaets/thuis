@@ -82,7 +82,10 @@ commits en uitleg.
   lijst (`/snel/:id/:typeId` met een eigen manifest, `GET /projects/:id/manifest/:typeId`, enkel als je er iets mag
   toevoegen), het manifest van de app per persoon (`GET /me/manifest`: je drie meestgebruikte lijsten als
   snelkoppeling, `share_target` naar `/delen`, opgevangen in `sw/sw.js`). Een gedeelde foto staat even in de cache
-  `gedeeld` (`src/shared-file.ts`) en wordt na gebruik opgeruimd.
+  `gedeeld` (`src/shared-file.ts`) en wordt na gebruik opgeruimd. **De app instellen** (`shared/apps.ts`,
+  `people.app_settings`, `GET/PUT /me/app`): eigen apps (`/app/:id`, manifest `GET /me/apps/:id/manifest`), eigen
+  snelkoppelingen en wat een gedeelde foto doet, enkel naar wat je bereikt (`keepReachable`, `reachFor`: enkel de
+  projecten waarnaar ze verwijzen). Waar de app opent, is per toestel (`src/start.ts`, localStorage).
 - **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon één of meer overzichten
   (`Board`, `cleanBoards`: het oude formaat wordt het eerste; `PUT /me/boards` hernoemt, schikt, voegt toe en haalt
   weg, er blijft er altijd één; `?board=`), elk met blokken (project met

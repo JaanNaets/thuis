@@ -5956,3 +5956,32 @@ dialog.palette[open]::backdrop {
     break-inside: avoid;
   }
 }
+
+/* ---------- de app instellen (AppSettings.tsx) ---------- */
+
+/* Een eigen app: de rij opent haar instellingen, rechts Op je beginscherm. */
+.app-rows .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-rows .row-button {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Een snelkoppeling: de keuze en een kruisje om ze weg te halen. */
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 6px;
+}

@@ -5,6 +5,7 @@ import { api } from "../api";
 import { BackupCard } from "../components/Backup";
 import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
+import { AppCard } from "../components/AppSettings";
 import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
 import { ProjectOrder } from "../components/ProjectOrder";
@@ -89,6 +90,8 @@ export function MePage() {
       </SubmitButton>
 
       <NotificationsCard />
+
+      <AppCard />
 
       {tops.length > 1 && (
         <section className="card">

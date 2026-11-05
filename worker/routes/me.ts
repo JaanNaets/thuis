@@ -4,12 +4,13 @@ import type { IconKey } from "../../shared/templates";
 import { isTone, type Me, type Overview, type Person } from "../../shared/types";
 import { blockProjects, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/overview";
 import { MAX_TARGETS, rankTargets, type AddTarget } from "../../shared/quickadd";
-import { appManifest } from "../../shared/manifest";
+import { appManifest, ownAppManifest } from "../../shared/manifest";
+import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type Reach } from "../../shared/apps";
 import { flattenTree } from "../../shared/tree";
 import { isValidIban, normalizeIban } from "../../shared/payment";
 import { accessibleProjects } from "../context";
 import type { AppEnv } from "../types";
-import { asObject, parseOrder, requiredString, ValidationError } from "../validate";
+import { asObject, NotFoundError, parseOrder, requiredString, ValidationError } from "../validate";
 
 export const me = new Hono<AppEnv>();
 
@@ -116,11 +117,80 @@ export async function addTargets(db: D1Database, personId: string): Promise<AddT
   return rankTargets(out).slice(0, MAX_TARGETS);
 }
 
-/** Het manifest van de app, met jouw meestgebruikte lijsten als snelkoppeling (zie shared/manifest.ts). */
+/**
+ * Het manifest van de app (zie shared/manifest.ts): je eigen snelkoppelingen (enkel wat je nog bereikt), of vanzelf je
+ * meestgebruikte lijsten.
+ */
 me.get("/manifest", async (c) => {
-  const targets = await addTargets(c.env.DB, c.get("person").id);
-  return c.body(JSON.stringify(appManifest(targets)), 200, { "content-type": "application/manifest+json" });
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const settings = await appSettingsOf(db, personId);
+  const chosen = settings.shortcuts?.map((s) => ({ name: s.name, url: destinationPath(s.to) })) ?? null;
+  const targets = chosen ? [] : await addTargets(db, personId);
+  return c.body(JSON.stringify(appManifest(targets, chosen)), 200, { "content-type": "application/manifest+json" });
 });
+
+/** Je app-instellingen (zie shared/apps.ts): apps, snelkoppelingen en wat er met een gedeelde foto gebeurt. */
+me.get("/app", async (c) => c.json(await appSettingsOf(c.env.DB, c.get("person").id)));
+
+/** Je app-instellingen bewaren: nagekeken, en enkel wat je kan bereiken (een nieuwe app krijgt een id). */
+me.put("/app", async (c) => {
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const raw = cleanAppSettings(asObject(await c.req.json()).settings);
+  const settings = keepReachable(raw, await reachFor(db, personId, raw));
+  await db.prepare("UPDATE people SET app_settings = ? WHERE id = ?").bind(JSON.stringify(settings), personId).run();
+  return c.json(settings);
+});
+
+/** Het manifest van één eigen app (een eigen icoon op je beginscherm); 404 als ze er niet (meer) is. */
+me.get("/apps/:appId/manifest", async (c) => {
+  const app = (await appSettingsOf(c.env.DB, c.get("person").id)).apps.find((a) => a.id === c.req.param("appId"));
+  if (!app) throw new NotFoundError("Die app bestaat niet (meer).");
+  return c.body(JSON.stringify(ownAppManifest(app)), 200, { "content-type": "application/manifest+json" });
+});
+
+/** Je app-instellingen zoals ze nu gelden: wat je niet meer kan bereiken, valt weg. */
+async function appSettingsOf(db: D1Database, personId: string): Promise<AppSettings> {
+  const row = await db.prepare("SELECT app_settings FROM people WHERE id = ?").bind(personId).first<{ app_settings: string | null }>();
+  const raw = cleanAppSettings(parseJson(row?.app_settings));
+  return keepReachable(raw, await reachFor(db, personId, raw));
+}
+
+/**
+ * Wat je kan bereiken voor deze instellingen: je overzichten, en voor de projecten waarnaar ze verwijzen de lijsten
+ * die je er ziet (ook van erboven) en of je er iets mag toevoegen. Enkel die projecten, ook bij 1000 projecten.
+ */
+async function reachFor(db: D1Database, personId: string, s: AppSettings): Promise<Reach> {
+  const all = [...s.apps.map((a) => a.to), ...(s.shortcuts ?? []).map((x) => x.to), ...(s.share.kind === "receipt" ? [{ kind: "list" as const, project: s.share.project, list: s.share.list }] : [])];
+  const wanted = new Set(all.flatMap((d) => ("project" in d ? [d.project] : [])));
+  const boards = all.some((d) => d.kind === "board") ? (await boardsOf(db, personId)).map(({ id, name }) => ({ id, name })) : [];
+  const reach: Reach = { boards, projects: new Map() };
+  if (!wanted.size) return reach;
+  const nodes = (await accessibleProjects(db, personId)).filter((n) => !n.archived);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const chainOf = (id: string) => {
+    const chain: string[] = [];
+    for (let n = byId.get(id); n && !chain.includes(n.id); n = n.parent_id ? byId.get(n.parent_id) : undefined) chain.push(n.id);
+    return chain;
+  };
+  const chains = new Map([...wanted].filter((id) => byId.has(id)).map((id) => [id, chainOf(id)]));
+  const ids = JSON.stringify([...new Set([...chains.values()].flat())]);
+  const { results } = await db
+    .prepare("SELECT id, project_id, name, plural FROM item_types WHERE project_id IN (SELECT value FROM json_each(?))")
+    .bind(ids)
+    .all<{ id: string; project_id: string; name: string; plural: string }>();
+  for (const [id, chain] of chains) {
+    const node = byId.get(id)!;
+    const lists = new Map(
+      results
+        .filter((t) => chain.includes(t.project_id) && typeAccess(node.rights, t.id) !== "none")
+        .map((t) => [t.id, { name: t.name, plural: t.plural, create: canCreate(node.rights, t.id) }]),
+    );
+    reach.projects.set(id, { name: node.name, lists });
+  }
+  return reach;
+}
 
 /** Wie je bent en al je projecten, met je rol in elk. */
 me.get("/", async (c) => {

@@ -100,14 +100,17 @@ export function Home() {
   const overview = base && { ...base, projects: [...base.projects, ...(extra?.projects ?? [])] };
   const lists = new Map(overview?.projects.map((p) => [p.id, p.types]));
 
-  // Het gekozen overzicht onthouden op dit toestel (ook als het via ?bord= kwam).
+  // ?bord= (een app, Openen op of een snelkoppeling): dat overzicht tonen, ook als het overzicht al open stond.
+  const linked = params.get("bord");
   useEffect(() => {
-    if (base?.board) storeBoard(base.board);
-  }, [base?.board]);
+    if (linked) setBoardId(linked);
+  }, [linked]);
 
+  // Een overzicht kiezen: dit toestel onthoudt het (een app of Openen op die er een kiest via ?bord=, niet).
   function chooseBoard(id: string) {
     setEditing(null);
     setBoardId(id);
+    storeBoard(id);
     if (params.has("bord")) setParams({}, { replace: true });
   }
 

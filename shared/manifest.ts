@@ -30,19 +30,20 @@ export const SHARE_PATH = "/delen";
 
 const shortcut = (name: string, url: string) => ({ name, short_name: name.slice(0, 12), url, icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }] });
 
-/** Het manifest van de app: met je meestgebruikte lijsten als snelkoppeling, Toevoegen en Agenda. */
-export function appManifest(targets: AddTarget[]) {
+/**
+ * Het manifest van de app: je eigen snelkoppelingen (`chosen`, zie shared/apps.ts), of vanzelf je meestgebruikte
+ * lijsten, Toevoegen en Agenda.
+ */
+export function appManifest(targets: AddTarget[], chosen: { name: string; url: string }[] | null = null) {
   return {
     id: "/",
     name: "Thuis",
     short_name: "Thuis",
     start_url: "/",
     ...BASE,
-    shortcuts: [
-      ...targets.slice(0, SHORTCUT_LISTS).map((t) => shortcut(t.name, addPath(t))),
-      shortcut("Toevoegen", "/?toevoegen=1"),
-      shortcut("Agenda", "/agenda"),
-    ],
+    shortcuts: chosen
+      ? chosen.map((c) => shortcut(c.name, c.url))
+      : [...targets.slice(0, SHORTCUT_LISTS).map((t) => shortcut(t.name, addPath(t))), shortcut("Toevoegen", "/?toevoegen=1"), shortcut("Agenda", "/agenda")],
     share_target: {
       action: SHARE_PATH,
       method: "POST",
@@ -59,4 +60,10 @@ export const quickPath = (projectId: string, typeId: string) => `/snel/${project
 export function listManifest(t: { project_id: string; type_id: string; name: string }) {
   const path = quickPath(t.project_id, t.type_id);
   return { id: path, name: t.name, short_name: t.name.slice(0, 12), start_url: path, ...BASE };
+}
+
+/** Het manifest van een eigen app (zie shared/apps.ts): een eigen icoon met haar naam, dat naar haar pagina gaat. */
+export function ownAppManifest(app: { id: string; name: string }) {
+  const path = `/app/${app.id}`;
+  return { id: path, name: app.name, short_name: app.name.slice(0, 12), start_url: path, ...BASE };
 }

@@ -132,7 +132,7 @@ export type Backup = {
  * migraties na): neem ze mee in de back-up en het terugzetten, of zeg waarom niet.
  */
 export const BACKUP_TABLES = {
-  people: "mensen in je projecten (naam, e-mailadres, kleur; geen rekeningnummer of overzicht)",
+  people: "mensen in je projecten (naam, e-mailadres, kleur; geen rekeningnummer, overzicht of app-instellingen: die zijn van die persoon)",
   projects: true,
   roles: true,
   memberships: true,

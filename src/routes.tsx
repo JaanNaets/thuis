@@ -10,7 +10,7 @@ import { MePage } from "./pages/MePage";
 import { ProjectNew } from "./pages/ProjectNew";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectSettings } from "./pages/ProjectSettings";
-import { QuickLinkPage, SharedPage, StickerPage } from "./pages/QuickLinks";
+import { AppPage, QuickLinkPage, SharedPage, StickerPage } from "./pages/QuickLinks";
 import { RoleFormPage } from "./pages/RoleForm";
 import { TypeFormPage } from "./pages/TypeForm";
 
@@ -34,6 +34,7 @@ export const routes: RouteObject[] = [
       { path: "projecten/:id/sticker", element: <StickerPage /> },
       { path: "snel/:id/:typeId", element: <QuickLinkPage /> },
       { path: "delen", element: <SharedPage /> },
+      { path: "app/:appId", element: <AppPage /> },
       { path: "items/:itemId", element: <ItemPage /> },
       { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
       { path: "agenda", element: <AgendaPage /> },
