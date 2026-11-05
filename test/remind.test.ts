@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { computeLocal } from "../shared/calc.ts";
 import { cleanFields, type FieldDef } from "../shared/fields.ts";
-import { everyText, nextDate, remindersDue, repeatsDue, whenText } from "../shared/remind.ts";
+import { everyText, nextDate, remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind.ts";
 
 const upkeep: FieldDef[] = [
   { key: "elke", label: "Om de", type: "interval" },
@@ -73,4 +73,40 @@ test("herhalen: de volgende keer, en inhalen als de app niet liep", () => {
   assert.equal(everyText({ n: 1, unit: "month" }), "elke maand");
   assert.equal(everyText({ n: 2, unit: "week" }), "om de 2 weken");
   assert.equal(everyText({ n: 1, unit: "year" }), "elk jaar");
+});
+
+test("herinneren op een uur: één keer, in het kwartier waarin het valt", () => {
+  const fields = cleanFields([
+    { key: "op", label: "Afspraak", type: "date", remind: 0, remind_at: "uur" },
+    { key: "uur", label: "Uur", type: "time" },
+    { key: "tht", label: "Houdbaar tot", type: "date", remind: 2, remind_at: "uur" },
+  ]);
+  assert.equal(fields[0].remind_at, "uur");
+  // Een uurveld dat geen uur is, valt weg.
+  assert.equal(cleanFields([{ key: "op", label: "Op", type: "date", remind: 0, remind_at: "x" }, { key: "x", label: "X", type: "text" }])[0].remind_at, undefined);
+  const data = { op: "2026-11-05", uur: "18:30", tht: "2026-11-07" };
+  // Met een uur: niet 's morgens.
+  assert.deepEqual(remindersDue(fields, data, "2026-11-05"), []);
+  const due = timedRemindersDue(fields, data, "2026-11-05T18:30", "2026-11-05T18:45");
+  assert.deepEqual(
+    due.map((r) => [r.label, r.date, r.days, r.time]),
+    [
+      ["Afspraak", "2026-11-05", 0, "18:30"],
+      ["Houdbaar tot", "2026-11-07", 2, "18:30"],
+    ],
+  );
+  // Het kwartier ervoor en erna: niets (zo komt ze één keer).
+  assert.deepEqual(timedRemindersDue(fields, data, "2026-11-05T18:15", "2026-11-05T18:30"), []);
+  assert.deepEqual(timedRemindersDue(fields, data, "2026-11-05T18:45", "2026-11-05T19:00"), []);
+  // Zonder uur: gewoon 's morgens.
+  assert.deepEqual(
+    remindersDue(fields, { op: "2026-11-05" }, "2026-11-05").map((r) => r.label),
+    ["Afspraak"],
+  );
+  // Elk jaar, op een uur (een verjaardag om 9 u, een dag vooraf).
+  const yearly = cleanFields([
+    { key: "dag", label: "Verjaardag", type: "date", remind: 1, yearly: true, remind_at: "uur" },
+    { key: "uur", label: "Uur", type: "time" },
+  ]);
+  assert.equal(timedRemindersDue(yearly, { dag: "1990-11-06", uur: "09:00" }, "2026-11-05T09:00", "2026-11-05T09:15").length, 1);
 });

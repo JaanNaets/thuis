@@ -475,13 +475,15 @@ Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets 
 
 ### Herinneren en herhalen
 
-Elke ochtend om 7 uur (8 uur in de zomer) doet de app twee dingen (`worker/cron.ts`, de cron in `wrangler.jsonc`):
+Elke ochtend om 7 uur doet de app twee dingen (`worker/cron.ts`, de cron in `wrangler.jsonc`, die elk kwartier loopt):
 
 - **Herinneren**: een datum kan bij het veld (onder ⋯) **Herinneren** krijgen: op de dag zelf, of 1 dag tot 1 maand
   vooraf. Ook een berekende datum, zoals de volgende onderhoudsbeurt. Met **Elk jaar** voor een verjaardag. Wie het
   item en die datum mag zien en meldingen aanzette (bij Jouw gegevens), krijgt een melding ("Verwarming · Volgende keer: over 7
   dagen (6/11)"). Hooguit vijf per ochtend, de rest samen in één. De sjablonen zetten het al aan voor onderhoud,
-  opzeggen, verjaardagen, taken en het einde van de garantie.
+  opzeggen, verjaardagen, taken, het einde van de garantie en wat bijna vervalt (**Houdbaar tot** bij een product,
+  niet verplicht). Heeft de lijst een **uur** (een veld Uur), kies dan bij Herinneren **Om**: de melding komt dan op
+  dat uur (een afspraak om 18:30), in plaats van 's morgens.
 - **Herhalen**: op de fiche van een item zet **Herhalen** het om de zoveel dagen, weken, maanden of jaren opnieuw
   klaar (de huur, elke maand). Op die dag maakt de app een nieuw item zoals dit, met de datum van die dag in elke
   ingevulde datum, met de rechten van wie het instelde. Mag die daar niets meer toevoegen, dan stopt het. Liep de app

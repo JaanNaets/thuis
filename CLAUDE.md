@@ -100,7 +100,9 @@ commits en uitleg.
   per regel een item (of tekst), hoeveel en de eenheid; met `adjust` trekt elke regel af (een maaltijd uit een recept),
   met `per` (porties) rekent overnemen uit een recept mee. Waar code `item`/`items` behandelt, hoort `amounts` erbij. Een kasticket rekent de maat op de lijn om
   (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
-- **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elke ochtend): een melding gaat enkel naar wie
+- **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elk kwartier; om 7 u herhalen en de gewone
+  herinneringen, met `remind_at` op het uur van een uurveld, voor het voorbije kwartier, zonder bij te houden wat al
+  verstuurd is: `timedRemindersDue`): een melding gaat enkel naar wie
   het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
   die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,
   `shared/webpush.ts`) gaan enkel naar de pushdiensten van de browsers (`isPushEndpoint`).

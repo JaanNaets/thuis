@@ -3,7 +3,7 @@ import { requireAccess } from "./auth";
 import { withPerson } from "./context";
 import { files, items, projectItems, search } from "./routes/items";
 import { me } from "./routes/me";
-import { daily } from "./cron";
+import { quarter } from "./cron";
 import { products, rates } from "./routes/products";
 import { push } from "./routes/push";
 import { agenda } from "./routes/agenda";
@@ -58,6 +58,6 @@ app.onError((err, c) => {
 
 export default {
   fetch: app.fetch,
-  // Elke ochtend: herhalen en herinneren (zie cron.ts en de cron in wrangler.jsonc).
-  scheduled: (_event, env, ctx) => ctx.waitUntil(daily(env.DB)),
+  // Elk kwartier: herinneringen met een uur, en om 7 u herhalen en herinneren (zie cron.ts en wrangler.jsonc).
+  scheduled: (event, env, ctx) => ctx.waitUntil(quarter(env.DB, new Date(event.scheduledTime))),
 } satisfies ExportedHandler<AppEnv["Bindings"]>;

@@ -539,6 +539,7 @@ export const PROJECT_TEMPLATES = {
           { key: "barcode", label: "Barcode", type: "code", format: "ean_13" },
           { key: "inhoud", label: "Inhoud per stuk", type: "number", unit: "g", hint: "in g of ml: zo wordt 30 g Nutella een deel van een pot" },
           { key: "kasticket", label: "Op het kasticket", type: "text", aliases: true, hint: "hoe het op een kasticket staat (de app vult het zelf in als je een lijn koppelt)" },
+          { key: "houdbaar_tot", label: "Houdbaar tot", type: "date", remind: 2, hint: "niet verplicht: twee dagen vooraf een melding" },
           { key: "kcal_100", label: "kcal per 100 g", type: "number", unit: "kcal", product: "kcal" },
           { key: "eiwit_100", label: "Eiwit per 100 g", type: "number", unit: "g", product: "protein" },
           { key: "koolhydraten_100", label: "Koolhydraten per 100 g", type: "number", unit: "g", product: "carbs" },

@@ -29,16 +29,47 @@ export function nextDate(value: string, yearly: boolean, today: string): string 
 
 export type Reminder = { key: string; label: string; date: string; days: number };
 
-/** De herinneringen die vandaag vallen voor één item (`data` met de berekeningen al uitgerekend). */
+const isTime = (v: unknown): v is string => typeof v === "string" && /^\d{2}:\d{2}$/.test(v);
+
+/** Het uur van een herinnering (`remind_at`), als dat uurveld ingevuld is; anders komt ze 's morgens. */
+const timeOf = (f: FieldDef, data: Attributes) => (f.remind_at && isTime(data[f.remind_at]) ? (data[f.remind_at] as string) : null);
+
+/**
+ * De herinneringen die vandaag 's morgens vallen voor één item (`data` met de berekeningen al uitgerekend). Een
+ * herinnering met een uur komt niet 's morgens maar op dat uur (`timedRemindersDue`).
+ */
 export function remindersDue(fields: FieldDef[], data: Attributes, today: string): Reminder[] {
   return fields.flatMap((f) => {
     const value = data[f.key];
-    if (f.remind === undefined || !isDate(value)) return [];
+    if (f.remind === undefined || !isDate(value) || timeOf(f, data)) return [];
     const date = nextDate(value, Boolean(f.yearly), today);
     const days = daysBetween(today, date);
     return days === f.remind ? [{ key: f.key, label: f.label, date, days }] : [];
   });
 }
+
+export type TimedReminder = Reminder & { time: string };
+
+/**
+ * De herinneringen met een uur die vallen in `[from, to)`: momenten in de tijd van België, "YYYY-MM-DDTHH:MM" (de cron
+ * kijkt elk kwartier naar het voorbije kwartier). Zo komt een melding één keer, zonder bij te houden wat al verstuurd is.
+ */
+export function timedRemindersDue(fields: FieldDef[], data: Attributes, from: string, to: string): TimedReminder[] {
+  const today = from.slice(0, 10);
+  return fields.flatMap((f) => {
+    const value = data[f.key];
+    const time = timeOf(f, data);
+    if (f.remind === undefined || !isDate(value) || !time) return [];
+    // De datum (bij elk jaar: de eerstvolgende vanaf de dag van de melding), en de dag van de melding ervoor.
+    for (const date of f.yearly ? [nextDate(value, true, today), nextDate(value, true, addDays(today, f.remind))] : [value]) {
+      const moment = `${addDays(date, -f.remind)}T${time}`;
+      if (moment >= from && moment < to) return [{ key: f.key, label: f.label, date, days: f.remind, time }];
+    }
+    return [];
+  });
+}
+
+const addDays = (iso: string, days: number) => new Date(isoDay(iso) + days * DAY).toISOString().slice(0, 10);
 
 /** "vandaag", "morgen" of "over 7 dagen (6/11)". */
 export function whenText(days: number, date: string): string {

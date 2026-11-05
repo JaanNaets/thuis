@@ -1,14 +1,17 @@
-// Elke ochtend (de cron in wrangler.jsonc): eerst de herhalingen (de huur van deze maand), dan de herinneringen (de
-// verwarming over een week, een verjaardag morgen) als melding naar wie ze mag zien en meldingen aanzette.
+// Elk kwartier (de cron in wrangler.jsonc): de herinneringen met een uur die in het voorbije kwartier vielen (een
+// afspraak om 18:30, iets dat over twee dagen vervalt). En 's morgens om 7 u eerst de herhalingen (de huur van deze
+// maand), dan de gewone herinneringen (de verwarming over een week, een verjaardag morgen). Een melding gaat enkel naar
+// wie het item en de datum mag zien en meldingen aanzette.
 
 import { fieldAccess, typeAccess, type Rights } from "../shared/access";
 import { computeLocal, fieldDeps } from "../shared/calc";
 import type { Attributes } from "../shared/fields";
-import { remindersDue, repeatsDue, whenText, type Reminder } from "../shared/remind";
+import { remindersDue, repeatsDue, timedRemindersDue, whenText, type Reminder } from "../shared/remind";
+import type { ItemType } from "../shared/types";
 import { accessibleProjects, toItemType, type TypeRow } from "./context";
 import { notify } from "./push";
 import { createRepeated } from "./routes/items";
-import { brusselsToday } from "./today";
+import { brusselsMoment, brusselsToday } from "./today";
 import { ForbiddenError } from "./validate";
 
 /** Hoeveel meldingen iemand per ochtend hooguit krijgt; de rest komt samen in één. */
@@ -17,6 +20,21 @@ const MAX_PER_PERSON = 5;
 export async function daily(db: D1Database, today = brusselsToday()): Promise<void> {
   await runRepeats(db, today).catch((err) => console.error("Herhalen lukte niet", err));
   await sendReminders(db, today).catch((err) => console.error("Herinneren lukte niet", err));
+}
+
+/** Het uur van de ochtend (in België) voor herhalen en de gewone herinneringen. */
+const MORNING = "07:00";
+
+/**
+ * Wat de cron elk kwartier doet, voor het kwartier `[at − 15 min, at)`: de herinneringen met een uur, en als 7 u in dat
+ * kwartier valt de ochtend. Zo gebeurt alles één keer, zonder bij te houden wat al gebeurde.
+ */
+export async function quarter(db: D1Database, at = new Date()): Promise<void> {
+  const to = brusselsMoment(at);
+  const from = brusselsMoment(new Date(at.getTime() - 15 * 60_000));
+  const morning = `${to.slice(0, 10)}T${MORNING}`;
+  if (morning >= from && morning < to) await daily(db, to.slice(0, 10));
+  await sendTimedReminders(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
 }
 
 type RepeatRow = { item_id: string; every_n: number; every_unit: "day" | "week" | "month" | "year"; next_on: string; created_by: string; archived: number };
@@ -42,19 +60,29 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
   return made;
 }
 
-type Due = { item: { id: string; name: string }; reminder: Reminder };
+type Due = { item: { id: string; name: string }; reminder: Reminder; body: string };
 
-export async function sendReminders(db: D1Database, today: string): Promise<number> {
+/**
+ * Per persoon de herinneringen die nu vallen: voor elke lijst met herinneringen (`like`: wat in haar velden moet staan)
+ * de items, met `pick` wat er voor één item valt. Enkel wie het item en de datum mag zien (en alles waarvan een
+ * berekende datum afhangt).
+ */
+async function collect(
+  db: D1Database,
+  like: string,
+  today: string,
+  pick: (fields: ItemType["fields"], data: Attributes) => { reminder: Reminder; body: string }[],
+): Promise<Map<string, Due[]>> {
+  const due = new Map<string, Due[]>();
   const { results: people } = await db.prepare("SELECT DISTINCT person_id FROM push_subscriptions").all<{ person_id: string }>();
-  if (!people.length) return 0;
-  const { results: typeRows } = await db.prepare(`SELECT * FROM item_types WHERE fields LIKE '%"remind"%'`).all<TypeRow>();
-  if (!typeRows.length) return 0;
+  if (!people.length) return due;
+  const { results: typeRows } = await db.prepare("SELECT * FROM item_types WHERE fields LIKE ?").bind(`%${like}%`).all<TypeRow>();
+  if (!typeRows.length) return due;
 
   // Per persoon zijn rechten in elk project (zoals in de app).
   const rights = new Map<string, Map<string, Rights>>();
   for (const { person_id } of people) rights.set(person_id, new Map((await accessibleProjects(db, person_id)).map((n) => [n.id, n.rights])));
 
-  const due = new Map<string, Due[]>();
   for (const row of typeRows) {
     const type = toItemType(row);
     if (!type.fields.some((f) => f.remind !== undefined)) continue;
@@ -69,25 +97,28 @@ export async function sendReminders(db: D1Database, today: string): Promise<numb
       } catch {
         continue;
       }
-      for (const reminder of remindersDue(type.fields, data, today)) {
-        // Enkel wie het item en de datum mag zien (en alles waarvan een berekende datum afhangt).
-        const deps = fieldDeps(type.fields, reminder.key);
+      for (const { reminder, body } of pick(type.fields, data)) {
+        const deps = [...fieldDeps(type.fields, reminder.key), ...(type.fields.find((f) => f.key === reminder.key)?.remind_at ? [type.fields.find((f) => f.key === reminder.key)!.remind_at!] : [])];
         for (const [person, projects] of rights) {
           const r = projects.get(item.project_id);
           if (!r || typeAccess(r, type.id) === "none" || deps.some((k) => fieldAccess(r, type.id, k) === "none")) continue;
-          due.set(person, [...(due.get(person) ?? []), { item, reminder }]);
+          due.set(person, [...(due.get(person) ?? []), { item, reminder, body }]);
         }
       }
     }
   }
+  return due;
+}
 
+/** De meldingen sturen: per persoon hooguit `MAX_PER_PERSON`, de rest samen in één. */
+async function send(db: D1Database, due: Map<string, Due[]>, tag: string): Promise<number> {
   let sent = 0;
   for (const [person, list] of due) {
     const shown = list.length > MAX_PER_PERSON ? list.slice(0, MAX_PER_PERSON - 1) : list;
-    for (const { item, reminder } of shown)
+    for (const { item, reminder, body } of shown)
       sent += await notify(db, person, {
         title: item.name,
-        body: `${reminder.label}: ${whenText(reminder.days, reminder.date)}`,
+        body,
         url: `/items/${item.id}`,
         tag: `${item.id}:${reminder.key}:${reminder.date}`,
       });
@@ -97,9 +128,27 @@ export async function sendReminders(db: D1Database, today: string): Promise<numb
         title: `Nog ${rest.length} herinneringen`,
         body: rest.map((d) => d.item.name).join(", "),
         url: "/",
-        tag: `meer:${today}`,
+        tag: `meer:${tag}`,
       });
     }
   }
   return sent;
+}
+
+export async function sendReminders(db: D1Database, today: string): Promise<number> {
+  const due = await collect(db, '"remind"', today, (fields, data) =>
+    remindersDue(fields, data, today).map((reminder) => ({ reminder, body: `${reminder.label}: ${whenText(reminder.days, reminder.date)}` })),
+  );
+  return send(db, due, today);
+}
+
+/** De herinneringen met een uur die in `[from, to)` vallen (tijd van België, "YYYY-MM-DDTHH:MM"). */
+export async function sendTimedReminders(db: D1Database, from: string, to: string): Promise<number> {
+  const due = await collect(db, '"remind_at"', from.slice(0, 10), (fields, data) =>
+    timedRemindersDue(fields, data, from, to).map((reminder) => ({
+      reminder,
+      body: `${reminder.label}: ${whenText(reminder.days, reminder.date)}${reminder.days === 0 ? ` om ${reminder.time}` : ""}`,
+    })),
+  );
+  return send(db, due, from);
 }

@@ -1212,7 +1212,7 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.type === "number" && d.counter ? { counter: true } : {}),
       ...(d.type === "number" && d.counter && d.measure ? { measure: Object.fromEntries(Object.entries(d.measure).filter(([, v]) => v).map(([k, v]) => [k, rename(v!)])) } : {}),
       ...(d.type === "text" && d.aliases ? { aliases: true } : {}),
-      ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind } : {}),
+      ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind, ...(d.remind_at ? { remind_at: rename(d.remind_at) } : {}) } : {}),
       ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
       ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
       ...(d.type === "item" && d.copy ? { copy: true } : {}),
@@ -1572,6 +1572,21 @@ export function FieldsEditor({
                             {n === 0 ? "Op de dag zelf" : n === 1 ? "1 dag vooraf" : n === 7 ? "1 week vooraf" : n === 14 ? "2 weken vooraf" : n === 30 ? "1 maand vooraf" : `${n} dagen vooraf`}
                           </option>
                         ))}
+                      </select>
+                    </label>
+                  )}
+                  {(f.type === "date" || f.type === "calc") && f.remind !== undefined && value.some((x) => x.type === "time" && x.label.trim()) && (
+                    <label className="field">
+                      <span className="label">Om</span>
+                      <select aria-label="Om" value={f.remind_at ?? ""} onChange={(e) => update(i, { remind_at: e.target.value || undefined })}>
+                        <option value="">'s Morgens</option>
+                        {value
+                          .filter((x) => x.type === "time" && x.label.trim())
+                          .map((x) => (
+                            <option key={x.key} value={x.key}>
+                              Het uur van {x.label}
+                            </option>
+                          ))}
                       </select>
                     </label>
                   )}

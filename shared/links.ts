@@ -106,6 +106,7 @@ export const FIELD_LINKS = {
   aliases: false,
   remind: false,
   yearly: false,
+  remind_at: false,
   agenda: true,
   adjust: true,
   copy: true,

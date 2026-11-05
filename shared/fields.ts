@@ -154,6 +154,11 @@ export type FieldDef = {
   remind?: number;
   /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
   yearly?: boolean;
+  /**
+   * Datum met `remind`: de sleutel van een uurveld van deze lijst. Staat daar een uur, dan komt de melding op dat uur
+   * (zoveel dagen vooraf), anders 's morgens. Zie shared/remind.ts.
+   */
+  remind_at?: string;
   /** Datum, periode of berekende datum: in de agenda van al je projecten (zie shared/agenda.ts). */
   agenda?: boolean;
   /**
@@ -290,6 +295,7 @@ export function cleanFields(raw: unknown): FieldDef[] {
       def.remind = f.remind;
     }
     if (f.yearly === true && type === "date" && (def.remind !== undefined || f.agenda === true)) def.yearly = true;
+    if (def.remind !== undefined && typeof f.remind_at === "string" && KEY_RE.test(f.remind_at)) def.remind_at = f.remind_at;
     if (f.agenda === true && (type === "date" || type === "date_range" || type === "calc")) def.agenda = true;
     if (f.fill === true && type === "share") {
       def.fill = true;
@@ -332,6 +338,10 @@ export function cleanFields(raw: unknown): FieldDef[] {
     let out = f;
     // Bij hoeveelheden telt elke regel met zijn eigen hoeveelheid en eenheid.
     if (f.adjust?.by && (f.type === "amounts" || !amounts.has(f.adjust.by))) out = { ...out, adjust: { field: f.adjust.field, sign: f.adjust.sign } };
+    if (f.remind_at && kinds.get(f.remind_at) !== "time") {
+      const { remind_at: _r, ...rest } = out;
+      out = rest;
+    }
     if (f.per && kinds.get(f.per) !== "number") {
       const { per: _p, ...rest } = out;
       out = rest;
