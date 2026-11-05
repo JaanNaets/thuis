@@ -37,6 +37,7 @@ import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 import { cleanView, EMPTY_VIEW, groupItems, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
 import { fieldsForViews } from "./views";
 import { boardWindow, BOARD_PERIODS, cleanChart, computeChart, type BoardPeriod } from "../../shared/charts";
+import { notifyNewItem } from "../notify";
 
 export const items = new Hono<AppEnv>();
 export const projectItems = new Hono<AppEnv>();
@@ -455,6 +456,8 @@ projectItems.post("/:id/items", async (c) => {
     ...(await effectStatements(db, me, applied, true)),
     ...firstFixedStatements(db, me, access.rights, type, name, data),
   ]);
+  // Een melding aan wie dat wil (instelling van de lijst), op de achtergrond: bewaren wacht er niet op.
+  if (type.notify) c.executionCtx.waitUntil(notifyNewItem(db, c.get("person"), access, type, { id, name, data }).catch((err) => console.warn("Melding niet verstuurd", err)));
   return c.json(await loadDetail(c, id), 201);
 });
 

@@ -48,7 +48,8 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
   assert.deepEqual(kept.share, { kind: "receipt", project: "p1", list: "b" });
   assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", project: "p1", list: "o" } }, reach).share, { kind: "ask" });
-  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true });
+  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] });
+  assert.deepEqual(cleanAppSettings({ muted: ["p1", "p1", "../x", 3] }).muted, ["p1"]);
 });
 
 test("lezen met AI: staat aan tenzij je ze uitdrukkelijk uitzette, en blijft bij het nakijken", () => {

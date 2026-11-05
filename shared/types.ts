@@ -1,5 +1,6 @@
 // Gedeelde types tussen de Worker (API) en de React-app.
 
+import type { NotifyDef } from "./notify";
 import type { Access, Rights } from "./access";
 import type { Attributes, FieldDef, Interval } from "./fields";
 import type { TotalDef, Transfer } from "./totals";
@@ -109,6 +110,8 @@ export type ItemType = {
   fields: FieldDef[];
   /** Samenvattingen op het project (Kcal per dag, Uitgaven per maand, Wie moet wie). */
   totals: TotalDef[];
+  /** Een melding bij een nieuw item (zie shared/notify.ts); null = geen. */
+  notify?: NotifyDef | null;
   sort_order: number;
 };
 
@@ -122,6 +125,7 @@ export type ItemTypeInput = {
   icon: IconKey | null;
   fields: FieldDef[];
   totals: TotalDef[];
+  notify?: NotifyDef | null;
 };
 
 /**

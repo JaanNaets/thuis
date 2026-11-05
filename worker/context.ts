@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { canSeeType, cleanRights, NO_RIGHTS, visibleFields, type Rights } from "../shared/access";
 import type { FieldDef } from "../shared/fields";
 import type { TotalDef } from "../shared/totals";
+import { cleanNotify } from "../shared/notify";
 import type { ItemType, Person, Project, ProjectNode, Tone } from "../shared/types";
 import { TONES } from "../shared/types";
 import type { AppEnv } from "./types";
@@ -160,7 +161,7 @@ export async function accessibleProjects(db: D1Database, personId: string): Prom
   return nodes;
 }
 
-export type TypeRow = Omit<ItemType, "fields" | "totals"> & { fields: string; totals?: string };
+export type TypeRow = Omit<ItemType, "fields" | "totals" | "notify"> & { fields: string; totals?: string; notify?: string | null };
 
 function parseList<T>(json: string | undefined): T[] {
   try {
@@ -174,7 +175,13 @@ function parseList<T>(json: string | undefined): T[] {
 export function toItemType(row: TypeRow): ItemType {
   // De kolom rules (van voor de totalen, zie migratie 0013) gaat niet mee.
   const { rules: _rules, ...rest } = row as TypeRow & { rules?: unknown };
-  return { ...rest, fields: parseList<FieldDef>(row.fields), totals: parseList<TotalDef>(row.totals) };
+  let notify: unknown = null;
+  try {
+    notify = typeof row.notify === "string" ? JSON.parse(row.notify) : null;
+  } catch {
+    notify = null;
+  }
+  return { ...rest, fields: parseList<FieldDef>(row.fields), totals: parseList<TotalDef>(row.totals), notify: cleanNotify(notify) };
 }
 
 /**

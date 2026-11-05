@@ -54,6 +54,7 @@ export type BackupType = {
   icon: string | null;
   fields: unknown;
   totals: unknown;
+  notify?: unknown;
   sort_order: number;
 };
 export type BackupTag = {

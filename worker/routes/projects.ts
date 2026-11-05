@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cleanNotify } from "../../shared/notify";
 import {
   canCreate,
   canDelete,
@@ -175,6 +176,7 @@ function parseTypeInput(body: unknown) {
     icon: icon as string | null,
     fields: obj.fields,
     totals: obj.totals,
+    notify: obj.notify,
   };
 }
 
@@ -860,12 +862,13 @@ projects.post("/:id/types", async (c) => {
   const totals = cleanTypeTotals(input.totals, fields);
   await checkSources(db, c.get("person").id, totals, fields, id);
   await checkGoalPeople(db, totals, access.chain);
+  const notify = cleanNotify(input.notify, fields);
   await db
     .prepare(
-      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
+      `INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, notify, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT ifnull(max(sort_order), 0) + 10 FROM item_types WHERE project_id = ?2))`,
     )
-    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals))
+    .bind(id, access.project.id, input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals), notify ? JSON.stringify(notify) : null)
     .run();
   return c.json({ id }, 201);
 });
@@ -957,7 +960,8 @@ types.put("/:id", async (c) => {
   const { type, access } = await requireType(db, c.get("person").id, c.req.param("id"));
   need(access, "manage", "Enkel wie het project instelt, kan lijsten aanpassen.");
   const lists = await fieldListsFor(db, c.get("person").id, access);
-  const fields = cleanTypeFields(input.fields, lists.refs, type.id, lists.calcs);
+  // Zonder velden in de vraag blijven de huidige (een onvolledige vraag wist nooit alle velden).
+  const fields = input.fields === undefined ? type.fields : cleanTypeFields(input.fields, lists.refs, type.id, lists.calcs);
   await checkDefaultShares(db, fields, access.chain);
   // Zonder totalen in de vraag blijven de huidige die nog bij de velden passen.
   const totals = input.totals === undefined ? keepTotals(type.totals, fields) : cleanTypeTotals(input.totals, fields);
@@ -965,9 +969,11 @@ types.put("/:id", async (c) => {
     await checkSources(db, c.get("person").id, totals, fields, type.id);
     await checkGoalPeople(db, totals, access.chain);
   }
+  // Zonder melding in de vraag blijft de huidige, als ze nog bij de velden past.
+  const notify = cleanNotify(input.notify === undefined ? type.notify : input.notify, fields);
   await db
-    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, totals = ? WHERE id = ?")
-    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals), type.id)
+    .prepare("UPDATE item_types SET name = ?, plural = ?, name_label = ?, icon = ?, fields = ?, totals = ?, notify = ? WHERE id = ?")
+    .bind(input.name, input.plural, input.name_label, input.icon, JSON.stringify(fields), JSON.stringify(totals), notify ? JSON.stringify(notify) : null, type.id)
     .run();
   return c.json({ id: type.id });
 });

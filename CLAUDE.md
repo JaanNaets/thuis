@@ -129,6 +129,10 @@ commits en uitleg.
   per regel een item (of tekst), hoeveel en de eenheid; met `adjust` trekt elke regel af (een maaltijd uit een recept),
   met `per` (porties) rekent overnemen uit een recept mee. Waar code `item`/`items` behandelt, hoort `amounts` erbij. Een kasticket rekent de maat op de lijn om
   (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
+- **Melding bij een nieuw item** (`shared/notify.ts`, `item_types.notify`, `worker/notify.ts`): per lijst niet, aan
+  iedereen die de lijst ziet, of aan wie in een veld met mensen staat; nooit aan wie het toevoegde of wie het project
+  (of een erboven) stilzette (`AppSettings.muted`, `PUT /me/muted`); per ontvanger zijn eigen rechten
+  (`projectAccess`, `visibleData`); kort na elkaar één melding (`tag`). Op de achtergrond (`waitUntil`).
 - **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elk kwartier; om 7 u herhalen en de gewone
   herinneringen, met `remind_at` op het uur van een uurveld, voor het voorbije kwartier, zonder bij te houden wat al
   verstuurd is: `timedRemindersDue`): een melding gaat enkel naar wie

@@ -32,6 +32,7 @@ import { effectsOf } from "../../shared/effects";
 import { cleanAttributes, cleanFields, INTERVAL_UNITS, refLists, type AmountEntry, type Attributes, type FieldDef, type Share } from "../../shared/fields";
 import { isIconKey } from "../../shared/templates";
 import { sourceMisfit, visibleTotals, type TotalDef } from "../../shared/totals";
+import { cleanNotify } from "../../shared/notify";
 import { isTone, type Item, type ItemType } from "../../shared/types";
 import { cleanView, viewFields } from "../../shared/views";
 import { withCalcs } from "../compute";
@@ -150,6 +151,8 @@ backup.get("/", async (c) => {
       icon: t.icon,
       fields: t.fields,
       totals: t.totals,
+      // Enkel een melding over een veld dat je ziet.
+      notify: cleanNotify(t.notify, t.fields),
       sort_order: t.sort_order,
     })),
     tags: tags.results as Backup["tags"],
@@ -407,11 +410,12 @@ backup.post("/", async (c) => {
             }
           : {}),
       }));
-    types.set(t.id, { ...t, fields, totals });
+    const notify = cleanNotify(source.notify, fields);
+    types.set(t.id, { ...t, fields, totals, notify });
     statements.push(
       db
-        .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(t.id, t.project_id, t.name, t.plural, t.name_label, t.icon, JSON.stringify(fields), JSON.stringify(totals), t.sort_order),
+        .prepare("INSERT INTO item_types (id, project_id, name, plural, name_label, icon, fields, totals, notify, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(t.id, t.project_id, t.name, t.plural, t.name_label, t.icon, JSON.stringify(fields), JSON.stringify(totals), notify ? JSON.stringify(notify) : null, t.sort_order),
     );
   }
 

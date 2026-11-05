@@ -141,10 +141,29 @@ me.get("/app", async (c) => c.json(await appSettingsOf(c.env.DB, c.get("person")
 me.put("/app", async (c) => {
   const db = c.env.DB;
   const personId = c.get("person").id;
-  const raw = { ...cleanAppSettings(asObject(await c.req.json()).settings), ai: await aiOn(db, personId) };
+  const row = await db.prepare("SELECT app_settings FROM people WHERE id = ?").bind(personId).first<{ app_settings: string | null }>();
+  const stored = cleanAppSettings(parseJson(row?.app_settings));
+  const raw = { ...cleanAppSettings(asObject(await c.req.json()).settings), ai: stored.ai, muted: stored.muted };
   const settings = keepReachable(raw, await reachFor(db, personId, raw));
   await db.prepare("UPDATE people SET app_settings = ? WHERE id = ?").bind(JSON.stringify(settings), personId).run();
   return c.json(settings);
+});
+
+/**
+ * Een project stilzetten (of niet meer): geen melding bij een nieuw item daar, ook niet in de subprojecten. Enkel een
+ * project waar je in zit.
+ */
+me.put("/muted", async (c) => {
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const obj = asObject(await c.req.json());
+  const project = typeof obj.project === "string" ? obj.project : "";
+  if (!(await accessibleProjects(db, personId)).some((p) => p.id === project)) throw new NotFoundError("Dat project bestaat niet.");
+  const row = await db.prepare("SELECT app_settings FROM people WHERE id = ?").bind(personId).first<{ app_settings: string | null }>();
+  const settings = cleanAppSettings(parseJson(row?.app_settings));
+  const muted = obj.muted === true ? [...new Set([...settings.muted, project])] : settings.muted.filter((id) => id !== project);
+  await db.prepare("UPDATE people SET app_settings = ? WHERE id = ?").bind(JSON.stringify({ ...settings, muted }), personId).run();
+  return c.json({ muted });
 });
 
 /** Lezen met AI: aan of uit voor jou, en hoe vaak je de AI vandaag liet lezen. */

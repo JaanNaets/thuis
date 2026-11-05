@@ -38,11 +38,16 @@ export type AppSettings = {
   share: ShareChoice;
   /** Mag de AI voor jou lezen (✨)? Uit: geen ✨-knoppen, en de server weigert elke AI-vraag van jou. */
   ai: boolean;
+  /** Projecten die je stilzette: geen melding bij een nieuw item daar (ook niet in hun subprojecten). */
+  muted: string[];
 };
 
 export const MAX_APPS = 12;
 export const MAX_SHORTCUTS = 4;
-export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true };
+export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] };
+
+/** Zoveel projecten kan je hoogstens stilzetten. */
+export const MAX_MUTED = 200;
 
 /** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
 export const aiAllowed = (raw: unknown): boolean => !(raw && typeof raw === "object" && (raw as Record<string, unknown>).ai === false);
@@ -103,7 +108,8 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
     : null;
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
   const share: ShareChoice = s.kind === "receipt" && id(s.project) && id(s.list) ? { kind: "receipt", project: s.project as string, list: s.list as string } : { kind: "ask" };
-  return { apps, shortcuts, share, ai: aiAllowed(o) };
+  const muted = Array.isArray(o.muted) ? [...new Set(o.muted.map(id).filter((x): x is string => x !== null))].slice(0, MAX_MUTED) : [];
+  return { apps, shortcuts, share, ai: aiAllowed(o), muted };
 }
 
 /** Het pad van een bestemming in de app. */
@@ -168,6 +174,7 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
     shortcuts: s.shortcuts && s.shortcuts.filter((x) => reachable(x.to, reach)),
     share,
     ai: s.ai,
+    muted: s.muted,
   };
 }
 

@@ -491,6 +491,15 @@ fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt
 in "Typ wat je weet" voor je iets typt, dan staat er wat je het **vaakst** toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
 Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
 
+### Een melding bij een nieuw item
+
+In het formulier van een lijst kies je **Melden bij een nieuw item**: Niet, Aan iedereen die de lijst ziet, of Aan
+wie in een veld staat (Betaald door, Verdeling, Wie). Voegt Jana een uitgave toe, dan krijg jij "Jana voegde uitgave
+toe · Pizza · € 40,00" (enkel wat jij van dat item mag zien), wie het toevoegde niet. Voegt iemand er kort na elkaar
+meer toe, dan blijft het één melding ("Jana voegde 3 uitgaven toe"). Wil je van een project niets horen (ook niet van
+zijn subprojecten), zet het dan **stil** bij Jouw gegevens → Meldingen. De melding vertrekt op de achtergrond
+(`worker/notify.ts`); bewaren wacht er niet op.
+
 ### Herinneren en herhalen
 
 Elke ochtend om 7 uur doet de app twee dingen (`worker/cron.ts`, de cron in `wrangler.jsonc`, die elk kwartier loopt):

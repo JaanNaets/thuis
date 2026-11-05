@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { NOTIFY_FIELD_TYPES } from "../../shared/notify";
 import { useParams } from "react-router";
 import { previewCalcs } from "../../shared/calc";
 import type { IconKey } from "../../shared/templates";
@@ -62,6 +63,8 @@ function TypeForm({
   const [icon, setIcon] = useState<IconKey | null>(existing?.icon ?? "folder");
   const [fields, setFields] = useState<FieldDraft[]>(() => fieldsDraft(existing?.fields ?? []));
   const [totals, setTotals] = useState<TotalDraft[]>(() => totalsDraft(existing?.totals ?? [], existing?.fields ?? []));
+  // Melden bij een nieuw item: "" = niet, "all" = iedereen die de lijst ziet, anders de sleutel van een veld met mensen.
+  const [notify, setNotify] = useState(existing?.notify ? (existing.notify.to === "all" ? "all" : existing.notify.field) : "");
   // De velden met de uitkomst van hun berekeningen (welke je kan optellen).
   const self = existing?.id ?? "self";
   const preview = useMemo(
@@ -85,6 +88,7 @@ function TypeForm({
     const keyOf = (key: string) => built.fields[fields.findIndex((f) => f.key === key)]?.key;
     const sums = buildTotals(totals, preview, keyOf);
     if ("error" in sums) return setError(sums.error);
+    const notifyKey = notify && notify !== "all" ? keyOf(notify) : undefined;
     const input: ItemTypeInput = {
       name,
       plural: plural || name,
@@ -92,6 +96,7 @@ function TypeForm({
       icon,
       fields: built.fields,
       totals: sums.totals,
+      notify: notify === "all" ? { to: "all" } : notifyKey ? { to: "field", field: notifyKey } : null,
     };
     setBusy(true);
     setError(undefined);
@@ -165,6 +170,23 @@ function TypeForm({
       </section>
 
       <TotalsEditor value={totals} onChange={setTotals} fields={preview} others={others} people={p.members.map((m) => m.person)} />
+
+      <section className="card form-section">
+        <label className="field">
+          <span className="label">Melden bij een nieuw item</span>
+          <select value={notify} onChange={(e) => setNotify(e.target.value)}>
+            <option value="">Niet</option>
+            <option value="all">Aan iedereen die de lijst ziet</option>
+            {fields
+              .filter((f) => NOTIFY_FIELD_TYPES.includes(f.type) && f.label.trim())
+              .map((f) => (
+                <option key={f.key} value={f.key}>
+                  Aan wie in {f.label.trim()} staat
+                </option>
+              ))}
+          </select>
+        </label>
+      </section>
 
       {error && <p className="error">{error}</p>}
       <SubmitButton busy={busy} className="btn btn-primary btn-lg">
