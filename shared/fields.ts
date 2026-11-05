@@ -135,6 +135,15 @@ export type FieldDef = {
   product?: ProductKey;
   /** Getal: met − en + in de lijst (een voorraad), en op te tellen met scannen of een kasticket. */
   counter?: boolean;
+  /**
+   * Getal met `counter`: in welke eenheid het telt, per item (zie shared/units.ts). De sleutels van velden van deze
+   * lijst: `unit` de eenheid (kg, l, stuk, zak, …), `piece` de inhoud van één stuk (g of ml), `pack` hoeveel er in één
+   * verpakking zit (in de eenheid) en `pack_name` hoe die heet (zak). Zo wordt 500 g eten 0,5 kg van de voorraad, en
+   * + een hele zak.
+   */
+  measure?: { unit?: string; piece?: string; pack?: string; pack_name?: string };
+  /** Tekst: andere namen voor dit item (hoe het op een kasticket staat), om lijnen aan het juiste item te koppelen. */
+  aliases?: boolean;
   /** Datum (ook berekend): zoveel dagen vooraf een melding voor wie het mag zien (zie shared/remind.ts). */
   remind?: number;
   /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
@@ -143,9 +152,10 @@ export type FieldDef = {
   agenda?: boolean;
   /**
    * Verwijzing: past bij bewaren het getal `field` van het gekozen item aan, met het getal `by` van dit item (leeg = 1),
-   * erbij (`sign` 1) of eraf (-1). Zie shared/effects.ts.
+   * erbij (`sign` 1) of eraf (-1). `unit`: de eenheid van `by` (g): de app rekent om naar de eenheid van het gekozen
+   * item (zie `measure` en shared/units.ts). Zie shared/effects.ts.
    */
-  adjust?: { field: string; by?: string; sign: 1 | -1 };
+  adjust?: { field: string; by?: string; sign: 1 | -1; unit?: string };
   /** Verwijzing: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde sleutel daar. */
   copy?: boolean;
   /** Uitleg bij het veld (en voor wie een etiket of foto leest). */
@@ -253,6 +263,14 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.me === true && type === "person") def.me = true;
     if (isProductKey(f.product) && productFits(f.product, type)) def.product = f.product;
     if (f.counter === true && type === "number") def.counter = true;
+    const measure = f.measure as Record<string, unknown> | undefined;
+    if (def.counter && measure && typeof measure === "object" && !Array.isArray(measure)) {
+      const m = Object.fromEntries(
+        (["unit", "piece", "pack", "pack_name"] as const).flatMap((k) => (typeof measure[k] === "string" && KEY_RE.test(measure[k] as string) ? [[k, measure[k]]] : [])),
+      );
+      if (Object.keys(m).length) def.measure = m;
+    }
+    if (f.aliases === true && type === "text") def.aliases = true;
     if (typeof f.remind === "number" && Number.isInteger(f.remind) && f.remind >= 0 && f.remind <= 365 && (type === "date" || type === "calc")) {
       def.remind = f.remind;
     }
@@ -272,13 +290,31 @@ export function cleanFields(raw: unknown): FieldDef[] {
     if (f.copy === true && type === "item") def.copy = true;
     const adjust = f.adjust as Record<string, unknown> | undefined;
     if (type === "item" && adjust && typeof adjust === "object" && typeof adjust.field === "string" && KEY_RE.test(adjust.field) && (adjust.sign === 1 || adjust.sign === -1)) {
-      def.adjust = { field: adjust.field, sign: adjust.sign, ...(typeof adjust.by === "string" && KEY_RE.test(adjust.by) ? { by: adjust.by } : {}) };
+      const unit = typeof adjust.unit === "string" ? adjust.unit.trim().toLowerCase().slice(0, 12) : "";
+      def.adjust = {
+        field: adjust.field,
+        sign: adjust.sign,
+        ...(typeof adjust.by === "string" && KEY_RE.test(adjust.by) ? { by: adjust.by } : {}),
+        ...(unit ? { unit } : {}),
+      };
     }
     return def;
   });
-  // Met welk getal een verwijzing telt: een getal of berekening van deze lijst (anders 1).
+  // Met welk getal een verwijzing telt: een getal of berekening van deze lijst (anders 1, zonder eenheid).
   const amounts = new Set(fields.filter((f) => ["number", "money", "duration", "calc"].includes(f.type)).map((f) => f.key));
-  return fields.map((f) => (f.adjust?.by && !amounts.has(f.adjust.by) ? { ...f, adjust: { field: f.adjust.field, sign: f.adjust.sign } } : f));
+  // De eenheid van een voorraad: velden van deze lijst van de juiste soort, anders valt het weg.
+  const kinds = new Map(fields.map((f) => [f.key, f.type]));
+  const fits = { unit: ["select", "text"], pack_name: ["select", "text"], piece: ["number"], pack: ["number"] } as const;
+  return fields.map((f) => {
+    let out = f;
+    if (f.adjust?.by && !amounts.has(f.adjust.by)) out = { ...out, adjust: { field: f.adjust.field, sign: f.adjust.sign } };
+    if (f.measure) {
+      const m = Object.fromEntries(Object.entries(f.measure).filter(([k, v]) => (fits[k as keyof typeof fits] as readonly string[]).includes(kinds.get(v) ?? "")));
+      const { measure: _m, ...rest } = out;
+      out = Object.keys(m).length ? { ...rest, measure: m } : rest;
+    }
+    return out;
+  });
 }
 
 /** Velden waarop je boven de lijst kan filteren. */

@@ -1,5 +1,6 @@
 // Verwijzingen die tellen: een verwijzing kan bij bewaren een getal van het gekozen item aanpassen (`adjust` op het
-// veld). Wat je eet uit de voorraad, trekt het af ("Uit voorraad": − gram ÷ inhoud); wat je op de winkellijst
+// veld). Wat je eet uit de voorraad, trekt het af ("Uit voorraad": − 30 g, omgerekend naar de eenheid van het product,
+// zie shared/units.ts); wat je op de winkellijst
 // afvinkt, telt het bij ("Product": + aantal als gekocht). Generiek: welk getal daar, met welk getal (of berekening)
 // hier, erbij of eraf.
 //
@@ -7,19 +8,35 @@
 // draait ze het terug; zo klopt het getal daar altijd met wat hier staat.
 
 import type { Attributes, FieldDef } from "./fields.ts";
+import { convert, type Measure } from "./units.ts";
 
-/** Wat een item aan een ander item deed: bij `target` het veld `field` met `delta`. */
+/** Wat een item aan een ander item deed: bij `target` het veld `field` met `delta` (in de eenheid van dat item). */
 export type Applied = { target: string; field: string; delta: number };
+/** Wat een item wil aanpassen, met de eenheid van de hoeveelheid hier (500 g); `convertEffects` rekent om. */
+export type Effect = Applied & { unit?: string };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Wat een item met deze waarden (met de berekeningen al uitgerekend) aanpast. */
-export function effectsOf(fields: FieldDef[], data: Attributes): Applied[] {
+export function effectsOf(fields: FieldDef[], data: Attributes): Effect[] {
   return fields.flatMap((f) => {
     if (f.type !== "item" || !f.adjust || typeof data[f.key] !== "string") return [];
     const amount = f.adjust.by ? data[f.adjust.by] : 1;
     if (typeof amount !== "number" || !Number.isFinite(amount) || amount === 0) return [];
-    return [{ target: data[f.key] as string, field: f.adjust.field, delta: round(f.adjust.sign * amount) }];
+    const effect: Effect = { target: data[f.key] as string, field: f.adjust.field, delta: round(f.adjust.sign * amount) };
+    return [f.adjust.by && f.adjust.unit ? { ...effect, unit: f.adjust.unit } : effect];
+  });
+}
+
+/**
+ * Een hoeveelheid met eenheid omrekenen naar de eenheid van het item dat telt (500 g van aardappelen in kg: 0,5).
+ * `measureOf`: hoe dat item telt (onbekend = zoals het staat).
+ */
+export function convertEffects(effects: Effect[], measureOf: (target: string, field: string) => Measure | undefined): Applied[] {
+  return effects.map(({ unit, ...e }) => {
+    const measure = unit ? measureOf(e.target, e.field) : undefined;
+    if (!measure) return e;
+    return { ...e, delta: round(Math.sign(e.delta) * convert(Math.abs(e.delta), unit, measure)) };
   });
 }
 

@@ -93,7 +93,10 @@ commits en uitleg.
 - **Verwijzingen die tellen** (`adjust`, `shared/effects.ts`, `worker/effects.ts`): wat een item aan andere items deed,
   staat in `items.applied` (nooit naar de browser). Bewaren past enkel het verschil toe, in dezelfde batch, en weigert
   als de bewerker dat getal daar niet mag wijzigen; verwijderen draait terug waar het mag. Overnemen (`copy`) gebeurt
-  in het formulier en gaat daarna door `prepareData` zoals alles.
+  in het formulier en gaat daarna door `prepareData` zoals alles. **Eenheden** (`shared/units.ts`): een voorraad telt
+  per item in een eenheid (`measure` op het getal: welk veld de eenheid, de inhoud per stuk en per verpakking zegt);
+  wat telt, mag een eenheid hebben (`adjust.unit`, 500 g of 2 zak) en wordt in `inTargetUnits` omgerekend naar die
+  van het item, vóór het in `applied` komt. Geen eenheid = zoals het staat.
 - **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elke ochtend): een melding gaat enkel naar wie
   het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
   die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,

@@ -4,6 +4,7 @@
 
 import { useRef, useState } from "react";
 import type { CodeValue, FieldDef } from "../../shared/fields";
+import { convert, formatAmount, measureOf, round3, type Measure } from "../../shared/units";
 import type { Item, ReceiptLines } from "../../shared/types";
 import { api } from "../api";
 import { formatNumber } from "../format";
@@ -11,6 +12,7 @@ import { prepareForReading } from "../image";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { Alert, Segmented } from "./Controls";
 import { Icon } from "./Icon";
+import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
 /** Een getal met `delta` aanpassen; geeft de nieuwe waarde. */
@@ -19,19 +21,112 @@ export async function adjust(itemId: string, key: string, delta: number): Promis
   return value;
 }
 
-/** − en + rechts in een rij van de lijst. */
-export function RowStepper({ value, label, onStep }: { value: number; label: string; onStep: (delta: number) => void }) {
+/**
+ * − en + rechts in een rij van de lijst. Met een eenheid (`measure`, zie shared/units.ts) staat ze erbij (45 kg) en
+ * telt een tik een hele verpakking (een zak van 15 kg); tik op het getal om een hoeveelheid te typen.
+ */
+export function RowStepper({
+  value,
+  label,
+  onStep,
+  measure,
+}: {
+  value: number;
+  label: string;
+  /** Het verschil, in de eenheid van het item. */
+  onStep: (delta: number) => void;
+  measure?: Measure;
+}) {
+  const [typing, setTyping] = useState(false);
+  const step = measure?.pack ?? 1;
+  const what = measure?.pack ? `één ${measure.pack_name ?? "verpakking"}` : "één";
+  const shown = measure?.unit ? formatAmount(value, measure.unit) : formatNumber(value);
   return (
     <span className="row-stepper">
-      <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${label}: één minder`} disabled={value <= 0} onClick={() => onStep(-1)}>
+      <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${label}: ${what} minder`} disabled={value <= 0} onClick={() => onStep(-Math.min(step, value))}>
         <Icon name="minus" size={15} />
       </button>
-      <span className="row-stepper-value">{formatNumber(value)}</span>
-      <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${label}: één meer`} onClick={() => onStep(1)}>
+      {measure ? (
+        <button type="button" className="row-stepper-value as-button" aria-label={`${label}: ${shown}, hoeveelheid typen`} onClick={() => setTyping(true)}>
+          {shown}
+        </button>
+      ) : (
+        <span className="row-stepper-value">{shown}</span>
+      )}
+      <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${label}: ${what} meer`} onClick={() => onStep(step)}>
         <Icon name="plus" size={15} />
       </button>
+      {measure && (
+        <Sheet open={typing} title={label} onClose={() => setTyping(false)}>
+          {typing && (
+            <AmountForm
+              measure={measure}
+              current={value}
+              onDone={(delta) => {
+                setTyping(false);
+                if (delta) onStep(delta);
+              }}
+            />
+          )}
+        </Sheet>
+      )}
     </span>
   );
+}
+
+/** Een hoeveelheid erbij of eraf, in een eenheid naar keuze (500 g van een voorraad in kg, een zak van 15 kg). */
+function AmountForm({ measure, current, onDone }: { measure: Measure; current: number; onDone: (delta: number) => void }) {
+  const [mode, setMode] = useState<"in" | "out">("out");
+  const [text, setText] = useState("");
+  const units = unitChoices(measure);
+  const [unit, setUnit] = useState(units[0].value);
+  const amount = Number(text.replace(",", "."));
+  const delta = Number.isFinite(amount) && amount > 0 ? round3(convert(amount, unit, measure)) : 0;
+  const after = round3(Math.max(0, current + (mode === "in" ? delta : -delta)));
+  return (
+    <form
+      className="form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onDone(mode === "in" ? delta : -Math.min(delta, current));
+      }}
+    >
+      <Segmented
+        label="Erbij of eraf"
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: "out", label: "Eraf" },
+          { value: "in", label: "Erbij" },
+        ]}
+      />
+      <div className="amount-row">
+        <input autoFocus inputMode="decimal" aria-label="Hoeveel" placeholder="0" value={text} onChange={(e) => setText(e.target.value)} />
+        <select aria-label="Eenheid" value={unit} onChange={(e) => setUnit(e.target.value)}>
+          {units.map((u) => (
+            <option key={u.value} value={u.value}>
+              {u.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button type="submit" className="btn btn-primary btn-lg" disabled={!delta}>
+        {delta ? `Wordt ${formatAmount(after, measure.unit)}` : mode === "in" ? "Erbij" : "Eraf"}
+      </button>
+    </form>
+  );
+}
+
+/** De eenheden die bij een item passen: zijn eigen, de verpakking, en gewicht of inhoud als dat omrekent. */
+function unitChoices(m: Measure): { value: string; label: string }[] {
+  const own = m.unit ?? "stuk";
+  const out = [{ value: own, label: own }];
+  if (m.pack) out.push({ value: m.pack_name ?? "verpakking", label: `${m.pack_name ?? "verpakking"} (${formatAmount(m.pack, own)})` });
+  const mass = ["g", "kg"];
+  const volume = ["ml", "cl", "l"];
+  const extra = mass.includes(own) ? mass : volume.includes(own) ? volume : m.piece ? ["g", "ml"] : [];
+  for (const u of extra) if (u !== own) out.push({ value: u, label: u });
+  return out;
 }
 
 /**
@@ -59,7 +154,9 @@ export function StockScanner({
     const item = items.find((i) => (i.data[code.key] as CodeValue | undefined)?.text === text);
     if (!item) return setStatus(`Nog niet in deze lijst (${text}). Voeg het eerst toe.`);
     try {
-      const value = await adjust(item.id, counter.key, mode === "in" ? 1 : -1);
+      // Eén barcode is één verpakking (een zak van 15 kg), anders één.
+      const one = measureOf(counter, item.data).pack ?? 1;
+      const value = await adjust(item.id, counter.key, mode === "in" ? one : -one);
       onChanged(item.id, value);
       setStatus(`${item.name}: ${formatNumber(value)} (${mode === "in" ? "+1" : "−1"})`);
     } catch (err) {

@@ -698,6 +698,10 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
 - In elke rij rechts `− 3 +` (`.row-stepper`); de rij is dan een `div.row` met de naam als `.row-link`. Dat getal is
   geen kolom meer (het staat al rechts). Elke tik gaat in één keer naar de database (`/items/:id/adjust`, nooit
   onder 0), zonder toast: het getal zelf is de bevestiging.
+- Met een eenheid (`measure` op het getal, zie `shared/units.ts`) staat ze erbij (`− 45 kg +`) en telt een tik een
+  hele verpakking (een zak van 15 kg; "Pellets: één zak meer"). Het getal is dan een knop (`.row-stepper-value
+  .as-button`): een `Sheet` met `Segmented` Eraf · Erbij, het getal met de eenheid ernaast (`.amount-row`: de eigen
+  eenheid, de verpakking, en g/kg of ml/cl/l als dat omrekent) en één knop die zegt wat het wordt ("Wordt 57,5 kg").
 - Bij **Meer opties** van de lijst: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
   Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
   resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`): een foto, de lijnen worden gekoppeld aan je items

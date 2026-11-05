@@ -2,8 +2,9 @@
 // het bewaren van het item zelf (één batch, dus alles of niets).
 
 import { fieldAccess, typeAccess, type Rights } from "../shared/access";
-import { effectsOf, type Applied } from "../shared/effects";
-import type { Attributes } from "../shared/fields";
+import { convertEffects, effectsOf, type Applied, type Effect } from "../shared/effects";
+import { measureOf } from "../shared/units";
+import type { Attributes, FieldDef } from "../shared/fields";
 import type { Item, ItemType } from "../shared/types";
 import { withCalcs } from "./compute";
 import { projectAccess, typesFor } from "./context";
@@ -14,7 +15,32 @@ export async function computeEffects(db: D1Database, personId: string, rights: R
   if (!type.fields.some((f) => f.type === "item" && f.adjust)) return [];
   const temp = { ...item, type_id: type.id, name: "", tag_ids: [], data: { ...data } } as unknown as Item;
   await withCalcs(db, personId, type, rights, [temp]);
-  return effectsOf(type.fields, temp.data);
+  return inTargetUnits(db, effectsOf(type.fields, temp.data));
+}
+
+/**
+ * Hoeveelheden met een eenheid (500 g) omrekenen naar de eenheid van elk item dat telt (zie shared/units.ts): met de
+ * waarden van die items, in twee vragen aan de databank. Niets hiervan gaat naar de browser.
+ */
+export async function inTargetUnits(db: D1Database, effects: Effect[]): Promise<Applied[]> {
+  const targets = [...new Set(effects.filter((e) => e.unit).map((e) => e.target))];
+  if (!targets.length) return convertEffects(effects, () => undefined);
+  const { results: rows } = await db
+    .prepare("SELECT id, type_id, data FROM items WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(targets))
+    .all<{ id: string; type_id: string; data: string }>();
+  const { results: lists } = await db
+    .prepare("SELECT id, fields FROM item_types WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify([...new Set(rows.map((r) => r.type_id))]))
+    .all<{ id: string; fields: string }>();
+  const fieldsOf = new Map(lists.map((l) => [l.id, JSON.parse(l.fields) as FieldDef[]]));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return convertEffects(effects, (target, field) => {
+    const row = byId.get(target);
+    const def = row && fieldsOf.get(row.type_id)?.find((f) => f.key === field);
+    if (!row || !def) return undefined;
+    return measureOf(def, JSON.parse(row.data) as Attributes);
+  });
 }
 
 /**

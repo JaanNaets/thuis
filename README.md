@@ -365,6 +365,11 @@ begint, mag de naam leeg ("Weging 30/10/2026"), en staat het nieuwste bovenaan.
 
 ### Voorraad
 
+Een product telt in zijn eigen **eenheid**: pellets in kg (met als verpakking een zak van 15 kg), aardappelen in kg,
+Nutella per pot (van 400 g), eieren per stuk. Eén product, ook als de zak de ene keer 15 kg en de andere keer 5 kg is:
++ in de lijst telt een hele verpakking bij, en een tik op het getal laat je een hoeveelheid typen (Eraf 500 g). Wat
+je eet of bijvult, rekent de app om: 500 g aardappelen gaat als 0,5 kg van de voorraad, 2 zakken pellets als 30 kg.
+
 Een getal kan **− en + in de lijst** krijgen (in Voorraad: Aantal). Dan tel je bij of af met één tik in de lijst, of
 met **Scannen** (bij **Meer opties**, de knop naast het zoekveld): scan de ene barcode na de andere, en de voorraad
 gaat erbij (gekocht) of eraf (opgebruikt). Met **Kasticket bijtellen** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →

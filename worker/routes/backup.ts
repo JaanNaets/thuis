@@ -35,6 +35,7 @@ import { sourceMisfit, visibleTotals, type TotalDef } from "../../shared/totals"
 import { isTone, type Item, type ItemType } from "../../shared/types";
 import { cleanView, viewFields } from "../../shared/views";
 import { withCalcs } from "../compute";
+import { inTargetUnits } from "../effects";
 import { accessibleProjects, toItemType, visibleLists, type TypeRow } from "../context";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
@@ -679,7 +680,7 @@ backup.post("/", async (c) => {
       continue;
     }
     for (const t of temp) {
-      const applied = effectsOf(type.fields, t.data);
+      const applied = await inTargetUnits(db, effectsOf(type.fields, t.data));
       if (applied.length) effects.push(db.prepare("UPDATE items SET applied = ? WHERE id = ?").bind(JSON.stringify(applied), t.id));
     }
   }

@@ -102,6 +102,8 @@ export const FIELD_LINKS = {
   default_shares: false,
   product: false,
   counter: false,
+  measure: false,
+  aliases: false,
   remind: false,
   yearly: false,
   agenda: true,

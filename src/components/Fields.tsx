@@ -31,6 +31,7 @@ import {
 import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
 import { REMIND_DAYS } from "../../shared/remind";
 import { splitCents } from "../../shared/totals";
+import { formatAmount, measureOf, UNITS } from "../../shared/units";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
 import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
 import { api, ApiError, apiUrl } from "../api";
@@ -988,7 +989,12 @@ export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldD
               {d.type === "calc" && <Tip text={d.hint || `Rekent de app uit: ${describeCalc(d, defs, lists)}.`} label={`Hoe ${d.label} berekend wordt`} />}
             </dt>
             <dd>
-              <FieldValueView def={d} value={data[d.key]} names={names} refs={refs} />
+              {d.type === "number" && d.measure && typeof data[d.key] === "number" ? (
+                // Een voorraad in zijn eenheid: 45 kg.
+                formatAmount(data[d.key] as number, measureOf(d, data).unit)
+              ) : (
+                <FieldValueView def={d} value={data[d.key]} names={names} refs={refs} />
+              )}
             </dd>
           </div>
         ))}
@@ -1179,11 +1185,22 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
       ...(d.type === "date" && d.today ? { today: true } : {}),
       ...(d.product && productFits(d.product, d.type) ? { product: d.product } : {}),
       ...(d.type === "number" && d.counter ? { counter: true } : {}),
+      ...(d.type === "number" && d.counter && d.measure ? { measure: Object.fromEntries(Object.entries(d.measure).filter(([, v]) => v).map(([k, v]) => [k, rename(v!)])) } : {}),
+      ...(d.type === "text" && d.aliases ? { aliases: true } : {}),
       ...((d.type === "date" || d.type === "calc") && d.remind !== undefined ? { remind: d.remind } : {}),
       ...(d.type === "date" && d.yearly && (d.remind !== undefined || d.agenda) ? { yearly: true } : {}),
       ...((d.type === "date" || d.type === "date_range" || d.type === "calc") && d.agenda ? { agenda: true } : {}),
       ...(d.type === "item" && d.copy ? { copy: true } : {}),
-      ...(d.type === "item" && d.adjust ? { adjust: { field: d.adjust.field, sign: d.adjust.sign, ...(d.adjust.by ? { by: rename(d.adjust.by) } : {}) } } : {}),
+      ...(d.type === "item" && d.adjust
+        ? {
+            adjust: {
+              field: d.adjust.field,
+              sign: d.adjust.sign,
+              ...(d.adjust.by ? { by: rename(d.adjust.by) } : {}),
+              ...(d.adjust.by && d.adjust.unit ? { unit: d.adjust.unit } : {}),
+            },
+          }
+        : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
@@ -1236,7 +1253,10 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
       {adjust && (
         <label className="field">
           <span className="label">Met</span>
-          <select value={adjust.by ?? ""} onChange={(e) => onChange({ field: adjust.field, sign: adjust.sign, ...(e.target.value ? { by: e.target.value } : {}) })}>
+          <select
+            value={adjust.by ?? ""}
+            onChange={(e) => onChange({ field: adjust.field, sign: adjust.sign, ...(e.target.value ? { by: e.target.value, ...(adjust.unit ? { unit: adjust.unit } : {}) } : {}) })}
+          >
             <option value="">1 per item</option>
             {own.map((x) => (
               <option key={x.key} value={x.key}>
@@ -1246,6 +1266,55 @@ function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; f
           </select>
         </label>
       )}
+      {adjust?.by && (
+        <label className="field">
+          <span className="label">In</span>
+          <select aria-label="In" value={adjust.unit ?? ""} onChange={(e) => onChange({ ...adjust, unit: e.target.value || undefined })}>
+            <option value="">Zoals het gekozen item telt</option>
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
+/**
+ * Hoe een voorraad telt (zie shared/units.ts): welk veld de eenheid zegt, de inhoud per stuk en wat er in een
+ * verpakking zit. Velden van deze lijst; leeg = niet.
+ */
+function MeasureEditor({ field, fields, onChange }: { field: FieldDraft; fields: FieldDraft[]; onChange: (measure: FieldDef["measure"]) => void }) {
+  const texts = fields.filter((x) => x !== field && (x.type === "select" || x.type === "text") && x.label.trim());
+  const numbers = fields.filter((x) => x !== field && x.type === "number" && x.label.trim());
+  const m = field.measure ?? {};
+  const set = (k: keyof NonNullable<FieldDef["measure"]>, v: string) => {
+    const next = { ...m, [k]: v || undefined };
+    onChange(Object.values(next).some(Boolean) ? next : undefined);
+  };
+  const pick = (k: keyof NonNullable<FieldDef["measure"]>, label: string, from: FieldDraft[]) =>
+    from.length > 0 && (
+      <label className="field" key={k}>
+        <span className="label">{label}</span>
+        <select aria-label={label} value={m[k] ?? ""} onChange={(e) => set(k, e.target.value)}>
+          <option value="">Geen</option>
+          {from.map((x) => (
+            <option key={x.key} value={x.key}>
+              {x.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  return (
+    <>
+      {pick("unit", "Eenheid", texts)}
+      {pick("piece", "Inhoud per stuk", numbers)}
+      {pick("pack", "Per verpakking", numbers)}
+      {pick("pack_name", "Verpakking", texts)}
     </>
   );
 }
@@ -1509,6 +1578,10 @@ export function FieldsEditor({
                       onChange={(on) => update(i, { counter: on })}
                       label="Met − en + in de lijst"
                     />
+                  )}
+                  {f.type === "number" && f.counter && <MeasureEditor field={f} fields={value} onChange={(measure) => update(i, { measure })} />}
+                  {f.type === "text" && (
+                    <Switch checked={Boolean(f.aliases)} onChange={(on) => update(i, { aliases: on })} label="Namen op een kasticket" />
                   )}
                   {f.type === "person" && (
                     <Switch

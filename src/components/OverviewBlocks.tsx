@@ -21,6 +21,7 @@ import { Sheet } from "./Sheet";
 import { projectIcon } from "./Sidebar";
 import { useSortable } from "./Sortable";
 import { adjust, RowStepper } from "./Stock";
+import { formatAmount, measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
 import { shownTotals, TotalsCards } from "./Totals";
 
@@ -212,6 +213,7 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
                         value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
                         label={item.name}
                         onStep={(d) => step(item.id, d)}
+                        measure={counter.measure || counter.unit ? measureOf(counter, item.data) : undefined}
                       />
                     ) : undefined
                   }
@@ -247,6 +249,9 @@ function ValueBlock({ item, field }: { item: string; field: string }) {
   const names = { person: (id: string) => it.people.find((x) => x.id === id)?.name ?? "", item: (id: string) => it.refs.find((x) => x.id === id)?.name ?? "" };
   const raw = value ?? it.data[field];
   const counter = def.type === "number" && def.counter && type.field_access[def.key] === "edit";
+  // Een voorraad in zijn eenheid (45 kg); − en + per verpakking (een zak van 15 kg).
+  const measure = def.measure || def.unit ? measureOf(def, it.data) : undefined;
+  const pack = measure?.pack ?? 1;
   const flags = type.fields.filter((f) => f.type === "calc" && f.result === "bool" && it.data[f.key] === true);
   async function step(delta: number) {
     try {
@@ -260,7 +265,7 @@ function ValueBlock({ item, field }: { item: string; field: string }) {
       <CardHead title={it.name} description={def.label} />
       <div className="card-body dash-value-row">
         <Link to={`/items/${it.id}`} className="dash-value">
-          {raw === undefined || raw === null ? "—" : formatFieldValue(def, raw, names)}
+          {raw === undefined || raw === null ? "—" : measure?.unit && typeof raw === "number" ? formatAmount(raw, measure.unit) : formatFieldValue(def, raw, names)}
         </Link>
         {flags.map((f) => (
           <span key={f.key} className="badge">
@@ -278,7 +283,7 @@ function ValueBlock({ item, field }: { item: string; field: string }) {
             >
               <Icon name="minus" size={15} />
             </button>
-            <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${it.name}: één meer`} onClick={() => step(1)}>
+            <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${it.name}: één meer`} onClick={() => step(pack)}>
               <Icon name="plus" size={15} />
             </button>
           </span>

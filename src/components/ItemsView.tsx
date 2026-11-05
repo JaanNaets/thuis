@@ -27,6 +27,7 @@ import { SkeletonRows, stagger } from "./Motion";
 import { EmptyState } from "./Page";
 import { Sheet } from "./Sheet";
 import { adjust, ReceiptToStock, RowStepper, StockScanner } from "./Stock";
+import { measureOf } from "../../shared/units";
 import { useToast } from "./Toast";
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
@@ -261,6 +262,7 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
               value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
               label={item.name}
               onStep={(d) => step(item.id, d)}
+              measure={counter.measure || counter.unit ? measureOf(counter, item.data) : undefined}
             />
           ) : undefined
         }

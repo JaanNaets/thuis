@@ -180,9 +180,8 @@ test("sjabloon Voeding: formules, gerechten en totalen kloppen", async () => {
   const uitVoorraad = under.find((f) => f.key === "voorraad")!;
   assert.equal(uitVoorraad.ref_type, "id-voorraad");
   assert.equal(uitVoorraad.copy, true);
-  assert.deepEqual(uitVoorraad.adjust, { field: "aantal", by: "stuks", sign: -1 });
-  assert.equal(computeLocal(under, { gram: 30, inhoud: 400 }).stuks, 0.075);
-  assert.equal(computeLocal(under, { gram: 30 }).stuks, 1);
+  // In gram: de app rekent om naar de eenheid van het product (zie shared/units.ts en test/units.test.ts).
+  assert.deepEqual(uitVoorraad.adjust, { field: "aantal", by: "gram", unit: "g", sign: -1 });
 
   // Eten los (zonder Gerechten): de kcal enkel uit kcal per 100 g.
   const los = resolveTemplateLists([{ id: "e", list: lists[0], refs: {}, calcs: {} }], {})["e"];

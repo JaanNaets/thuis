@@ -2132,6 +2132,32 @@ input[type="checkbox"] {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  white-space: nowrap;
+}
+
+/* Met een eenheid (45 kg) is het getal een knop: tik om een hoeveelheid te typen. */
+.row-stepper-value.as-button {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .row-stepper-value.as-button:hover {
+    background: var(--hover);
+  }
+}
+
+/* Een hoeveelheid typen: het getal en de eenheid naast elkaar. */
+.amount-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 /* Lijnen van een kasticket: aanvinken, naam (met wat erop stond), en hoeveel erbij komt. */
