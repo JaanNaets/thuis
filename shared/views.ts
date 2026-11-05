@@ -205,7 +205,7 @@ export type ViewDef = {
   group?: string;
 };
 /** Een bewaarde weergave; `shared`: voor iedereen in het project; `can_edit`: jij mag ze aanpassen. */
-export type SavedView = { id: string; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
+export type SavedView = { id: string; type_id: string; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
 
 export const EMPTY_VIEW: ViewDef = { match: "all", conditions: [] };
 export const MAX_CONDITIONS = 20;

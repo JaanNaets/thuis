@@ -897,9 +897,13 @@ met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", 
 een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen) en **één lijst** (`ListBlock`):
 als rij met het aantal, of met een bewaarde **weergave** ("Te kopen" · Voorraad · project, met het aantal dat erin
 past), of met **Items** de eerste `BLOCK_ITEMS` items zelf in een `dash-card` met kop (opent de lijst met die
-weergave, `?weergave=`) en `ItemRow`s eronder (− en + bij een voorraad; leeg: "Leeg" in `.dash-empty`). Een blok
-met **Breed** (`.dash-block.is-wide`) neemt twee kolommen en toont dan tot drie kolommen als tabel. **Aanpassen**
-(`BlocksEditor`): een `sort-list` met greep en ×, bij een project de lijsten als filterpillen (aan = zichtbaar), een
+weergave, `?weergave=`) en `ItemRow`s eronder (− en + bij een voorraad; een gegroepeerde weergave met de groepen
+als `group-row`; leeg: "Leeg" in `.dash-empty`). In een projectblok telt een lijst ook volgens een weergave
+(Voorraad, met "Te kopen" eronder en dat aantal). Een blok met **Breed** (`.dash-block.is-wide`) neemt twee kolommen
+en toont dan tot drie kolommen als tabel. De blokken staan als metselwerk (`useMasonry`, rijen van 8px): elk blok zo
+hoog als het is, een kort blok vult een gat erboven. **Aanpassen** (`BlocksEditor`): een `sort-list` met greep en ×,
+bij een project de lijsten als filterpillen (aan = zichtbaar; met bewaarde weergaven een `FilterSelect`: Alles, een
+weergave om te tellen, of Verborgen), een
 filterpil Breed (enkel op tablet, bij een project, totaal of lijst met items), "Toevoegen" in een `Sheet` (bij een
 lijst: Weergave en Toon `Segmented` Aantal · Items), en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in
 de paneelbalk) en "Standaard" (ghost) bij de titel. Het kruimelpad toont hier enkel "Overzicht".

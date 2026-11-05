@@ -4,7 +4,7 @@ import { blockKey, blockProjects, cleanBlocks, DEFAULT_ALL, defaultBlocks, MAX_B
 
 test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
   const out = cleanBlocks([
-    { kind: "project", project: "p1", hide: ["l1", "l1", "bad id!"] },
+    { kind: "project", project: "p1", hide: ["l1", "l1", "bad id!"], views: { l2: "v1", "bad id!": "v2", l3: 5 } },
     { kind: "project", project: "p1" },
     { kind: "list", project: "p1", list: "l2" },
     { kind: "list", project: "p1", list: "l2", view: "v1", show: "items", wide: true },
@@ -18,7 +18,7 @@ test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
     null,
   ]);
   assert.deepEqual(out, [
-    { kind: "project", project: "p1", hide: ["l1"] },
+    { kind: "project", project: "p1", hide: ["l1"], views: { l2: "v1" } },
     { kind: "list", project: "p1", list: "l2" },
     // Dezelfde lijst met een weergave als tabel is een ander blok; een kapotte weergave valt weg (dan een dubbel).
     { kind: "list", project: "p1", list: "l2", view: "v1", show: "items", wide: true },

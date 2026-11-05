@@ -34,6 +34,7 @@ function checked(raw: unknown, access: ProjectAccess, type: ItemType) {
 
 const toView = (row: ViewRow, me: string, access: ProjectAccess): SavedView => ({
   id: row.id,
+  type_id: row.type_id,
   name: row.name,
   shared: row.person_id === null,
   def: JSON.parse(row.def),
@@ -50,6 +51,21 @@ async function listIn(c: { env: AppEnv["Bindings"]; get: (k: "person") => { id: 
 }
 
 projectViews.get("/:id/views", async (c) => {
+  // Zonder ?type=: de weergaven van alle lijsten die je hier ziet (voor het overzicht: tellen per weergave).
+  if (!c.req.query("type")) {
+    const db = c.env.DB;
+    const me = c.get("person").id;
+    const access = await requireProject(db, me, c.req.param("id"));
+    const seen = new Set((await typesFor(db, access.chain)).filter((t) => typeAccess(access.rights, t.id) !== "none").map((t) => t.id));
+    const { results } = await db
+      .prepare(
+        `SELECT * FROM views WHERE project_id = ? AND (person_id IS NULL OR person_id = ?)
+         ORDER BY person_id IS NOT NULL, sort_order, name COLLATE NOCASE`,
+      )
+      .bind(access.project.id, me)
+      .all<ViewRow>();
+    return c.json(results.filter((r) => seen.has(r.type_id)).map((r) => toView(r, me, access)));
+  }
   const { db, me, access, type } = await listIn(c, c.req.param("id"), c.req.query("type"));
   const { results } = await db
     .prepare(

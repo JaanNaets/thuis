@@ -31,7 +31,7 @@ import { nameIn, nameMatches } from "../../shared/quickfill";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
-import { cleanView, EMPTY_VIEW, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
+import { cleanView, EMPTY_VIEW, groupItems, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
 import { fieldsForViews } from "./views";
 
 export const items = new Hono<AppEnv>();
@@ -352,6 +352,8 @@ projectItems.get("/:id/items", async (c) => {
     viewDefs,
     names,
   );
+  // Gegroepeerd: groep na groep, zoals de lijst ze toont (de eerste items zijn dan die van de eerste groep).
+  if (view.group) list = groupItems(list, view.group, viewDefs, names).flatMap((g) => g.items);
   const limit = Math.min(Math.max(Math.floor(Number(limitText)) || 0, 0), 50);
   const shown = list.slice(0, limitText === undefined ? 50 : limit);
   // Enkel de namen van wat meekomt.

@@ -6,12 +6,12 @@ import { formatFieldValue } from "../../shared/fields";
 import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, type Block, type BlockKind } from "../../shared/overview";
 import { totalLabel } from "../../shared/totals";
 import type { ItemDetail, ItemList, Overview, OverviewType, ProjectDetail, ProjectNode } from "../../shared/types";
-import type { SavedView } from "../../shared/views";
+import { groupItems, viewFields, type SavedView } from "../../shared/views";
 import { useApi } from "../api";
 import { projectTree } from "../projects";
 import { Link } from "../router";
 import { useSession } from "../session";
-import { CardHead, Segmented } from "./Controls";
+import { CardHead, FilterSelect, Segmented } from "./Controls";
 import { namesFrom } from "./Fields";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
@@ -67,7 +67,19 @@ function ListRow({ project, type, meta, title, href }: { project: string; type: 
 }
 
 /** Een project: de kop opent het project, elke rij een lijst (behalve wat je verborg). */
-function ProjectBlock({ project: p, above, types, hide }: { project: ProjectNode; above?: string; types?: OverviewType[]; hide?: string[] }) {
+function ProjectBlock({
+  project: p,
+  above,
+  types,
+  hide,
+  views,
+}: {
+  project: ProjectNode;
+  above?: string;
+  types?: OverviewType[];
+  hide?: string[];
+  views?: Record<string, string>;
+}) {
   const shown = types?.filter((t) => !hide?.includes(t.id));
   return (
     <section className="card dash-card">
@@ -88,15 +100,23 @@ function ProjectBlock({ project: p, above, types, hide }: { project: ProjectNode
       {!shown ? null : shown.length > 0 ? (
         <ul className="rows">
           {shown.map((t) => (
-            <li key={t.id}>
-              <ListRow project={p.id} type={t} />
-            </li>
+            <li key={t.id}>{views?.[t.id] ? <ViewCountRow project={p} type={t} view={views[t.id]} /> : <ListRow project={p.id} type={t} />}</li>
           ))}
         </ul>
       ) : (
         <p className="dash-empty">Nog niets om bij te houden</p>
       )}
     </section>
+  );
+}
+
+/** Eén lijst in een projectblok, geteld volgens een weergave: Voorraad · Te kopen 3 (opent de lijst met die weergave). */
+function ViewCountRow({ project, type, view }: { project: ProjectNode; type: OverviewType; view: string }) {
+  const { data } = useApi<ItemList>(`/projects/${project.id}/items?type=${type.id}&view=${view}&limit=0`);
+  const { data: views } = useViews(project.id, type.id);
+  const name = views?.find((v) => v.id === view)?.name;
+  return (
+    <ListRow project={project.id} type={{ ...type, count: data?.count ?? 0 }} meta={name} href={`/projecten/${project.id}?lijst=${type.id}&weergave=${view}`} />
   );
 }
 
@@ -129,6 +149,19 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
   const columns = keys.flatMap((k) => visible.filter((f) => f.key === k)).slice(0, block.wide ? 3 : 1);
   const names = namesFrom(data?.people ?? [], data?.refs ?? []);
   const items = data?.items ?? [];
+  // Een gegroepeerde weergave: de groepen als stille kopjes (de API gaf de items al groep na groep).
+  const groups =
+    view?.def.group && full
+      ? groupItems(
+          items,
+          view.def.group,
+          viewFields(
+            full.fields.filter((f) => full.field_access[f.key] !== "none"),
+            full.name_label ?? "Naam",
+          ),
+          names,
+        )
+      : [{ key: "", label: "", items }];
   async function step(id: string, delta: number) {
     try {
       const value = await adjust(id, counter!.key, delta);
@@ -156,27 +189,36 @@ function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "li
       {data && !items.length && <p className="dash-empty">Leeg</p>}
       {items.length > 0 && (
         <ul className="rows">
-          {items.map((item) => (
-            <li key={item.id}>
-              <ItemRow
-                item={item}
-                icon={(type.icon ?? "folder") as IconName}
-                tone={project.color ?? "sky"}
-                columns={columns}
-                names={names}
-                tags={[]}
-                stepper={
-                  counter ? (
-                    <RowStepper
-                      value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
-                      label={item.name}
-                      onStep={(d) => step(item.id, d)}
-                    />
-                  ) : undefined
-                }
-              />
-            </li>
-          ))}
+          {groups.flatMap((g) => [
+            ...(g.label
+              ? [
+                  <li key={`groep-${g.key}`} className="group-row">
+                    {g.label}
+                  </li>,
+                ]
+              : []),
+            ...g.items.map((item) => (
+              <li key={item.id}>
+                <ItemRow
+                  item={item}
+                  icon={(type.icon ?? "folder") as IconName}
+                  tone={project.color ?? "sky"}
+                  columns={columns}
+                  names={names}
+                  tags={[]}
+                  stepper={
+                    counter ? (
+                      <RowStepper
+                        value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
+                        label={item.name}
+                        onStep={(d) => step(item.id, d)}
+                      />
+                    ) : undefined
+                  }
+                />
+              </li>
+            )),
+          ])}
         </ul>
       )}
     </section>
@@ -253,7 +295,8 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
   const above = project?.parent_id ? projects.find((p) => p.id === project.parent_id)?.name : undefined;
   const type = "list" in block ? lists.get(block.project)?.find((t) => t.id === block.list) : undefined;
   let body: React.ReactNode = null;
-  if (block.kind === "project" && project) body = <ProjectBlock project={project} above={above} types={lists.get(project.id)} hide={block.hide} />;
+  if (block.kind === "project" && project)
+    body = <ProjectBlock project={project} above={above} types={lists.get(project.id)} hide={block.hide} views={block.views} />;
   else if (block.kind === "list" && project && type)
     body =
       block.show === "items" ? (
@@ -337,10 +380,6 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
     (order) => onChange(order.map((k) => byKey.get(k)!)),
     (k) => BLOCK_KINDS[byKey.get(k)!.kind],
   );
-  const toggle = (b: Extract<Block, { kind: "project" }>, listId: string) => {
-    const hide = b.hide?.includes(listId) ? b.hide.filter((x) => x !== listId) : [...(b.hide ?? []), listId];
-    onChange(blocks.map((x) => (x === b ? { ...b, hide } : x)));
-  };
 
   return (
     <>
@@ -370,13 +409,7 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
                   </button>
                 </div>
                 {b.kind === "project" && (lists.get(b.project)?.length ?? 0) > 0 && (
-                  <div className="dash-edit-lists" role="group" aria-label="Lijsten">
-                    {lists.get(b.project)!.map((t) => (
-                      <button key={t.id} type="button" className="filter" aria-pressed={!b.hide?.includes(t.id)} onClick={() => toggle(b, t.id)}>
-                        {t.plural}
-                      </button>
-                    ))}
-                  </div>
+                  <ProjectListsEditor block={b} types={lists.get(b.project)!} onChange={(next) => onChange(blocks.map((x) => (x === b ? next : x)))} />
                 )}
               </li>
             );
@@ -389,6 +422,45 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
       </button>
       <AddBlock open={adding} onClose={() => setAdding(false)} onAdd={(b) => onChange([...blocks.filter((x) => blockKey(x) !== blockKey(b)), b])} />
     </>
+  );
+}
+
+/**
+ * De lijsten van een projectblok: een pil per lijst (aan = zichtbaar). Heeft een lijst bewaarde weergaven, dan kies je
+ * er een om te tellen (Alles, Te kopen, …) of Verborgen.
+ */
+function ProjectListsEditor({ block, types, onChange }: { block: Extract<Block, { kind: "project" }>; types: OverviewType[]; onChange: (b: Block) => void }) {
+  const { data: views } = useApi<SavedView[]>(`/projects/${block.project}/views`);
+  const HIDDEN = "verborgen";
+  const set = (listId: string, hidden: boolean, view: string | null) => {
+    const hide = (block.hide ?? []).filter((x) => x !== listId).concat(hidden ? [listId] : []);
+    const rest = Object.fromEntries(Object.entries(block.views ?? {}).filter(([k]) => k !== listId));
+    const next = view ? { ...rest, [listId]: view } : rest;
+    onChange({ ...block, hide: hide.length ? hide : undefined, views: Object.keys(next).length ? next : undefined });
+  };
+  return (
+    <div className="dash-edit-lists" role="group" aria-label="Lijsten">
+      {types.map((t) => {
+        const own = views?.filter((v) => v.type_id === t.id) ?? [];
+        const hidden = Boolean(block.hide?.includes(t.id));
+        if (!own.length)
+          return (
+            <button key={t.id} type="button" className="filter" aria-pressed={!hidden} onClick={() => set(t.id, !hidden, block.views?.[t.id] ?? null)}>
+              {t.plural}
+            </button>
+          );
+        return (
+          <FilterSelect
+            key={t.id}
+            label={t.plural}
+            all="Alles"
+            value={hidden ? HIDDEN : (block.views?.[t.id] ?? null)}
+            options={[...own.map((v) => ({ value: v.id, label: v.name })), { value: HIDDEN, label: "Verborgen" }]}
+            onChange={(v) => set(t.id, v === HIDDEN, v && v !== HIDDEN ? v : null)}
+          />
+        );
+      })}
+    </div>
   );
 }
 

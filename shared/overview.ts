@@ -6,8 +6,11 @@ const ID = /^[A-Za-z0-9-]{1,64}$/;
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 
 export type Block = (
-  /** Een project (of subproject) met zijn lijsten; `hide`: de lijsten die je er niet wil zien. */
-  | { kind: "project"; project: string; hide?: string[] }
+  /**
+   * Een project (of subproject) met zijn lijsten; `hide`: de lijsten die je er niet wil zien; `views`: per lijst een
+   * bewaarde weergave om te tellen (Voorraad · Te kopen 3).
+   */
+  | { kind: "project"; project: string; hide?: string[]; views?: Record<string, string> }
   /**
    * Eén lijst: hoeveel erin zit, en openen. `view`: een bewaarde weergave (hoeveel daarin zit: "Te kopen 3");
    * `show: "items"`: de eerste items zelf, als kleine tabel (met − en + bij een voorraad).
@@ -69,7 +72,13 @@ export function cleanBlocks(raw: unknown): Block[] | null {
     let b: Block | null = null;
     if (o.kind === "project" && id(o.project)) {
       const hide = Array.isArray(o.hide) ? [...new Set(o.hide.map(id).filter((x): x is string => x !== null))].slice(0, 60) : [];
-      b = { kind: "project", project: o.project as string, ...(hide.length ? { hide } : {}) };
+      const raw = o.views && typeof o.views === "object" && !Array.isArray(o.views) ? (o.views as Record<string, unknown>) : {};
+      const views = Object.fromEntries(
+        Object.entries(raw)
+          .filter(([list, view]) => id(list) && id(view))
+          .slice(0, 60),
+      ) as Record<string, string>;
+      b = { kind: "project", project: o.project as string, ...(hide.length ? { hide } : {}), ...(Object.keys(views).length ? { views } : {}) };
     } else if (o.kind === "list" && id(o.project) && id(o.list)) {
       b = { kind: "list", project: o.project as string, list: o.list as string, ...(id(o.view) ? { view: o.view as string } : {}), ...(o.show === "items" ? { show: "items" as const } : {}) };
     } else if (o.kind === "add" && id(o.project) && id(o.list)) {

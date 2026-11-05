@@ -4870,6 +4870,13 @@ dialog.palette[open]::backdrop {
   gap: 16px;
 }
 
+/* Metselwerk (useMasonry in Home.tsx): rijen van 8px, elk blok zo hoog als het is; een kort blok vult een gat erboven. */
+.dashboard.masonry {
+  grid-auto-rows: 8px;
+  grid-auto-flow: row dense;
+  row-gap: 0;
+}
+
 /* Een breed blok (Breed bij Aanpassen) neemt twee kolommen, als er twee zijn. */
 @media (min-width: 700px) {
   .dash-block.is-wide {

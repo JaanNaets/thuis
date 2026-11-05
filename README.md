@@ -211,7 +211,9 @@ Met **Aanpassen** stel je je overzicht zelf samen (enkel voor jou): schik de blo
 en zet er een lijst, **snel toevoegen** ("Eten toevoegen"), een **totaal** (Kcal vandaag) of de **waarde van een
 item** bij (Pellets · Aantal, ook een berekening zoals Laatst bijgevuld; bij een voorraad met − en +). Een lijst kan
 ook met een **weergave** ("Te kopen": hoeveel er te kopen is) en met **Items** als kleine tabel (de eerste vijf, met −
-en + bij een voorraad); de kop opent de lijst met die weergave. **Breed** zet een blok over twee kolommen.
+en + bij een voorraad); de kop opent de lijst met die weergave. Ook in een project kan een lijst tellen volgens een
+weergave (Voorraad: 3 te kopen). **Breed** zet een blok over twee kolommen; de blokken schuiven in elkaar zonder
+gaten.
 **Standaard** zet het terug zoals het vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
 
 ### Wie betaalde wat

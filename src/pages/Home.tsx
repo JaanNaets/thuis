@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { blockKey, blockProjects, defaultBlocks, type Block } from "../../shared/overview";
 import type { Overview } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -10,6 +10,41 @@ import { useToast } from "../components/Toast";
 import { projectTree } from "../projects";
 import { Link } from "../router";
 import { useSession } from "../session";
+
+/**
+ * Blokken zonder gaten (metselwerk): elk blok neemt zoveel rijen van 8px als het hoog is, zodat een kort blok niet een
+ * hele rij naast een hoog blok leeg laat. De volgorde blijft die van je overzicht, behalve dat een kort blok een gat
+ * erboven opvult (`dense`).
+ */
+function useMasonry() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const grid = ref.current;
+    if (!grid) return;
+    const ROW = 8;
+    const GAP = 16;
+    const fit = (el: Element) => {
+      (el as HTMLElement).style.gridRowEnd = `span ${Math.ceil((el.getBoundingClientRect().height + GAP) / ROW)}`;
+    };
+    const sizes = new ResizeObserver((entries) => entries.forEach((e) => fit(e.target)));
+    const watch = () => {
+      for (const el of grid.children) {
+        fit(el);
+        sizes.observe(el);
+      }
+    };
+    watch();
+    grid.classList.add("masonry");
+    const added = new MutationObserver(watch);
+    added.observe(grid, { childList: true });
+    return () => {
+      sizes.disconnect();
+      added.disconnect();
+      grid.classList.remove("masonry");
+    };
+  });
+  return ref;
+}
 
 /**
  * Je overzicht: de blokken die je koos (zie shared/overview.ts), of vanzelf elk project met zijn lijsten. Met
@@ -24,6 +59,7 @@ export function Home() {
   const active = tree.filter((p) => !p.archived);
   const archived = tree.filter((p) => p.archived);
   const [editing, setEditing] = useState<Block[] | null>(null);
+  const masonry = useMasonry();
   const [busy, setBusy] = useState(false);
   const blocks = editing ?? base?.blocks ?? defaultBlocks(active);
   // De server stuurt enkel de lijsten van de projecten in je blokken; een project dat je net toevoegde, komt apart.
@@ -90,7 +126,7 @@ export function Home() {
           </button>
         </div>
       ) : (
-        <div className="dashboard stagger">
+        <div className="dashboard stagger" ref={masonry}>
           {blocks.map((b, i) => (
             <BlockView key={blockKey(b)} block={b} lists={lists} index={i} />
           ))}

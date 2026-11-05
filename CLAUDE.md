@@ -72,8 +72,9 @@ commits en uitleg.
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
 - **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
-  verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item; een lijst met een bewaarde weergave en als
-  aantal of als items, elk blok eventueel breed), enkel ids, nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
+  verborgen lijsten en per lijst eventueel een weergave om te tellen, lijst, snel toevoegen, totaal, waarde van een
+  item; een lijst met een bewaarde weergave en als aantal of als items, elk blok eventueel breed), enkel ids,
+  nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
   de eerste items en het aantal (`GET /projects/:id/items?type=&view=&limit=`, met `count`), nooit de hele lijst. Een
   blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:
   elk project, of bij meer dan `DEFAULT_ALL` enkel die bovenaan). `GET /me/overview` geeft enkel de lijsten van de
