@@ -373,7 +373,9 @@ je eet of bijvult, rekent de app om: 500 g aardappelen gaat als 0,5 kg van de vo
 Een getal kan **− en + in de lijst** krijgen (in Voorraad: Aantal). Dan tel je bij of af met één tik in de lijst, of
 met **Scannen** (bij **Meer opties**, de knop naast het zoekveld): scan de ene barcode na de andere, en de voorraad
 gaat erbij (gekocht) of eraf (opgebruikt). Met **Kasticket bijtellen** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →
-Melk), jij kiest wat erbij komt, en wat nog niet bestaat, wordt een nieuw product. Wat je moet kopen, zie je met de
+Melk), jij kiest wat erbij komt, en wat nog niet bestaat, wordt een nieuw product. De maat op het ticket rekent de
+app om naar de eenheid van het product ("AARDAPPELEN 5KG" is 5 kg, "COLA 6X33CL" zijn 6 blikken), en een lijn die je
+aan een product koppelt, onthoudt dat product (bij **Op het kasticket**): het volgende ticket koppelt vanzelf. Wat je moet kopen, zie je met de
 filter **Kopen: Ja**.
 
 ### Items

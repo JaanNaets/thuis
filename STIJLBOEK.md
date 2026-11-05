@@ -705,7 +705,8 @@ Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) m
 - Bij **Meer opties** van de lijst: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
   Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
   resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`): een foto, de lijnen worden gekoppeld aan je items
-  (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij), daarna "Bijtellen".
+  (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij in de eenheid van het product,
+  die rechts in het veld staat), daarna "Bijtellen".
 - Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
 
 ### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)

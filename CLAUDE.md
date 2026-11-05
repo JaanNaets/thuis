@@ -96,7 +96,8 @@ commits en uitleg.
   in het formulier en gaat daarna door `prepareData` zoals alles. **Eenheden** (`shared/units.ts`): een voorraad telt
   per item in een eenheid (`measure` op het getal: welk veld de eenheid, de inhoud per stuk en per verpakking zegt);
   wat telt, mag een eenheid hebben (`adjust.unit`, 500 g of 2 zak) en wordt in `inTargetUnits` omgerekend naar die
-  van het item, vóór het in `applied` komt. Geen eenheid = zoals het staat.
+  van het item, vóór het in `applied` komt. Geen eenheid = zoals het staat. Een kasticket rekent de maat op de lijn om
+  (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
 - **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elke ochtend): een melding gaat enkel naar wie
   het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
   die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,

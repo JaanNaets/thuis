@@ -15,9 +15,9 @@ import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
-/** Een getal met `delta` aanpassen; geeft de nieuwe waarde. */
-export async function adjust(itemId: string, key: string, delta: number): Promise<number> {
-  const { value } = await api.post<{ value: number }>(`/items/${itemId}/adjust`, { key, delta });
+/** Een getal met `delta` aanpassen; geeft de nieuwe waarde. `alias`: de naam op een kasticket, om te onthouden. */
+export async function adjust(itemId: string, key: string, delta: number, alias?: string): Promise<number> {
+  const { value } = await api.post<{ value: number }>(`/items/${itemId}/adjust`, { key, delta, ...(alias ? { alias } : {}) });
   return value;
 }
 
@@ -197,7 +197,7 @@ export function StockScanner({
   );
 }
 
-type Line = ReceiptLines["lines"][number] & { on: boolean; amount: string };
+type Line = Omit<ReceiptLines["lines"][number], "amount"> & { on: boolean; amount: string };
 
 /**
  * Een kasticket bij je voorraad optellen: de AI leest de lijnen, de app koppelt ze aan je items. Jij kiest wat erbij
@@ -230,7 +230,7 @@ export function ReceiptToStock({
       body.set("image", await prepareForReading(file));
       body.set("type_id", typeId);
       const found = await api.post<ReceiptLines>(`/projects/${projectId}/items/scan-lines`, body);
-      setLines(found.lines.map((l) => ({ ...l, on: true, amount: String(l.quantity) })));
+      setLines(found.lines.map((l) => ({ ...l, on: true, amount: String(l.amount).replace(".", ",") })));
       setStatus(found.message ? { tone: "none", text: found.message } : undefined);
     } catch (err) {
       setStatus({ tone: "none", text: (err as Error).message });
@@ -243,8 +243,14 @@ export function ReceiptToStock({
     try {
       for (const l of chosen) {
         const n = Number(l.amount.replace(",", "."));
-        if (l.item_id) await adjust(l.item_id, counter.key, n);
-        else await api.post(`/projects/${projectId}/items`, { type_id: typeId, name: l.name, data: { [counter.key]: n }, tag_ids: [] });
+        // Gekoppeld aan een product met een andere naam: die naam onthoudt het product (zie de API).
+        if (l.item_id) await adjust(l.item_id, counter.key, n, l.item_name !== l.name ? l.name : undefined);
+        else {
+          // Een nieuw product: met de eenheid en de verpakking van het ticket (Aardappelen 5KG: in kg, per zak van 5).
+          const m = counter.measure;
+          const data = { [counter.key]: n, ...(m?.unit && l.unit ? { [m.unit]: l.unit } : {}), ...(m?.pack && l.pack ? { [m.pack]: l.pack } : {}) };
+          await api.post(`/projects/${projectId}/items`, { type_id: typeId, name: l.name, data, tag_ids: [] });
+        }
       }
       toast(chosen.length === 1 ? "1 product bijgeteld" : `${chosen.length} producten bijgeteld`);
       onDone();
@@ -295,7 +301,7 @@ export function ReceiptToStock({
                     <span className="hint">{l.item_id ? (l.item_name !== l.name ? `op het ticket: ${l.name}` : "in je voorraad") : "nieuw item"}</span>
                   </span>
                 </label>
-                <span className="split-input" data-unit="+">
+                <span className="split-input" data-unit={l.unit ? formatAmount(0, l.unit).replace(/^0 /, "") : "+"}>
                   <input inputMode="decimal" value={l.amount} aria-label={`Aantal ${l.name}`} onChange={(e) => set(i, { amount: e.target.value })} />
                 </span>
               </li>

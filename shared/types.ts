@@ -201,7 +201,14 @@ export type ImportResult = { created: number; skipped: { row: number; error: str
 
 /** Wat de app van een etiket of foto las, in de velden van de lijst. */
 /** De lijnen van een kasticket voor een voorraad: per lijn het aantal, en het item waarbij het hoort (als gekend). */
-export type ReceiptLines = { lines: { name: string; quantity: number; item_id: string | null; item_name: string | null }[]; message?: string };
+/**
+ * De lijnen van een kasticket: `amount` in de eenheid van het product (`unit`; de maat op het ticket omgerekend), en
+ * bij een nieuw product met een maat wat er in één verpakking zit (`pack`).
+ */
+export type ReceiptLines = {
+  lines: { name: string; quantity: number; amount: number; unit: string | null; pack?: number; item_id: string | null; item_name: string | null }[];
+  message?: string;
+};
 
 export type LabelScan = {
   name: string | null;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { convert, formatAmount, normalizeUnit, parseSize } from "../shared/units.ts";
+import { convert, formatAmount, normalizeUnit, parseSize, receiptAmount } from "../shared/units.ts";
 
 test("omrekenen naar de eenheid van de voorraad", () => {
   const aardappelen = { unit: "kg", pack: 5, pack_name: "zak" };
@@ -39,4 +39,17 @@ test("eenheden en maten lezen", () => {
   assert.equal(formatAmount(3, "stuk"), "3 stuks");
   assert.equal(formatAmount(1, "stuk"), "1 stuk");
   assert.equal(formatAmount(0.1 + 0.2, "l"), "0,3 l");
+});
+
+test("kasticket: de maat op de lijn in de eenheid van het product", () => {
+  const aardappelen = { unit: "kg", pack: 5, pack_name: "zak" };
+  assert.deepEqual(receiptAmount(1, "5 kg", "AARDAPPELEN", aardappelen), { amount: 5, unit: "kg" });
+  assert.deepEqual(receiptAmount(2, "", "AARDAPPELEN 2,5KG", aardappelen), { amount: 5, unit: "kg" });
+  // Zonder maat: een verpakking per stuk.
+  assert.deepEqual(receiptAmount(2, "", "AARDAPPELEN", aardappelen), { amount: 10, unit: "kg" });
+  // Cola per blik: 6x33cl met 33 cl per blik = 6 blikken.
+  assert.deepEqual(receiptAmount(1, "6x33 cl", "COLA", { unit: "blik", piece: 330 }), { amount: 6, unit: "blik" });
+  // Een nieuw product: in de eenheid van het ticket, met de verpakking.
+  assert.deepEqual(receiptAmount(1, "", "PELLETS 15KG", null), { amount: 15, unit: "kg", pack: 15 });
+  assert.deepEqual(receiptAmount(3, "", "BROOD", null), { amount: 3, unit: null });
 });

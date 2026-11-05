@@ -28,6 +28,7 @@ import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requir
 import { brusselsToday } from "../today";
 import { descendantIds } from "../../shared/tree";
 import { nameIn, nameMatches } from "../../shared/quickfill";
+import { measureOf, receiptAmount, round3 } from "../../shared/units";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
@@ -517,6 +518,18 @@ items.post("/:id/adjust", async (c) => {
   )
     .bind(row.id, path, delta)
     .first<{ value: number }>();
+  // Een lijn van een kasticket gekoppeld aan dit item: die naam onthouden (een tekstveld met `aliases`), als je dat
+  // veld mag wijzigen. Zo koppelt het volgende ticket vanzelf.
+  const alias = typeof obj.alias === "string" ? obj.alias.trim().slice(0, 120) : "";
+  const aliasField = type.fields.find((f) => f.type === "text" && f.aliases && fieldAccess(access.rights, type.id, f.key) === "edit");
+  if (alias && aliasField) {
+    const data = parseData(row.data);
+    const have = typeof data[aliasField.key] === "string" ? (data[aliasField.key] as string).split(";").map((a) => a.trim()) : [];
+    if (alias.toLowerCase() !== row.name.toLowerCase() && !have.some((a) => a.toLowerCase() === alias.toLowerCase())) {
+      const next = [...have.filter(Boolean), alias].join("; ").slice(0, 300);
+      await c.env.DB.prepare("UPDATE items SET data = json_set(data, ?2, ?3) WHERE id = ?1").bind(row.id, `$.${aliasField.key}`, next).run();
+    }
+  }
   return c.json({ value: updated?.value ?? 0 });
 });
 
@@ -1071,6 +1084,7 @@ projectItems.post("/:id/items/scan-lines", async (c) => {
           content: `Je leest een kasticket. Geef elke gekochte lijn:
 - name: de productnaam zoals op het ticket (zonder prijs, code of gewicht)
 - quantity: het aantal stuks (1 als er geen aantal staat, ook bij iets dat per gewicht verkocht wordt)
+- size: het gewicht of de inhoud als die op de lijn staat (bv. "5 kg", "500 g", "1,5 l", "6x33 cl"), anders leeg
 Sla totalen, kortingen, statiegeld, zakjes en betaalgegevens over. Geef enkel wat je echt ziet.`,
         },
         {
@@ -1093,8 +1107,8 @@ Sla totalen, kortingen, statiegeld, zakjes en betaalgegevens over. Geef enkel wa
                 type: "array",
                 items: {
                   type: "object",
-                  properties: { name: { type: "string" }, quantity: { type: "number" } },
-                  required: ["name", "quantity"],
+                  properties: { name: { type: "string" }, quantity: { type: "number" }, size: { type: "string" } },
+                  required: ["name", "quantity", "size"],
                   additionalProperties: false,
                 },
               },
@@ -1110,21 +1124,39 @@ Sla totalen, kortingen, statiegeld, zakjes en betaalgegevens over. Geef enkel wa
     });
     const content = result.choices?.[0]?.message?.content;
     const parsed = ((typeof content === "string" ? safeJson(content) : content) ?? {}) as { lines?: unknown };
-    const { results: known } = await db
-      .prepare("SELECT id, name FROM items WHERE project_id = ? AND type_id = ? AND archived = 0")
+    const { results: rows } = await db
+      .prepare("SELECT id, name, data FROM items WHERE project_id = ? AND type_id = ? AND archived = 0")
       .bind(access.project.id, type.id)
-      .all<{ id: string; name: string }>();
-    // Per item één lijn (twee keer melk op het ticket: 2), wat niet gekend is per naam.
+      .all<{ id: string; name: string; data: string }>();
+    const known = rows.map((r) => ({ id: r.id, name: r.name, data: parseData(r.data) }));
+    // Ook op de namen zoals ze op een kasticket stonden (een tekstveld met `aliases`, gescheiden door ;).
+    const aliasKeys = type.fields.filter((f) => f.type === "text" && f.aliases).map((f) => f.key);
+    const candidates = known.flatMap((k) => [
+      { id: k.id, name: k.name },
+      ...aliasKeys.flatMap((key) => (typeof k.data[key] === "string" ? (k.data[key] as string).split(";") : [])).map((a) => ({ id: k.id, name: a.trim() })),
+    ]);
+    // Per item één lijn (twee keer melk op het ticket: 2), wat niet gekend is per naam. De hoeveelheid in de eenheid
+    // van het product: de maat op het ticket omgerekend (5 kg, 6x33 cl), anders een verpakking per stuk.
     const lines = new Map<string, ReceiptLines["lines"][number]>();
     for (const raw of Array.isArray(parsed.lines) ? parsed.lines.slice(0, 60) : []) {
-      const l = (raw ?? {}) as { name?: unknown; quantity?: unknown };
+      const l = (raw ?? {}) as { name?: unknown; quantity?: unknown; size?: unknown };
       const name = typeof l.name === "string" ? l.name.trim().slice(0, 120) : "";
       if (!name) continue;
       const quantity = typeof l.quantity === "number" && l.quantity > 0 ? Math.min(99, Math.round(l.quantity)) || 1 : 1;
-      const id = matchName(known, name);
+      const id = matchName(candidates, name);
+      const item = known.find((k) => k.id === id);
+      const { amount, unit, pack } = receiptAmount(quantity, typeof l.size === "string" ? l.size : null, name, item ? measureOf(counter, item.data) : null);
       const key = id ?? `nieuw:${name.toLowerCase()}`;
       const prev = lines.get(key);
-      lines.set(key, { name: prev?.name ?? name, quantity: (prev?.quantity ?? 0) + quantity, item_id: id, item_name: known.find((k) => k.id === id)?.name ?? null });
+      lines.set(key, {
+        name: prev?.name ?? name,
+        quantity: (prev?.quantity ?? 0) + quantity,
+        amount: round3((prev?.amount ?? 0) + amount),
+        unit,
+        ...(pack ? { pack } : {}),
+        item_id: id,
+        item_name: item?.name ?? null,
+      });
     }
     const out: ReceiptLines = { lines: [...lines.values()] };
     if (!out.lines.length) out.message = "Geen lijnen gevonden op deze foto.";

@@ -101,3 +101,18 @@ export function measureOf(
   const num = (k?: string) => (k && typeof data[k] === "number" && (data[k] as number) > 0 ? (data[k] as number) : null);
   return { unit: normalizeUnit(text(m?.unit) ?? def.unit ?? null), piece: num(m?.piece), pack: num(m?.pack), pack_name: text(m?.pack_name) };
 }
+
+/**
+ * Hoeveel een lijn van een kasticket bijtelt, in de eenheid van het product (`measure`; null = een nieuw product):
+ * de maat op de lijn omgerekend ("AARDAPPELEN 5KG" bij aardappelen in kg: 5), zonder maat een verpakking per stuk
+ * (of één). Bij een nieuw product met een maat: in die eenheid, met wat er in één verpakking zit.
+ */
+export function receiptAmount(quantity: number, size: string | null, name: string, measure: Measure | null): { amount: number; unit: string | null; pack?: number } {
+  const found = (size ? parseSize(size) : null) ?? parseSize(name);
+  if (measure) {
+    const amount = found ? quantity * found.count * convert(found.amount, found.unit, measure) : quantity * (measure.pack ?? 1);
+    return { amount: round3(amount), unit: measure.unit };
+  }
+  if (!found) return { amount: quantity, unit: null };
+  return { amount: round3(quantity * found.count * found.amount), unit: found.unit, pack: round3(found.count * found.amount) };
+}
