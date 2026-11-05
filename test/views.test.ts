@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { cleanView, conditionText, matchesView, periodRange, sortItems, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
+import { canSum, cleanView, conditionText, groupItems, matchesView, orderItems, periodRange, sortItems, sumOf, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
 
 const names = { person: (id: string) => ({ a: "Jaan", b: "Ana" })[id] ?? "?", item: (id: string) => ({ c: "Colruyt", d: "Aldi" })[id] ?? "?" };
 const ctx = { today: "2026-10-30", me: "a", names };
@@ -130,4 +130,53 @@ test("voorwaarden in woorden", () => {
   assert.equal(conditionText({ field: "door", op: "any_of", value: ["me", "b"] }, def("door"), names), "Betaald door is een van jij, Ana");
   assert.equal(conditionText({ field: "bedrag", op: "gt", value: 2000 }, def("bedrag"), names).replace(/\s/g, " "), "Bedrag groter dan € 20,00");
   assert.equal(conditionText({ field: "datum", op: "in", value: { p: "last_days", n: 30 } }, def("datum"), names), "Datum valt in de laatste 30 dagen");
+});
+
+test("groeperen: keuzes in hun volgorde, datums per maand (nieuwste eerst), zonder waarde achteraan", () => {
+  const byCat = groupItems(items, "cat", fields, names);
+  assert.deepEqual(
+    byCat.map((g) => [g.label, g.items.map((i) => i.name)]),
+    [
+      ["Boodschappen", ["Brood"]],
+      ["Wonen", ["Huur"]],
+      ["Vrije tijd", ["Cinema"]],
+      ["Zonder categorie", ["Melk"]],
+    ],
+  );
+  assert.deepEqual(
+    groupItems(items, "datum", fields, names).map((g) => g.label),
+    ["oktober 2026", "september 2026", "Zonder datum"],
+  );
+  assert.deepEqual(
+    groupItems(items, "door", fields, names).map((g) => g.label),
+    ["Ana", "Jaan"],
+  );
+  assert.deepEqual(
+    groupItems(items, "klaar", fields, names).map((g) => g.label),
+    ["Klaar", "Niet klaar"],
+  );
+  // Op tags of de naam groepeer je niet: dan één groep.
+  assert.equal(groupItems(items, "_tags", fields, names).length, 1);
+  assert.equal(cleanView({ conditions: [], group: "cat" }, fields).group, "cat");
+  assert.equal(cleanView({ conditions: [], group: "_tags" }, fields).group, undefined);
+});
+
+test("optellen en volgorde", () => {
+  assert.equal(canSum(base[0]), true);
+  assert.equal(canSum(base[7]), true);
+  assert.equal(canSum({ key: "n", label: "Aantal", type: "number", counter: true, unit: "zak" }), false);
+  assert.equal(canSum({ key: "z", label: "Zakken", type: "number", unit: "zak" }), true);
+  assert.equal(canSum({ key: "s", label: "Score", type: "score" }), false);
+  assert.equal(sumOf(items, "bedrag"), 97830);
+  assert.equal(sumOf(items, "klaar"), null);
+  // Een logboek: het nieuwste eerst; met een sortering die van de weergave.
+  const log = viewFields([{ key: "datum", label: "Datum", type: "date", today: true }]);
+  assert.deepEqual(
+    orderItems(items, { match: "all", conditions: [] }, log, names).map((i) => i.name),
+    ["Brood", "Huur", "Cinema", "Melk"],
+  );
+  assert.deepEqual(
+    orderItems(items, { match: "all", conditions: [], sort: [{ field: "bedrag", dir: "desc" }] }, fields, names).map((i) => i.name),
+    ["Huur", "Cinema", "Brood", "Melk"],
+  );
 });

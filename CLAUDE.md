@@ -62,7 +62,8 @@ commits en uitleg.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
-- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, als agenda) en de **agenda** (`shared/agenda.ts`,
+- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, groeperen, als agenda; de volgorde altijd met
+  `orderItems`, optellen enkel waar het zin heeft: `canSum`) en de **agenda** (`shared/agenda.ts`,
   velden met `agenda`) zijn generiek over alle veldsoorten. Een weergave is geen beveiliging: wat iemand niet mag zien,
   krijgt hij niet, en een voorwaarde daarop telt voor hem niet mee. `/agenda` kijkt per item de rechten in zijn
   project na. Wat binnenkomt, gaat door `cleanView`.
@@ -71,7 +72,9 @@ commits en uitleg.
   andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
   enkel lijsten uit de keten erboven die je ziet).
 - **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon blokken (project met
-  verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item), enkel ids, nagekeken met `cleanBlocks`. Een
+  verborgen lijsten, lijst, snel toevoegen, totaal, waarde van een item; een lijst met een bewaarde weergave en als
+  aantal of als items, elk blok eventueel breed), enkel ids, nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
+  de eerste items en het aantal (`GET /projects/:id/items?type=&view=&limit=`, met `count`), nooit de hele lijst. Een
   blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:
   elk project, of bij meer dan `DEFAULT_ALL` enkel die bovenaan). `GET /me/overview` geeft enkel de lijsten van de
   projecten in de blokken (`blockProjects`, of `?projects=`). Opstarten blijft licht bij 1000 projecten: geen lijst

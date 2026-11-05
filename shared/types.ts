@@ -163,7 +163,8 @@ export type Item = {
 };
 
 /** Een lijst items, met de namen waarnaar ze verwijzen (personen, andere items). */
-export type ItemList = { items: Item[]; people: Person[]; refs: ItemRef[] };
+/** De items van een lijst; `count`: hoeveel er in totaal zijn als het er maar een paar zijn (?limit=, zie de API). */
+export type ItemList = { items: Item[]; people: Person[]; refs: ItemRef[]; count?: number };
 
 export type ItemRef = { id: string; name: string; type_id: string; project_id: string };
 

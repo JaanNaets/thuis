@@ -1,28 +1,34 @@
 // De blokken van je overzicht (zie shared/overview.ts): een project, een lijst, snel toevoegen, een totaal of de
 // waarde van één item. Elk blok haalt op wat het toont met jouw rechten; wat je niet (meer) ziet, blijft weg.
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { formatFieldValue } from "../../shared/fields";
-import { BLOCK_KINDS, blockKey, type Block, type BlockKind } from "../../shared/overview";
+import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, type Block, type BlockKind } from "../../shared/overview";
 import { totalLabel } from "../../shared/totals";
-import type { ItemDetail, Overview, OverviewType, ProjectDetail, ProjectNode } from "../../shared/types";
+import type { ItemDetail, ItemList, Overview, OverviewType, ProjectDetail, ProjectNode } from "../../shared/types";
+import type { SavedView } from "../../shared/views";
 import { useApi } from "../api";
 import { projectTree } from "../projects";
 import { Link } from "../router";
 import { useSession } from "../session";
-import { CardHead } from "./Controls";
+import { CardHead, Segmented } from "./Controls";
+import { namesFrom } from "./Fields";
 import { Icon, type IconName } from "./Icon";
 import { ItemPicker } from "./ItemPicker";
+import { ItemRow } from "./ItemsView";
 import { Num, stagger } from "./Motion";
 import { Sheet } from "./Sheet";
 import { projectIcon } from "./Sidebar";
 import { useSortable } from "./Sortable";
+import { adjust, RowStepper } from "./Stock";
+import { useToast } from "./Toast";
 import { shownTotals, TotalsCards } from "./Totals";
 
 type Lists = Map<string, OverviewType[]>;
 
-/** Eén lijst als rij: openen, en + om meteen iets toe te voegen. */
-function ListRow({ project, type, meta }: { project: string; type: OverviewType; meta?: string }) {
+/** Eén lijst als rij: openen, en + om meteen iets toe te voegen. `title`/`href`: een weergave van die lijst. */
+function ListRow({ project, type, meta, title, href }: { project: string; type: OverviewType; meta?: string; title?: string; href?: string }) {
+  const to = href ?? `/projecten/${project}?lijst=${type.id}`;
   const main = (
     <>
       <span className="cell-main">
@@ -30,7 +36,7 @@ function ListRow({ project, type, meta }: { project: string; type: OverviewType;
           <Icon name={(type.icon ?? "folder") as IconName} size={16} />
         </span>
         <span className="row-main">
-          <span className="row-title">{type.plural}</span>
+          <span className="row-title">{title ?? type.plural}</span>
           {meta && (
             <span className="row-meta">
               <span>{meta}</span>
@@ -43,9 +49,9 @@ function ListRow({ project, type, meta }: { project: string; type: OverviewType;
       </span>
     </>
   );
-  return type.can_create ? (
+  const row = type.can_create ? (
     <div className="row">
-      <Link to={`/projecten/${project}?lijst=${type.id}`} className="row-link">
+      <Link to={to} className="row-link">
         {main}
       </Link>
       <Link to={`/projecten/${project}/nieuw?lijst=${type.id}`} className="btn btn-ghost btn-icon btn-sm" aria-label={`${type.name} toevoegen`}>
@@ -53,10 +59,11 @@ function ListRow({ project, type, meta }: { project: string; type: OverviewType;
       </Link>
     </div>
   ) : (
-    <Link to={`/projecten/${project}?lijst=${type.id}`} className="row">
+    <Link to={to} className="row">
       {main}
     </Link>
   );
+  return row;
 }
 
 /** Een project: de kop opent het project, elke rij een lijst (behalve wat je verborg). */
@@ -93,6 +100,89 @@ function ProjectBlock({ project: p, above, types, hide }: { project: ProjectNode
   );
 }
 
+/** De bewaarde weergaven van een lijst (gedeelde en de jouwe). */
+const useViews = (project: string, list: string, on = true) => useApi<SavedView[]>(on && project && list ? `/projects/${project}/views?type=${list}` : null);
+
+/**
+ * Eén lijst: hoeveel erin zit (of in een weergave: "Te kopen 3"), of met `show: "items"` de eerste items als kleine
+ * tabel, in de volgorde van de lijst, met − en + bij een voorraad. De kop opent de lijst (met die weergave).
+ */
+function ListBlock({ block, project, type }: { block: Extract<Block, { kind: "list" }>; project: ProjectNode; type: OverviewType }) {
+  const toast = useToast();
+  const asItems = block.show === "items";
+  const query = `type=${type.id}${block.view ? `&view=${block.view}` : ""}&limit=${asItems ? BLOCK_ITEMS : 0}`;
+  const { data } = useApi<ItemList>(asItems || block.view ? `/projects/${project.id}/items?${query}` : null);
+  const { data: views } = useViews(project.id, type.id, Boolean(block.view));
+  const { data: detail } = useApi<ProjectDetail>(asItems ? `/projects/${project.id}` : null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const view = views?.find((v) => v.id === block.view);
+  const count = block.view ? data?.count : type.count;
+  const href = `/projecten/${project.id}?lijst=${type.id}${block.view ? `&weergave=${block.view}` : ""}`;
+  const meta = [view ? type.plural : null, project.name].filter(Boolean).join(" · ");
+
+  if (!asItems) return <ListRow project={project.id} type={{ ...type, count: count ?? 0 }} meta={meta} href={href} title={view?.name} />;
+
+  const full = detail?.types.find((t) => t.id === type.id);
+  const counter = full?.fields.find((f) => f.type === "number" && f.counter && full.field_access[f.key] === "edit");
+  const visible = full?.fields.filter((f) => full.field_access[f.key] !== "none" && f !== counter) ?? [];
+  const keys = view?.def.columns?.length ? view.def.columns : visible.filter((f) => f.column).map((f) => f.key);
+  const columns = keys.flatMap((k) => visible.filter((f) => f.key === k)).slice(0, block.wide ? 3 : 1);
+  const names = namesFrom(data?.people ?? [], data?.refs ?? []);
+  const items = data?.items ?? [];
+  async function step(id: string, delta: number) {
+    try {
+      const value = await adjust(id, counter!.key, delta);
+      setCounts((c) => ({ ...c, [id]: value }));
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+  const cols = ["minmax(0, 1fr)", ...columns.map(() => "minmax(0, 120px)"), ...(counter ? ["auto"] : [])].join(" ");
+  return (
+    <section className={`card dash-card${block.wide ? " table" : ""}`} style={{ "--cols": cols } as CSSProperties}>
+      <Link to={href} className="dash-head">
+        <span className={`row-media tone-${project.color ?? "sky"}`}>
+          <Icon name={(type.icon ?? "folder") as IconName} size={16} />
+        </span>
+        <span className="row-main">
+          <span className="row-title">{view?.name ?? type.plural}</span>
+          <span className="row-meta">
+            <span>{meta}</span>
+          </span>
+        </span>
+        <span className="row-end">{count !== undefined && <Num value={count} />}</span>
+        <Icon name="next" size={16} className="row-chevron" />
+      </Link>
+      {data && !items.length && <p className="dash-empty">Leeg</p>}
+      {items.length > 0 && (
+        <ul className="rows">
+          {items.map((item) => (
+            <li key={item.id}>
+              <ItemRow
+                item={item}
+                icon={(type.icon ?? "folder") as IconName}
+                tone={project.color ?? "sky"}
+                columns={columns}
+                names={names}
+                tags={[]}
+                stepper={
+                  counter ? (
+                    <RowStepper
+                      value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
+                      label={item.name}
+                      onStep={(d) => step(item.id, d)}
+                    />
+                  ) : undefined
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /** Een totaal van een lijst, zoals in de zijkolom van het project. */
 function TotalBlock({ project, list, total }: { project: string; list: string; total: string }) {
   const { data } = useApi<ProjectDetail>(`/projects/${project}`);
@@ -100,20 +190,58 @@ function TotalBlock({ project, list, total }: { project: string; list: string; t
   return type ? <TotalsCards projectId={project} type={type} only={total} className="dash-card" /> : null;
 }
 
-/** Eén veld van één item, groot (ook een berekening): Pellets · Aantal. */
+/**
+ * Eén veld van één item, groot (ook een berekening): Pellets · Aantal. Een getal met − en + (voorraad) pas je hier
+ * meteen aan; een berekend ja/nee-veld dat aan staat (Kopen), staat erbij.
+ */
 function ValueBlock({ item, field }: { item: string; field: string }) {
+  const toast = useToast();
   const { data: it } = useApi<ItemDetail>(`/items/${item}`);
   const { data: p } = useApi<ProjectDetail>(it ? `/projects/${it.project_id}` : null);
-  const def = it && p ? p.types.find((t) => t.id === it.type_id)?.fields.find((f) => f.key === field) : undefined;
-  if (!it || !def) return null;
+  const [value, setValue] = useState<number>();
+  const type = it && p ? p.types.find((t) => t.id === it.type_id) : undefined;
+  const def = type?.fields.find((f) => f.key === field);
+  if (!it || !type || !def) return null;
   const names = { person: (id: string) => it.people.find((x) => x.id === id)?.name ?? "", item: (id: string) => it.refs.find((x) => x.id === id)?.name ?? "" };
-  const value = it.data[field];
+  const raw = value ?? it.data[field];
+  const counter = def.type === "number" && def.counter && type.field_access[def.key] === "edit";
+  const flags = type.fields.filter((f) => f.type === "calc" && f.result === "bool" && it.data[f.key] === true);
+  async function step(delta: number) {
+    try {
+      setValue(await adjust(it!.id, def!.key, delta));
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
   return (
     <section className="card dash-card">
-      <CardHead title={def.label} description={it.name} />
-      <Link to={`/items/${it.id}`} className="card-body dash-value">
-        {value === undefined || value === null ? "—" : formatFieldValue(def, value, names)}
-      </Link>
+      <CardHead title={it.name} description={def.label} />
+      <div className="card-body dash-value-row">
+        <Link to={`/items/${it.id}`} className="dash-value">
+          {raw === undefined || raw === null ? "—" : formatFieldValue(def, raw, names)}
+        </Link>
+        {flags.map((f) => (
+          <span key={f.key} className="badge">
+            {f.label}
+          </span>
+        ))}
+        {counter && (
+          <span className="row-stepper">
+            <button
+              type="button"
+              className="btn btn-ghost btn-icon btn-sm"
+              aria-label={`${it.name}: één minder`}
+              disabled={typeof raw !== "number" || raw <= 0}
+              onClick={() => step(-1)}
+            >
+              <Icon name="minus" size={15} />
+            </button>
+            <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${it.name}: één meer`} onClick={() => step(1)}>
+              <Icon name="plus" size={15} />
+            </button>
+          </span>
+        )}
+      </div>
     </section>
   );
 }
@@ -127,15 +255,18 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
   let body: React.ReactNode = null;
   if (block.kind === "project" && project) body = <ProjectBlock project={project} above={above} types={lists.get(project.id)} hide={block.hide} />;
   else if (block.kind === "list" && project && type)
-    body = (
-      <section className="card dash-card">
-        <ul className="rows">
-          <li>
-            <ListRow project={project.id} type={type} meta={project.name} />
-          </li>
-        </ul>
-      </section>
-    );
+    body =
+      block.show === "items" ? (
+        <ListBlock block={block} project={project} type={type} />
+      ) : (
+        <section className="card dash-card">
+          <ul className="rows">
+            <li>
+              <ListBlock block={block} project={project} type={type} />
+            </li>
+          </ul>
+        </section>
+      );
   else if (block.kind === "add" && project && type?.can_create)
     body = (
       <section className="card dash-card">
@@ -156,7 +287,7 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
   else if (block.kind === "total" && project) body = <TotalBlock project={project.id} list={block.list} total={block.total} />;
   else if (block.kind === "value") body = <ValueBlock item={block.item} field={block.field} />;
   return body ? (
-    <div className="dash-block" style={stagger(index)}>
+    <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
       {body}
     </div>
   ) : null;
@@ -166,8 +297,11 @@ export function BlockView({ block, lists, index }: { block: Block; lists: Lists;
 function BlockLabel({ block, lists }: { block: Block; lists: Lists }) {
   const { projects } = useSession();
   const { data: it } = useApi<ItemDetail>(block.kind === "value" ? `/items/${block.item}` : null);
+  const view = block.kind === "list" ? block.view : undefined;
+  const { data: views } = useViews(block.kind === "list" ? block.project : "", block.kind === "list" ? block.list : "", Boolean(view));
   const project = "project" in block ? projects.find((p) => p.id === block.project)?.name : undefined;
   const list = "list" in block ? lists.get(block.project)?.find((t) => t.id === block.list) : undefined;
+  const viewName = views?.find((v) => v.id === view)?.name;
   const title =
     block.kind === "project"
       ? project
@@ -175,12 +309,14 @@ function BlockLabel({ block, lists }: { block: Block; lists: Lists }) {
         ? `${list?.name ?? "Item"} toevoegen`
         : block.kind === "value"
           ? (it?.name ?? "…")
-          : list?.plural;
+          : viewName
+            ? `${list?.plural ?? ""} · ${viewName}`
+            : list?.plural;
   return (
     <span className="row-main">
       <span className="row-title">{title ?? "Verborgen"}</span>
       <span className="row-meta">
-        <span>{BLOCK_KINDS[block.kind]}</span>
+        <span>{block.kind === "list" && block.show === "items" ? "Items" : BLOCK_KINDS[block.kind]}</span>
         {block.kind !== "project" && project && <span>{project}</span>}
       </span>
     </span>
@@ -219,6 +355,16 @@ export function BlocksEditor({ blocks, onChange, overview }: { blocks: Block[]; 
                     <Icon name="grip" size={16} />
                   </button>
                   <BlockLabel block={b} lists={lists} />
+                  {(b.kind === "project" || b.kind === "total" || (b.kind === "list" && b.show === "items")) && (
+                    <button
+                      type="button"
+                      className="filter wide-only"
+                      aria-pressed={Boolean(b.wide)}
+                      onClick={() => onChange(blocks.map((x) => (x === b ? (b.wide ? { ...b, wide: undefined } : { ...b, wide: true }) : x)))}
+                    >
+                      Breed
+                    </button>
+                  )}
                   <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Weghalen" onClick={() => onChange(blocks.filter((x) => x !== b))}>
                     <Icon name="close" size={15} />
                   </button>
@@ -255,7 +401,10 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
   const [total, setTotal] = useState("");
   const [item, setItem] = useState<string | null>(null);
   const [field, setField] = useState("");
+  const [view, setView] = useState("");
+  const [show, setShow] = useState<"count" | "items">("count");
   const { data: detail } = useApi<ProjectDetail>(project ? `/projects/${project}` : null);
+  const { data: views } = useViews(project, list, kind === "list");
   const types = detail?.types ?? [];
   const type = types.find((t) => t.id === list);
   const nodes = projectTree(projects);
@@ -265,20 +414,25 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
       ? project
         ? { kind, project }
         : null
-      : kind === "list" || kind === "add"
+      : kind === "list"
         ? project && list
-          ? { kind, project, list }
+          ? { kind, project, list, ...(view ? { view } : {}), ...(show === "items" ? { show: "items" as const } : {}) }
           : null
-        : kind === "total"
-          ? project && list && total
-            ? { kind, project, list, total }
+        : kind === "add"
+          ? project && list
+            ? { kind, project, list }
             : null
-          : item && field
-            ? { kind, item, field }
-            : null;
+          : kind === "total"
+            ? project && list && total
+              ? { kind, project, list, total }
+              : null
+            : item && field
+              ? { kind, item, field }
+              : null;
   const reset = () => {
     setProject("");
     setList("");
+    setView("");
     setTotal("");
     setItem(null);
     setField("");
@@ -289,7 +443,8 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
       <div className="form">
         <label className="field">
           <span className="label">Wat</span>
-          <select aria-label="Wat"
+          <select
+            aria-label="Wat"
             value={kind}
             onChange={(e) => {
               setKind(e.target.value as BlockKind);
@@ -307,7 +462,8 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
         </label>
         <label className="field">
           <span className="label">Project</span>
-          <select aria-label="Project"
+          <select
+            aria-label="Project"
             value={project}
             onChange={(e) => {
               reset();
@@ -325,10 +481,12 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
         {kind !== "project" && project && (
           <label className="field">
             <span className="label">Lijst</span>
-            <select aria-label="Lijst"
+            <select
+              aria-label="Lijst"
               value={list}
               onChange={(e) => {
                 setList(e.target.value);
+                setView("");
                 setTotal("");
                 setItem(null);
                 setField("");
@@ -344,6 +502,35 @@ function AddBlock({ open, onClose, onAdd }: { open: boolean; onClose: () => void
                 ))}
             </select>
           </label>
+        )}
+        {kind === "list" && type && (
+          <>
+            {(views?.length ?? 0) > 0 && (
+              <label className="field">
+                <span className="label">Weergave</span>
+                <select aria-label="Weergave" value={view} onChange={(e) => setView(e.target.value)}>
+                  <option value="">Alles</option>
+                  {views!.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="field">
+              <span className="label">Toon</span>
+              <Segmented
+                label="Toon"
+                value={show}
+                onChange={setShow}
+                options={[
+                  { value: "count", label: "Aantal" },
+                  { value: "items", label: "Items" },
+                ]}
+              />
+            </div>
+          </>
         )}
         {kind === "total" && type && (
           <label className="field">

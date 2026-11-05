@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import {
   formatFieldValue,
   rangeStatus,
@@ -11,7 +12,7 @@ import {
   type Names,
 } from "../../shared/fields";
 import type { Item, ItemList, ItemTypeView, ProjectDetail } from "../../shared/types";
-import { EMPTY_VIEW, kindOf, matchesView, NAME, sortItems, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
+import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
 import { apiUrl, useApi } from "../api";
 import { today } from "../format";
 import { useSession } from "../session";
@@ -69,6 +70,8 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     }
   }
   const { person, projects } = useSession();
+  // Op een breed scherm passen meer kolommen (op gsm staan ze toch in de grijze regel).
+  const wideScreen = typeof window !== "undefined" && window.matchMedia("(min-width: 1100px)").matches;
   // Weergaven: filters, sortering en kolommen (shared/views.ts); wat je koos, blijft staan zolang de app openstaat.
   const { data: savedViews, reload: reloadViews } = useApi<SavedView[]>(`/projects/${project.project.id}/views?type=${type.id}`);
   const storeKey = `thuis:weergave:${project.project.id}:${type.id}`;
@@ -87,6 +90,16 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     }
   }, [storeKey, activeId, def]);
   const setDef = (next: ViewDef) => setView((v) => ({ ...v, def: next }));
+  // Een weergave uit het adres (?weergave=, bv. vanaf een blok op het overzicht): één keer kiezen als ze er is.
+  const [params] = useSearchParams();
+  const wanted = params.get("weergave");
+  const applied = useRef<string | null>(null);
+  useEffect(() => {
+    const view = wanted && savedViews?.find((v) => v.id === wanted);
+    if (!view || applied.current === wanted) return;
+    applied.current = wanted;
+    setView({ activeId: view.id, def: view.def });
+  }, [wanted, savedViews]);
   // Met subprojecten: ook de items die eronder in deze lijst staan (elk met jouw rechten daar), met hun project erbij.
   const tree = Boolean(def.tree && project.children.length);
   const listQuery = `type=${type.id}${archived ? "&archived=1" : ""}${tree ? "&sub=1" : ""}`;
@@ -112,17 +125,10 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
   const vfields = useMemo(() => viewFields(visibleFields, type.name_label ?? "Naam"), [fields, type]);
   const columns = def.columns?.length
     ? def.columns.flatMap((k) => visibleFields.filter((f) => f.key === k && !(f === counter && !archived)))
-    : fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, 2);
+    : fields.filter((f) => f.column && !(f === counter && !archived)).slice(0, wideScreen ? 4 : 2);
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
-  // Een logboek (een datum die met vandaag begint: eten, gewicht, uitgaven): het nieuwste eerst.
-  const logDate = fields.find((f) => f.type === "date" && f.today);
-  const items = useMemo(() => {
-    const all = data?.items ?? [];
-    if (!logDate) return all;
-    const day = (i: Item) => (typeof i.data[logDate.key] === "string" ? (i.data[logDate.key] as string) : "");
-    return [...all].sort((a, b) => day(b).localeCompare(day(a)));
-  }, [data, logDate]);
+  const items = useMemo(() => data?.items ?? [], [data]);
   const year = new Date().getFullYear();
 
   const options = useMemo(() => {
@@ -156,9 +162,10 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
       return true;
     });
     const context = { today: today(), me: person.id, names };
-    return sortItems(
+    // Een logboek het nieuwste eerst, of zoals de weergave sorteert (dezelfde regel als op het overzicht).
+    return orderItems(
       list.filter((item) => matchesView(item, def, vfields, context)),
-      def.sort,
+      def,
       vfields,
       names,
     );
@@ -213,6 +220,53 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
     ...(type.can_create && live ? [{ icon: "table" as const, label: "Importeren", to: `/projecten/${project.project.id}/importeren?lijst=${type.id}` }] : []),
     ...(items.length > 0 ? [{ icon: "download" as const, label: "Exporteren", href: apiUrl(`/projects/${project.project.id}/items/export?${listQuery}${exportFilter}`) }] : []),
   ];
+
+  // Groeperen (een weergave met `group`) met per groep het aantal en de som, en onderaan het totaal van wat je ziet.
+  const groups = def.group ? groupItems(shown, def.group, vfields, names) : [{ key: "", label: "", items: shown }];
+  const summed = columns.filter(canSum);
+  const sumText = (list: Item[]) =>
+    summed
+      .flatMap((c) => {
+        const total = sumOf(list, c.key);
+        return total === null ? [] : [formatFieldValue(c, total, names)];
+      })
+      .join(" · ");
+  const sumCells = (list: Item[]) => (
+    <>
+      {columns.map((c) => {
+        const total = canSum(c) ? sumOf(list, c.key) : null;
+        return (
+          <span key={c.key} className="col col-end">
+            {total !== null && <span>{formatFieldValue(c, total, names)}</span>}
+          </span>
+        );
+      })}
+      {counter && !archived && <span className="col" />}
+    </>
+  );
+  let index = 0;
+  const row = (item: Item) => (
+    <li key={item.id} style={stagger(index++)}>
+      <ItemRow
+        item={item}
+        icon={icon}
+        tone={elsewhere(item)?.color ?? project.project.color ?? "sky"}
+        place={elsewhere(item)?.name}
+        columns={columns}
+        names={names}
+        tags={project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name)}
+        stepper={
+          counter && !archived ? (
+            <RowStepper
+              value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
+              label={item.name}
+              onStep={(d) => step(item.id, d)}
+            />
+          ) : undefined
+        }
+      />
+    </li>
+  );
 
   return (
     <>
@@ -335,64 +389,63 @@ export function ItemsView({ project, type }: { project: ProjectDetail; type: Ite
             {counter && !archived && <span className="end">{counter.label}</span>}
           </div>
           <ul className="rows stagger">
-            {shown.map((item, i) => (
-              <li key={item.id} style={stagger(i)}>
-                <ItemRow
-                  item={item}
-                  icon={icon}
-                  tone={elsewhere(item)?.color ?? project.project.color ?? "sky"}
-                  place={elsewhere(item)?.name}
-                  columns={columns}
-                  names={names}
-                  tags={project.tags.filter((t) => item.tag_ids.includes(t.id)).map((t) => t.name)}
-                  stepper={
-                    counter && !archived ? (
-                      <RowStepper
-                        value={counts[item.id] ?? (typeof item.data[counter.key] === "number" ? (item.data[counter.key] as number) : 0)}
-                        label={item.name}
-                        onStep={(d) => step(item.id, d)}
-                      />
-                    ) : undefined
-                  }
-                />
+            {groups.flatMap((g) => [
+              ...(g.label
+                ? [
+                    <li key={`groep-${g.key}`} className="group-row table-sum">
+                      <span className="cell-main">
+                        {g.label} <span className="group-count">{g.items.length}</span>
+                      </span>
+                      {sumText(g.items) && <span className="sum-text">{sumText(g.items)}</span>}
+                      {sumCells(g.items)}
+                    </li>,
+                  ]
+                : []),
+              ...g.items.map((item) => row(item)),
+            ])}
+            {summed.length > 0 && shown.length > 1 && (
+              <li className="table-sum table-total">
+                <span className="cell-main">Totaal</span>
+                <span className="sum-text">{sumText(shown)}</span>
+                {sumCells(shown)}
               </li>
-            ))}
+            )}
           </ul>
         </div>
       )}
 
       <Sheet open={sheet === "more"} title={type.plural} onClose={() => setSheet(undefined)}>
         {actions.length > 0 && (
-        <ul className="rows sheet-menu">
-          {actions.map((a) => {
-            const body = (
-              <span className="cell-main">
-                <span className="row-media">
-                  <Icon name={a.icon} size={16} />
+          <ul className="rows sheet-menu">
+            {actions.map((a) => {
+              const body = (
+                <span className="cell-main">
+                  <span className="row-media">
+                    <Icon name={a.icon} size={16} />
+                  </span>
+                  <span className="row-title">{a.label}</span>
                 </span>
-                <span className="row-title">{a.label}</span>
-              </span>
-            );
-            return (
-              <li key={a.label}>
-                {a.to ? (
-                  <Link to={a.to} className="row">
-                    {body}
-                  </Link>
-                ) : a.href ? (
-                  // Een bestand, geen ander scherm: een gewone link met `download`.
-                  <a href={a.href} download className="row" onClick={() => setSheet(undefined)}>
-                    {body}
-                  </a>
-                ) : (
-                  <button type="button" className="row" onClick={a.run}>
-                    {body}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+              );
+              return (
+                <li key={a.label}>
+                  {a.to ? (
+                    <Link to={a.to} className="row">
+                      {body}
+                    </Link>
+                  ) : a.href ? (
+                    // Een bestand, geen ander scherm: een gewone link met `download`.
+                    <a href={a.href} download className="row" onClick={() => setSheet(undefined)}>
+                      {body}
+                    </a>
+                  ) : (
+                    <button type="button" className="row" onClick={a.run}>
+                      {body}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
         <div className="form">
           {project.children.length > 0 && <Switch label="Met subprojecten" checked={tree} onChange={(on) => setDef({ ...def, tree: on || undefined })} />}
@@ -479,7 +532,7 @@ function SortButton({ field, label, def, onSort }: { field: string; label: strin
   );
 }
 
-function ItemRow({
+export function ItemRow({
   item,
   icon,
   tone,

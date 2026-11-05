@@ -739,7 +739,15 @@ zijn kleur (`.lm-swatch`).
 een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen, Importeren, Exporteren), met daaronder de
 schakelaars Met subprojecten en Archief; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
 (één tik zet hem uit). Geen rij iconknoppen naast het zoekveld. Gebruik `ItemsView` overal waar items van een lijst
-staan; bouw geen eigen lijst.
+staan; bouw geen eigen lijst (op het overzicht hergebruikt `ListBlock` haar `ItemRow`).
+
+- **Volgorde**: `orderItems` (`shared/views.ts`), dezelfde regel op het scherm en op de server: een logboek het
+  nieuwste eerst, anders op naam, of zoals de weergave sorteert.
+- **Groeperen** (Filters → Groeperen op: een keuze, ja/nee, een persoon, een verwijzing of een datum, per maand): een
+  `group-row table-sum` per groep met de naam, het aantal (`.group-count`) en de som onder haar kolom (op gsm rechts).
+- **Totaalrij** (`.table-total`, onderaan bij twee of meer items): de som van elke kolom waar optellen zin heeft
+  (`canSum`: bedragen, duur, een getal met eenheid dat geen voorraad is). Geen totaal bij een aantal in een voorraad.
+- Op een breed scherm (vanaf 1100px) tot vier kolommen die de lijst als kolom toont, op tablet twee.
 
 ### Rechten in de app
 
@@ -884,16 +892,25 @@ Regels:
 (`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
 een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
 met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
-→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: één lijst, snel toevoegen (een rij met +),
-een totaal (`TotalsCards only`) of één waarde (`.dash-value`, groot). **Aanpassen** (`BlocksEditor`): een
-`sort-list` met greep en ×, bij een project de lijsten als filterpillen (aan = zichtbaar), "Toevoegen" in een
-`Sheet`, en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in de paneelbalk) en "Standaard" (ghost) bij de
-titel. Het kruimelpad toont hier enkel "Overzicht".
+→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: snel toevoegen (een rij met +), een totaal
+(`TotalsCards only`), één waarde (`.dash-value`, groot; de naam van het item als titel, het veld eronder, − en + bij
+een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen) en **één lijst** (`ListBlock`):
+als rij met het aantal, of met een bewaarde **weergave** ("Te kopen" · Voorraad · project, met het aantal dat erin
+past), of met **Items** de eerste `BLOCK_ITEMS` items zelf in een `dash-card` met kop (opent de lijst met die
+weergave, `?weergave=`) en `ItemRow`s eronder (− en + bij een voorraad; leeg: "Leeg" in `.dash-empty`). Een blok
+met **Breed** (`.dash-block.is-wide`) neemt twee kolommen en toont dan tot drie kolommen als tabel. **Aanpassen**
+(`BlocksEditor`): een `sort-list` met greep en ×, bij een project de lijsten als filterpillen (aan = zichtbaar), een
+filterpil Breed (enkel op tablet, bij een project, totaal of lijst met items), "Toevoegen" in een `Sheet` (bij een
+lijst: Weergave en Toon `Segmented` Aantal · Items), en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in
+de paneelbalk) en "Standaard" (ghost) bij de titel. Het kruimelpad toont hier enkel "Overzicht".
 
 **Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
 `manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →
 `split split-main-first`: rechts `ItemsView`, in de zijkolom de totalen van de open lijst en Wie moet wie (als er
-een lijst is die verrekent; op gsm beide vóór de lijst), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Zonder lijsten: een lege staat met "Lijst maken".
+een lijst is die verrekent), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Op gsm staat de lijst meteen in
+beeld: daarboven één regel `LeadSummary` (`.lead-summary`, zacht vlak `--subtle`: per totaal het label en de waarde,
+en "Je krijgt nog" / "Je moet nog"; een pijltje klapt de kaarten van de totalen en Wie moet wie open). Zonder
+lijsten: een lege staat met "Lijst maken".
 
 **Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
 `dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het

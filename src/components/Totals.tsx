@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
 import { formatDuration, type FieldDef, type FieldType } from "../../shared/fields";
 import { totalLabel, type Period, type TotalDef, type TotalResult } from "../../shared/totals";
-import type { ItemTypeView } from "../../shared/types";
+import type { Balance, ItemTypeView } from "../../shared/types";
 import { useApi } from "../api";
 import { formatCents, formatTotal, today } from "../format";
+import { useSession } from "../session";
 import { CardHead } from "./Controls";
+import { Icon } from "./Icon";
 import { useCountUp } from "./Motion";
 
 const NOW: Record<Period, string> = { all: "Alles samen", day: "Vandaag", week: "Deze week", month: "Deze maand", year: "Dit jaar" };
@@ -207,5 +209,50 @@ function TotalLine({ total: t, periods, result, unit, goal }: { total: TotalDef;
         ))}
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * Op gsm boven de lijst: de totalen van de lijst en wat jij nog moet krijgen of betalen, op één regel. Tik om de
+ * kaarten zelf open te klappen (zie ProjectPage); zo staat de lijst meteen in beeld.
+ */
+export function LeadSummary({ projectId, type, open, onToggle }: { projectId: string; type: ItemTypeView | undefined; open: boolean; onToggle: () => void }) {
+  const { person } = useSession();
+  const totals = type ? shownTotals(type) : [];
+  const { data } = useApi<Shown[]>(type && totals.length ? `/projects/${projectId}/totals?type=${type.id}&today=${today()}` : null);
+  const { data: balance } = useApi<Balance>(`/projects/${projectId}/balance`);
+  const chips = [
+    ...(data ?? []).flatMap((d) => {
+      const t = totals.find((x) => x.id === d.id);
+      if (!t || d.result.current === undefined) return [];
+      const unit = t.agg === "count" ? undefined : type!.fields.find((f) => f.key === t.field)?.unit;
+      return [{ key: d.id, label: totalLabel(t, type!.fields), value: show(d.result.current, d.result.result, unit) }];
+    }),
+    ...(balance?.active
+      ? balance.transfers
+          .filter((t) => t.from === person.id || t.to === person.id)
+          .slice(0, 1)
+          .map((t) => ({ key: "balance", label: t.to === person.id ? "Je krijgt nog" : "Je moet nog", value: formatCents(t.amount) }))
+      : []),
+  ];
+  if (!chips.length && !balance?.active) return null;
+  return (
+    <button type="button" className="card lead-summary" aria-expanded={open} onClick={onToggle}>
+      <span className="lead-chips">
+        {chips.length ? (
+          chips.map((c) => (
+            <span key={c.key} className="lead-chip">
+              <span className="lead-label">{c.label}</span>
+              <span className="lead-value">{c.value}</span>
+            </span>
+          ))
+        ) : (
+          <span className="lead-chip">
+            <span className="lead-label">Wie moet wie</span>
+          </span>
+        )}
+      </span>
+      <Icon name="down" size={16} className="lead-chevron" />
+    </button>
   );
 }

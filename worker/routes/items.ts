@@ -31,7 +31,7 @@ import { nameIn, nameMatches } from "../../shared/quickfill";
 import { netEffects, parseApplied } from "../../shared/effects";
 import { computeEffects, effectStatements } from "../effects";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
-import { cleanView, matchesView, sortItems } from "../../shared/views";
+import { cleanView, EMPTY_VIEW, matchesView, orderItems, sortItems, type ViewDef } from "../../shared/views";
 import { fieldsForViews } from "./views";
 
 export const items = new Hono<AppEnv>();
@@ -309,7 +309,9 @@ async function itemsIn(db: D1Database, me: string, access: ProjectAccess, lists:
 
 /**
  * De items van een project (?type= één lijst, ?archived=1 het archief, ?sub=1 ook uit de subprojecten), met de namen
- * waarnaar ze verwijzen.
+ * waarnaar ze verwijzen. Voor een blok op het overzicht: ?view= een bewaarde weergave (gedeeld of de jouwe) en
+ * ?limit= enkel de eerste items (0: enkel het aantal), in de volgorde van de lijst (`orderItems`), met `count`: hoeveel
+ * er in totaal zijn.
  */
 projectItems.get("/:id/items", async (c) => {
   const db = c.env.DB;
@@ -319,8 +321,47 @@ projectItems.get("/:id/items", async (c) => {
   const typeId = c.req.query("type") || null;
   const lists = types.filter((t) => typeAccess(access.rights, t.id) !== "none" && (!typeId || t.id === typeId));
   if (!lists.length) return c.json({ items: [], people: [], refs: [] } satisfies ItemList);
-  const list = await itemsIn(db, me, access, lists, c.req.query("archived") === "1", c.req.query("sub") === "1");
-  return c.json({ items: list, ...(await namesFor(db, me, access.chain, types, list)) } satisfies ItemList);
+  const viewId = c.req.query("view") || null;
+  const limitText = c.req.query("limit");
+  const paged = Boolean(typeId && (viewId || limitText !== undefined));
+  let view: ViewDef = EMPTY_VIEW;
+  if (paged && viewId) {
+    const row = await db
+      .prepare("SELECT def FROM views WHERE id = ? AND project_id = ? AND type_id = ? AND (person_id IS NULL OR person_id = ?)")
+      .bind(viewId, access.project.id, typeId, me)
+      .first<{ def: string }>();
+    if (!row) throw new NotFoundError("Die weergave bestaat niet (meer).");
+    try {
+      view = cleanView(JSON.parse(row.def), fieldsForViews(access, lists[0]));
+    } catch {
+      // Past niet meer bij de velden: dan alles, zoals in de lijst.
+    }
+  }
+  const sub = c.req.query("sub") === "1" || Boolean(view.tree);
+  let list = await itemsIn(db, me, access, lists, c.req.query("archived") === "1", sub);
+  if (!paged) return c.json({ items: list, ...(await namesFor(db, me, access.chain, types, list)) } satisfies ItemList);
+
+  const all = await namesFor(db, me, access.chain, types, list);
+  const person = new Map(all.people.map((p) => [p.id, p.name]));
+  const ref = new Map(all.refs.map((r) => [r.id, r.name]));
+  const names = { person: (id: string) => person.get(id) ?? "", item: (id: string) => ref.get(id) ?? "" };
+  const viewDefs = fieldsForViews(access, lists[0]);
+  list = orderItems(
+    list.filter((i) => matchesView(i, view, viewDefs, { today: brusselsToday(), me, names })),
+    view,
+    viewDefs,
+    names,
+  );
+  const limit = Math.min(Math.max(Math.floor(Number(limitText)) || 0, 0), 50);
+  const shown = list.slice(0, limitText === undefined ? 50 : limit);
+  // Enkel de namen van wat meekomt.
+  const used = JSON.stringify(shown.map((i) => i.data));
+  return c.json({
+    items: shown,
+    people: all.people.filter((p) => used.includes(p.id)),
+    refs: all.refs.filter((r) => used.includes(r.id)),
+    count: list.length,
+  } satisfies ItemList);
 });
 
 projectItems.post("/:id/items", async (c) => {
@@ -419,8 +460,6 @@ projectItems.get("/:id/items/export", async (c) => {
 
 // ---------- één item ----------
 
-/** Keuzes voor een verwijzing: alle items van een lijst (?type=) die je mag zien, in al je projecten. */
-/** De items om uit te kiezen bij een verwijzing (?type=lijst, of meer lijsten met komma's), enkel waar je ze ziet. */
 /**
  * Items om uit te kiezen bij een verwijzing, over een of meer lijsten (`type`), enkel wat je mag zien. Een bladzijde
  * (`limit`), met `more` als er meer zijn. Zoeken op naam (`q`: elk woord), de namen die in een getypte tekst staan

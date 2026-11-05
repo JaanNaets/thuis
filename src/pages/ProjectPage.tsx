@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { ProjectDetail } from "../../shared/types";
 import { useApi } from "../api";
@@ -7,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { ItemsView } from "../components/ItemsView";
 import { EmptyState, PageHead } from "../components/Page";
 import { projectIcon } from "../components/Sidebar";
-import { shownTotals, TotalsCards } from "../components/Totals";
+import { LeadSummary, shownTotals, TotalsCards } from "../components/Totals";
 import { Link } from "../router";
 
 /**
@@ -18,6 +19,9 @@ export function ProjectPage() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
+  // Op gsm staan de totalen en Wie moet wie ingeklapt boven de lijst (één regel); tik om ze open te klappen.
+  const narrow = typeof window !== "undefined" && window.matchMedia("(max-width: 959px)").matches;
+  const [leadOpen, setLeadOpen] = useState(false);
 
   if (error) return <p className="error page">{error}</p>;
   if (!p) return null;
@@ -74,9 +78,14 @@ export function ProjectPage() {
       )}
 
       <div className="split split-main-first">
+        {narrow && <LeadSummary key={type?.id} projectId={project.id} type={type} open={leadOpen} onToggle={() => setLeadOpen((o) => !o)} />}
         <aside className="split-aside">
-          {type && shownTotals(type).length > 0 && <TotalsCards key={type.id} projectId={project.id} type={type} className="split-lead" />}
-          <BalanceCard key={project.id} projectId={project.id} className="split-lead" />
+          {(!narrow || leadOpen) && (
+            <>
+              {type && shownTotals(type).length > 0 && <TotalsCards key={type.id} projectId={project.id} type={type} className="split-lead" />}
+              <BalanceCard key={project.id} projectId={project.id} className="split-lead" />
+            </>
+          )}
           {(p.children.length > 0 || (rights.manage && !project.archived)) && (
             <section className="card">
               <CardHead

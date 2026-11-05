@@ -209,8 +209,10 @@ in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het
 
 Met **Aanpassen** stel je je overzicht zelf samen (enkel voor jou): schik de blokken, verberg lijsten van een project,
 en zet er een lijst, **snel toevoegen** ("Eten toevoegen"), een **totaal** (Kcal vandaag) of de **waarde van een
-item** bij (Pellets · Aantal, ook een berekening zoals Laatst bijgevuld). **Standaard** zet het terug zoals het
-vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
+item** bij (Pellets · Aantal, ook een berekening zoals Laatst bijgevuld; bij een voorraad met − en +). Een lijst kan
+ook met een **weergave** ("Te kopen": hoeveel er te kopen is) en met **Items** als kleine tabel (de eerste vijf, met −
+en + bij een voorraad); de kop opent de lijst met die weergave. **Breed** zet een blok over twee kolommen.
+**Standaard** zet het terug zoals het vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
 
 ### Wie betaalde wat
 
@@ -404,7 +406,12 @@ Boven elke lijst staat **Filters**: kies zoveel voorwaarden als je wil, op elk v
 wanneer iets toegevoegd werd). Getallen en bedragen (groter dan, tussen), keuzes en personen ("Wie is jij"), en
 datums: vandaag, deze week, vorige maand, de laatste 30 dagen, tussen twee datums, of als patroon (de eerste week van
 de maand, op een maandag). Alles moet kloppen, of één ervan. Sorteer op elk veld (of tik op een kolomkop) en kies
-welke kolommen je ziet.
+welke kolommen je ziet. Met **Groeperen op** staan de items per categorie, per persoon of per maand, elk met het
+aantal en de som; onderaan staat het **totaal** van wat je ziet (bedragen, duur en getallen met een eenheid, niet het
+aantal in een voorraad).
+
+Op je gsm staat de lijst van een project meteen in beeld: de totalen en wat je nog moet krijgen of betalen staan
+erboven op één regel, en een tik klapt ze open.
 
 Bewaar dat als **weergave** ("Deze week", "Te kopen", "Van mij"): ze staan als knoppen boven de lijst. Een weergave
 is van jou, of (als je het project instelt) voor iedereen in het project. Exporteren volgt wat je ziet.

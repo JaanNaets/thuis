@@ -7,6 +7,8 @@ test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
     { kind: "project", project: "p1", hide: ["l1", "l1", "bad id!"] },
     { kind: "project", project: "p1" },
     { kind: "list", project: "p1", list: "l2" },
+    { kind: "list", project: "p1", list: "l2", view: "v1", show: "items", wide: true },
+    { kind: "list", project: "p1", list: "l2", view: "fout id!", show: "alles", wide: "ja" },
     { kind: "add", project: "p1", list: "l2" },
     { kind: "total", project: "p1", list: "l2", total: "t1" },
     { kind: "value", item: "i1", field: "aantal" },
@@ -18,6 +20,8 @@ test("blokken op het overzicht: enkel geldige, zonder dubbels", () => {
   assert.deepEqual(out, [
     { kind: "project", project: "p1", hide: ["l1"] },
     { kind: "list", project: "p1", list: "l2" },
+    // Dezelfde lijst met een weergave als tabel is een ander blok; een kapotte weergave valt weg (dan een dubbel).
+    { kind: "list", project: "p1", list: "l2", view: "v1", show: "items", wide: true },
     { kind: "add", project: "p1", list: "l2" },
     { kind: "total", project: "p1", list: "l2", total: "t1" },
     { kind: "value", item: "i1", field: "aantal" },

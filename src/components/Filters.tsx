@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { FieldDef, Names } from "../../shared/fields";
 import type { Tag } from "../../shared/types";
 import {
+  canGroup,
   conditionText,
   kindOf,
   kindOfKey,
@@ -287,6 +288,7 @@ export function ViewEditor({
   const [shared, setShared] = useState(active?.shared ?? false);
   const [busy, setBusy] = useState(false);
   const sortable = fields.filter((f) => f.key !== TAGS);
+  const groupable = fields.filter((f) => canGroup(f.key, f));
   const sort = def.sort?.[0];
   const setConditions = (conditions: Condition[]) => setDef((d) => ({ ...d, conditions }));
   const dateFields = fields.filter((f) => kindOf(f) === "date" && !f.key.startsWith("_"));
@@ -387,6 +389,20 @@ export function ViewEditor({
           )}
         </div>
       </div>
+
+      {groupable.length > 0 && (
+        <label className="field">
+          <span className="label">Groeperen op</span>
+          <select aria-label="Groeperen op" value={def.group ?? ""} onChange={(e) => setDef((d) => ({ ...d, group: e.target.value || undefined }))}>
+            <option value="">Niet groeperen</option>
+            {groupable.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <div className="field">
         <span className="label">

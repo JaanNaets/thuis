@@ -201,6 +201,8 @@ export type ViewDef = {
   date?: string;
   /** Ook de items uit de subprojecten (elk met jouw rechten in zijn eigen project). */
   tree?: boolean;
+  /** Groeperen op een veld (zie `groupItems`), met per groep het aantal en de som. */
+  group?: string;
 };
 /** Een bewaarde weergave; `shared`: voor iedereen in het project; `can_edit`: jij mag ze aanpassen. */
 export type SavedView = { id: string; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
@@ -362,6 +364,86 @@ export function sortItems<T extends ViewItem>(items: T[], sort: SortKey[] | unde
   });
 }
 
+// ---------- volgorde, groeperen en optellen ----------
+
+/**
+ * De volgorde van een lijst: zonder sortering in de weergave een logboek (een datum die met vandaag begint: eten,
+ * gewicht, uitgaven) het nieuwste eerst, anders op naam (zoals de API ze geeft); met sortering die van de weergave.
+ */
+export function orderItems<T extends ViewItem>(items: T[], view: ViewDef, fields: FieldDef[], names: Names): T[] {
+  if (view.sort?.length) return sortItems(items, view.sort, fields, names);
+  const log = fields.find((f) => f.type === "date" && f.today);
+  if (!log) return items;
+  const day = (i: T) => (typeof i.data[log.key] === "string" ? (i.data[log.key] as string) : "");
+  return [...items].sort((a, b) => day(b).localeCompare(day(a)));
+}
+
+const GROUP_KINDS: Kind[] = ["select", "bool", "person", "item", "date"];
+/** Een veld om op te groeperen: één waarde per item (een keuze, ja/nee, een persoon, een verwijzing, een datum). */
+export const canGroup = (key: string, def: FieldDef) => key !== TAGS && key !== NAME && GROUP_KINDS.includes(kindOf(def));
+
+const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+
+export type Group<T> = { key: string; label: string; items: T[] };
+
+/**
+ * Items per groep, in een vaste volgorde: keuzes zoals ze ingesteld zijn, datums per maand (de nieuwste eerst), de rest
+ * op naam; zonder waarde achteraan ("Zonder …"). Binnen een groep blijft de volgorde van `items`.
+ */
+export function groupItems<T extends ViewItem>(items: T[], key: string, fields: FieldDef[], names: Names): Group<T>[] {
+  const def = fields.find((f) => f.key === key);
+  if (!def || !canGroup(key, def)) return [{ key: "", label: "", items }];
+  const kind = kindOf(def);
+  const groups = new Map<string, Group<T>>();
+  for (const item of items) {
+    const v = valueOf(item, key);
+    let k = "";
+    let label = `Zonder ${def.label.toLowerCase()}`;
+    if (kind === "bool") {
+      k = v === true ? "1" : "0";
+      label = v === true ? def.label : `Niet ${def.label.toLowerCase()}`;
+    } else if (!isEmpty(v)) {
+      if (kind === "date" && isDate(v)) {
+        k = v.slice(0, 7);
+        label = `${MONTHS[Number(v.slice(5, 7)) - 1]} ${v.slice(0, 4)}`;
+      } else {
+        k = String(v);
+        label = formatFieldValue(def, v, names);
+      }
+    }
+    if (!groups.has(k)) groups.set(k, { key: k, label, items: [] });
+    groups.get(k)!.items.push(item);
+  }
+  const rank = (g: Group<T>) => (def.type === "select" && def.options ? def.options.indexOf(g.key) : -1);
+  return [...groups.values()].sort((a, b) => {
+    if (!a.key !== !b.key) return a.key ? -1 : 1;
+    if (kind === "bool") return b.key.localeCompare(a.key);
+    if (kind === "date") return b.key.localeCompare(a.key);
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    return a.label.localeCompare(b.label, "nl", { numeric: true });
+  });
+}
+
+/**
+ * Een kolom die optellen zin heeft: bedragen en duur, en een getal met een eenheid dat geen stand is (zakken bijgevuld,
+ * kcal gegeten; niet het aantal in je voorraad, dat een − en + heeft).
+ */
+export function canSum(def: FieldDef): boolean {
+  const type = def.type === "calc" ? def.result : def.type;
+  if (type === "money" || type === "duration") return true;
+  return type === "number" && Boolean(def.unit) && !def.counter;
+}
+
+/** De som van een kolom over items (enkel getallen); null als er geen enkel getal is. */
+export function sumOf(items: ViewItem[], key: string): number | null {
+  let total: number | null = null;
+  for (const i of items) {
+    const v = i.data[key];
+    if (typeof v === "number" && Number.isFinite(v)) total = Math.round(((total ?? 0) + v) * 1000) / 1000;
+  }
+  return total;
+}
+
 /** Een voorwaarde in woorden: "Datum valt in deze week", "Wie is een van jij". */
 export function conditionText(c: Condition, def: FieldDef, names: Names, tagName: (id: string) => string = (id) => id): string {
   const op = OPS[c.op];
@@ -462,6 +544,7 @@ export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
     .map((s) => ({ field: s.field, dir: s.dir }));
   const columns = (Array.isArray(o.columns) ? o.columns : []).filter((k): k is string => typeof k === "string" && byKey.has(k) && !k.startsWith("_")).slice(0, 6);
   const date = typeof o.date === "string" && byKey.has(o.date) && kindOf(byKey.get(o.date)!) === "date" ? o.date : undefined;
+  const group = typeof o.group === "string" && byKey.has(o.group) && canGroup(o.group, byKey.get(o.group)!) ? o.group : undefined;
   return {
     match: o.match === "any" ? "any" : "all",
     conditions,
@@ -469,5 +552,6 @@ export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
     ...(columns.length ? { columns: [...new Set(columns)] } : {}),
     ...(o.mode === "agenda" && date ? { mode: "agenda" as const, date } : {}),
     ...(o.tree === true ? { tree: true } : {}),
+    ...(group ? { group } : {}),
   };
 }

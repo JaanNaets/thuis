@@ -5,17 +5,27 @@
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 
-export type Block =
+export type Block = (
   /** Een project (of subproject) met zijn lijsten; `hide`: de lijsten die je er niet wil zien. */
   | { kind: "project"; project: string; hide?: string[] }
-  /** Eén lijst: hoeveel erin zit, en openen. */
-  | { kind: "list"; project: string; list: string }
+  /**
+   * Eén lijst: hoeveel erin zit, en openen. `view`: een bewaarde weergave (hoeveel daarin zit: "Te kopen 3");
+   * `show: "items"`: de eerste items zelf, als kleine tabel (met − en + bij een voorraad).
+   */
+  | { kind: "list"; project: string; list: string; view?: string; show?: "items" }
   /** Meteen iets toevoegen aan een lijst ("Eten toevoegen"). */
   | { kind: "add"; project: string; list: string }
   /** Een totaal van een lijst (Kcal vandaag, Uitgaven deze maand). */
   | { kind: "total"; project: string; list: string; total: string }
   /** Eén veld van één item, ook een berekening (Pellets · Aantal, Laatst bijgevuld). */
-  | { kind: "value"; item: string; field: string };
+  | { kind: "value"; item: string; field: string }
+) & {
+  /** Breed: over twee kolommen (op tablet en computer). */
+  wide?: true;
+};
+
+/** Zoveel items toont een lijstblok met `show: "items"`. */
+export const BLOCK_ITEMS = 5;
 
 export type BlockKind = Block["kind"];
 
@@ -36,8 +46,9 @@ export function blockKey(b: Block): string {
     case "project":
       return `project/${b.project}`;
     case "list":
+      return `list/${b.project}/${b.list}${b.view ? `/${b.view}` : ""}${b.show ? `/${b.show}` : ""}`;
     case "add":
-      return `${b.kind}/${b.project}/${b.list}`;
+      return `add/${b.project}/${b.list}`;
     case "total":
       return `total/${b.project}/${b.list}/${b.total}`;
     case "value":
@@ -59,13 +70,16 @@ export function cleanBlocks(raw: unknown): Block[] | null {
     if (o.kind === "project" && id(o.project)) {
       const hide = Array.isArray(o.hide) ? [...new Set(o.hide.map(id).filter((x): x is string => x !== null))].slice(0, 60) : [];
       b = { kind: "project", project: o.project as string, ...(hide.length ? { hide } : {}) };
-    } else if ((o.kind === "list" || o.kind === "add") && id(o.project) && id(o.list)) {
-      b = { kind: o.kind, project: o.project as string, list: o.list as string };
+    } else if (o.kind === "list" && id(o.project) && id(o.list)) {
+      b = { kind: "list", project: o.project as string, list: o.list as string, ...(id(o.view) ? { view: o.view as string } : {}), ...(o.show === "items" ? { show: "items" as const } : {}) };
+    } else if (o.kind === "add" && id(o.project) && id(o.list)) {
+      b = { kind: "add", project: o.project as string, list: o.list as string };
     } else if (o.kind === "total" && id(o.project) && id(o.list) && id(o.total)) {
       b = { kind: "total", project: o.project as string, list: o.list as string, total: o.total as string };
     } else if (o.kind === "value" && id(o.item) && typeof o.field === "string" && KEY.test(o.field)) {
       b = { kind: "value", item: o.item as string, field: o.field };
     }
+    if (b && o.wide === true) b = { ...b, wide: true };
     if (!b || seen.has(blockKey(b))) continue;
     seen.add(blockKey(b));
     out.push(b);
