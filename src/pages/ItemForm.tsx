@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type AmountEntry, type Attributes, type CodeValue } from "../../shared/fields";
+import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue } from "../../shared/fields";
 import type { QuickResult, Suggestion } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
 import { today } from "../format";
 import { Segmented, SubmitButton } from "../components/Controls";
-import { attributesDraft, buildAttributes, FieldInputs, fieldSuggestions, findProduct, LabelScanner, type AttributeDraft } from "../components/Fields";
+import { attributesDraft, buildAttributes, draftValue, FieldInputs, fieldSuggestions, findProduct, LabelScanner, type AttributeDraft, type FieldPin } from "../components/Fields";
 import { PageHead } from "../components/Page";
 import type { QuickSource } from "../components/QuickInput";
 import { useQuickFill } from "../components/useQuickFill";
@@ -386,14 +386,106 @@ function ItemForm({
 
   // Geheugen (`remember`): een nieuw item begint met wat jij de vorige keer in die velden invulde, zacht blauw. Wat je
   // typt of zelf invult, wint.
-  const remembers = !item && fields.some((f) => f.remember && type.field_access[f.key] === "edit");
-  const { data: remembered } = useApi<{ data: Attributes }>(remembers ? `/projects/${project.project.id}/items/remembered?type=${type.id}` : null);
+  const remembers = !item && fields.some((f) => f.remember && !f.remember_by && type.field_access[f.key] === "edit");
+  const { data: remembered } = useApi<{ data: Attributes; fixed?: Attributes }>(remembers ? `/projects/${project.project.id}/items/remembered?type=${type.id}` : null);
   const memory = useRef<Attributes | null>(null);
   useEffect(() => {
     if (!remembered || memory.current) return;
     memory.current = remembered.data;
     applyMemory(remembered.data);
+    setFixedNow((f) => ({ ...f, ...Object.fromEntries(fields.filter((d) => d.remember_fixed && !d.remember_by).map((d) => [d.key, remembered.fixed?.[d.key] ?? null])) }));
   }, [remembered]);
+
+  // Geheugen per keuze (`remember_by`): kies of typ je Pasta (de naam of een veld), dan krijgen die velden wat jij de
+  // vorige keer bij Pasta invulde, of hun vaste waarde (`remember_fixed`). Kies je iets anders, dan wisselt het mee;
+  // wat je zelf invulde of typte, wint altijd.
+  const byKeys = useMemo(
+    () => (item ? [] : [...new Set(fields.filter((f) => f.remember && f.remember_by && type.field_access[f.key] === "edit").map((f) => f.remember_by!))]),
+    [fields, item],
+  );
+  const byValue = (by: string): FieldValue | null => {
+    if (by === "name") return name.trim() || null;
+    const def = defOf(by);
+    return def ? (draftValue(def, attrs[by]) ?? null) : null;
+  };
+  /** Vaste waarden van nu, per veld (null = er staat (nog) niets vast voor deze keuze). */
+  const [fixedNow, setFixedNow] = useState<Record<string, FieldValue | null>>({});
+  const memApplied = useRef<Record<string, string[]>>({});
+  const bySeen = useRef<Record<string, string>>({});
+  const bySigs = byKeys.map((by) => JSON.stringify(byValue(by)));
+  useEffect(() => {
+    if (!byKeys.length) return;
+    const timer = setTimeout(() => {
+      byKeys.forEach(async (by, i) => {
+        const sig = bySigs[i];
+        if (bySeen.current[by] === sig) return;
+        bySeen.current[by] = sig;
+        const res =
+          sig === "null"
+            ? { data: {}, fixed: {} }
+            : await api
+                .get<{ data: Attributes; fixed: Attributes }>(`/projects/${project.project.id}/items/remembered?type=${type.id}&by=${encodeURIComponent(by)}&value=${encodeURIComponent(sig)}`)
+                .catch(() => null);
+        if (res && bySeen.current[by] === sig) applyByMemory(by, res);
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [bySigs.join("|")]);
+
+  function applyByMemory(by: string, res: { data: Attributes; fixed: Attributes }) {
+    const keys = fields.filter((f) => f.remember && f.remember_by === by && type.field_access[f.key] === "edit").map((f) => f.key);
+    const free = (k: string) => !touched.current.has(k) && !(k in live.current.set);
+    const set = keys.filter((k) => free(k) && res.data[k] !== undefined);
+    // Wat de vorige keuze invulde en je niet aanraakte, gaat terug naar het begin.
+    const clear = (memApplied.current[by] ?? []).filter((k) => free(k) && res.data[k] === undefined && latest.current.auto.has(k));
+    const drafted = attributesDraft(fields, res.data);
+    const start = fresh();
+    setAttrs((a) => ({ ...a, ...Object.fromEntries(clear.map((k) => [k, start[k]])), ...Object.fromEntries(set.map((k) => [k, drafted[k]])) }));
+    setAuto((a) => new Set([...[...a].filter((k) => !clear.includes(k)), ...set]));
+    memApplied.current[by] = set;
+    setFixedNow((f) => ({ ...f, ...Object.fromEntries(keys.filter((k) => defOf(k)?.remember_fixed).map((k) => [k, res.fixed[k] ?? null])) }));
+  }
+
+  /** Hoe de keuze heet (voor Vastzetten): de naam, een keuze, of de naam van het gekozen item. */
+  function byLabel(by: string, value: FieldValue | null): string | null {
+    if (value === null) return null;
+    if (typeof value === "string") {
+      const def = defOf(by);
+      if (def?.type === "item") return engine.itemName(value) ?? null;
+      if (def?.type === "person") return people.find((p) => p.id === value)?.name ?? null;
+      return value;
+    }
+    if (typeof value === "object" && value && "text" in value) return String((value as { text: unknown }).text);
+    return null;
+  }
+
+  /** Vastzetten: deze waarde staat voortaan vast (voor deze keuze); nog eens tikken haalt ze weg. */
+  async function pin(def: FieldDef, by: FieldValue | null, value: FieldValue | null, label: string | null) {
+    try {
+      await api.put(`/projects/${project.project.id}/items/remembered`, { type: type.id, field: def.key, by_value: by, value });
+      setFixedNow((f) => ({ ...f, [def.key]: value }));
+      toast(value === null ? `${def.label} staat niet meer vast` : `${def.label} staat vast${label ? ` voor ${label}` : ""}`);
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+
+  const pins: Record<string, FieldPin> = {};
+  for (const def of item ? [] : fields) {
+    if (!def.remember || !def.remember_fixed || type.field_access[def.key] !== "edit") continue;
+    const by = def.remember_by ? byValue(def.remember_by) : null;
+    if (def.remember_by && by === null) continue;
+    const value = draftValue(def, attrs[def.key]);
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) continue;
+    const fixed = fixedNow[def.key] ?? null;
+    const pinned = fixed !== null && JSON.stringify(fixed) === JSON.stringify(value);
+    const label = def.remember_by ? byLabel(def.remember_by, by) : null;
+    pins[def.key] = {
+      pinned,
+      label: pinned ? (label ? `Vast voor ${label}` : "Vast") : label ? `Vastzetten voor ${label}` : "Vastzetten",
+      onToggle: () => pin(def, by, pinned ? null : value, label),
+    };
+  }
 
   function applyMemory(data: Attributes) {
     const keys = Object.keys(data).filter((k) => defOf(k)?.remember && type.field_access[k] === "edit" && !touched.current.has(k) && !(k in live.current.set));
@@ -754,6 +846,7 @@ function ItemForm({
             auto={auto}
             suggestions={fieldSuggestions(fields, siblings?.items ?? [])}
             onChange={changeField}
+            pins={pins}
           />
         )}
       </section>

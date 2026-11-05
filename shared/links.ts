@@ -105,6 +105,8 @@ export const FIELD_LINKS = {
   measure: false,
   aliases: false,
   remember: false,
+  remember_by: false,
+  remember_fixed: false,
   remind: false,
   yearly: false,
   remind_at: false,

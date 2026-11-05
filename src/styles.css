@@ -4669,6 +4669,47 @@ dialog.palette[open]::backdrop {
   }
 }
 
+/* Vastzetten (geheugen met een vaste waarde): een kleine speld rechts naast het label. Stil grijs; vast = zwart. */
+.field-pin-wrap {
+  position: relative;
+  display: grid;
+}
+
+.field-pin-wrap > .field .label {
+  padding-right: 28px;
+}
+
+.field-pin {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, transform 0.2s var(--ease-out);
+}
+
+@media (hover: hover) {
+  .field-pin:hover {
+    background: rgb(0 0 0 / 0.04);
+    color: var(--foreground);
+  }
+}
+
+.field-pin:active {
+  transform: scale(0.9);
+}
+
+.field-pin[aria-pressed="true"] {
+  color: var(--primary);
+}
+
 /* Score op 5: sterren, half kan. */
 .score-input {
   display: flex;

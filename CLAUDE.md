@@ -67,7 +67,10 @@ commits en uitleg.
   `matchSuggestions`; items enkel via `GET /items?type=…&q=` of `in=`, nooit een hele lijst) en waar een getal of datum
   naartoe kan (`moveTargets`, `moveValue`); een keuze telt als zelf ingevuld (`setField`, zoals `changeField`), en wat
   je typt wint van overnemen, Vaak, productinfo en een foto. **Geheugen** (`remember` op een veld): een nieuw item
-  begint met jouw laatste waarde (`GET /projects/:id/items/remembered`, enkel velden die je mag wijzigen).
+  begint met jouw laatste waarde of een vaste waarde (`remember_fixed`, tabel `fixed_values`, de eerste keer vanzelf,
+  Vastzetten met `PUT …/items/remembered`), voor alles of per keuze in een ander veld (`remember_by`, `rememberKey`:
+  Hoeveel bij Pasta). `GET /projects/:id/items/remembered` (`?by=&value=`): enkel velden die je mag wijzigen, en
+  een keuze in een veld dat je niet ziet, telt niet.
 - **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
   productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
   verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.

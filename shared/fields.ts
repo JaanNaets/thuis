@@ -152,6 +152,16 @@ export type FieldDef = {
   aliases?: boolean;
   /** Een nieuw item begint met wat jij de vorige keer in dit veld invulde (zie GET /projects/:id/items/remembered). */
   remember?: boolean;
+  /**
+   * Met `remember`: het geheugen per keuze in een ander veld van deze lijst ("name" = de naam): kies je Pasta, dan staat
+   * hier wat jij de vorige keer bij Pasta invulde (300 g). Zie `rememberKey`.
+   */
+  remember_by?: string;
+  /**
+   * Met `remember`: een vaste waarde (per keuze bij `remember_by`) in plaats van de laatste. De eerste keer dat je iets
+   * bewaart, wordt dat de vaste waarde; wat je daarna anders invult, verandert ze niet (dat doet Vastzetten).
+   */
+  remember_fixed?: boolean;
   /** Datum (ook berekend): zoveel dagen vooraf een melding voor wie het mag zien (zie shared/remind.ts). */
   remind?: number;
   /** Datum met `remind`: elk jaar opnieuw (een verjaardag). */
@@ -233,6 +243,43 @@ export function fieldKey(label: string, taken: string[]): string {
   return key;
 }
 
+/** Velden waarop het geheugen per keuze kan (`remember_by`), naast de naam. */
+export const REMEMBER_BY = ["text", "select", "item", "person", "code", "bool"] as const;
+
+/**
+ * De sleutel van een keuze voor het geheugen (`remember_by`): dezelfde voor "Pasta" en "pasta", een id voor een item of
+ * persoon, "t:…" voor vrije tekst in een verwijzing. Leeg of ongeldig: null (dan geen geheugen per keuze).
+ */
+export function rememberKey(type: FieldType | "name", value: unknown): string | null {
+  const fold = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120) || null;
+  const text = (v: unknown) => (typeof v === "string" ? v : v && typeof v === "object" && typeof (v as { text?: unknown }).text === "string" ? (v as { text: string }).text : null);
+  switch (type) {
+    case "name":
+    case "text":
+    case "select":
+    case "code": {
+      const t = text(value);
+      return t === null ? null : fold(t);
+    }
+    case "item":
+      if (typeof value === "string") return /^[A-Za-z0-9-]{1,64}$/.test(value) ? value : null;
+      return text(value) === null ? null : (fold(text(value)!) && `t:${fold(text(value)!)}`) || null;
+    case "person":
+      return typeof value === "string" && /^[A-Za-z0-9-]{1,64}$/.test(value) ? value : null;
+    case "bool":
+      return value === true ? "ja" : value === false ? "nee" : null;
+    default:
+      return null;
+  }
+}
+
 /** De velden van een lijst nakijken (wat de app of iemand anders stuurde). Gooit een fout met uitleg. */
 export function cleanFields(raw: unknown): FieldDef[] {
   if (raw === null || raw === undefined) return [];
@@ -293,7 +340,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
       if (Object.keys(m).length) def.measure = m;
     }
     if (f.aliases === true && type === "text") def.aliases = true;
-    if (f.remember === true && type !== "calc") def.remember = true;
+    if (f.remember === true && type !== "calc") {
+      def.remember = true;
+      if (f.remember_fixed === true) def.remember_fixed = true;
+      if (typeof f.remember_by === "string" && (f.remember_by === "name" || KEY_RE.test(f.remember_by)) && f.remember_by !== key) def.remember_by = f.remember_by;
+    }
     if (typeof f.remind === "number" && Number.isInteger(f.remind) && f.remind >= 0 && f.remind <= 365 && (type === "date" || type === "calc")) {
       def.remind = f.remind;
     }
@@ -347,6 +398,11 @@ export function cleanFields(raw: unknown): FieldDef[] {
     }
     if (f.per && kinds.get(f.per) !== "number") {
       const { per: _p, ...rest } = out;
+      out = rest;
+    }
+    // Geheugen per keuze: enkel per de naam of een veld van deze lijst waarin je kiest.
+    if (f.remember_by && f.remember_by !== "name" && !(REMEMBER_BY as readonly string[]).includes(kinds.get(f.remember_by) ?? "")) {
+      const { remember_by: _b, ...rest } = out;
       out = rest;
     }
     if (f.measure) {

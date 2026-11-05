@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Access } from "../../shared/access";
 import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
@@ -14,6 +14,7 @@ import {
   isCodeFormat,
   normalizeShares,
   parseFieldText,
+  REMEMBER_BY,
   type Attributes,
   type AmountEntry,
   type ChecklistEntry,
@@ -74,6 +75,9 @@ type IntervalDraft = { n: string; unit: IntervalUnit };
 /** Wat in een veld staat terwijl je typt. */
 type DraftValue = string | [string, string] | number | boolean | null | CodeValue | TextValue | SharesDraft | string[] | ChecklistEntry[] | IntervalDraft | AmountEntry[];
 export type AttributeDraft = Record<string, DraftValue>;
+
+/** Vastzetten van een veld: staat de waarde van nu vast (`pinned`), het label (Vastzetten voor Pasta) en de tik. */
+export type FieldPin = { pinned: boolean; label: string; onToggle: () => void };
 
 export function sharesDraft(shares: Share[] | undefined): SharesDraft {
   if (!shares?.length) return { mode: "none", people: [], values: {} };
@@ -178,7 +182,7 @@ export function attributesDraft(defs: FieldDef[], attributes: Attributes): Attri
 }
 
 /** Eén waarde lezen; null = leeg, undefined = niet te lezen (het veld kleurt rood). */
-function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldValue | null | undefined {
+export function draftValue(def: FieldDef, raw: DraftValue | undefined): FieldValue | null | undefined {
   if (raw === undefined || raw === null || raw === "") return null;
   switch (def.type) {
     case "score":
@@ -288,6 +292,7 @@ export function FieldInputs({
   meId,
   auto,
   suggestions,
+  pins,
 }: {
   defs: FieldDef[];
   value: AttributeDraft;
@@ -297,12 +302,27 @@ export function FieldInputs({
   meId: string;
   auto?: Set<string>;
   suggestions?: Record<string, string[]>;
+  /** Vastzetten (geheugen met een vaste waarde, zie ItemForm): een kleine speld naast het label. */
+  pins?: Record<string, FieldPin>;
 }) {
   const set = (key: string, v: DraftValue) => onChange({ ...value, [key]: v }, key);
+  // De speld staat naast het veld (niet in het label: een knop in een label neemt het label over).
+  const withPin = (def: FieldDef, el: ReactNode) => {
+    const pin = pins?.[def.key];
+    if (!pin || !el) return el;
+    return (
+      <div key={def.key} className={`field-pin-wrap ${WIDE.includes(def.type) ? "wide" : ""}`}>
+        {el}
+        <button type="button" className="field-pin" aria-pressed={pin.pinned} aria-label={pin.label} title={pin.label} onClick={pin.onToggle}>
+          <Icon name="pushpin" size={14} />
+        </button>
+      </div>
+    );
+  };
   const computed = useMemo(() => (defs.some((d) => d.type === "calc") ? previewData(defs, value) : {}), [defs, value]);
   return (
     <div className="attr-fields">
-      {defs.map((def) => {
+      {defs.map((def) => withPin(def, (() => {
         const raw = value[def.key];
         const disabled = access[def.key] !== "edit";
         const invalid = draftValue(def, raw) === undefined;
@@ -604,7 +624,7 @@ export function FieldInputs({
             );
           }
         }
-      })}
+      })()))}
     </div>
   );
 }
@@ -1229,6 +1249,14 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
           }
         : {}),
       ...(d.type === "person" && d.me ? { me: true } : {}),
+      // Onthouden: je laatste of een vaste waarde, eventueel per keuze in een ander veld (zie shared/fields.ts).
+      ...(d.remember && d.type !== "calc"
+        ? {
+            remember: true,
+            ...(d.remember_fixed ? { remember_fixed: true } : {}),
+            ...(d.remember_by && d.remember_by !== d.key ? { remember_by: d.remember_by === "name" ? "name" : rename(d.remember_by) } : {}),
+          }
+        : {}),
       ...(d.type === "share" && d.fill ? { fill: true, ...(shares.length ? { default_shares: shares } : {}) } : {}),
       ...(d.hint?.trim() ? { hint: d.hint.trim() } : {}),
     });
@@ -1557,7 +1585,42 @@ export function FieldsEditor({
                   </label>
                   {f.type !== "calc" && <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />}
                   {f.type !== "calc" && (
-                    <Switch checked={Boolean(f.remember)} onChange={(on) => update(i, { remember: on || undefined })} label="Laatste waarde onthouden" />
+                    <div className="field-row">
+                      <label className="field">
+                        <span className="label">Onthouden</span>
+                        <select
+                          value={f.remember ? (f.remember_fixed ? "fixed" : "last") : ""}
+                          onChange={(e) =>
+                            update(
+                              i,
+                              e.target.value
+                                ? { remember: true, remember_fixed: e.target.value === "fixed" || undefined }
+                                : { remember: undefined, remember_fixed: undefined, remember_by: undefined },
+                            )
+                          }
+                        >
+                          <option value="">Niet</option>
+                          <option value="last">Je laatste waarde</option>
+                          <option value="fixed">Een vaste waarde</option>
+                        </select>
+                      </label>
+                      {f.remember && (
+                        <label className="field">
+                          <span className="label">Per</span>
+                          <select value={f.remember_by ?? ""} onChange={(e) => update(i, { remember_by: e.target.value || undefined })}>
+                            <option value="">Voor alles</option>
+                            <option value="name">Naam</option>
+                            {value
+                              .filter((x) => x.key !== f.key && (REMEMBER_BY as readonly string[]).includes(x.type))
+                              .map((x) => (
+                                <option key={x.key} value={x.key}>
+                                  {x.label.trim() || "Naamloos veld"}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
                   )}
                   {f.type === "date" && (
                     <Switch

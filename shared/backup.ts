@@ -150,6 +150,8 @@ export const BACKUP_TABLES = {
   products: false,
   settings: false,
   push_subscriptions: false,
+  // Persoonlijk (zoals het geheugen van je laatste waarden): van die persoon, niet van het project.
+  fixed_values: false,
 } as const;
 
 const ARRAYS = ["people", "projects", "roles", "memberships", "types", "tags", "items", "log", "repeats", "views", "shown", "files"] as const;

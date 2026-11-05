@@ -504,7 +504,15 @@ items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet
 
 Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. Enter vult in met code; voor een hele zin tik je op ✨: die leest de AI.
 
-Per veld kan je in de lijst **Laatste waarde onthouden** aanzetten: een nieuw item begint dan met wat jij de vorige keer koos (zacht blauw), bv. de categorie of het aantal zakken. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
+Per veld kies je in de lijst wat het **onthoudt** (enkel voor jou):
+
+- **Je laatste waarde**: een nieuw item begint met wat jij de vorige keer invulde (zacht blauw), bv. de categorie of
+  het aantal zakken.
+- **Een vaste waarde**: de eerste keer dat je iets bewaart, wordt dat de vaste waarde; wat je daarna eens anders
+  invult, verandert ze niet. Met de punaise naast het veld zet je de waarde van nu vast (nog eens tikken: niet meer vast).
+- **Per**: voor alles samen, of per naam of per keuze in een ander veld. Hoeveel per Naam: kies je Pasta, dan staat er
+  250 g; eet je eens 300 g, dan staat er de volgende keer toch weer 250 g (vast), of 300 g (laatste waarde). Kies je
+  iets anders, dan wisselt het mee. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
 
 ### Snel naar het juiste formulier
 

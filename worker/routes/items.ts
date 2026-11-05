@@ -12,6 +12,7 @@ import {
   MAX_REF_LISTS,
   referencedPeople,
   refLists,
+  rememberKey,
   repeatData,
   type Attributes,
   type AmountEntry,
@@ -44,6 +45,15 @@ export const search = new Hono<AppEnv>();
 export type ItemRow = Omit<Item, "data" | "tag_ids"> & { data: string; tag_json: string; applied?: string | null };
 
 export const ITEM_SELECT = `SELECT i.*, (SELECT json_group_array(tag_id) FROM item_tags WHERE item_id = i.id) AS tag_json FROM items i`;
+
+/** Eén bewaarde waarde (JSON), of null als ze niet te lezen is. */
+function parseJsonValue(json: string): unknown {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
 function parseData(json: string): Attributes {
   try {
@@ -384,19 +394,23 @@ projectItems.post("/:id/items", async (c) => {
   const id = crypto.randomUUID();
   // Verwijzingen die tellen (bv. eten uit de voorraad): samen met het item, of niets.
   const applied = await computeEffects(db, me, access.rights, type, { id, project_id: access.project.id }, data);
+  const name = nameOrDefault(type, input.name, data);
   await db.batch([
     db
       .prepare("INSERT INTO items (id, project_id, type_id, name, data, created_by, applied) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, access.project.id, type.id, nameOrDefault(type, input.name, data), JSON.stringify(data), me, applied.length ? JSON.stringify(applied) : null),
+      .bind(id, access.project.id, type.id, name, JSON.stringify(data), me, applied.length ? JSON.stringify(applied) : null),
     ...tagStatements(db, id, input.tag_ids),
     ...(await effectStatements(db, me, applied, true)),
+    ...firstFixedStatements(db, me, access.rights, type, name, data),
   ]);
   return c.json(await loadDetail(c, id), 201);
 });
 
 /**
- * Geheugen per veld (`remember`): voor een nieuw item in deze lijst, per veld de laatste waarde die jij invulde (uit je
- * nieuwste items van deze lijst in dit project), enkel van velden die je nu mag wijzigen en zien.
+ * Geheugen per veld (`remember`): voor een nieuw item in deze lijst, per veld je vaste waarde (`remember_fixed`) of de
+ * laatste waarde die jij invulde (uit je nieuwste items van deze lijst in dit project), enkel van velden die je nu mag
+ * wijzigen en zien. Met `?by=` (de naam of een veld) en `?value=` (de keuze, als JSON): de velden die per die keuze
+ * onthouden (`remember_by`), bv. Hoeveel bij Pasta. `fixed`: wat er vaststaat (voor Vastzetten in het formulier).
  */
 projectItems.get("/:id/items/remembered", async (c) => {
   const db = c.env.DB;
@@ -405,23 +419,102 @@ projectItems.get("/:id/items/remembered", async (c) => {
   const types = await typesFor(db, access.chain);
   const type = types.find((t) => t.id === c.req.query("type") && typeAccess(access.rights, t.id) !== "none");
   if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
-  const keys = type.fields.filter((f) => f.remember && f.type !== "calc" && fieldAccess(access.rights, type.id, f.key) === "edit").map((f) => f.key);
-  if (!keys.length) return c.json({ data: {} });
-  const { results } = await db
-    .prepare("SELECT data FROM items WHERE project_id = ? AND type_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT 20")
-    .bind(access.project.id, type.id, me)
-    .all<{ data: string }>();
-  const data: Attributes = {};
-  for (const row of results) {
-    const values = parseData(row.data);
-    for (const k of keys) {
-      const v = values[k];
-      if (!(k in data) && v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) data[k] = v;
-    }
-    if (keys.every((k) => k in data)) break;
+  const by = c.req.query("by") ?? "";
+  const none = { data: {}, fixed: {} };
+  const fields = type.fields.filter((f) => f.remember && f.type !== "calc" && (f.remember_by ?? "") === by && fieldAccess(access.rights, type.id, f.key) === "edit");
+  if (!fields.length) return c.json(none);
+  // De keuze zelf: een veld dat je niet ziet, telt niet.
+  const byDef = by && by !== "name" ? type.fields.find((f) => f.key === by) : undefined;
+  if (by && by !== "name" && (!byDef || fieldAccess(access.rights, type.id, by) === "none")) return c.json(none);
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(c.req.query("value") ?? "null");
+  } catch {
+    raw = null;
   }
-  return c.json({ data: visibleData(access.rights, type.id, type.fields, data) });
+  const key = by ? rememberKey(byDef ? byDef.type : "name", raw) : "";
+  if (key === null) return c.json(none);
+  const fixed: Attributes = {};
+  if (fields.some((f) => f.remember_fixed)) {
+    const { results } = await db
+      .prepare("SELECT field_key, value FROM fixed_values WHERE person_id = ? AND type_id = ? AND by_value = ?")
+      .bind(me, type.id, key)
+      .all<{ field_key: string; value: string }>();
+    for (const row of results) {
+      const def = fields.find((f) => f.key === row.field_key && f.remember_fixed);
+      const v = def ? cleanAttributes([def], { [def.key]: parseJsonValue(row.value) })[def.key] : undefined;
+      if (def && v !== undefined && v !== null) fixed[def.key] = v;
+    }
+  }
+  const data: Attributes = { ...fixed };
+  const open = fields.filter((f) => !(f.key in data)).map((f) => f.key);
+  if (open.length) {
+    const { results } = await db
+      .prepare("SELECT name, data FROM items WHERE project_id = ? AND type_id = ? AND created_by = ? ORDER BY created_at DESC LIMIT ?")
+      .bind(access.project.id, type.id, me, by ? 200 : 20)
+      .all<{ name: string; data: string }>();
+    for (const row of results) {
+      const values = parseData(row.data);
+      if (by && rememberKey(byDef ? byDef.type : "name", by === "name" ? row.name : values[by]) !== key) continue;
+      for (const k of open) {
+        const v = values[k];
+        if (!(k in data) && v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)) data[k] = v;
+      }
+      if (open.every((k) => k in data)) break;
+    }
+  }
+  return c.json({ data: visibleData(access.rights, type.id, type.fields, data), fixed: visibleData(access.rights, type.id, type.fields, fixed) });
 });
+
+/**
+ * Vastzetten (`remember_fixed`): deze waarde staat voortaan vast in dit veld (voor jou, en per keuze bij `remember_by`),
+ * ook als je ze eens anders invult. `value: null` haalt de vaste waarde weg (dan weer je laatste waarde).
+ */
+projectItems.put("/:id/items/remembered", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const access = await requireProject(db, me, c.req.param("id"));
+  const obj = asObject(await c.req.json());
+  const type = (await typesFor(db, access.chain)).find((t) => t.id === obj.type && typeAccess(access.rights, t.id) !== "none");
+  if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
+  const def = type.fields.find((f) => f.key === obj.field && f.remember && f.remember_fixed);
+  if (!def || fieldAccess(access.rights, type.id, def.key) !== "edit") throw new ForbiddenError("Dit veld kan je niet vastzetten.");
+  const byDef = def.remember_by && def.remember_by !== "name" ? type.fields.find((f) => f.key === def.remember_by) : undefined;
+  if (byDef && fieldAccess(access.rights, type.id, byDef.key) === "none") throw new ForbiddenError("Dit veld kan je niet vastzetten.");
+  const key = def.remember_by ? rememberKey(byDef ? byDef.type : "name", obj.by_value) : "";
+  if (key === null) throw new ValidationError("Kies eerst waarvoor het vaststaat.");
+  if (obj.value === null) {
+    await db.prepare("DELETE FROM fixed_values WHERE person_id = ? AND type_id = ? AND field_key = ? AND by_value = ?").bind(me, type.id, def.key, key).run();
+    return c.json({ ok: true });
+  }
+  const value = cleanAttributes([def], { [def.key]: obj.value })[def.key];
+  if (value === undefined || value === null || value === "") throw new ValidationError(`${def.label}: die waarde klopt niet.`);
+  await db
+    .prepare(
+      `INSERT INTO fixed_values (person_id, type_id, field_key, by_value, value) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (person_id, type_id, field_key, by_value) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+    )
+    .bind(me, type.id, def.key, key, JSON.stringify(value))
+    .run();
+  return c.json({ ok: true });
+});
+
+/** De eerste keer dat je iets bewaart in een veld met een vaste waarde (`remember_fixed`), wordt dat de vaste waarde. */
+function firstFixedStatements(db: D1Database, me: string, rights: Rights, type: ItemType, name: string, data: Attributes): D1PreparedStatement[] {
+  return type.fields.flatMap((f) => {
+    const v = data[f.key];
+    if (!f.remember || !f.remember_fixed || v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length)) return [];
+    if (fieldAccess(rights, type.id, f.key) !== "edit") return [];
+    const byDef = f.remember_by && f.remember_by !== "name" ? type.fields.find((x) => x.key === f.remember_by) : undefined;
+    const key = f.remember_by ? rememberKey(byDef ? byDef.type : "name", f.remember_by === "name" ? name : data[f.remember_by]) : "";
+    if (key === null) return [];
+    return [
+      db
+        .prepare("INSERT INTO fixed_values (person_id, type_id, field_key, by_value, value) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
+        .bind(me, type.id, f.key, key, JSON.stringify(v)),
+    ];
+  });
+}
 
 /**
  * Een lijst als CSV (?type=), zoals jij ze ziet: de velden die je mag zien, met de berekeningen, de namen van personen

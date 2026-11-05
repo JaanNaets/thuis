@@ -195,6 +195,13 @@ const FILLED = {
 
 /** Lijniconen, tekenvlak 24 × 24. */
 const LINES = {
+  // Vastzetten (een vaste waarde in een veld): een punaise, niet de speld van een plaats.
+  pushpin: (
+    <>
+      <path d="M12 17v5" />
+      <path d="M5 17h14v-1.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.8a2 2 0 0 1-1.1 1.7l-1.8.9A2 2 0 0 0 5 15.2Z" />
+    </>
+  ),
   plus: (
     <>
       <path d="M5 12h14" />

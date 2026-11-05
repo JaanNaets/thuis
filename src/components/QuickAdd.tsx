@@ -53,7 +53,7 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
   const projectId = project.project.id;
   const fields = useMemo(() => type.fields.filter((f) => f.type !== "calc" && type.field_access[f.key] === "edit"), [type]);
   const people = useMemo(() => project.members.map((m) => m.person), [project]);
-  const remembers = fields.some((f) => f.remember);
+  const remembers = fields.some((f) => f.remember && !f.remember_by);
   const { data: remembered } = useApi<{ data: Attributes }>(remembers ? `/projects/${projectId}/items/remembered?type=${type.id}` : null);
   const [copy, setCopy] = useState<{ id: string; name: string; data: Attributes } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,14 +67,16 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
    * Wat het blok bewaart: wat de velden zelf invullen, je geheugen, wat een gekozen item overneemt (`copy`), je tekst
    * en je keuzes (die winnen); hoeveelheden uit een recept rekenen mee met de porties.
    */
-  function compose(read: QuickResult | null, list: Suggestion[], copied: typeof copy): Attributes {
+  function compose(read: QuickResult | null, list: Suggestion[], copied: typeof copy, mem: Attributes = {}): Attributes {
     const start: Attributes = Object.fromEntries(fields.filter((f) => f.today).map((f) => [f.key, today()]));
     const data: Attributes = {
       ...applyFieldDefaults(fields, start, people.map((p) => p.id), person.id, true),
-      ...Object.fromEntries(Object.entries(remembered?.data ?? {}).filter(([k]) => defOf(k)?.remember)),
+      ...Object.fromEntries(Object.entries(remembered?.data ?? {}).filter(([k]) => defOf(k)?.remember && !defOf(k)?.remember_by)),
     };
     const typed = new Set([...Object.keys(read?.data ?? {}), ...list.map((p) => p.field)]);
     if (copied) for (const [k, v] of Object.entries(copied.data)) if (!typed.has(k)) data[k] = v;
+    // Geheugen per keuze (Hoeveel bij Pasta) wint van overnemen; wat je typte, wint van alles.
+    for (const [k, v] of Object.entries(mem)) if (!typed.has(k) && defOf(k)?.remember_by) data[k] = v;
     Object.assign(data, read?.data ?? {});
     for (const p of list) {
       const def = defOf(p.field);
@@ -128,16 +130,37 @@ function QuickAddForm({ project, type }: { project: ProjectDetail; type: ItemTyp
   }, [copyId]);
 
   const copied = copy && copy.id === copyId ? copy : null;
+
+  // Geheugen per keuze (`remember_by`): wat jij de vorige keer bij deze keuze invulde, of de vaste waarde.
+  const byKeys = useMemo(() => [...new Set(fields.filter((f) => f.remember && f.remember_by).map((f) => f.remember_by!))], [fields]);
+  const bySigs = byKeys.map((by) => JSON.stringify(by === "name" ? nameOf(result, picks, copied).trim() || null : (own[by] ?? null)));
+  const [byMem, setByMem] = useState<Record<string, { sig: string; data: Attributes }>>({});
+  useEffect(() => {
+    let stale = false;
+    byKeys.forEach((by, i) => {
+      const sig = bySigs[i];
+      if (byMem[by]?.sig === sig) return;
+      if (sig === "null") return setByMem((m) => ({ ...m, [by]: { sig, data: {} } }));
+      api.get<{ data: Attributes }>(`/projects/${projectId}/items/remembered?type=${type.id}&by=${encodeURIComponent(by)}&value=${encodeURIComponent(sig)}`).then(
+        (r) => !stale && setByMem((m) => ({ ...m, [by]: { sig, data: r.data } })),
+        () => {},
+      );
+    });
+    return () => {
+      stale = true;
+    };
+  }, [bySigs.join("|")]);
+  const mem: Attributes = Object.assign({}, ...byKeys.map((by, i) => (byMem[by]?.sig === bySigs[i] ? byMem[by].data : {})));
   const missingIn = (data: Attributes, name: string) =>
     type.fields.some((f) => f.required && type.field_access[f.key] === "edit" && empty(data[f.key])) || (!logbook && !name.trim());
-  const missing = missingIn(compose(result, picks, copied), nameOf(result, picks, copied));
+  const missing = missingIn(compose(result, picks, copied, mem), nameOf(result, picks, copied));
   const typed = Boolean(note.trim());
 
   async function save() {
     // Wat je nog typte, eerst lezen.
     const read = engine.pending() ? await engine.flush() : engine.latest().result;
     const list = engine.latest().picks;
-    const data = compose(read, list, copied);
+    const data = compose(read, list, copied, mem);
     const name = nameOf(read, list, copied);
     if (missingIn(data, name)) return navigate(addPath({ project_id: projectId, type_id: type.id }, engine.latest().note));
     const input: ItemInput = { type_id: type.id, name: name.trim(), data, tag_ids: [] };
