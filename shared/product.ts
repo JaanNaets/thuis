@@ -136,3 +136,69 @@ export function productData(fields: FieldDef[], info: ProductInfo): Attributes {
 /** Hoe de app een product noemt: "Nutella (Ferrero)". */
 export const productLabel = (info: ProductInfo) =>
   info.brand && !info.name.toLowerCase().includes(info.brand.toLowerCase()) ? `${info.name} (${info.brand})` : info.name;
+
+// ---------- voedingswaarde schatten (snel invullen met ✨) ----------
+
+/** Een voedingswaarde waar de AI naar vraagt, met wat ze betekent. */
+export const FOOD_ASK: Partial<Record<ProductKey, string>> = {
+  kcal: "energie in kcal per 100 g (of 100 ml)",
+  protein: "eiwitten in g per 100 g",
+  carbs: "koolhydraten in g per 100 g",
+  sugars: "waarvan suikers in g per 100 g",
+  fat: "vetten in g per 100 g",
+  saturated: "waarvan verzadigd vet in g per 100 g",
+  fiber: "vezels in g per 100 g",
+  salt: "zout in g per 100 g",
+  serving: "hoeveel één gewone portie weegt, in g of ml (een kom soep 250, een appel 150, een snee brood 35)",
+};
+
+export type FoodQuestion = { asked: ProductKey[]; amount?: string; schema: Record<string, unknown>; prompt: string };
+
+/**
+ * De vraag aan de AI naar de voedingswaarde van wat iemand at, zoals een voedingstabel ze geeft: enkel wat de velden
+ * met productinfo vragen, en hoeveel er gegeten werd (het getal met porties). Geen productinfo: null.
+ */
+export function foodQuestion(fields: FieldDef[]): FoodQuestion | null {
+  const asked = [...new Set(fields.flatMap((f) => (f.type === "number" && f.product && FOOD_ASK[f.product] ? [f.product] : [])))];
+  if (!asked.length) return null;
+  const amount = fields.find((f) => f.type === "number" && f.portion)?.key;
+  const properties: Record<string, unknown> = {
+    kind: { type: "string", enum: ["product", "dish", "unknown"] },
+    brand: { type: ["string", "null"] },
+    ...Object.fromEntries(asked.map((k) => [k, { type: "number" }])),
+    ...(amount ? { hoeveel: { type: "number" } } : {}),
+  };
+  const prompt = `Je bent een voedingstabel zoals NEVO. Je krijgt een notitie van wat iemand at of dronk, en wat het is.
+- kind: "product" voor een verpakt product van een merk, "dish" voor een gerecht of gewoon voedingsmiddel (groentesoep, een appel, spaghetti bolognese), "unknown" als het niets eetbaars is
+- brand: het merk als de notitie het noemt, anders null
+${asked.map((k) => `- ${k}: ${FOOD_ASK[k]}`).join("\n")}${amount ? `\n- hoeveel: hoeveel er gegeten of gedronken werd in g of ml, zoals in de notitie ("een kom" is één kom, "300 g" is 300); staat er niets, dan één gewone portie` : ""}
+Geef realistische gemiddelde waarden voor hoe dit meestal gemaakt of verkocht wordt, nooit 0 tenzij het echt 0 is (zoals vet in water). Voorbeeld: groentesoep is ongeveer 30 kcal, 1,2 g eiwitten, 4 g koolhydraten en 1 g vet per 100 g, een portie 250 g.`;
+  return { asked, amount, schema: { type: "object", properties, required: Object.keys(properties), additionalProperties: false }, prompt };
+}
+
+/**
+ * Het antwoord van de AI in de velden: elke gevraagde voedingswaarde in het veld met die productinfo, en hoeveel in
+ * het getal met porties. Zonder energie (of niets eetbaars) is het geen schatting: dan blijft alles leeg.
+ */
+export function foodAnswer(
+  fields: FieldDef[],
+  question: Pick<FoodQuestion, "asked" | "amount">,
+  parsed: Record<string, unknown>,
+): { kind: "product" | "dish" | "unknown"; brand: string | null; estimated: boolean; raw: Attributes } {
+  const kind = parsed.kind === "product" || parsed.kind === "dish" ? parsed.kind : "unknown";
+  const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim().slice(0, 80) : null;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 100_000 ? v : null);
+  const kcal = num(parsed.kcal);
+  const estimated = kind !== "unknown" && (!question.asked.includes("kcal") || (kcal !== null && kcal > 0));
+  const raw: Attributes = {};
+  if (estimated) {
+    for (const f of fields) {
+      if (f.type !== "number" || !f.product || !question.asked.includes(f.product)) continue;
+      const v = num(parsed[f.product]);
+      if (v !== null) raw[f.key] = Math.round(v * 10) / 10;
+    }
+    const eaten = num(parsed.hoeveel);
+    if (question.amount && eaten) raw[question.amount] = Math.round(eaten);
+  }
+  return { kind, brand, estimated, raw };
+}

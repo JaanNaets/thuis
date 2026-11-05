@@ -27,7 +27,7 @@ import { withCalcs } from "../compute";
 import { nevoByName, productByCode, productByName } from "../products";
 import { nevoCredit } from "../../shared/nevo";
 import { NEVO_DATA } from "../../shared/nevo-data";
-import { isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
+import { foodAnswer, foodQuestion, isProductCode, PRODUCT_KEYS, productData, productLabel } from "../../shared/product";
 import { accessibleProjects, placeholders, projectAccess, requireProject, toItemType, typesFor, type ProjectAccess, type TypeRow } from "../context";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, idList, NotFoundError, optionalString, requiredDate, requiredId, requiredString, ValidationError } from "../validate";
@@ -1140,6 +1140,29 @@ function labelSchema(fields: FieldDef[]) {
   return { type: "object", properties, required: Object.keys(properties), additionalProperties: false };
 }
 
+/**
+ * De voedingswaarde van wat in een notitie staat ("groentesoep", "een kom groentesoep"), in een eigen vraag aan de
+ * AI zoals een voedingstabel ze geeft (zie `foodQuestion` en `foodAnswer` in shared/product.ts).
+ */
+async function estimateFood(env: AppEnv["Bindings"], fields: FieldDef[], text: string, name: string) {
+  const question = foodQuestion(fields);
+  if (!question) return null;
+  const result = await env.AI.run(MODEL, {
+    messages: [
+      { role: "system", content: question.prompt },
+      { role: "user", content: `Notitie: "${text.replace(/"/g, "'")}"\nWat het is: ${name}` },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "food", schema: question.schema, strict: true } },
+    chat_template_kwargs: { enable_thinking: false },
+    temperature: 0,
+    max_tokens: 300,
+  });
+  const content = result.choices?.[0]?.message?.content;
+  const parsed = ((typeof content === "string" ? safeJson(content) : content) ?? {}) as Record<string, unknown>;
+  const answer = foodAnswer(fields, question, parsed);
+  return { ...answer, data: cleanAttributes(fields, answer.raw) };
+}
+
 function describeField(f: FieldDef): string {
   const extra =
     {
@@ -1208,30 +1231,12 @@ projectItems.post("/:id/items/read", async (c) => {
   if (limit) return c.json({ ...empty, message: limit });
   const fields = type.fields.filter((f) => READABLE.includes(f.type) && fieldAccess(access.rights, type.id, f.key) === "edit");
   const schema = labelSchema(fields);
-  // Een lijst met productinfo (Eten): de AI herkent ook in tekst wat het is ("groentesoep") en schat de voedingswaarde
-  // per 100 g en hoeveel (staat het er niet, één gewone portie), zoals bij een foto; een gekend product of
-  // voedingsmiddel krijgt daarna de echte gegevens. Andere getallen raadt ze nooit.
-  const products = fields.some((f) => f.product);
-  // Wat geschat mag: de voedingswaarden (productinfo) en hoeveel je at (het getal met porties).
-  const estimated = products ? fields.filter((f) => f.type === "number" && (f.product || f.portion)) : [];
-  if (products) {
-    Object.assign(schema.properties, {
-      kind: { type: "string", enum: ["product", "dish", "unknown"] },
-      brand: { type: ["string", "null"] },
-      ...Object.fromEntries(estimated.map((f) => [f.key, { type: "number" }])),
-    });
-    schema.required = Object.keys(schema.properties);
-  }
   const prompt = `Je krijgt een korte notitie van iemand die iets bijhoudt in de lijst "${type.plural}". Haal er de velden uit.
-Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum${estimated.length ? ` (behalve ${estimated.map((f) => f.key).join(", ")}: zie onder)` : ""}. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
-- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)${products ? ", bij een verpakt product de naam met merk en smaak" : ""}
-${products ? `- kind: "product" voor een verpakt product van een merk, "dish" voor een gerecht of gewoon voedingsmiddel (groentesoep, een appel, spaghetti), anders "unknown"
-- brand: het merk als de notitie het noemt, anders null
-` : ""}${fields.map((f) => describeField(f) + (f.product ? ` (${PRODUCT_KEYS[f.product].label})` : "")).join("\n")}${
-    estimated.length
-      ? `\nVul ${estimated.map((f) => f.key).join(" en ")} altijd in: de waarden per 100 g of 100 ml zoals een voedingstabel ze geeft voor wat er staat, en hoeveel zoals in de notitie (300 g, een kom, twee sneden) of anders één gewone portie, in g of ml. Bij "unknown" mag je 0 geven.`
-      : ""
-  }`;
+Gebruik null voor wat er niet in staat; raad nooit een getal, bedrag of datum. Vandaag is ${today}: "gisteren", "maandag" of "21-10" zijn datums (YYYY-MM-DD).
+- name: ${type.name_label ?? `naam van de ${type.name.toLowerCase()}`}: kort wat het is (zonder datum of hoeveelheid)
+${fields.map(describeField).join("\n")}`;
+  // Een lijst met productinfo (Eten): daarna een tweede, eigen vraag naar de voedingswaarde (zie `estimateFood`).
+  const products = fields.some((f) => f.product);
   try {
     const result = await c.env.AI.run(MODEL, {
       messages: [
@@ -1258,20 +1263,22 @@ ${products ? `- kind: "product" voor een verpakt product van een merk, "dish" vo
       if (f.type === "item" && f.free && !(f.key in refs.data) && typeof parsed[f.key] === "string" && (parsed[f.key] as string).trim())
         raw[f.key] = { text: parsed[f.key] };
     }
-    // Niets eetbaars herkend: dan zijn de verplichte schattingen niets waard.
-    if (parsed.kind === "unknown") for (const f of estimated) raw[f.key] = null;
     const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 200) : null;
     const create = refs.create.filter((r) => !fields.find((f) => f.key === r.key)?.free);
     const scan: LabelScan = { name, data: cleanAttributes(fields, raw), ...(create.length ? { create } : {}) };
-    if (products && name && parsed.kind !== "unknown") {
-      // Zoals bij een foto: een verpakt product in Open Food Facts (op naam en merk), een gerecht of gewoon
-      // voedingsmiddel in NEVO. Lukt dat niet, dan blijft de schatting staan, en dat zeggen we ook.
-      const brand = typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : null;
-      const info = parsed.kind === "product" ? await productByName(db, name, brand).catch(() => null) : !brand ? nevoByName(name) : null;
-      if (info) {
-        Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
-        scan.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
-      } else if (estimated.some((f) => scan.data[f.key] !== undefined)) scan.source = { kind: "estimate" };
+    if (products && name) {
+      // Wat het is: eerst de schatting (zoals een voedingstabel), dan de echte gegevens als we het kennen: een verpakt
+      // product in Open Food Facts (op naam en merk), een gerecht of gewoon voedingsmiddel in NEVO.
+      const food = await estimateFood(c.env, fields, text, name).catch(() => null);
+      if (food) {
+        // Wat de notitie zelf zei (300 g), wint van een gewone portie.
+        Object.assign(scan.data, Object.fromEntries(Object.entries(food.data).filter(([k]) => scan.data[k] === undefined)));
+        const info = food.kind === "product" ? await productByName(db, name, food.brand).catch(() => null) : !food.brand ? nevoByName(name) : null;
+        if (info) {
+          Object.assign(scan.data, cleanAttributes(fields, productData(fields, info)));
+          scan.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
+        } else if (food.estimated) scan.source = { kind: "estimate" };
+      }
     }
     return c.json(scan);
   } catch (err) {

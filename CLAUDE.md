@@ -59,8 +59,9 @@ commits en uitleg.
 - **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
   velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
   en wat de code vond, wint; de AI enkel met ✨. In een lijst met productinfo herkent de AI ook in tekst wat het is
-  ("groentesoep"): ze schat de voedingswaarde en hoeveel (anders één gewone portie), en daarna komen de echte gegevens
-  uit NEVO of Open Food Facts zoals bij een foto (`source`: databank of geschat); andere getallen raadt ze nooit. **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
+  ("groentesoep"): in een tweede, eigen vraag (`foodQuestion`, `foodAnswer` in `shared/product.ts`) schat ze de
+  voedingswaarde en hoeveel (anders één gewone portie; zonder energie of alles 0 telt het niet), en daarna komen de echte
+  gegevens uit NEVO of Open Food Facts zoals bij een foto (`source`: databank of geschat); andere getallen raadt ze nooit. **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
   (`AiMark`), ze start nooit vanzelf (ook een gedeelde foto wacht), de melding zegt "met AI", en per persoon staat ze
   aan of uit (`AppSettings.ai`, `PUT /me/ai`, `useSession().ai`); uit = geen ✨-knoppen en `useAiBudget` weigert. Alles daarna gewoon door het formulier en `prepareData`. De code vult
   **live** in (één motor voor formulier en blok: `useQuickFill`; `ItemForm` zet de lezing in zijn velden met `applyLive`,

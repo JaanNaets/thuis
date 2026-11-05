@@ -83,3 +83,31 @@ test("productinfo in de velden van een lijst", () => {
   );
   assert.deepEqual(productData(fields, { ...fromOff(nutella)!, brand: "Ferrero" }), { kcal_100: 539, merk: "Ferrero", suiker: 56.3 });
 });
+
+test("Voedingswaarde schatten: enkel wat de velden vragen, en hoeveel in het getal met porties", async () => {
+  const { foodAnswer, foodQuestion } = await import("../shared/product.ts");
+  const eten: import("../shared/fields.ts").FieldDef[] = [
+    { key: "kcal_100", label: "kcal per 100 g", type: "number", product: "kcal" },
+    { key: "eiwit_100", label: "Eiwit per 100 g", type: "number", product: "protein" },
+    { key: "vet_100", label: "Vet per 100 g", type: "number", product: "fat" },
+    { key: "portie", label: "Portie", type: "number", product: "serving" },
+    { key: "gram", label: "Hoeveel", type: "number", portion: "portie" },
+    { key: "naam", label: "Merk", type: "text", product: "brand" },
+  ];
+  const q = foodQuestion(eten)!;
+  assert.deepEqual(q.asked, ["kcal", "protein", "fat", "serving"]);
+  assert.equal(q.amount, "gram");
+  assert.deepEqual((q.schema as { required: string[] }).required, ["kind", "brand", "kcal", "protein", "fat", "serving", "hoeveel"]);
+  // Groentesoep: geschat, met één portie als hoeveel.
+  const soup = foodAnswer(eten, q, { kind: "dish", brand: null, kcal: 31.4, protein: 1.23, fat: 1, serving: 250, hoeveel: 250 });
+  assert.equal(soup.estimated, true);
+  assert.deepEqual(soup.raw, { kcal_100: 31.4, eiwit_100: 1.2, vet_100: 1, portie: 250, gram: 250 });
+  // Alles 0 (de AI wist het niet): geen schatting, niets ingevuld.
+  const zero = foodAnswer(eten, q, { kind: "dish", brand: null, kcal: 0, protein: 0, fat: 0, serving: 0, hoeveel: 0 });
+  assert.equal(zero.estimated, false);
+  assert.deepEqual(zero.raw, {});
+  // Niets eetbaars: ook niets.
+  assert.equal(foodAnswer(eten, q, { kind: "unknown", kcal: 100 }).estimated, false);
+  // Een lijst zonder productinfo: geen vraag.
+  assert.equal(foodQuestion([{ key: "bedrag", label: "Bedrag", type: "money" }]), null);
+});
