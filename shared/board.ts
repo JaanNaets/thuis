@@ -91,6 +91,20 @@ export function cleanBlocks(raw: unknown): Block[] | null {
   return out;
 }
 
+export type QuickBlock = Extract<Block, { kind: "quick" }>;
+
+/** De blokken zoals het overzicht ze tekent: Snel loggen na elkaar staat samen (een rij knoppen), de rest los. */
+export function segmentBlocks(blocks: Block[]): (Block | QuickBlock[])[] {
+  const out: (Block | QuickBlock[])[] = [];
+  for (const b of blocks) {
+    const last = out[out.length - 1];
+    if (b.kind !== "quick") out.push(b);
+    else if (Array.isArray(last)) last.push(b);
+    else out.push([b]);
+  }
+  return out;
+}
+
 /** Een sleutel per blok (om dubbels te weren en in React). */
 export function blockKey(b: Block): string {
   switch (b.kind) {

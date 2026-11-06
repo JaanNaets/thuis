@@ -5310,20 +5310,6 @@ dialog.palette[open]::backdrop {
 }
 
 /* De kop van een projectkaart opent het project (een rij zonder lijn eronder, de lijsten volgen ingezet). */
-/* Snel toevoegen op je overzicht (QuickAdd): het invulveld met Bewaar onder de kop; een kaart waarin je typt, komt
-   niet omhoog bij aanwijzen. */
-.quick-add-body {
-  display: grid;
-  gap: 8px;
-  padding: 2px 18px 16px;
-}
-
-@media (hover: hover) {
-  .dash-card.quick-add:hover {
-    transform: none;
-  }
-}
-
 .dash-head {
   display: flex;
   align-items: center;
@@ -7719,9 +7705,87 @@ label.lm-row-main {
   color: var(--destructive);
 }
 
-/* Snel loggen in een blok: het zoekveld van de zijbalk, over de hele breedte. */
-.quick-open {
-  width: 100%;
+/*
+ * Snel loggen op het overzicht (QuickGroup in Board.tsx): één knop per soort, met haar icoon op de tint van de lijst en
+ * een + rechts. Knoppen na elkaar staan naast elkaar: twee per rij op gsm, vier in een breed blok op tablet.
+ */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: 10px;
+}
+
+/* Eén knop alleen: over de hele breedte van zijn blok. */
+.quick-grid:has(> :only-child) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.quick-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 10px 12px 10px 10px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur);
+}
+
+.quick-tile .row-media {
+  width: 32px;
+  height: 32px;
+}
+
+.quick-tile-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-tile-plus {
+  flex: none;
+  color: var(--muted-foreground);
+  transition: color var(--dur);
+}
+
+@media (hover: hover) {
+  .quick-tile:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .quick-tile:hover .quick-tile-plus {
+    color: var(--foreground);
+  }
+}
+
+.quick-tile:active {
+  transform: scale(0.98);
+}
+
+.quick-tile:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-card), var(--focus-ring);
+}
+
+.quick-tile.is-loading {
+  background: var(--muted);
+  box-shadow: none;
+  cursor: default;
 }
 
 /* Lijnen van een gebeurtenis (LinesEditor): per lijn een wit kaartje in de groep, bovenaan wat er gebeurt en met wat,

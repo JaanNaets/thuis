@@ -3,7 +3,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, type Block, type BoardInfo } from "../../shared/board";
+import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, segmentBlocks, type Block, type BoardInfo, type QuickBlock } from "../../shared/board";
 import { CHART_AGGS, CHART_FORMS, CHART_STEPS, computeChart, isDateField, isGroupField, isNumberField, type ChartDef, type ChartForm, type ChartStep } from "../../shared/charts";
 import type { Transfer } from "../../shared/ledger";
 import { logFields, logItem } from "../../shared/logview";
@@ -213,9 +213,9 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
         />
       ) : (
         <div className="dashboard stagger" ref={masonry}>
-          {blocks.map((b, i) => (
-            <BlockView key={blockKey(b)} block={b} index={i} />
-          ))}
+          {segmentBlocks(blocks).map((b, i) =>
+            Array.isArray(b) ? <QuickGroup key={`snel:${blockKey(b[0])}`} blocks={b} index={i} /> : <BlockView key={blockKey(b)} block={b} index={i} />,
+          )}
         </div>
       )}
 
@@ -317,7 +317,12 @@ function BlockView({ block, index }: { block: Block; index: number }) {
       case "timers":
         return <TimersBlock />;
       case "quick":
-        return <QuickBlock block={block} />;
+        // Gewoonlijk samen in QuickGroup (segmentBlocks); los ook gewoon als knop.
+        return (
+          <div className="quick-grid">
+            <QuickButton block={block} />
+          </div>
+        );
       case "thing":
         return <ThingBlock id={block.thing} />;
       case "chart":
@@ -546,27 +551,33 @@ function TimersBlock() {
 }
 
 /** Snel loggen in een lijst: de kop opent het formulier, het veld gaat met je tekst naar het formulier. */
-function QuickBlock({ block }: { block: Extract<Block, { kind: "quick" }> }) {
-  const { data: detail } = useApi<ListDetail>(`/lists/${block.list}`);
-  const palette = usePalette();
-  if (!detail) return null;
-  const kind = detail.kinds.find((k) => k.id === block.type);
-  const label = kind ? kind.name : `Loggen in ${detail.list.name}`;
+/** Snel loggen na elkaar: een rij knoppen (twee per rij op gsm, zoveel als past op tablet); vanaf drie breed. */
+function QuickGroup({ blocks, index }: { blocks: QuickBlock[]; index: number }) {
   return (
-    <section className="card dash-card quick-add">
-      <Link to={`/lijsten/${block.list}/loggen${block.type ? `?soort=${block.type}` : ""}`} className="dash-head">
-        <span className={`row-media tone-${listTone(detail.list)}`}>
-          <Icon name={listIcon(detail.list)} size={16} />
-        </span>
-        <span className="row-title">{label}</span>
-      </Link>
-      <div className="card-body">
-        <button type="button" className="sidebar-search quick-open" onClick={() => palette("add", kind ? `${kind.name} ` : `${detail.list.name} `)}>
-          <Icon name="plus" size={15} />
-          <span>Typ wat je weet…</span>
-        </button>
+    <div className={`dash-block quick-group${blocks.length > 2 ? " is-wide" : ""}`} style={stagger(index)}>
+      <div className="quick-grid">
+        {blocks.map((b) => (
+          <QuickButton key={blockKey(b)} block={b} />
+        ))}
       </div>
-    </section>
+    </div>
+  );
+}
+
+/** Eén knop: het icoon en de naam van de soort (of de lijst); een tik opent het formulier van die lijst en soort. */
+function QuickButton({ block }: { block: QuickBlock }) {
+  const { data: detail } = useApi<ListDetail>(`/lists/${block.list}`);
+  if (!detail) return <span className="quick-tile is-loading" aria-hidden="true" />;
+  const kind = block.type ? detail.kinds.find((k) => k.id === block.type) : undefined;
+  const label = kind?.name ?? detail.list.name;
+  return (
+    <Link to={`/lijsten/${block.list}/loggen${kind ? `?soort=${kind.id}` : ""}`} className="quick-tile" aria-label={`${label} loggen`}>
+      <span className={`row-media tone-${listTone(detail.list)}`}>
+        <Icon name={(kind?.icon ?? listIcon(detail.list)) as IconName} size={16} />
+      </span>
+      <span className="quick-tile-name">{label}</span>
+      <Icon name="plus" size={16} className="quick-tile-plus" />
+    </Link>
   );
 }
 

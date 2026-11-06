@@ -972,7 +972,10 @@ Regels:
 overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf: Uitgaven deze maand, Te doen, Bijna
 op en Wie moet wie (geen blok per lijst: die staan in de zijbalk, en op gsm per tag onder het overzicht). Elk blok is
 een `dash-card`; een blok dat als geheel opent, is een `dash-link`; het aantal staat rechts in de kop
-(`.dash-count`, enkel als het niet 0 is). De blokken staan als metselwerk (`useMasonry`). **Aanpassen**
+(`.dash-count`, enkel als het niet 0 is). De blokken staan als metselwerk (`useMasonry`). **Snel loggen** is geen
+kaart maar een knop (`QuickGroup`, `.quick-tile`): het icoon van de soort op de tint van de lijst, haar naam en een +
+rechts, 56px hoog; een tik opent het formulier van die lijst en soort (met Typ wat je weet bovenaan). Snel loggen na elkaar staat samen
+(`segmentBlocks`): twee knoppen per rij op gsm, vanaf drie een breed blok met vier naast elkaar op tablet. **Aanpassen**
 (`BlocksEditor`): een `sort-list` met greep en ×, Breed als filterpil, Toevoegen in een `Sheet`, onderaan Klaar.
 
 **Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); noemen de
