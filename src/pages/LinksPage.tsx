@@ -50,30 +50,17 @@ export function LinksPage() {
   const links = all.filter((l) => !off.has(l.kind));
   const kinds = LINK_ORDER.filter((k) => all.some((l) => l.kind === k));
   const asked = params.get("lijst");
-  const selected = asked && (byId.has(asked) || viewOf(asked)) && links.some((l) => l.from === asked || l.to === asked) ? asked : null;
+  const selected = asked && (byId.has(asked) || (viewOf(asked) && links.some((l) => l.from === asked || l.to === asked))) ? asked : null;
   const select = (id: string | null) => set({ lijst: id });
 
-  // Niet op de kaart: lijsten zonder verbanden (met de filters die aanstaan).
-  const linked = (id: string) => links.some((l) => l.from === id || l.to === id);
-  const shownLists = columns.flatMap((c) => c.lists);
-  const quiet = shownLists.filter((l) => !linked(l.id));
-  const names = (ls: typeof shownLists) =>
-    ls.map((l, i) => (
-      <span key={l.id}>
-        {i > 0 && ", "}
-        <button type="button" className="link-quiet" onClick={() => select(l.id)}>
-          {l.name}
-        </button>
-      </span>
-    ));
 
   return (
     <div className="page">
       <PageHead title="Verbanden" />
       {error && <p className="error">{error}</p>}
       {!data && !error && <SkeletonRows rows={4} />}
-      {data && !all.length && <EmptyState icon="links" title="Nog geen verbanden" />}
-      {data && all.length > 0 && (
+      {data && !columns.length && <EmptyState icon="links" title="Nog geen lijsten" />}
+      {data && columns.length > 0 && (
         <>
           {wide && (
             <Tabs<View>
@@ -116,11 +103,6 @@ export function LinksPage() {
               <LinkList columns={columns} links={links} counts={data.counts} onSelect={select} />
             ))}
 
-          {quiet.length > 0 && (
-            <div className="lm-more">
-              <p>Zonder verbanden: {names(quiet)}</p>
-            </div>
-          )}
         </>
       )}
     </div>

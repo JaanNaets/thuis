@@ -104,9 +104,13 @@ export function LinkMapView({
   const columnIds = columns.map((c) => c.key);
   const nodes = columns.flatMap((c) => c.lists.map((l) => ({ id: l.id, column: c.key, list: l })));
   const between = betweenLists(active);
-  // Lijsten die enkel in weergaven voorkomen, staan ook op de kaart (onderaan hun kolom, met hun iconen).
-  const alone = views ? nodes.filter((n) => viewsOf(active, n.id).length > 0).map((n) => n.id) : [];
-  const layout = layoutLinks(columnIds, nodes, between, alone);
+  // Elke lijst staat op de kaart: zonder spoor op de eerste vrije rij van haar kolom (met haar weergaven, of leeg).
+  const layout = layoutLinks(
+    columnIds,
+    nodes,
+    between,
+    nodes.map((n) => n.id),
+  );
   const shown = nodes.filter((n) => layout.places.has(n.id));
   const links = between.filter((l) => layout.places.has(l.from) && layout.places.has(l.to));
   const broken = new Set(problems.map((p) => `${p.list}|${p.to}`));
@@ -198,7 +202,8 @@ export function LinkMapView({
           const hub = links.some((l) => l.to === n.id);
           const s = hub ? 22 : 16;
           const kinds = kindsAt(n.id);
-          const ring = kinds.size === 0 ? "lm-station lm-alone" : kinds.size === 1 ? `lm-station lm-${[...kinds][0]}` : "lm-station lm-mixed";
+          const ring =
+            kinds.size === 1 ? `lm-station lm-${[...kinds][0]}` : kinds.size > 1 ? "lm-station lm-mixed" : active.some((l) => l.from === n.id || l.to === n.id) ? "lm-station lm-alone" : "lm-station lm-empty";
           const bottom = y + s / 2 + (lanes - 1) * LANE;
           const rows = links.filter((l) => l.from === n.id).map((l) => layout.places.get(l.to)!.row);
           const down = rows.some((r) => r > row);
@@ -575,7 +580,7 @@ function LinkSchema({
   );
 }
 
-/** Dezelfde verbanden als lijst: per tag de lijsten met hoeveel verbanden elk heeft, dan de weergaven. Op gsm de gewone weergave. */
+/** Dezelfde verbanden als lijst: per tag al je lijsten met hoeveel verbanden elk heeft, dan de weergaven. Op gsm de enige. */
 export function LinkList({
   columns,
   links,
@@ -589,7 +594,7 @@ export function LinkList({
 }) {
   const degree = new Map<string, number>();
   for (const l of links) for (const x of [l.from, l.to]) degree.set(x, (degree.get(x) ?? 0) + 1);
-  const groups = columns.map((c) => ({ ...c, lists: c.lists.filter((l) => degree.has(l.id)) })).filter((g) => g.lists.length);
+  const groups = columns.filter((g) => g.lists.length);
   const views = (Object.keys(VIEWS) as ViewKey[]).filter((v) => degree.has(`view:${v}`));
   const verbanden = (n: number) => plural(n, "verband", "verbanden");
   return (
@@ -609,7 +614,7 @@ export function LinkList({
                   <span className="row-main">
                     <span className="row-title">{l.name}</span>
                     <span className="row-meta">
-                      <span>{verbanden(degree.get(l.id)!)}</span>
+                      <span>{degree.has(l.id) ? verbanden(degree.get(l.id)!) : "Geen verbanden"}</span>
                       <span>{listMeta(l, counts)}</span>
                     </span>
                   </span>

@@ -822,12 +822,12 @@ Kasticket lezen, Overzicht).
   eigen rij (wie het meest binnenkrijgt bovenaan, een groter station); een spoor loopt eerst verticaal bij de lijst
   waar het vertrekt en dan horizontaal naar zijn doel, op een eigen baan per soort. Twee stations in een kolom
   krijgen elk een eigen plaats als hun verticale sporen elkaar zouden raken. Onder de naam en het aantal dingen
-  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Een lijst die enkel in weergaven voorkomt, is
-  een grijs station zonder spoor op de eerste vrije rij van haar kolom. Een verband dat voor iemand niet werkt, is
-  rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen vlak. Tik
+  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Elke lijst staat op de kaart: een lijst die
+  enkel in weergaven voorkomt, is een grijs station zonder spoor op de eerste vrije rij van haar kolom, een lijst
+  zonder verbanden een gestippeld station. Een verband dat voor iemand niet werkt, is rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen vlak. Tik
   of Enter op een station kiest het (`?lijst=`): het krijgt een zachte gele halo, de rest vervaagt, en eronder komt
-  zijn kaart. Onder de kaart **Zonder verbanden**, met de namen om te kiezen.
-- **De lijst**: per tag de lijsten met hoeveel verbanden, dan de weergaven. Een tik toont de kaart van die lijst of
+  zijn kaart.
+- **De lijst**: per tag al je lijsten met hoeveel verbanden (of "Geen verbanden"), dan de weergaven. Een tik toont de kaart van die lijst of
   weergave, met **Alles** om terug te gaan.
 - **Het schema** (`LinkSchema`, enkel op gsm, bovenaan de kaart van een gekozen lijst): erboven de lijsten waar iets
   vandaan komt, in het midden de lijst zelf (met een zachte gele halo, haar naam, hoeveel dingen en haar weergaven),
