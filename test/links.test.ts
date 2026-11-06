@@ -156,6 +156,16 @@ test("de kaart: een rij per lijst waar iets toekomt, een eigen plaats als vertic
   assert.deepEqual(layout.places.get("K"), { col: 1, slot: 0, row: 1 });
   assert.equal(layout.places.has("W"), false);
   assert.deepEqual(layout.slots, [1, 2]);
+  // Wat enkel in weergaven voorkomt, staat op de eerste vrije rij in zijn kolom (niet waar een spoor door loopt).
+  const withAlone = layoutLinks(["huis", "eten", "elders"], [...nodes, { id: "X", column: "huis" }, { id: "Y", column: "huis" }, { id: "Z", column: "elders" }], links, ["X", "Y", "W", "Z"]);
+  assert.deepEqual(withAlone.places.get("X"), { col: 0, slot: 0, row: 2 });
+  assert.deepEqual(withAlone.places.get("Y"), { col: 0, slot: 0, row: 3 });
+  assert.deepEqual(withAlone.places.get("W"), { col: 1, slot: 0, row: 2 });
+  assert.deepEqual(withAlone.places.get("Z"), { col: 2, slot: 0, row: 0 });
+  assert.deepEqual(withAlone.rows.slice(2), [
+    { hub: "", kinds: [] },
+    { hub: "", kinds: [] },
+  ]);
   // Dezelfde lijsten geven altijd dezelfde kaart.
   const again = layoutLinks(["huis", "eten"], nodes, [...links].reverse());
   assert.deepEqual([...again.places], [...layout.places]);

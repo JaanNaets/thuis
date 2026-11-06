@@ -814,19 +814,25 @@ wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur 
 Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo,
 Kasticket lezen, Overzicht).
 
-- **Kaart en Lijst** zijn twee tabs (`?weergave=`); op tablet begint het op Kaart, op gsm op Lijst. Daaronder per soort
-  een filter die je aan- en uitzet (met een stukje lijn), en **Werkt niet voor iedereen**.
+- **Kaart en Lijst** zijn twee tabs (`?weergave=`), enkel op tablet (`useWide`); het begint op Kaart. Op gsm is er
+  enkel de lijst: de kaart is daar te klein om te lezen of aan te tikken. Daaronder per soort een filter die je aan- en
+  uitzet (met een stukje lijn), en **Werkt niet voor iedereen**.
 - **De kaart** is een metrokaart (`layoutLinks`): per tag een zachte grijze kolom (een lijst staat bij haar eerste
   tag), de lijsten als stations, de verbanden tussen lijsten als sporen. Elke lijst waar iets in toekomt, krijgt een
   eigen rij (wie het meest binnenkrijgt bovenaan, een groter station); een spoor loopt eerst verticaal bij de lijst
   waar het vertrekt en dan horizontaal naar zijn doel, op een eigen baan per soort. Twee stations in een kolom
   krijgen elk een eigen plaats als hun verticale sporen elkaar zouden raken. Onder de naam en het aantal dingen
-  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Een verband dat voor iemand niet werkt, is
+  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Een lijst die enkel in weergaven voorkomt, is
+  een grijs station zonder spoor op de eerste vrije rij van haar kolom. Een verband dat voor iemand niet werkt, is
   rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen vlak. Tik
   of Enter op een station kiest het (`?lijst=`): het krijgt een zachte gele halo, de rest vervaagt, en eronder komt
-  zijn kaart. Onder de kaart: **Enkel in de weergaven** en **Zonder verbanden**, met de namen om te kiezen.
+  zijn kaart. Onder de kaart **Zonder verbanden**, met de namen om te kiezen.
 - **De lijst**: per tag de lijsten met hoeveel verbanden, dan de weergaven. Een tik toont de kaart van die lijst of
   weergave, met **Alles** om terug te gaan.
+- **Het schema** (`LinkSchema`, enkel op gsm, bovenaan de kaart van een gekozen lijst): erboven de lijsten waar iets
+  vandaan komt, in het midden de lijst zelf (met een zachte gele halo, haar naam, hoeveel dingen en haar weergaven),
+  eronder waar het naartoe gaat; dezelfde sporen en kleuren als op de kaart. Elk station is een raakvlak van 56px hoog
+  en zo breed als zijn plaats; een tik kiest die lijst. Meer dan vier aan een kant: de drie met het meeste en "+n".
 - **De kaart van een lijst of weergave** (`LinkDetail`): `CardHead` (de naam, hoeveel dingen, Openen), dan **Komt
   van**, **Gaat naar** en **Weergaven** met één rij per ander eind (zijn icoon, de naam, een stukje lijn per soort, wat
   het doet in grijs, rechts hoeveel keer; een tik kiest het), **In de lijst zelf** (wat ze met haar eigen dingen doet)

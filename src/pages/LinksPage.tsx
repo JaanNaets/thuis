@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
-import { betweenLists, LINK_KINDS, LINK_ORDER, viewOf, type LinkKind, type LinksResponse } from "../../shared/links";
+import { LINK_KINDS, LINK_ORDER, viewOf, type LinkKind, type LinksResponse } from "../../shared/links";
 import { useApi } from "../api";
 import { FilterToggle, Tabs } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { LinkDetail, LinkList, LinkMapView, LinkProblems, LinkSwatch, type MapColumn } from "../components/LinkMap";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
+import { useWide } from "../device";
 import { groupByTag } from "../lists";
 import { useSession } from "../session";
 
@@ -14,9 +15,10 @@ type View = "kaart" | "lijst";
 
 /**
  * Verbanden (`/verbanden`, zie STIJLBOEK.md → Verbanden): hoe al je lijsten met elkaar en met de weergaven samenhangen,
- * zoals jij ze ziet. Als metrokaart (tablet) of als lijst (gsm); een gekozen lijst of weergave toont wat erin toekomt en
- * waar ze naartoe gaat. De weergave en de keuze staan in het adres (`?weergave=lijst&lijst=…`), zodat terug ook echt
- * terug is.
+ * zoals jij ze ziet. Op tablet als metrokaart of als lijst, op gsm enkel als lijst (de kaart is daar te klein om te
+ * lezen of aan te tikken; een gekozen lijst krijgt er een klein schema). Een gekozen lijst of weergave toont wat erin
+ * toekomt en waar ze naartoe gaat. De weergave en de keuze staan in het adres (`?weergave=lijst&lijst=…`), zodat terug
+ * ook echt terug is.
  */
 export function LinksPage() {
   const { lists, tags } = useSession();
@@ -24,8 +26,8 @@ export function LinksPage() {
   const [params, setParams] = useSearchParams();
   const [off, setOff] = useState<Set<LinkKind>>(new Set());
 
-  const wide = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
-  const view: View = params.get("weergave") === "lijst" || (!params.get("weergave") && !wide) ? "lijst" : "kaart";
+  const wide = useWide();
+  const view: View = !wide || params.get("weergave") === "lijst" ? "lijst" : "kaart";
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
     for (const [k, v] of Object.entries(patch)) (v ? next.set(k, v) : next.delete(k));
@@ -51,12 +53,9 @@ export function LinksPage() {
   const selected = asked && (byId.has(asked) || viewOf(asked)) && links.some((l) => l.from === asked || l.to === asked) ? asked : null;
   const select = (id: string | null) => set({ lijst: id });
 
-  // Niet op de kaart: lijsten die enkel in weergaven voorkomen, en lijsten zonder verbanden.
-  const between = betweenLists(links);
+  // Niet op de kaart: lijsten zonder verbanden (met de filters die aanstaan).
   const linked = (id: string) => links.some((l) => l.from === id || l.to === id);
-  const onMap = (id: string) => between.some((l) => l.from === id || l.to === id);
   const shownLists = columns.flatMap((c) => c.lists);
-  const onlyViews = shownLists.filter((l) => linked(l.id) && !onMap(l.id));
   const quiet = shownLists.filter((l) => !linked(l.id));
   const names = (ls: typeof shownLists) =>
     ls.map((l, i) => (
@@ -76,15 +75,17 @@ export function LinksPage() {
       {data && !all.length && <EmptyState icon="links" title="Nog geen verbanden" />}
       {data && all.length > 0 && (
         <>
-          <Tabs<View>
-            label="Weergave"
-            value={view}
-            onChange={(v) => set({ weergave: v === "lijst" ? "lijst" : "kaart" })}
-            tabs={[
-              { value: "kaart", label: "Kaart" },
-              { value: "lijst", label: "Lijst" },
-            ]}
-          />
+          {wide && (
+            <Tabs<View>
+              label="Weergave"
+              value={view}
+              onChange={(v) => set({ weergave: v === "lijst" ? "lijst" : null })}
+              tabs={[
+                { value: "kaart", label: "Kaart" },
+                { value: "lijst", label: "Lijst" },
+              ]}
+            />
+          )}
           {kinds.length > 1 && (
             <div className="filters" role="group" aria-label="Soorten verbanden">
               {kinds.map((k) => (
@@ -99,11 +100,7 @@ export function LinksPage() {
 
           {view === "kaart" && (
             <>
-              {between.length > 0 ? (
-                <LinkMapView columns={columns} links={links} views={!off.has("view")} counts={data.counts} problems={data.problems} selected={selected} onSelect={select} />
-              ) : (
-                <p className="lm-more">Geen verbanden tussen je lijsten.</p>
-              )}
+              <LinkMapView columns={columns} links={links} views={!off.has("view")} counts={data.counts} problems={data.problems} selected={selected} onSelect={select} />
               {selected && <LinkDetail id={selected} data={data} links={links} byId={byId} onSelect={select} />}
             </>
           )}
@@ -113,16 +110,15 @@ export function LinksPage() {
                 <button type="button" className="btn btn-ghost btn-sm lm-back" onClick={() => select(null)}>
                   <Icon name="back" size={15} /> Alles
                 </button>
-                <LinkDetail id={selected} data={data} links={links} byId={byId} onSelect={select} />
+                <LinkDetail id={selected} data={data} links={links} byId={byId} onSelect={select} schema={!wide} />
               </>
             ) : (
               <LinkList columns={columns} links={links} counts={data.counts} onSelect={select} />
             ))}
 
-          {((view === "kaart" && onlyViews.length > 0) || quiet.length > 0) && (
+          {quiet.length > 0 && (
             <div className="lm-more">
-              {view === "kaart" && onlyViews.length > 0 && <p>Enkel in de weergaven: {names(onlyViews)}</p>}
-              {quiet.length > 0 && <p>Zonder verbanden: {names(quiet)}</p>}
+              <p>Zonder verbanden: {names(quiet)}</p>
             </div>
           )}
         </>

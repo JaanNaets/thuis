@@ -27,6 +27,20 @@ export const isKiosk = readKioskMode();
  */
 export const isTouch = (): boolean => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
+/** Breed genoeg voor de schil van een tablet (vanaf 768px, zoals in styles.css); volgt het als het scherm draait. */
+export function useWide(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      if (typeof matchMedia !== "function") return () => {};
+      const query = matchMedia("(min-width: 768px)");
+      query.addEventListener("change", change);
+      return () => query.removeEventListener("change", change);
+    },
+    () => typeof matchMedia === "function" && matchMedia("(min-width: 768px)").matches,
+    () => true,
+  );
+}
+
 /** Event waarop useApi opnieuw ophaalt; de kiosk vuurt het af wanneer niemand de tablet gebruikt. */
 export const REFRESH_EVENT = "huishouden:refresh";
 

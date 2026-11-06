@@ -5973,6 +5973,11 @@ dialog.palette[open]::backdrop {
   stroke: var(--foreground);
 }
 
+/* Een lijst die enkel in weergaven voorkomt: een grijs station zonder spoor. */
+.lm-station.lm-alone {
+  stroke: var(--faint);
+}
+
 .lm-node {
   cursor: pointer;
   outline: none;
@@ -6056,6 +6061,29 @@ dialog.palette[open]::backdrop {
 .lm-detail .row-meta,
 .lm-detail .row-meta > span {
   white-space: normal;
+}
+
+/* Het schema van één lijst (gsm): bovenaan in haar kaart, zo breed als de kaart. */
+.lm-schema {
+  padding: 4px 16px 8px;
+}
+
+.lm-schema svg {
+  display: block;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.lm-schema .lm-line.lm-log {
+  stroke-width: 4;
+}
+
+.lm-hit {
+  fill: transparent;
+}
+
+.lm-center {
+  cursor: default;
 }
 
 .lm-back {

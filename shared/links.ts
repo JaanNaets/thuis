@@ -391,9 +391,11 @@ export type Layout = {
  * - Een lijn loopt eerst verticaal bij de lijst waar ze vertrekt (naar de rij van haar doel), dan horizontaal naar het
  *   doel. Op een rij staan dus enkel lijsten die naar die rij gaan: een lijn die erdoor loopt, hoort er echt bij.
  * - In een kolom krijgen twee punten elk een eigen plaats naast elkaar als hun verticale lijnen elkaar zouden raken.
+ * - `alone`: lijsten zonder verband met een andere lijst die toch op de kaart horen (ze komen voor in een weergave).
+ *   Die staan op de eerste vrije rij in hun kolom (waar geen spoor of naam in de weg zit), zonder baan.
  * Zuiver en voorspelbaar: dezelfde lijsten geven altijd dezelfde kaart.
  */
-export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<Link, "kind" | "from" | "to">[]): Layout {
+export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<Link, "kind" | "from" | "to">[], alone: string[] = []): Layout {
   const order = new Map(nodes.map((n, i) => [n.id, i]));
   const known = links.filter((l) => order.has(l.from) && order.has(l.to) && l.from !== l.to);
   const incoming = new Map<string, number>();
@@ -426,6 +428,36 @@ export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<
   }
 
   const rows = hubs.map((hub) => ({ hub, kinds: LINK_ORDER.filter((k) => known.some((l) => l.to === hub && l.kind === k)) }));
+
+  // Wat enkel in weergaven voorkomt: op de eerste vrije rij in zijn kolom. Bezet is een rij waar een spoor door de kolom
+  // loopt, waar een station of zijn verticale spoor staat, of net boven een station waarvan de naam boven staat (zijn
+  // spoor gaat naar beneden).
+  const used = columns.map(() => new Set<number>());
+  for (const l of known) {
+    const row = hubRow.get(l.to)!;
+    const a = colIndex.get(nodes[order.get(l.from)!].column);
+    const b = colIndex.get(nodes[order.get(l.to)!].column);
+    if (a === undefined || b === undefined) continue;
+    for (let c = Math.min(a, b); c <= Math.max(a, b); c++) used[c].add(row);
+  }
+  for (const n of sorted) {
+    const { col, row } = places.get(n.id)!;
+    const reach = [row, ...(targets.get(n.id) ?? [])];
+    for (let r = Math.min(...reach); r <= Math.max(...reach); r++) used[col].add(r);
+    if (reach.some((r) => r > row)) used[col].add(row - 1);
+  }
+  const lone = new Set(alone);
+  let last = hubs.length - 1;
+  for (const n of nodes) {
+    if (!lone.has(n.id) || places.has(n.id) || !colIndex.has(n.column)) continue;
+    const col = colIndex.get(n.column)!;
+    let row = 0;
+    while (used[col].has(row)) row++;
+    used[col].add(row);
+    places.set(n.id, { col, slot: 0, row });
+    last = Math.max(last, row);
+  }
+  while (rows.length <= last) rows.push({ hub: "", kinds: [] });
   return { rows, places, slots };
 }
 
