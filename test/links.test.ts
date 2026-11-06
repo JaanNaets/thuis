@@ -3,14 +3,17 @@ import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
 import {
   BLOCK_LINKS,
+  betweenLists,
   buildLinks,
   EVENT_LINKS,
   FIELD_LINKS,
   KIND_LINKS,
   LINE_LINKS,
   LIST_LINKS,
+  layoutLinks,
   linkProblems,
   viewNode,
+  viewsOf,
   type Link,
   type LinkInput,
   type LinkList,
@@ -122,3 +125,54 @@ test("problemen: wie kan bewerken maar een lijst waar het van afhangt niet ziet,
   assert.deepEqual(linkProblems(links, people, new Set(["B"])), rik, "wie B beheert, kan Rik erbij zetten");
   assert.deepEqual(linkProblems(links, people, new Set(["C"])), []);
 });
+
+test("de kaart: een rij per lijst waar iets toekomt, een eigen plaats als verticale lijnen elkaar raken", () => {
+  const links: Link[] = [
+    { kind: "log", from: "B", to: "V", texts: [], count: 3, last: null },
+    { kind: "ref", from: "B", to: "V", texts: [], count: null, last: null },
+    { kind: "log", from: "U", to: "V", texts: [], count: 1, last: null },
+    { kind: "log", from: "U", to: "K", texts: [], count: 1, last: null },
+    { kind: "ref", from: "O", to: "K", texts: [], count: null, last: null },
+  ];
+  const nodes = [
+    { id: "B", column: "huis" },
+    { id: "O", column: "huis" },
+    { id: "V", column: "eten" },
+    { id: "U", column: "eten" },
+    { id: "K", column: "eten" },
+    { id: "W", column: "eten" }, // zonder verbanden: niet op de kaart
+  ];
+  const layout = layoutLinks(["huis", "eten"], nodes, links);
+  assert.deepEqual(
+    layout.rows.map((r) => r.hub),
+    ["V", "K"],
+  );
+  assert.deepEqual(layout.rows[0].kinds, ["ref", "log"]);
+  assert.deepEqual(layout.places.get("B"), { col: 0, slot: 0, row: 0 });
+  assert.deepEqual(layout.places.get("O"), { col: 0, slot: 0, row: 1 });
+  assert.deepEqual(layout.places.get("V"), { col: 1, slot: 0, row: 0 });
+  // U gaat naar twee rijen en raakt V: een eigen plaats.
+  assert.deepEqual(layout.places.get("U"), { col: 1, slot: 1, row: 0 });
+  assert.deepEqual(layout.places.get("K"), { col: 1, slot: 0, row: 1 });
+  assert.equal(layout.places.has("W"), false);
+  assert.deepEqual(layout.slots, [1, 2]);
+  // Dezelfde lijsten geven altijd dezelfde kaart.
+  const again = layoutLinks(["huis", "eten"], nodes, [...links].reverse());
+  assert.deepEqual([...again.places], [...layout.places]);
+  assert.deepEqual(again.rows, layout.rows);
+});
+
+test("weergaven staan bij de lijst, niet als lijn op de kaart", () => {
+  const links: Link[] = [
+    { kind: "view", from: "A", to: viewNode("geld"), texts: [], count: 2, last: null },
+    { kind: "view", from: viewNode("productinfo"), to: "A", texts: [], count: null, last: null },
+    { kind: "view", from: "A", to: viewNode("agenda"), texts: [], count: null, last: null },
+    { kind: "log", from: "A", to: "B", texts: [], count: 1, last: null },
+  ];
+  assert.deepEqual(viewsOf(links, "A"), ["geld", "agenda", "productinfo"]);
+  assert.deepEqual(
+    betweenLists(links).map((l) => l.to),
+    ["B"],
+  );
+});
+

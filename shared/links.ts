@@ -356,6 +356,79 @@ export function linkProblems(links: Link[], people: Map<string, LinkPerson[]>, m
   return out;
 }
 
+// ---------- de kaart ----------
+// Op de kaart staan de verbanden tussen lijsten (verwijzingen en het logboek); de weergaven staan als kleine iconen bij
+// elke lijst (`viewsOf`), anders kreeg elke weergave een eigen rij en elke lijst een eigen spoor.
+
+/** De verbanden tussen twee lijsten (geen weergave). */
+export const betweenLists = (links: Link[]) => links.filter((l) => !viewOf(l.from) && !viewOf(l.to));
+
+/** De weergaven waar een lijst in voorkomt of die haar iets geven, in de vaste volgorde. */
+export function viewsOf(links: Link[], list: string): ViewKey[] {
+  const out = new Set<ViewKey>();
+  for (const l of links) {
+    const v = l.from === list ? viewOf(l.to) : l.to === list ? viewOf(l.from) : null;
+    if (v) out.add(v);
+  }
+  return VIEW_ORDER.filter((v) => out.has(v));
+}
+
+export type LayoutNode = { id: string; column: string };
+/** Waar een punt staat: kolom, plaats in de kolom (`slot`) en rij. */
+export type Place = { col: number; slot: number; row: number };
+export type Layout = {
+  /** Per rij: de lijst waar alles op deze rij naartoe gaat, en de soorten die er rijden (elk een eigen baan). */
+  rows: { hub: string; kinds: LinkKind[] }[];
+  places: Map<string, Place>;
+  /** Hoeveel plaatsen naast elkaar elke kolom nodig heeft (minstens 1). */
+  slots: number[];
+};
+
+/**
+ * Schikt de kaart (een metrokaart). De regel:
+ * - Elke lijst waar een verband in toekomt, krijgt een eigen rij (wie het meest binnenkrijgt bovenaan). Een lijst die
+ *   enkel iets doorgeeft, staat op de rij van de eerste lijst waar ze in toekomt.
+ * - Een lijn loopt eerst verticaal bij de lijst waar ze vertrekt (naar de rij van haar doel), dan horizontaal naar het
+ *   doel. Op een rij staan dus enkel lijsten die naar die rij gaan: een lijn die erdoor loopt, hoort er echt bij.
+ * - In een kolom krijgen twee punten elk een eigen plaats naast elkaar als hun verticale lijnen elkaar zouden raken.
+ * Zuiver en voorspelbaar: dezelfde lijsten geven altijd dezelfde kaart.
+ */
+export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<Link, "kind" | "from" | "to">[]): Layout {
+  const order = new Map(nodes.map((n, i) => [n.id, i]));
+  const known = links.filter((l) => order.has(l.from) && order.has(l.to) && l.from !== l.to);
+  const incoming = new Map<string, number>();
+  for (const l of known) incoming.set(l.to, (incoming.get(l.to) ?? 0) + 1);
+
+  const hubs = [...incoming.keys()].sort((a, b) => incoming.get(b)! - incoming.get(a)! || order.get(a)! - order.get(b)!);
+  const hubRow = new Map(hubs.map((h, i) => [h, i]));
+  const targets = new Map<string, number[]>();
+  for (const l of known) targets.set(l.from, [...(targets.get(l.from) ?? []), hubRow.get(l.to)!]);
+
+  const rowOf = (id: string) => hubRow.get(id) ?? Math.min(...(targets.get(id) ?? [0]));
+  const colIndex = new Map(columns.map((c, i) => [c, i]));
+  const placed = nodes.filter((n) => colIndex.has(n.column) && (incoming.has(n.id) || targets.has(n.id)));
+
+  const places = new Map<string, Place>();
+  const slots = columns.map(() => 1);
+  // Per kolom en plaats: de rijen die een punt (met zijn verticale lijnen) al inneemt.
+  const taken = columns.map(() => [] as [number, number][][]);
+  const sorted = [...placed].sort((a, b) => rowOf(a.id) - rowOf(b.id) || order.get(a.id)! - order.get(b.id)!);
+  for (const n of sorted) {
+    const row = rowOf(n.id);
+    const reach = [row, ...(targets.get(n.id) ?? [])];
+    const span: [number, number] = [Math.min(...reach), Math.max(...reach)];
+    const col = colIndex.get(n.column)!;
+    let slot = 0;
+    while (taken[col][slot]?.some(([a, b]) => a <= span[1] && span[0] <= b)) slot++;
+    (taken[col][slot] ??= []).push(span);
+    slots[col] = Math.max(slots[col], slot + 1);
+    places.set(n.id, { col, slot, row });
+  }
+
+  const rows = hubs.map((hub) => ({ hub, kinds: LINK_ORDER.filter((k) => known.some((l) => l.to === hub && l.kind === k)) }));
+  return { rows, places, slots };
+}
+
 /** Iemand bij een lijst op de kaart: met zijn rol, en via welke tag als het geen rechtstreekse rol is. */
 export type LinkPersonView = LinkPerson & { via: string | null };
 

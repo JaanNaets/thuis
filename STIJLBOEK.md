@@ -805,29 +805,34 @@ Een activiteit met een uur en zonder einde loopt nog (werk, vasten): ze staat in
 live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`). Een soort met een doel
 (16 u vasten) geeft een melding als dat doel bereikt is.
 
-### Verbanden: `LinkMap`, `LinkLegend` (`LinkMap.tsx`) en `LinksPage`
+### Verbanden: `LinkMapView`, `LinkList`, `LinkDetail`, `LinkProblems` (`LinkMap.tsx`) en `LinksPage`
 
 Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.ts` (`GET /insights/links`): enkel
-wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon (de eerste drie grafiekkleuren, zodat kleur nooit
-alleen draagt): **Logboek** (doorlopend: gebeurtenissen in de ene lijst met dingen of soorten van de andere),
-**Verwijzingen** (streepjes: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes: Geld, Wie moet wie,
-Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo, Kasticket lezen,
-Overzicht).
+wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
+(doorlopend, de eerste grafiekkleur: gebeurtenissen in de ene lijst met dingen of soorten van de andere),
+**Verwijzingen** (streepjes, de tweede: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes, de derde:
+Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo,
+Kasticket lezen, Overzicht).
 
-- **De kaart** (`.linkmap`, enkel vanaf 768px): een kolom per tag (een lijst staat bij haar eerste tag), rechts de
-  weergaven. Een lijst is een wit vlakje (148×30, rond 9px) met haar icoon in haar toon, een weergave een grijs. Een
-  verband is een lijn van 2px van de rechterkant van het punt links naar de linkerkant van het punt rechts, met een
-  pijltje aan de kant waar het naartoe gaat (nooit achteruit over de kaart; in dezelfde kolom een boog langs rechts).
-  Zonder keuze zijn de lijnen naar de weergaven stil (35%). Tik of Enter op een punt kiest het (`?lijst=`): enkel zijn
-  lijnen blijven, de rest vervaagt. De legende staat erboven. Past de kaart niet, dan schuift ze binnen haar eigen vlak.
-- **De lijst** (altijd, op gsm enkel dit): per lijst een kaart met `CardHead` (de naam, "12 dingen · 40
-  gebeurtenissen", Openen) en per verband een rij: het icoon van het andere eind, › (ernaartoe) of ‹ (ervandaan), de
-  naam, een stukje lijn van de soort, wat het doet in grijs en rechts hoeveel keer. Een tik kiest het andere eind.
-  Daaronder **In de lijst zelf** (wat ze met haar eigen dingen doet) en **Wie** (met rol, en via welke tag). Een
-  gekozen weergave krijgt haar eigen kaart. Vanaf 1100px twee kaarten naast elkaar.
-- **Werkt niet voor iedereen** bovenaan (enkel als je een van beide lijsten beheert): wie in een lijst kan bewerken
-  maar een lijst niet ziet waar die van afhangt; de rij opent Mensen van de lijst die je beheert.
-- Filters: Lijst (ook een weergave), Soort, en Werkt niet voor iedereen (enkel als er iets is), in het adres.
+- **Kaart en Lijst** zijn twee tabs (`?weergave=`); op tablet begint het op Kaart, op gsm op Lijst. Daaronder per soort
+  een filter die je aan- en uitzet (met een stukje lijn), en **Werkt niet voor iedereen**.
+- **De kaart** is een metrokaart (`layoutLinks`): per tag een zachte grijze kolom (een lijst staat bij haar eerste
+  tag), de lijsten als stations, de verbanden tussen lijsten als sporen. Elke lijst waar iets in toekomt, krijgt een
+  eigen rij (wie het meest binnenkrijgt bovenaan, een groter station); een spoor loopt eerst verticaal bij de lijst
+  waar het vertrekt en dan horizontaal naar zijn doel, op een eigen baan per soort. Twee stations in een kolom
+  krijgen elk een eigen plaats als hun verticale sporen elkaar zouden raken. Onder de naam en het aantal dingen
+  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Een verband dat voor iemand niet werkt, is
+  rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen vlak. Tik
+  of Enter op een station kiest het (`?lijst=`): het krijgt een zachte gele halo, de rest vervaagt, en eronder komt
+  zijn kaart. Onder de kaart: **Enkel in de weergaven** en **Zonder verbanden**, met de namen om te kiezen.
+- **De lijst**: per tag de lijsten met hoeveel verbanden, dan de weergaven. Een tik toont de kaart van die lijst of
+  weergave, met **Alles** om terug te gaan.
+- **De kaart van een lijst of weergave** (`LinkDetail`): `CardHead` (de naam, hoeveel dingen, Openen), dan **Komt
+  van**, **Gaat naar** en **Weergaven** met één rij per ander eind (zijn icoon, de naam, een stukje lijn per soort, wat
+  het doet in grijs, rechts hoeveel keer; een tik kiest het), **In de lijst zelf** (wat ze met haar eigen dingen doet)
+  en **Wie** (met rol, en via welke tag).
+- **Werkt niet voor iedereen** (enkel als je een van beide lijsten beheert): wie in een lijst kan bewerken maar een
+  lijst niet ziet waar die van afhangt; de rij opent Mensen van de lijst die je beheert.
 - Een nieuwe eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok? Dan weigert TypeScript te bouwen tot
   je in `shared/links.ts` beslist of ze iets verbindt (`FIELD_LINKS` …); wat verbindt, krijgt een voorbeeld in
   `test/links.test.ts`. Zo blijft alles zichtbaar.
@@ -980,7 +985,7 @@ Weergave, Lijst of Formulier, met bij een formulier Loggen, een soort of "<Ding>
 volgorde van je lijsten en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
 
 **Verbanden** (`/verbanden`, ook via ⋯ → Verbanden van een lijst): `PageHead`, de filters, Werkt niet voor iedereen,
-de kaart (tablet) en per lijst haar verbanden; zie [Verbanden](#verbanden-linkmap-linklegend-linkmaptsx-en-linkspage).
+Kaart of Lijst, en de kaart van wat je kiest; zie [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-linkspage).
 
 **Snel naar een formulier** (`QuickLinks.tsx`): de **QR-sticker** (`/lijsten/:id/sticker`, Afdrukken), een eigen app
 (`/app/:id`: als app meteen naar haar bestemming, in de browser `HomeScreenHint`) en **Gedeeld** (`/delen`: een

@@ -5897,105 +5897,80 @@ dialog.palette[open]::backdrop {
 
 
 /* ---------- verbanden (LinksPage.tsx, LinkMap.tsx) ----------
- * De kaart (vanaf tablet): een kolom per tag, rechts de weergaven. Lijsten zijn witte vlakjes met hun icoon in hun toon,
- * weergaven grijze. Een verband is een lijn van 2px met een pijltje, in de kleur en het patroon van zijn soort (de eerste
- * drie grafiekkleuren: logboek doorlopend, verwijzing in streepjes, weergave in puntjes), zodat kleur nooit alleen
- * draagt. Past de kaart niet, dan schuift ze binnen haar eigen vlak (de pagina zelf schuift nooit opzij).
+ * Een metrokaart: per tag een zachte grijze kolom, de lijsten als stations, de verbanden tussen lijsten als sporen
+ * (eerst verticaal bij de lijst waar ze vertrekken, dan horizontaal naar hun doel, een eigen baan per soort). Logboek
+ * doorlopend in de eerste grafiekkleur, verwijzingen in streepjes in de tweede, zodat kleur nooit alleen draagt; de
+ * weergaven als kleine grijze iconen onder elk station. Past de kaart niet, dan verkleint ze tot 72%; nog breder schuift
+ * ze binnen haar eigen vlak (de pagina zelf schuift nooit opzij).
  */
-.only-tablet {
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .only-tablet {
-    display: block;
-  }
-}
-
-.linkmap-card {
-  padding: 12px 0 4px;
-}
-
-.link-problems {
-  margin-bottom: 12px;
-}
-
-.lm-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 0;
-  padding: 0 16px 8px;
-  list-style: none;
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-}
-
-.lm-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .linkmap {
   overflow-x: auto;
+  margin: 4px 0 16px;
   overscroll-behavior-x: contain;
-  padding: 0 8px 8px;
 }
 
 .linkmap svg {
   display: block;
 }
 
-.lm-column {
+.lm-column > rect {
+  fill: var(--subtle);
+}
+
+.lm-column-dot {
+  fill: var(--tone, var(--faint));
+}
+
+.lm-column-name {
   fill: var(--muted-foreground);
-  font: 600 11px var(--font-sans);
+  font: 600 11.5px var(--font-sans);
   letter-spacing: 0.05em;
 }
 
 .lm-line {
   fill: none;
-  stroke-width: 2;
   stroke-linecap: round;
+  stroke-linejoin: round;
   transition: opacity var(--dur);
 }
 
-.lm-line[data-on="false"] {
-  opacity: 0.08;
+.lm-line.lm-log {
+  stroke: var(--chart-1);
+  stroke-width: 5;
 }
 
-.lm-line[data-quiet="true"] {
-  opacity: 0.35;
+.lm-line.lm-ref {
+  stroke: var(--chart-2);
+  stroke-width: 3;
+  stroke-dasharray: 7 6;
 }
 
-.lm-log {
+.lm-line.lm-view {
+  stroke: var(--chart-3);
+  stroke-width: 3;
+  stroke-dasharray: 0.5 6;
+}
+
+/* Een verband dat voor iemand niet werkt (zie LinkProblems). */
+.lm-line.lm-problem {
+  stroke: var(--danger);
+  stroke-dasharray: 10 8;
+}
+
+.lm-station {
+  fill: var(--background);
+}
+
+.lm-station.lm-log {
   stroke: var(--chart-1);
 }
 
-.lm-ref {
+.lm-station.lm-ref {
   stroke: var(--chart-2);
-  stroke-dasharray: 6 4;
 }
 
-.lm-view {
-  stroke: var(--chart-3);
-  stroke-dasharray: 0.5 5;
-}
-
-.lm-head {
-  stroke: none;
-}
-
-.lm-head.lm-log {
-  fill: var(--chart-1);
-}
-
-.lm-head.lm-ref {
-  fill: var(--chart-2);
-}
-
-.lm-head.lm-view {
-  fill: var(--chart-3);
+.lm-station.lm-mixed {
+  stroke: var(--foreground);
 }
 
 .lm-node {
@@ -6004,48 +5979,73 @@ dialog.palette[open]::backdrop {
   transition: opacity var(--dur);
 }
 
-.lm-node[data-dim="true"] {
-  opacity: 0.45;
+.lm-halo {
+  fill: var(--accent-soft);
+  stroke: none;
+  opacity: 0;
+  transition: opacity var(--dur);
 }
 
-.lm-pill {
-  fill: var(--surface);
-  stroke: rgb(24 24 27 / 0.1);
-  stroke-width: 1;
-  transition: stroke var(--dur);
+.lm-halo.on {
+  opacity: 1;
 }
 
-.lm-viewnode .lm-pill {
-  fill: var(--muted-solid);
-}
-
-@media (hover: hover) {
-  .lm-node:hover .lm-pill {
-    stroke: rgb(24 24 27 / 0.24);
-  }
-}
-
-.lm-node[data-selected="true"] .lm-pill {
-  stroke: var(--foreground);
-  stroke-width: 1.5;
-}
-
-.lm-node:focus-visible .lm-pill {
+.lm-node:focus-visible .lm-halo {
+  opacity: 1;
   stroke: var(--ring);
-  stroke-width: 3;
-}
-
-.lm-icon {
-  color: var(--tone-ink, var(--muted-foreground));
-}
-
-.lm-viewnode .lm-icon {
-  color: var(--text-soft);
+  stroke-width: 2;
 }
 
 .lm-name {
   fill: var(--foreground);
-  font: 500 13px var(--font-sans);
+  font: 600 13px var(--font-sans);
+}
+
+.lm-meta {
+  fill: var(--muted-foreground);
+  font: 400 12px var(--font-sans);
+}
+
+.lm-view-icon {
+  color: var(--muted-foreground);
+}
+
+.lm-dim {
+  opacity: 0.22;
+}
+
+/* Een stukje lijn van een soort (filters, rijen): dezelfde kleur en hetzelfde patroon, dunner. */
+.lm-swatch {
+  flex: none;
+  vertical-align: middle;
+}
+
+.lm-swatch .lm-line {
+  stroke-width: 3;
+}
+
+.lm-swatch .lm-line.lm-ref {
+  stroke-dasharray: 4 3;
+}
+
+.lm-swatch .lm-line.lm-view {
+  stroke-dasharray: 0.5 4;
+}
+
+.lm-swatches {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.lm-row-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.lm-problems {
+  margin-bottom: 16px;
 }
 
 .lm-problem-icon {
@@ -6053,40 +6053,32 @@ dialog.palette[open]::backdrop {
   background: var(--danger-bg);
 }
 
-/* Per lijst een kaart met haar verbanden; vanaf 1100px twee naast elkaar. */
-.link-cards {
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-@media (min-width: 1100px) {
-  .link-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-}
-
-.link-row-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.link-dir {
-  flex: none;
-  color: var(--muted-foreground);
-}
-
-.link-kind {
-  flex: none;
-  margin-left: 2px;
-}
-
-.link-cards .row-meta,
-.link-cards .row-meta > span {
+.lm-detail .row-meta,
+.lm-detail .row-meta > span {
   white-space: normal;
+}
+
+.lm-back {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
+
+.lm-more {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.lm-more p {
+  margin: 4px 0;
+}
+
+.lm-more .link-quiet {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* ---------- een item kiezen (ItemPicker.tsx) ----------
