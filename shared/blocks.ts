@@ -1,16 +1,18 @@
 // De bouwdoos van het overzicht (zie STIJLBOEK.md → Overzicht): elk blok is een **weergave** (wat je ziet) of een
 // **actie** (wat je doet). Een weergave is een zin: "toon <bron> van <lijsten> waar <voorwaarden>, tel <…> per <…>",
-// getoond als lijst, tabel, getal, grafiek of kalender, met voorwaarden op wat je ziet (kleur, bovenaan, verbergen).
+// getoond als lijst, tabel, agenda, getal of grafiek, met voorwaarden op wat je ziet (kleur, bovenaan, verbergen). Een
+// weergave met een periode (deze maand, de laatste 6 weken, een agenda) blader je door (`viewSpan`).
 // Een actie is een knop die logt: een soort met vooraf ingevulde velden, die het formulier opent, meteen bewaart, er
 // één bijtelt of start en stopt. Alles is enkel ids en sleutels; de server rekent een weergave uit met de rechten van
 // wie kijkt (GET /insights/view), met de motor van bewaarde weergaven (shared/views.ts) en grafieken (shared/charts.ts).
 
-import { CHART_AGGS, CHART_STEPS, cleanChart, computeChart, type ChartAgg, type ChartData, type ChartDef, type ChartForm, type ChartNames, type ChartStep } from "./charts.ts";
+import { monthGrid, shiftMonth } from "./agenda.ts";
+import { bucketLabel, CHART_AGGS, CHART_STEPS, chartWindow, cleanChart, computeChart, previousWindow, type ChartAgg, type ChartData, type ChartDef, type ChartForm, type ChartNames, type ChartStep, type ChartWindow } from "./charts.ts";
 import type { Attributes, FieldDef, FieldValue, Names } from "./fields.ts";
 import { NUTRIENTS } from "./food.ts";
 import { logFields } from "./logview.ts";
 import { STATUSES } from "./model.ts";
-import { matchesView, NAME, sortItems, type Condition, type ViewDef, type ViewItem } from "./views.ts";
+import { matchesView, NAME, PERIODS, periodRange, periodText, sortItems, type Condition, type Period, type PeriodKind, type ViewDef, type ViewItem } from "./views.ts";
 
 // ---------- bronnen ----------
 
@@ -21,15 +23,19 @@ export const SOURCES = {
   voorraad: "de voorraad",
   saldo: "wie moet wie",
   voeding: "wat er gegeten is",
+  datums: "alles met een datum",
 } as const;
 export type SourceKind = keyof typeof SOURCES;
 
-/** Volgens welke datum een bron in de tijd staat (voor tellen per periode); null: geen (dan telt "vandaag"). */
+/** Volgens welke datum een bron in de tijd staat (tellen per periode, een agenda); bij de dingen kies je een datumveld. */
 export function sourceDate(source: SourceKind, fields: FieldDef[], chosen?: string): string {
-  if (source === "logboek") return "at";
+  if (source === "logboek" || source === "datums") return "at";
   if (source === "voeding") return "day";
   if (source === "voorraad") return "expires";
-  if (source === "dingen" && chosen && fields.some((f) => f.key === chosen && f.type === "date")) return chosen;
+  if (source === "dingen") {
+    const dates = fields.filter((f) => f.type === "date" || f.type === "date_range");
+    return (dates.find((f) => f.key === chosen) ?? dates.find((f) => f.agenda) ?? dates[0])?.key ?? "created";
+  }
   return "created";
 }
 
@@ -94,6 +100,16 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
         { key: "who", label: "Persoon", type: "person" },
         ...NUTRIENTS.map((n): FieldDef => ({ key: n, label: NUTRIENT_LABELS[n][0], type: "number", unit: NUTRIENT_LABELS[n][1] })),
       ];
+    case "datums":
+      // Wat gebeurde of gepland staat, en de datums van dingen met "In de agenda" (de keuring, een verjaardag).
+      return [
+        { key: NAME, label: "Wat", type: "text" },
+        { key: "at", label: "Wanneer", type: "date" },
+        { key: "end", label: "Tot", type: "date" },
+        { key: "list", label: "Lijst", type: "select", options: ctx.lists.map((l) => l.name).slice(0, 60) },
+        { key: "what", label: "Soort", type: "text" },
+        { key: "status", label: "Status", type: "select", options: Object.values(STATUSES).map((x) => x.label) },
+      ];
   }
 }
 
@@ -103,6 +119,7 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
 export const SHOWS = {
   lijst: { label: "Lijst", chart: null },
   tabel: { label: "Tabel", chart: null },
+  agenda: { label: "Agenda", chart: null },
   getal: { label: "Getal", chart: "number" },
   voortgang: { label: "Voortgang", chart: "number" },
   staafjes: { label: "Staafjes", chart: "bars" },
@@ -110,7 +127,7 @@ export const SHOWS = {
   gebied: { label: "Gebied", chart: "line" },
   perkeuze: { label: "Per keuze", chart: "ranked" },
   verdeling: { label: "Verdeling", chart: "parts" },
-  kalender: { label: "Kalender", chart: "bars" },
+  kalender: { label: "Per dag", chart: "bars" },
 } as const satisfies Record<string, { label: string; chart: ChartForm | null }>;
 export type Show = keyof typeof SHOWS;
 export const SHOW_ORDER = Object.keys(SHOWS) as Show[];
@@ -131,8 +148,6 @@ export type Tally = {
   step: ChartStep;
   /** De laatste zoveel periodes; 0 = alles. */
   n: number;
-  /** De dingen: volgens welk datumveld (anders wanneer ze toegevoegd werden). */
-  date?: string;
 };
 export const DEFAULT_TALLY: Tally = { agg: "count", step: "week", n: 8 };
 
@@ -167,6 +182,8 @@ export type ViewBlock = {
   where: ViewDef;
   show: Show;
   tally?: Tally;
+  /** De dingen: volgens welk datumveld ze in de tijd staan (tellen per periode, agenda); anders het eerste. */
+  date?: string;
   /** Lijst en tabel: hoogstens zoveel rijen. */
   limit?: number;
   /** Voortgang (en een lijn bij getal en grafiek): het doel. */
@@ -208,8 +225,7 @@ function cleanTally(raw: unknown): Tally {
   const n = typeof o.n === "number" && Number.isInteger(o.n) && o.n >= 0 ? Math.min(o.n, 366) : 8;
   const field = typeof o.field === "string" && KEY.test(o.field) ? o.field : undefined;
   const by = typeof o.by === "string" && KEY.test(o.by) ? o.by : undefined;
-  const date = typeof o.date === "string" && KEY.test(o.date) ? o.date : undefined;
-  return { agg: agg !== "count" && !field ? "count" : agg, ...(agg !== "count" && field ? { field } : {}), ...(by ? { by } : {}), step, n, ...(date ? { date } : {}) };
+  return { agg: agg !== "count" && !field ? "count" : agg, ...(agg !== "count" && field ? { field } : {}), ...(by ? { by } : {}), step, n };
 }
 
 function cleanRule(raw: unknown): Rule | null {
@@ -265,6 +281,9 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
   const show = Object.hasOwn(SHOWS, String(o.show)) ? (o.show as Show) : "lijst";
   const limit = typeof o.limit === "number" && Number.isInteger(o.limit) ? Math.max(1, Math.min(o.limit, MAX_LIMIT)) : undefined;
   const goal = typeof o.goal === "number" && Number.isFinite(o.goal) && Math.abs(o.goal) < 1e12 ? o.goal : undefined;
+  // Het datumveld van de dingen (vroeger in `tally.date`).
+  const t = o.tally && typeof o.tally === "object" ? (o.tally as Record<string, unknown>) : {};
+  const date = [o.date, t.date].find((d): d is string => typeof d === "string" && KEY.test(d));
   const rules = (Array.isArray(o.rules) ? o.rules : []).slice(0, MAX_RULES).flatMap((r) => {
     const x = cleanRule(r);
     return x ? [x] : [];
@@ -277,7 +296,8 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
     where: cleanWhere(o.where),
     show,
     ...(counts(show) ? { tally: cleanTally(o.tally) } : {}),
-    ...(!counts(show) && limit ? { limit } : {}),
+    ...(source === "dingen" && date && (counts(show) || show === "agenda") ? { date } : {}),
+    ...((show === "lijst" || show === "tabel") && limit ? { limit } : {}),
     ...(goal !== undefined ? { goal } : {}),
     ...(rules.length ? { rules } : {}),
   };
@@ -370,7 +390,8 @@ export function upgradeBlock(raw: Record<string, unknown>): ViewBlock | ActionBl
         lists: list ? [list] : [],
         where: { match: "all", conditions: [] },
         show,
-        tally: { agg: chart.agg, ...(chart.field ? { field: chart.field } : {}), ...(chart.by ? { by: chart.by } : {}), step: chart.step, n: chart.count, ...(source === "dingen" && chart.date !== "created" ? { date: chart.date } : {}) },
+        tally: { agg: chart.agg, ...(chart.field ? { field: chart.field } : {}), ...(chart.by ? { by: chart.by } : {}), step: chart.step, n: chart.count },
+        ...(source === "dingen" && chart.date !== "created" ? { date: chart.date } : {}),
         ...(chart.goal !== undefined ? { goal: chart.goal } : {}),
       });
     }
@@ -393,7 +414,143 @@ export type ViewOutcome<T extends SourceItem = SourceItem> = {
   hidden: boolean;
   /** Een voorwaarde op de uitkomst. */
   tone: RuleTone | null;
+  /** De periode die je ziet en of je kan bladeren; null: geen periode. */
+  span: Span | null;
 };
+
+// ---------- bladeren door de tijd ----------
+
+/** De periode van een weergave: wat er boven staat ("Deze maand", "oktober 2026") en of je verder terug of vooruit kan. */
+export type Span = {
+  label: string;
+  earlier: boolean;
+  later: boolean;
+  from: string | null;
+  to: string | null;
+  /** Een agenda: de maand ("2026-11"). */
+  month?: string;
+};
+/** Zoveel periodes ver kan je bladeren (ook vooruit). */
+export const MAX_SHIFT = 240;
+
+const DAY_MS = 86_400_000;
+const dayMs = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+const addDays = (d: string, n: number) => new Date(dayMs(d) + n * DAY_MS).toISOString().slice(0, 10);
+/** Maanden verder of terug, met dezelfde dag (of de laatste van die maand). */
+function addMonths(d: string, n: number): string {
+  const month = shiftMonth(d.slice(0, 7), n);
+  const last = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  return `${month}-${String(Math.min(Number(d.slice(8, 10)), last)).padStart(2, "0")}`;
+}
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** Hoe ver een periode in een voorwaarde verschuift per stap (vandaag: een dag, deze maand: een maand). */
+const PERIOD_STEPS: Partial<Record<PeriodKind, { unit: "day" | "month"; n: number }>> = {
+  today: { unit: "day", n: 1 },
+  yesterday: { unit: "day", n: 1 },
+  tomorrow: { unit: "day", n: 1 },
+  this_week: { unit: "day", n: 7 },
+  last_week: { unit: "day", n: 7 },
+  next_week: { unit: "day", n: 7 },
+  this_month: { unit: "month", n: 1 },
+  last_month: { unit: "month", n: 1 },
+  next_month: { unit: "month", n: 1 },
+  this_year: { unit: "month", n: 12 },
+  last_year: { unit: "month", n: 12 },
+  next_year: { unit: "month", n: 12 },
+  last_days: { unit: "day", n: 0 },
+  next_days: { unit: "day", n: 0 },
+};
+
+/** De eerste voorwaarde met een periode die meeschuift ("wanneer in deze maand"). */
+function periodOf(block: ViewBlock): Period | null {
+  for (const c of block.where.conditions) {
+    const v = c.value as Period | undefined;
+    if (c.op === "in" && v && typeof v === "object" && !Array.isArray(v) && typeof v.p === "string" && PERIOD_STEPS[v.p]) return v;
+  }
+  return null;
+}
+
+const NAMED: PeriodKind[] = ["today", "yesterday", "tomorrow", "this_week", "last_week", "next_week", "this_month", "last_month", "next_month", "this_year", "last_year", "next_year"];
+
+/** Een periode in woorden: "Gisteren", "Vorige maand", "oktober 2026", "2025", "di 3 nov", "5/10 – 11/10". */
+export function rangeLabel(from: string, to: string, today: string): string {
+  for (const p of NAMED) {
+    const [a, b] = periodRange({ p }, today);
+    if (a === from && b === to) return cap(PERIODS[p]);
+  }
+  const year = today.slice(0, 4);
+  if (from === to) return cap(bucketLabel(from, "day", from.slice(0, 4) !== year).long);
+  const wholeMonths = from.slice(8) === "01" && addDays(to, 1).slice(8) === "01";
+  if (wholeMonths) {
+    if (from.slice(5) === "01-01" && to.slice(5) === "12-31" && from.slice(0, 4) === to.slice(0, 4)) return from.slice(0, 4);
+    const month = (d: string) => bucketLabel(d, "month", true).long;
+    return from.slice(0, 7) === to.slice(0, 7) ? cap(month(from)) : `${cap(month(from))} – ${month(to)}`;
+  }
+  const short = (d: string) => `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`;
+  return `${short(from)} – ${short(to)}${to.slice(0, 4) !== year ? ` ${to.slice(0, 4)}` : ""}`;
+}
+
+/** De periode van een getal of grafiek: de laatste zoveel periodes (stap en aantal zoals chartOf). */
+const tallyWindow = (block: ViewBlock) => {
+  const t = block.tally ?? DEFAULT_TALLY;
+  const calendar = block.show === "kalender";
+  return { step: calendar ? ("day" as const) : t.step, count: calendar && !t.n ? 35 : t.n };
+};
+
+/**
+ * Waar een weergave staat als je `shift` periodes bladert (negatief: vroeger): de periode die je ziet, de dag die als
+ * "vandaag" telt (voor de voorwaarden en de grafiek) en welke dagen de server moet laden. Een agenda bladert per maand,
+ * een getal of grafiek per venster (6 maanden terug bij "de laatste 6 maanden", niet voorbij vandaag), een lijst met een
+ * periode in haar voorwaarden per die periode (gisteren, vorige week). Null: niets om door te bladeren.
+ */
+export function viewSpan(block: ViewBlock, today: string, shift = 0): (Span & { today: string; load: [string | null, string | null] }) | null {
+  const k = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, Math.trunc(shift) || 0));
+  if (block.show === "agenda") {
+    const month = shiftMonth(today.slice(0, 7), k);
+    const grid = monthGrid(month);
+    const from = grid[0];
+    const to = grid[grid.length - 1];
+    return { label: cap(bucketLabel(`${month}-01`, "month", true).long), earlier: true, later: true, from, to, month, today: k ? addMonths(today, k) : today, load: [from, to] };
+  }
+  const { step, count } = tallyWindow(block);
+  if (counts(block.show) && count > 0) {
+    const def = { step, count } as ChartDef;
+    let w = chartWindow(def, today) as ChartWindow;
+    for (let i = 0; i < -Math.min(k, 0); i++) w = previousWindow(w, def);
+    const label = k < 0 ? rangeLabel(w.from, w.to, today) : count === 1 ? (step === "day" ? "Vandaag" : cap(`deze ${CHART_STEPS[step].one}`).replace("Deze jaar", "Dit jaar")) : `Laatste ${count} ${CHART_STEPS[step].many}`;
+    // Een getal vergelijkt met de periode ervoor: die moet ook geladen zijn.
+    return { label, earlier: true, later: k < 0, from: w.from, to: w.to, today: k < 0 ? w.to : today, load: [previousWindow(w, def).from, w.to] };
+  }
+  const period = periodOf(block);
+  if (period) {
+    const stepOf = PERIOD_STEPS[period.p]!;
+    const n = (stepOf.n || Math.max(1, period.n ?? 7)) * k;
+    const moved = stepOf.unit === "day" ? addDays(today, n) : addMonths(today, n);
+    const [from, to] = periodRange(period, moved);
+    const label = k === 0 ? cap(periodText(period)) : from && to ? rangeLabel(from, to, today) : cap(periodText(period));
+    return { label, earlier: true, later: true, from, to, today: moved, load: [from, to] };
+  }
+  return null;
+}
+
+/** Wanneer een rij in de agenda staat: de dag (een datum, het begin van een tijdstip of periode) en eventueel tot wanneer. */
+export function agendaDays(item: { data: Record<string, unknown> }, key: string): { start: string; end?: string } | null {
+  const v = item.data[key];
+  const day = (x: unknown) => (typeof x === "string" && /^\d{4}-\d{2}-\d{2}/.test(x) ? x.slice(0, 10) : null);
+  if (Array.isArray(v)) {
+    const start = day(v[0]) ?? day(v[1]);
+    const end = day(v[1]);
+    return start ? { start, ...(end && end > start ? { end } : {}) } : null;
+  }
+  const start = day(v);
+  if (!start) return null;
+  const end = day(item.data.end);
+  return { start, ...(end && end > start ? { end } : {}) };
+}
+
+/** Zoveel staat er hoogstens in een agenda (een maand). */
+export const MAX_AGENDA = 400;
 
 /** De grafiek die bij de zin hoort (getal, voortgang, staafjes, …); null bij een lijst of tabel. */
 export function chartOf(block: ViewBlock, fields: FieldDef[]): ChartDef | null {
@@ -405,7 +562,7 @@ export function chartOf(block: ViewBlock, fields: FieldDef[]): ChartDef | null {
     form,
     agg: t.agg,
     ...(t.agg !== "count" && t.field ? { field: t.field } : {}),
-    date: sourceDate(block.source, fields, t.date),
+    date: sourceDate(block.source, fields, block.date),
     step: block.show === "kalender" ? "day" : t.step,
     count: block.show === "kalender" && !t.n ? 35 : t.n,
     ...(by ? { by } : {}),
@@ -419,20 +576,33 @@ const compare = (a: number, op: ResultOp, b: number) => (op === "lt" ? a < b : o
  * Rekent een weergave uit over de rijen van haar bron (al met de rechten van de lezer): de voorwaarden van de zin, de
  * volgorde, de voorwaarden op wat je ziet, en de grafiek of de rijen (hoogstens `limit`).
  */
-export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: FieldDef[], items: T[], ctx: { today: string; me: string; names: Names; chart: ChartNames }): ViewOutcome<T> {
-  const chosen = items.filter((i) => matchesView(i, block.where, fields, { today: ctx.today, me: ctx.me, names: ctx.names }));
+export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: FieldDef[], items: T[], ctx: { today: string; me: string; names: Names; chart: ChartNames; shift?: number }): ViewOutcome<T> {
+  const at = viewSpan(block, ctx.today, ctx.shift);
+  const span: Span | null = at ? { label: at.label, earlier: at.earlier, later: at.later, from: at.from, to: at.to, ...(at.month ? { month: at.month } : {}) } : null;
+  const today = at?.today ?? ctx.today;
+  const chosen = items.filter((i) => matchesView(i, block.where, fields, { today, me: ctx.me, names: ctx.names }));
   const rules = block.rules ?? [];
   const hideEmpty = rules.some((r) => r.when === "leeg");
   const def = chartOf(block, fields);
   if (def) {
-    const chart = computeChart(def, fields, chosen, ctx.chart, ctx.today);
+    const chart = computeChart(def, fields, chosen, ctx.chart, today);
     const result = chart?.total ?? null;
     const toneRule = result === null ? undefined : rules.find((r): r is Extract<Rule, { when: "uitkomst" }> => r.when === "uitkomst" && compare(result, r.op, r.value));
-    return { rows: [], total: chosen.length, chart, hidden: hideEmpty && chosen.length === 0, tone: toneRule?.then ?? null };
+    return { rows: [], total: chosen.length, chart, hidden: hideEmpty && chosen.length === 0, tone: toneRule?.then ?? null, span };
+  }
+  if (block.show === "agenda" && at) {
+    // Een agenda: wat in het rooster van de maand valt, op volgorde van de dag.
+    const key = sourceDate(block.source, fields, block.date);
+    const placed = chosen
+      .map((i) => ({ i, d: agendaDays(i, key) }))
+      .filter((x): x is { i: T; d: { start: string; end?: string } } => x.d !== null && x.d.start <= at.to! && (x.d.end ?? x.d.start) >= at.from!)
+      .sort((a, b) => a.d.start.localeCompare(b.d.start));
+    const rows: ViewRow<T>[] = placed.map((x) => x.i);
+    return { rows: rows.slice(0, MAX_AGENDA), total: rows.length, chart: null, hidden: hideEmpty && rows.length === 0, tone: null, span };
   }
   // Een lijst of tabel: de volgorde, dan wat bovenaan moet, wat weg moet en welke kleur.
   const rowRules = rules.filter((r): r is Extract<Rule, { when: "rij" }> => r.when === "rij");
-  const effects = (i: T) => rowRules.filter((r) => matchesView(i, { match: "all", conditions: [r.cond] }, fields, { today: ctx.today, me: ctx.me, names: ctx.names })).map((r) => r.then);
+  const effects = (i: T) => rowRules.filter((r) => matchesView(i, { match: "all", conditions: [r.cond] }, fields, { today, me: ctx.me, names: ctx.names })).map((r) => r.then);
   const sorted = sortItems(chosen, block.where.sort, fields, ctx.names);
   const rows: ViewRow<T>[] = [];
   for (const i of sorted) {
@@ -442,11 +612,16 @@ export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: Fie
     rows.push({ ...i, ...(tone ? { tone } : {}), ...(fx.includes("bovenaan") ? { top: true } : {}) });
   }
   const ordered = [...rows.filter((r) => r.top), ...rows.filter((r) => !r.top)];
-  return { rows: ordered.slice(0, block.limit ?? DEFAULT_LIMIT), total: ordered.length, chart: null, hidden: hideEmpty && ordered.length === 0, tone: null };
+  return { rows: ordered.slice(0, block.limit ?? DEFAULT_LIMIT), total: ordered.length, chart: null, hidden: hideEmpty && ordered.length === 0, tone: null, span };
 }
 
-/** Een rij zoals de server ze geeft: met een link, en bij het logboek de gebeurtenis (afvinken, een timer stoppen). */
-export type ViewRowOut = ViewRow<SourceItem & { link: string | null; event?: { status: "gebeurd" | "gepland" | "afgevinkt"; running: boolean; at: string } }>;
+/**
+ * Een rij zoals de server ze geeft: met een link, bij het logboek de gebeurtenis (afvinken, een timer stoppen) en bij
+ * wie moet wie waar Terugbetaald een overdracht logt (met de IBAN van wie krijgt, voor een betaal-QR).
+ */
+export type ViewRowOut = ViewRow<
+  SourceItem & { link: string | null; event?: { status: "gebeurd" | "gepland" | "afgevinkt"; running: boolean; at: string }; settle?: { list: string; iban: string | null } }
+>;
 
 /** Wat GET /insights/view geeft: de velden van de bron, de uitkomst, en de namen om waarden te tonen. */
 export type ViewResponse = Omit<ViewOutcome, "rows"> & {
@@ -476,6 +651,7 @@ export function columnsOf(block: ViewBlock, fields: FieldDef[]): FieldDef[] {
     voorraad: ["level"],
     saldo: ["amount"],
     voeding: ["kcal"],
+    datums: ["at", "list"],
   };
   const keys = fallback[block.source];
   if (keys.length) return keys.map((k) => byKey.get(k)).filter((f): f is FieldDef => Boolean(f));

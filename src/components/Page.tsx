@@ -43,6 +43,7 @@ export function PageHead({
   badge,
   description,
   back,
+  top = false,
   actions,
   primary,
 }: {
@@ -50,10 +51,14 @@ export function PageHead({
   badge?: ReactNode;
   description?: ReactNode;
   back?: Back;
+  /** Een plek uit het menu (een bord, Verbanden): geen kruimelpad ervoor. */
+  top?: boolean;
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
-  const { person: me, openSearch } = useSession();
+  const { person: me, openSearch, boards } = useSession();
+  // Het beginscherm: je eerste bord.
+  const home = boards[0]?.name ?? "Overzicht";
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -81,10 +86,10 @@ export function PageHead({
     <>
       <div className="panel-bar">
         <nav className="breadcrumb" aria-label="Kruimelpad">
-          {/* Op het overzicht zelf geen "Overzicht › Overzicht". */}
-          {(back || title !== "Overzicht") && (
+          {/* Een plek uit het menu staat op zichzelf; de rest komt van je beginscherm (of van waar je kwam). */}
+          {(back || !top) && (
             <>
-              {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">Overzicht</Link>}
+              {back ? <BackLink back={back}>{back.label}</BackLink> : <Link to="/">{home}</Link>}
               <Icon name="next" size={14} className="sep" />
             </>
           )}

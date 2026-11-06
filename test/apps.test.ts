@@ -17,12 +17,13 @@ const reach: Reach = {
 test("bestemmingen: nagekeken, als pad en met een naam", () => {
   assert.equal(cleanDestination({ kind: "board", board: "../x" }), null);
   assert.equal(cleanDestination({ kind: "raar" }), null);
-  assert.equal(cleanDestination({ kind: "view", view: "raar" }), null);
+  // De vaste weergaven (Geld, Agenda, …) zijn borden geworden: zo'n bestemming valt weg.
+  assert.equal(cleanDestination({ kind: "view", view: "geld" }), null);
+  assert.equal(cleanDestination({ kind: "agenda" }), null);
   assert.deepEqual(cleanDestination({ kind: "form", list: "pel", type: "bij", text: "  3 zakken  pellets " }), { kind: "form", list: "pel", type: "bij", text: "3 zakken pellets" });
   assert.deepEqual(cleanDestination({ kind: "form", list: "pel", thing: true, type: "bij" }), { kind: "form", list: "pel", thing: true });
-  assert.equal(destinationPath({ kind: "board", board: "k1" }), "/?bord=k1");
+  assert.equal(destinationPath({ kind: "board", board: "k1" }), "/bord/k1");
   assert.equal(destinationPath({ kind: "list", list: "pel" }), "/lijsten/pel");
-  assert.equal(destinationPath({ kind: "view", view: "geld" }), "/geld");
   assert.equal(destinationPath({ kind: "form", list: "pel", type: "bij", text: "3 zakken" }), "/lijsten/pel/loggen?soort=bij&tekst=3+zakken");
   assert.equal(destinationPath({ kind: "form", list: "pel", thing: true }), "/lijsten/pel/nieuw");
   assert.equal(destinationLabel({ kind: "board", board: "k1" }, reach), "Keuken");
@@ -40,7 +41,8 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
     {
       apps: [
         { id: "a1", name: " Pellets ", to: { kind: "form", list: "pel", type: "bij" } },
-        { id: "a1", name: "Dubbel", to: { kind: "agenda" } },
+        { id: "a1", name: "Dubbel", to: { kind: "board", board: "main" } },
+        { name: "Geld", to: { kind: "view", view: "geld" } },
         { name: "Geen bestemming" },
         { name: "Wijn", to: { kind: "form", list: "wijn", thing: true } },
         { name: "Weg", to: { kind: "list", list: "weg" } },

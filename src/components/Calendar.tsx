@@ -12,7 +12,8 @@ export type CalendarEntry = {
   title: string;
   start: string;
   end?: string;
-  href: string;
+  /** Waar een tik naartoe gaat (zonder: enkel tonen). */
+  href?: string;
   /** Toon (kleur van het project), zoals bij `tone-…`. */
   tone?: string;
   icon?: IconName;
@@ -120,9 +121,13 @@ export function CalendarMonth({
                   <ul className="calendar-entries">
                     {here.slice(0, PER_DAY).map((e) => (
                       <li key={e.key}>
-                        <Link to={e.href} className={`calendar-entry tone-${e.tone ?? "sky"}`} onClick={(ev) => ev.stopPropagation()}>
-                          {e.title}
-                        </Link>
+                        {e.href ? (
+                          <Link to={e.href} className={`calendar-entry tone-${e.tone ?? "sky"}`} onClick={(ev) => ev.stopPropagation()}>
+                            {e.title}
+                          </Link>
+                        ) : (
+                          <span className={`calendar-entry tone-${e.tone ?? "sky"}`}>{e.title}</span>
+                        )}
                       </li>
                     ))}
                     {here.length > PER_DAY && <li className="calendar-more">+{here.length - PER_DAY}</li>}
@@ -152,8 +157,9 @@ export function CalendarMonth({
           <ul className="rows">
             {list.map((e) => (
               <li key={e.key}>
-                <Link to={e.href} className="row">
-                  <span className="cell-main">
+                {e.href ? (
+                  <Link to={e.href} className="row">
+                    <span className="cell-main">
                     <span className={`row-media tone-${e.tone ?? "sky"}`}>
                       <Icon name={e.icon ?? "calendar"} size={16} />
                     </span>
@@ -166,8 +172,25 @@ export function CalendarMonth({
                       )}
                     </span>
                   </span>
-                  <Icon name="next" size={16} className="row-chevron" />
-                </Link>
+                    <Icon name="next" size={16} className="row-chevron" />
+                  </Link>
+                ) : (
+                  <div className="row">
+                    <span className="cell-main">
+                    <span className={`row-media tone-${e.tone ?? "sky"}`}>
+                      <Icon name={e.icon ?? "calendar"} size={16} />
+                    </span>
+                    <span className="row-main">
+                      <span className="row-title">{e.title}</span>
+                      {e.meta && (
+                        <span className="row-meta">
+                          <span>{e.meta}</span>
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

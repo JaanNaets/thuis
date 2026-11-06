@@ -1,10 +1,10 @@
 // De app instellen (Jouw gegevens → App, zie shared/apps.ts): waar ze opent op dit toestel, je eigen apps (elk een
 // icoon op je beginscherm met een eigen naam en bestemming), de snelkoppelingen op het icoon en wat er met een gedeelde
-// foto gebeurt (Android). Een bestemming is een overzicht, de agenda, een weergave (Geld, Voorraad, …), een lijst, of
-// een formulier: loggen (eventueel met een soort en tekst) of een ding toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
+// foto gebeurt (Android). Een bestemming is een overzicht (een bord: Geld, Agenda, …), een lijst, of een formulier:
+// loggen (eventueel met een soort en tekst) of een ding toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
 
 import { useMemo, useState } from "react";
-import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, VIEWS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut, type ViewKey } from "../../shared/apps";
+import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
 import type { Targets } from "../../shared/targets";
 import { api, useApi } from "../api";
 import { useSession } from "../session";
@@ -68,11 +68,7 @@ export function DestinationPicker({
     const next: Destination | null =
       k === "board"
         ? choices.boards[0] && { kind: "board", board: choices.boards[0].id }
-        : k === "agenda"
-          ? { kind: "agenda" }
-          : k === "view"
-            ? { kind: "view", view: "geld" }
-            : first && { kind: k as "list" | "form", list: first.id };
+        : first && { kind: k as "list" | "form", list: first.id };
     onChange(next ?? null);
   };
   const list = value && "list" in value ? choices.lists.find((l) => l.id === value.list) : undefined;
@@ -98,18 +94,6 @@ export function DestinationPicker({
             {choices.boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {value?.kind === "view" && (
-        <label className="field">
-          <span className="label">Weergave</span>
-          <select value={value.view} onChange={(e) => onChange({ kind: "view", view: e.target.value as ViewKey })}>
-            {(Object.entries(VIEWS) as [ViewKey, { label: string }][]).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v.label}
               </option>
             ))}
           </select>
@@ -186,6 +170,7 @@ export function AppCard() {
 
   if (!choices || !settings) return null;
   const reach = choices.reach;
+  const firstBoard: Destination = { kind: "board", board: reach.boards[0]?.id ?? "main" };
   const ownShortcuts = shortcuts ?? settings.shortcuts;
 
   async function saveApp() {
@@ -244,7 +229,7 @@ export function AppCard() {
               ))}
             </ul>
           )}
-          <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => setEditing({ name: "", to: { kind: "agenda" } })}>
+          <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => setEditing({ name: "", to: firstBoard })}>
             <Icon name="plus" size={15} /> Nieuwe app
           </button>
         </div>
@@ -262,7 +247,7 @@ export function AppCard() {
               if (v === "auto") {
                 setShortcuts(null);
                 save({ ...settings, shortcuts: null }, "Snelkoppelingen: vanzelf");
-              } else setShortcuts(settings.shortcuts ?? [{ name: "Agenda", to: { kind: "agenda" } }]);
+              } else setShortcuts(settings.shortcuts ?? [{ name: shortName(firstBoard, reach), to: firstBoard }]);
             }}
           />
           {ownShortcuts && (
@@ -281,7 +266,7 @@ export function AppCard() {
               ))}
               <div className="btn-row">
                 {ownShortcuts.length < MAX_SHORTCUTS && (
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setShortcuts([...ownShortcuts, { name: "Agenda", to: { kind: "agenda" } }])}>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setShortcuts([...ownShortcuts, { name: shortName(firstBoard, reach), to: firstBoard }])}>
                     <Icon name="plus" size={15} /> Snelkoppeling
                   </button>
                 )}

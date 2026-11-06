@@ -7891,6 +7891,54 @@ button.quick-tile[aria-busy="true"] {
   box-shadow: inset 3px 0 0 var(--success-solid);
 }
 
+/* Bladeren (‹ ›, Vandaag) en de tabelknop rechts in de kop; tijdens het laden blijft de vorige periode staan, zachter. */
+.view-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.view-content.is-stale {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+/* Een agenda in een kaart: de maandkalender, compact (stipjes en de daglijst) zodra de kaart smal is. */
+.view-card {
+  container-type: inline-size;
+}
+
+.view-agenda {
+  padding-top: 0;
+}
+
+@container (max-width: 560px) {
+  .view-agenda .calendar-grid {
+    gap: 2px;
+  }
+
+  .view-agenda .calendar-weekday {
+    padding: 0 0 4px;
+    text-align: center;
+  }
+
+  .view-agenda .calendar-day {
+    justify-items: center;
+    min-height: 44px;
+    padding: 4px 2px;
+    border-radius: var(--radius-md);
+  }
+
+  .view-agenda .calendar-entries {
+    display: none;
+  }
+
+  .view-agenda .calendar-dots {
+    display: flex;
+  }
+}
+
 .view-card.tone-rood .chart-number-value {
   color: var(--danger);
 }

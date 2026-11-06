@@ -1,5 +1,5 @@
-// Waar de app opent op dit toestel (Jouw gegevens → App → Openen op): een overzicht, de agenda, een project, een
-// lijst of een formulier. Per toestel (de keukentablet "Keuken", je gsm "Uitgave toevoegen"), dus in localStorage.
+// Waar de app opent op dit toestel (Jouw gegevens → App → Openen op): een overzicht (een bord), een lijst of een
+// formulier. Per toestel (de keukentablet "Keuken", je gsm "Uitgave toevoegen"), dus in localStorage.
 // Enkel bij het openen (de eerste keer "/" in deze sessie), en op de kiosk na een tijd zonder aanraking.
 
 import { cleanDestination, destinationPath, type Destination } from "../shared/apps";

@@ -5,7 +5,7 @@ import { CommandPalette, PaletteContext, type PaletteMode } from "./components/C
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { Icon } from "./components/Icon";
 import { MenuSheet } from "./components/MenuSheet";
-import { Sidebar } from "./components/Sidebar";
+import { placeIndex, placesOf, Sidebar, type Place } from "./components/Sidebar";
 import { ToastProvider } from "./components/Toast";
 import { isKiosk, useIdleReset, useOnline } from "./device";
 import { useOutbox } from "./outbox";
@@ -65,11 +65,26 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
     document.querySelector("main")?.scrollTo({ top: 0 });
   }, [pathname]);
 
-  const session = useMemo(() => ({ person: me.person, lists: me.lists, tags: me.tags, ai: me.ai !== false, reloadMe, openSearch: () => openPalette("search") }), [me, reloadMe]);
+  const session = useMemo(
+    () => ({ person: me.person, lists: me.lists, tags: me.tags, boards: me.boards ?? [], ai: me.ai !== false, reloadMe, openSearch: () => openPalette("search") }),
+    [me, reloadMe],
+  );
 
-  // De onderbalk op een gsm: Overzicht, Agenda, de +, Geld en Menu. Menu licht op voor wat enkel in het menublad staat,
-  // en zolang dat open is.
-  const tabIndex = menu ? 4 : pathname === "/" ? 0 : pathname.startsWith("/agenda") ? 1 : pathname.startsWith("/geld") ? 3 : 4;
+  // De onderbalk op een gsm: je eerste drie borden (anders ook Verbanden) rond de +, en Menu. Menu licht op voor wat
+  // enkel in het menublad staat, en zolang dat open is.
+  const places = placesOf(session.boards);
+  const tabs = places.slice(0, 3);
+  const left = tabs.slice(0, 2);
+  const right = tabs.slice(2);
+  const here = placeIndex(tabs, pathname);
+  const menuIndex = tabs.length + 1;
+  const tabIndex = menu || here < 0 ? menuIndex : here < 2 ? here : here + 1;
+  const tab = (p: Place, i: number) => (
+    <NavLink key={p.to} to={p.to} end className={tabIndex === i ? "active" : ""}>
+      <Icon name={p.icon} size={20} />
+      <span>{p.label}</span>
+    </NavLink>
+  );
 
   return (
     <SessionContext value={session}>
@@ -92,16 +107,9 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
             <Sidebar onSearch={() => openPalette("search")} />
 
-            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 5 } as CSSProperties}>
+            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": tabs.length + 2 } as CSSProperties}>
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
-              <NavLink to="/" end className={tabIndex === 0 ? "active" : ""}>
-                <Icon name="project" size={20} />
-                <span>Overzicht</span>
-              </NavLink>
-              <NavLink to="/agenda" className={tabIndex === 1 ? "active" : ""}>
-                <Icon name="calendar" size={20} />
-                <span>Agenda</span>
-              </NavLink>
+              {left.map((p, i) => tab(p, i))}
               {add?.to ? (
                 <Link to={add.to} className="tab-add" aria-label={add.label}>
                   <span>
@@ -115,11 +123,8 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
                   </span>
                 </button>
               )}
-              <NavLink to="/geld" className={tabIndex === 3 ? "active" : ""}>
-                <Icon name="wallet" size={20} />
-                <span>Geld</span>
-              </NavLink>
-              <button type="button" className={`tab-button${tabIndex === 4 ? " active" : ""}`} aria-expanded={menu} onClick={() => setMenu(true)}>
+              {right.map((p, i) => tab(p, left.length + 1 + i))}
+              <button type="button" className={`tab-button${tabIndex === menuIndex ? " active" : ""}`} aria-expanded={menu} onClick={() => setMenu(true)}>
                 <Icon name="menu" size={20} />
                 <span>Menu</span>
               </button>

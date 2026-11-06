@@ -33,8 +33,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   (`lines`): `in` (erbij), `uit` (eraf), `voor` (waarvoor, de wagen) en `bij` (waar, de winkel), naar een ding of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon). Status: `gebeurd`,
   `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee).
-- Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen, getoond in **weergaven**
-  (`/geld`, `/voorraad`, `/eten`, `/te-doen`, `/agenda`; uitgerekend in `worker/routes/insights.ts`).
+- Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen. Er zijn ook geen vaste
+  pagina's (Geld, Voorraad, Eten, Te doen, Agenda): dat zijn **borden** met weergaven (bronnen: logboek, dingen,
+  voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan
+  met naam en icoon in het menu (`placesOf`: `/` en `/bord/:id`, plus Verbanden).
 - Dingen houden bij het overzetten de id van hun oude item (foto's in R2: `items/{id}/photo`); een gebeurtenis
   gebruikt `events/{id}/photo` (`worker/media.ts`).
 
@@ -90,11 +92,12 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   activiteit zonder einde (`POST /events/:id/stop`, `kinds.goal` voor een melding).
 - **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een lijst): aan iedereen die de lijst ziet of aan wie in
   de verdeling staat; nooit aan wie het logde of wie de lijst of tag stilzette.
-- **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden met blokken van twee soorten. Een **weergave** is een
-  zin: bron (logboek, dingen, voorraad, saldo's, voeding) + lijsten + voorwaarden (`ViewDef`) + tellen (`Tally`) + één
-  van tien vormen (`SHOWS`) + voorwaarden op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
+- **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden (naam, icoon) met blokken van twee soorten. Een **weergave** is een
+  zin: bron (logboek, dingen, voorraad, saldo's, voeding, alles met een datum) + lijsten + voorwaarden (`ViewDef`) +
+  tellen (`Tally`) + één van elf vormen (`SHOWS`, ook Agenda) + voorwaarden op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
   verbergen als er niets is; de uitkomst kleuren). De server rekent ze uit met de rechten van de lezer
-  (`GET /insights/view`, `evaluateView`). Een **actie** logt: soort, vooraf ingevulde velden en wat een tik doet
+  (`GET /insights/view`, `evaluateView`); met een periode blader je (`viewSpan`, `?periode=`), een agenda per maand.
+  Een **actie** logt: soort, vooraf ingevulde velden en wat een tik doet
   (formulier, meteen bewaren met Ongedaan maken, tellen, timer). Geen vaste blokken of voorbeelden; oude blokken
   (todo, money, stock, quick, chart, …) worden bij het lezen een gelijke zin (`upgradeBlock`). Automatisaties (iets
   dat zelf handelt) zijn voor later. Opstarten blijft licht: elk blok haalt zijn eigen inhoud.

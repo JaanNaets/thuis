@@ -29,7 +29,7 @@ const shortcut = (name: string, url: string) => ({ name, short_name: name.slice(
 
 /**
  * Het manifest van de app: je eigen snelkoppelingen (`chosen`, zie shared/apps.ts), of vanzelf wat je het meest logt
- * (`often`), Toevoegen en Agenda.
+ * (`often`) en Toevoegen.
  */
 export function appManifest(often: { name: string; url: string }[], chosen: { name: string; url: string }[] | null = null) {
   return {
@@ -40,7 +40,7 @@ export function appManifest(often: { name: string; url: string }[], chosen: { na
     ...BASE,
     shortcuts: chosen
       ? chosen.map((c) => shortcut(c.name, c.url))
-      : [...often.slice(0, SHORTCUT_LISTS).map((t) => shortcut(t.name, t.url)), shortcut("Toevoegen", "/?toevoegen=1"), shortcut("Agenda", "/agenda")],
+      : [...often.slice(0, SHORTCUT_LISTS).map((t) => shortcut(t.name, t.url)), shortcut("Toevoegen", "/?toevoegen=1")],
     share_target: {
       action: SHARE_PATH,
       method: "POST",

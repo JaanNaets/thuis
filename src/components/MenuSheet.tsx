@@ -5,15 +5,17 @@ import { useSession } from "../session";
 import { Avatar } from "./Controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
-import { currentList, PLACES, TagTree } from "./Sidebar";
+import { currentList, placeIndex, placesOf, TagTree } from "./Sidebar";
 
 /**
- * Het menublad (gsm, achter de tab Menu; zie STIJLBOEK.md → Gsm): zoeken, de vaste plekken, je lijsten per tag en
+ * Het menublad (gsm, achter de tab Menu; zie STIJLBOEK.md → Gsm): zoeken, je borden en Verbanden, je lijsten per tag en
  * jij, op de schil. Een tik op een rij of een nieuwe pagina sluit het blad.
  */
 export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose: () => void; onSearch: () => void }) {
-  const { lists, tags, person } = useSession();
+  const { lists, tags, person, boards } = useSession();
   const { pathname } = useLocation();
+  const places = placesOf(boards);
+  const here = placeIndex(places, pathname);
   useEffect(() => onClose(), [pathname]);
 
   return (
@@ -31,8 +33,8 @@ export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose:
           <span>Zoeken…</span>
         </button>
         <nav className="menu-places" aria-label="Plekken">
-          {PLACES.map((p) => (
-            <NavLink key={p.to} to={p.to} end={p.to === "/"} className="menu-row">
+          {places.map((p, i) => (
+            <NavLink key={p.to} to={p.to} end className={`menu-row${i === here ? " active" : ""}`}>
               <Icon name={p.icon} size={18} />
               <span>{p.label}</span>
             </NavLink>

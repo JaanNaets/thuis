@@ -82,8 +82,12 @@ export function defaultBlocks(lists: { id: string; archived: 0 | 1 }[], has: { m
 
 // ---------- borden ----------
 
-export type Board = { id: string; name: string; blocks: Block[] | null };
-export type BoardInfo = { id: string; name: string };
+/** Een bord staat met zijn naam en icoon in het menu (het eerste is je beginscherm). */
+export type Board = { id: string; name: string; icon: string; blocks: Block[] | null };
+export type BoardInfo = { id: string; name: string; icon: string };
+export const BOARD_ICON = "project";
+const ICON = /^[a-z]{2,20}$/;
+const iconOf = (v: unknown) => (typeof v === "string" && ICON.test(v) ? v : BOARD_ICON);
 export const MAX_BOARDS = 8;
 export const MAIN_BOARD = "main";
 
@@ -100,13 +104,13 @@ export function cleanBoards(raw: unknown): Board[] {
     const name = typeof r.name === "string" ? r.name.trim().slice(0, 30) : "";
     if (!boardId || !name || seen.has(boardId)) continue;
     seen.add(boardId);
-    boards.push({ id: boardId, name, blocks: fresh ? cleanBlocks(r.blocks) : null });
+    boards.push({ id: boardId, name, icon: iconOf(r.icon), blocks: fresh ? cleanBlocks(r.blocks) : null });
   }
-  if (!boards.length) boards.push({ id: MAIN_BOARD, name: "Overzicht", blocks: null });
+  if (!boards.length) boards.push({ id: MAIN_BOARD, name: "Overzicht", icon: BOARD_ICON, blocks: null });
   return boards;
 }
 
-/** Hernoemen, schikken, toevoegen (zonder id) en weghalen; er blijft er altijd één. */
+/** Hernoemen, een icoon kiezen, schikken, toevoegen (zonder id) en weghalen; er blijft er altijd één. */
 export function renameBoards(current: Board[], wanted: unknown, newId: () => string): Board[] {
   if (!Array.isArray(wanted)) return current;
   const byId = new Map(current.map((b) => [b.id, b]));
@@ -117,7 +121,8 @@ export function renameBoards(current: Board[], wanted: unknown, newId: () => str
     const name = typeof r.name === "string" ? r.name.trim().slice(0, 30) : "";
     if (!name) continue;
     const had = typeof r.id === "string" ? byId.get(r.id) : undefined;
-    out.push(had ? { ...had, name } : { id: newId(), name, blocks: [] });
+    const icon = r.icon === undefined && had ? had.icon : iconOf(r.icon);
+    out.push(had ? { ...had, name, icon } : { id: newId(), name, icon, blocks: [] });
   }
   return out.length ? out : current.slice(0, 1);
 }

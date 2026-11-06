@@ -15,6 +15,7 @@ import {
   ROW_EFFECTS,
   SHOW_ORDER,
   SHOWS,
+  sourceDate,
   SOURCES,
   viewName,
   type ActionBlock,
@@ -264,6 +265,14 @@ const SHOW_ICONS: Record<Show, ReactNode> = {
     </>
   ),
   tabel: <path d="M4 4h32v18H4zM4 10h32M4 16h32M16 4v18" fill="none" strokeWidth="2" />,
+  agenda: (
+    <>
+      <path d="M8 4h24a3 3 0 0 1 3 3v15a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zM5 10h30" fill="none" strokeWidth="2" />
+      <rect x="10" y="14" width="5" height="4" rx="1" stroke="none" />
+      <rect x="18" y="14" width="5" height="4" rx="1" stroke="none" opacity=".35" />
+      <rect x="26" y="14" width="5" height="4" rx="1" stroke="none" opacity=".35" />
+    </>
+  ),
   getal: (
     <text x="20" y="19" textAnchor="middle" fontSize="15" fontWeight="700" stroke="none">
       12
@@ -315,7 +324,7 @@ const SHOW_ICONS: Record<Show, ReactNode> = {
 /** Wat bij een vorm hoort: tellen (met standaard per periode of keuze) of rijen (met een maximum). */
 function withShow(draft: ViewBlock, next: Show): ViewBlock {
   const { tally: _t, limit: _l, ...rest } = draft;
-  if (!counts(next)) return { ...rest, show: next, limit: draft.limit ?? DEFAULT_LIMIT };
+  if (!counts(next)) return { ...rest, show: next, ...(next !== "agenda" ? { limit: draft.limit ?? DEFAULT_LIMIT } : {}) };
   const keep = draft.tally;
   const tally: Tally = next === "kalender" ? { agg: keep?.agg ?? "count", ...(keep?.field ? { field: keep.field } : {}), step: "day", n: 35 } : perChoice(next) || next === "getal" || next === "voortgang" ? { agg: keep?.agg ?? "count", ...(keep?.field ? { field: keep.field } : {}), ...(keep?.by ? { by: keep.by } : {}), step: keep && !overTime(draft.show) ? keep.step : "month", n: keep && !overTime(draft.show) ? keep.n : 1 } : { agg: keep?.agg ?? "count", ...(keep?.field ? { field: keep.field } : {}), step: keep?.step && keep.step !== "day" ? keep.step : "week", n: 8 };
   return { ...rest, show: next, tally };
@@ -361,6 +370,7 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
   const choices: Choices = { people: data?.people ?? [], items: data?.items ?? {}, me: person.id };
   const conds = draft.where.conditions;
   const usable = fields.filter((f) => f.type !== "calc" || f.result);
+  const dates = usable.filter((f) => f.type === "date" || f.type === "date_range");
   const listName = (id: string) => lists.find((l) => l.id === id)?.name;
 
   function setSource(source: SourceKind) {
@@ -444,6 +454,13 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
             />
           </div>
 
+          {draft.source === "dingen" && (counts(draft.show) || draft.show === "agenda") && dates.length > 0 && (
+            <div className="sentence-line">
+              volgens
+              <Tok label="Volgens welke datum" value={sourceDate("dingen", usable, draft.date)} options={dates.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))} onChange={(date) => set({ date })} />
+            </div>
+          )}
+
           {counts(draft.show) && t && (
             <>
               <div className="sentence-line">
@@ -499,7 +516,7 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
             </>
           )}
 
-          {!counts(draft.show) && (
+          {(draft.show === "lijst" || draft.show === "tabel") && (
             <>
               <div className="sentence-line">
                 gesorteerd op
@@ -574,7 +591,7 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
       <div className="builder-preview">
         <h3 className="cap-label">Voorbeeld</h3>
         <section className={`card dash-card view-card${data?.tone ? ` tone-${data.tone}` : ""}`} aria-label="Voorbeeld" aria-busy={!data}>
-          <CardHead title={viewName(draft, listName)} description={data?.chart?.window && counts(draft.show) ? data.chart.window : undefined} />
+          <CardHead title={viewName(draft, listName)} description={draft.show !== "agenda" ? (data?.span?.label ?? (counts(draft.show) ? data?.chart?.window : undefined)) : undefined} />
           {data && (data.hidden ? <p className="view-empty">Verborgen: er is niets</p> : <ViewBody block={settled} data={data} preview />)}
         </section>
       </div>
@@ -601,7 +618,7 @@ const TONE_OPTIONS: Option<RuleTone>[] = [
 
 function RulesEditor({ draft, fields, choices, onChange }: { draft: ViewBlock; fields: FieldDef[]; choices: Choices; onChange: (rules: Rule[]) => void }) {
   const rules = draft.rules ?? [];
-  const rows = !counts(draft.show);
+  const rows = draft.show === "lijst" || draft.show === "tabel";
   const result = draft.show === "getal" || draft.show === "voortgang";
   const set = (i: number, r: Rule) => onChange(rules.map((x, k) => (k === i ? r : x)));
   const remove = (i: number) => onChange(rules.filter((_, k) => k !== i));

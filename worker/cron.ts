@@ -153,7 +153,7 @@ async function send(db: D1Database, due: Map<string, Due[]>, tag: string): Promi
     for (const d of shown) sent += await notify(db, person, d);
     if (shown.length < list.length) {
       const rest = list.slice(shown.length);
-      sent += await notify(db, person, { title: `Nog ${rest.length} herinneringen`, body: rest.map((d) => d.title).join(", "), url: "/te-doen", tag: `meer:${tag}` });
+      sent += await notify(db, person, { title: `Nog ${rest.length} herinneringen`, body: rest.map((d) => d.title).join(", "), url: "/", tag: `meer:${tag}` });
     }
   }
   return sent;

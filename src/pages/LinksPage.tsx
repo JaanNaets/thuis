@@ -213,7 +213,7 @@ export function LinksPage() {
 
   return (
     <div className="page">
-      <PageHead title="Verbanden" description={summary} />
+      <PageHead top title="Verbanden" description={summary} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <SkeletonRows rows={4} />}
       {data && !lists.length && <EmptyState icon="links" title="Nog geen lijsten" />}

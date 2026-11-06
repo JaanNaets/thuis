@@ -155,23 +155,23 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 │ [ Wijnen · Logboek ]                   │
 │ …                                      │
 ├ onderbalk (schil, 56px, van rand tot rand) ┤
-│ ◖Overzicht◗  Agenda  [ + ]  Geld  Menu │
+│ ◖Thuis◗   Geld   [ + ]  Agenda   Menu  │
 └────────────────────────────────────────┘
 ```
 
 - Witte pagina, inhoud met 16px marge, een titel van 24px.
 - **De kop** (`.phone-head`, in `PageHead`): 48px op de schil met een waas, plakt bovenaan, een haarlijn eronder.
-  Links **terug** (een icoonknop van 36px) of het merk (▣ Thuis, naar het overzicht); rechts **zoeken** (opent het
+  Links **terug** (een icoonknop van 36px) of het merk (▣ Thuis, naar je eerste bord); rechts **zoeken** (opent het
   [zoekpalet](#zoekpalet-commandpalette)) en **jouw letter** (naar `/ik`). Zodra de grote titel onder de kop
   schuift, verschijnt hij klein in het midden.
 - **De onderbalk** (`.tabbar`): vast onderaan, van rand tot rand, op de schil met een waas en een dekkende lijn
-  erboven. Vijf tabs: **Overzicht**, **Agenda**, de gele **+**, **Geld** en **Menu**. Het witte vlak glijdt naar
-  waar je bent; Menu licht op voor wat enkel in het menublad staat (een lijst, Voorraad, Eten, …) en zolang dat
-  open is.
+  erboven. Je eerste drie **borden** (met hun icoon en naam; met minder borden ook **Verbanden**) rond de gele **+**,
+  en **Menu**. Het witte vlak glijdt naar waar je bent; Menu licht op voor wat enkel in het menublad staat (een lijst,
+  je andere borden, …) en zolang dat open is.
 - **De +** doet wat het scherm vraagt (`useAddAction` of `<PhoneAdd>` uit `src/shell.ts`: een lijst voegt een ding
   toe of logt), anders opent hij het palet om toe te voegen. Er is geen zwevende knop.
-- **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), de vaste plekken,
-  je lijsten per tag en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
+- **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), je borden en
+  Verbanden, je lijsten per tag en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
 
 ### Tablet en kiosk (vanaf 768px)
@@ -179,9 +179,9 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 ```
 ┌ schil #f2f2ef ─────────────────────────────────────────────────────────────┐
 │ ▣ Thuis          ┌ paneel (wit, haarlijn, 18px) ──────────────────────────┐ │
-│ [⌕ Zoeken…]      │ Overzicht › Wijnen               [+ Wijn toevoegen]  (J)│ │  ← paneelbalk 56px
-│ ◖Overzicht◗      ├────────────────────────────────────────────────────────┤ │
-│ Agenda …         │ Wijnen                                          (⋯)    │ │  ← titel 24px
+│ [⌕ Zoeken…]      │ Thuis › Wijnen                   [+ Wijn toevoegen]  (J)│ │  ← paneelbalk 56px
+│ ◖Thuis◗          ├────────────────────────────────────────────────────────┤ │
+│ Geld, Agenda …   │ Wijnen                                          (⋯)    │ │  ← titel 24px
 │ LIJSTEN          │ [ Wijnen · Logboek ]                                   │ │  ← tabs
 │ ⌄ Huis           │ zijkolom (320px)        zoeken, filters                │ │
 │ │ Voorraad       │ Wie                     Wijn          Wijnhuis   Fles  │ │
@@ -194,12 +194,12 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 - **Schil** met links de **zijbalk** (224px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (10px marge, een dekkende haarlijn `--line`, afronding 18px, geen schaduw). Het paneel scrollt zelf; de
   zijbalk blijft staan.
-- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje met "Thuis" (naar het overzicht), het
-  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), de vaste plekken en de
+- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje met "Thuis" (naar je eerste bord), het
+  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden en Verbanden, en de
   [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen item ligt op het **witte vlak** dat meeglijdt.
 - **Paneelbalk** (56px, wit, plakt bovenaan het paneel met een haarlijn eronder; de inhoud scrollt eronder door):
-  kruimelpad met `›` links ("Overzicht › Wijnen"), rechts de hoofdactie (gele knop) en jouw letter in een wit
-  rondje (naar `/ik`).
+  kruimelpad met `›` links ("Thuis › Wijnen": je eerste bord; een bord of Verbanden zelf staat er alleen, `top`),
+  rechts de hoofdactie (gele knop) en jouw letter in een wit rondje (naar `/ik`).
 - **Kop**: een titel (24px, vet) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
   item rechts (`btn-outline btn-sm`). Geen lijn eronder.
 - Inhoud daaronder met 20px marge. Een lijst en een ding gebruiken de [zijkolom](#zijkolom-split).
@@ -417,11 +417,13 @@ glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? V
 
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
-Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen, Verbanden), daaronder **Lijsten**: per tag een
+Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam (het eerste op `/`, de andere op `/bord/:id`) en
+**Verbanden**. Er zijn geen vaste pagina's voor geld, voorraad, eten, te doen of de agenda: dat zijn borden die je zelf
+samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
-Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); onder het overzicht staan geen lijsten.
+Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); onder een bord staan geen lijsten.
 Een sectiekop ("Lijsten") staat in kleine kapitalen.
 
 ### Formulier
@@ -618,8 +620,10 @@ beetje omhoog. Per dag hooguit drie pilletjes (`.calendar-entry`, in de toon van
 stipjes. Onder de kalender wat op de gekozen dag valt, als gewone `rows`, met eventueel "+ Maaltijd toevoegen" (begint
 op die dag: `?veld=datum&op=2026-11-03`). Een periode (een reis) staat op elke dag ervan.
 
-- **Agenda** (`/agenda`, in de zijbalk en de onderbalk): elk veld met **In de agenda** (`agenda` op een datum, een
-  periode of een berekende datum) uit al je lijsten, met jouw rechten per lijst.
+- **Een agenda op een bord**: een weergave in de vorm **Agenda** (`ViewBody`), bv. "alles met een datum van al je
+  lijsten": wat gebeurde of gepland staat, en elk veld met **In de agenda** (`agenda` op een datum, een periode of
+  een berekende datum), met jouw rechten per lijst. In een smalle kaart (onder 560px, een container query) zoals op
+  gsm: stipjes en de daglijst.
 - Een lijst als agenda: de weergave **Als agenda** (volgens een datumveld naar keuze).
 
 ### Uitleg: `Tip`
@@ -668,19 +672,18 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 - Volgorde is een instelling, geen knop op een overzicht: je lijsten bij **Jouw gegevens** (je letter rechtsboven),
   velden en soorten bij **Instellen** van de lijst.
 
-### Kosten verdelen: `BalanceCard`
+### Kosten verdelen: Wie moet wie en `SettleForm`
 
 Kosten verdelen is geen lijst: elke aankoop of dienst heeft Bedrag, Betaald door (begint met jou) en Gedeeld met
 (`SharesField`), en een lijn kan enkel van één persoon zijn. Wie moet wie rekent de app uit over alles wat je ziet
 (`shared/ledger.ts`); een terugbetaling is een overdracht.
 
 - Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde.
-- `BalanceCard` ("Wie moet wie") staat op Geld en als blok op het overzicht. Per overschrijving één
-  rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
-  en datum; minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Jouw gegevens** (je letter rechtsboven)), dan staat daar een
-  betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Alles is verrekend."
-- Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
-- "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
+- Wie moet wie is een weergave ("Toon wie moet wie", bron `saldo`). Per overschrijving één rij: "Jana → Jij", rechts
+  het bedrag, en eronder een `link-button` **Terugbetaald** (`SettleForm` in `Settle.tsx`, een `Sheet` met het bedrag;
+  minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Jouw gegevens**), dan staat daar een
+  betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Niets".
+- "Jij" in plaats van je eigen naam.
 - Telt enkel wat je helemaal ziet (een gebeurtenis in een lijst waar je bij bent); wat je niet ziet, telt niet mee.
 - Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
   echt niet gaat, een eigen onderdeel bovenop de kern.
@@ -812,8 +815,8 @@ Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.
 wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
 (doorlopend, de eerste grafiekkleur: gebeurtenissen in de ene lijst met dingen of soorten van de andere),
 **Verwijzingen** (streepjes, de tweede: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes, de derde:
-Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo,
-Kasticket lezen, Overzicht). Wat een verband doet, staat er als gewone zin (`lineText`: "Tankbeurt voor een wagen",
+wat de app uitrekent: Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, en verder Herinneringen,
+Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband doet, staat er als gewone zin (`lineText`: "Tankbeurt voor een wagen",
 "Gegeten haalt eraf uit de voorraad"); hoe vaak en wanneer laatst staan apart, rechts.
 
 - **Bovenaan** onder de titel één regel met cijfers (lijsten · verbanden tussen lijsten · wat niet werkt). Dan één rij:
@@ -884,10 +887,13 @@ ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en
   `+ …` (`.tok-add`), wat je weghaalt een ×. "**Toon** het logboek **van** al je lijsten / Jaan · Voorraad **waar**
   dingen bevat komkommer **en** wanneer in deze maand **tel** de som van bedrag **per** maand **over** de laatste 12
   maanden **met als doel** …". Bronnen (`SOURCES`): het logboek, de dingen, de voorraad, wie moet wie, wat er gegeten
-  is. Een lijst krijgt **gesorteerd op** en **hoogstens N rijen**; tellen enkel bij een vorm die telt.
-- **Tonen als** (`.show-grid`, tien `.show-tile`s met een klein tekeningetje, het gekozen wit met een rand en blauw):
-  Lijst, Tabel, Getal, Voortgang, Staafjes, Lijn, Gebied, Per keuze, Verdeling, Kalender. Geen 3D, geen
-  grafiekenbibliotheek. **Kolommen** als chips (`.builder-chips`) bij Lijst en Tabel.
+  is, alles met een datum (gebeurtenissen en de datums van dingen met In de agenda). Een lijst krijgt **gesorteerd
+  op** en **hoogstens N rijen**; tellen enkel bij een vorm die telt; de dingen tellen of staan in een agenda
+  **volgens** een datumveld.
+- **Tonen als** (`.show-grid`, elf `.show-tile`s met een klein tekeningetje, het gekozen wit met een rand en blauw):
+  Lijst, Tabel, Agenda, Getal, Voortgang, Staafjes, Lijn, Gebied, Per keuze, Verdeling, Per dag. Geen 3D, geen
+  grafiekenbibliotheek. **Kolommen** als chips (`.builder-chips`) bij Lijst, Tabel en Agenda (de grijze regel in de
+  daglijst).
 - **Voorwaarden** (`RulesEditor`, `.rule-line`): over wat je ziet, nooit iets dat handelt. "Als een rij waar … →
   rood / oranje / groen kleuren, bovenaan, verbergen", "Als er niets is → het blok verbergen", "Als de uitkomst > … →
   kleuren". Een gekleurde rij krijgt een balkje links (`.tone-row-*`) en gekleurde tekst; een gekleurde uitkomst
@@ -898,9 +904,15 @@ ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en
   komt als placeholder ("Het logboek", "Bijna op"). Onderaan, altijd zichtbaar (`.builder-actions`): Annuleren en **Op
   het bord zetten** / **Bewaren**.
 - **Een weergave op het bord** (`ViewCard`): een `dash-card` met `CardHead`, de periode eronder ("Laatste 6 maanden")
-  tenzij de naam ze al zegt ("Water vandaag"). Lijst: rijen met de naam, de kolommen in grijs, de laatste rechts; een
-  geplande rij heeft een vinkje (afvinken), een lopende de tijd en Stop; meer dan het maximum is "+13". Tabel
-  (`.view-table`): kleine grijze koppen, getallen rechts. Kalender (`.view-calendar`): per dag een vakje van hoogstens
+  tenzij de naam ze al zegt ("Water vandaag"). **Bladeren** (`viewSpan`): heeft de weergave een periode (een getal of
+  grafiek over de laatste zoveel, of een voorwaarde "in vandaag / deze week / deze maand / de laatste 7 dagen"), dan
+  staan rechts in de kop ‹ › (`.view-tools`, `btn-ghost btn-icon btn-sm`) en na het bladeren **Vandaag**; de periode
+  eronder in woorden ("Gisteren", "Vorige maand", "Oktober 2026", "12/10 – 18/10"). Een getal of grafiek gaat niet
+  voorbij vandaag; tijdens het laden blijft de vorige periode staan, zachter (`.view-content.is-stale`). Agenda: een
+  maandkalender (zie [Agenda](#agenda-calendarmonth)) die zelf per maand bladert. Lijst: rijen met de naam, de kolommen in grijs, de laatste rechts; een
+  geplande rij heeft een vinkje (afvinken), een lopende de tijd en Stop, een rij van wie moet wie **Terugbetaald**;
+  meer dan het maximum is "+13". Tabel
+  (`.view-table`): kleine grijze koppen, getallen rechts. Per dag (`.view-calendar`): per dag een vakje van hoogstens
   32px, de weekdagen erboven, van licht naar donker in één kleur (`--chart-1`) met "minder … meer". Niets: "Niets"; een
   weergave die verbergt als er niets is, staat er dan niet.
 - **Een actie** (`ActionBuilder`): bovenaan de knop zoals hij wordt (`.builder-preview-tile`), dan Lijst, Soort (chips),
@@ -940,10 +952,11 @@ Lijn, Gebied, Per keuze, Verdeling, Getal of Voortgang.
 
 ## 6. Patronen per scherm
 
-**Overzicht** (`/`, `BoardView` in `Board.tsx`): `PageHead` met de naam van het overzicht, `primary` **Toevoegen**
-(op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
-overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf (zolang je niets koos): Uitgaven deze
-maand, Te doen, Bijna op en Wie moet wie, als weergaven. Onder een bord staat niets anders dan zijn blokken: je lijsten
+**Een bord** (`/` het eerste, `/bord/:id` de andere; `BoardView` in `Board.tsx`): `PageHead` (`top`) met de naam van
+het bord, `primary` **Toevoegen** (op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen,
+Nieuw overzicht, Naam en icoon (`IconPicker`), Verwijderen. Je wisselt van bord in het menu (zijbalk, onderbalk,
+menublad, palet), niet met tabs. Vanzelf (zolang je niets koos): Uitgaven deze maand, Te doen, Bijna op en Wie moet
+wie, als weergaven. Onder een bord staat niets anders dan zijn blokken: je lijsten
 staan in de zijbalk en onder Menu (en in Verbanden). Elk blok is een [weergave of actie](#weergaven-en-acties-op-een-overzicht-viewcard-actiontile-viewbuilder-actionbuilder)
 (of één ding); de blokken staan als metselwerk (`useMasonry`). **Aanpassen** (`BlocksEditor`): een `sort-list` met
 greep, de naam, een potlood (de bouwer), Breed als filterpil (enkel op tablet) en ×, Toevoegen → Blok toevoegen, onderaan
@@ -975,13 +988,10 @@ soort; Herhalen en Foto. Een prijs in de tekst zonder gekozen soort maakt er een
 en **Foto ✨**, en daaronder de bron ("Uit Open Food Facts: …", "Geschat met AI"); dan de velden, Deel van, Opslaan
 en Opslaan en volgende.
 
-**Geld** (`/geld`): links Wie moet wie (`BalanceCard`: per overdracht een rij met Terugbetaald, een betaal-QR met het
-rekeningnummer), rechts de maand (`calendar-head`: de maand en ‹ ›), het totaal groot (`total-value`) met jouw deel,
-`Segmented` Per soort · Per lijst · Per winkel, en de gebeurtenissen van die maand.
-
-**Voorraad, Eten, Te doen, Agenda**: Voorraad toont elk ding uit een lijst met voorraad (Bijna op · Lijst als
-filters); Eten per dag de gebeurtenissen met kcal en per persoon de som; Te doen al wat gepland staat, met een vinkje;
-de Agenda een maand met gebeurtenissen en datums van dingen.
+**Geld, Agenda, Te doen, Voorraad, Eten** zijn geen vaste pagina's maar borden met weergaven: Wie moet wie (met
+Terugbetaald), Uitgaven deze maand (‹ › naar vorige maanden), per soort of per winkel; alles met een datum als
+Agenda; wat gepland staat als lijst met een vinkje; de voorraad waar bijna op = ja; wat er gegeten is, vandaag (‹ ›
+naar gisteren).
 
 **Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). Algemeen:
 naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, Archiveren en Verwijderen.
@@ -989,8 +999,8 @@ naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, A
 **Tag** (`/tags/:id`): de lijsten met die tag (met jouw rol), Tag weghalen, en **Altijd erbij** met Aanpassen.
 
 **Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en wat je stilzette), **App** (`AppCard`: Openen
-op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht, Agenda,
-Weergave, Lijst of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI**, de
+op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst
+of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI**, de
 volgorde van je lijsten en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
 
 **Verbanden** (`/verbanden`, ook via ⋯ → Verbanden van een lijst): `PageHead`, de filters, Werkt niet voor iedereen,

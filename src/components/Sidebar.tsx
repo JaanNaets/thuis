@@ -1,5 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { useLocation } from "react-router";
+import { boardPath } from "../../shared/apps";
+import type { BoardInfo } from "../../shared/board";
 import { isKiosk } from "../device";
 import { groupByTag, listIcon, listTone } from "../lists";
 import { Link, NavLink } from "../router";
@@ -9,29 +11,38 @@ import { Icon, type IconName } from "./Icon";
 /** ⌘K op een Mac, Ctrl K elders. */
 export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
 
-/** De vaste plekken bovenaan: het overzicht, de agenda, de weergaven over al je lijsten en hoe ze samenhangen. */
-export const PLACES: { to: string; label: string; icon: IconName }[] = [
-  { to: "/", label: "Overzicht", icon: "project" },
-  { to: "/agenda", label: "Agenda", icon: "calendar" },
-  { to: "/geld", label: "Geld", icon: "wallet" },
-  { to: "/voorraad", label: "Voorraad", icon: "package" },
-  { to: "/eten", label: "Eten", icon: "food" },
-  { to: "/te-doen", label: "Te doen", icon: "check" },
-  { to: "/verbanden", label: "Verbanden", icon: "links" },
-];
+export type Place = { to: string; label: string; icon: IconName };
+
+/**
+ * De plekken bovenaan het menu: je borden (het eerste op /, je beginscherm) en Verbanden. Geld, Agenda, Te doen, … zijn
+ * gewone borden die je zelf samenstelt.
+ */
+export function placesOf(boards: BoardInfo[]): Place[] {
+  return [
+    ...boards.map((b, i) => ({ to: i === 0 ? "/" : boardPath(b.id), label: b.name, icon: (b.icon || "project") as IconName })),
+    { to: "/verbanden", label: "Verbanden", icon: "links" as IconName },
+  ];
+}
+
+/** Welke plek je nu bekijkt (-1: geen, bv. een lijst). */
+export function placeIndex(places: Place[], pathname: string): number {
+  const path = decodeURI(pathname);
+  return places.findIndex((p) => (p.to === "/" ? path === "/" : path === decodeURI(p.to) || path.startsWith(`${decodeURI(p.to)}/`)));
+}
 
 /** De lijst die je nu bekijkt (uit het adres). */
 export const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
 
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, de vaste plekken en je lijsten per tag
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, je borden en Verbanden, en je lijsten per tag
  * (een tag klapt open). Jouw gegevens: je letter rechtsboven in de paneelbalk.
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
-  const { lists, tags } = useSession();
+  const { lists, tags, boards } = useSession();
   const { pathname } = useLocation();
   const current = currentList(pathname);
-  const navIndex = PLACES.findIndex((p) => (p.to === "/" ? pathname === "/" : pathname.startsWith(p.to)));
+  const places = placesOf(boards);
+  const navIndex = placeIndex(places, pathname);
 
   return (
     <aside className="sidebar" aria-label="Hoofdmenu">
@@ -51,8 +62,8 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
       <div className="sidebar-scroll">
         <nav className="sidebar-nav">
           <span className="sidebar-indicator" style={{ "--i": navIndex, opacity: navIndex >= 0 ? 1 : 0 } as CSSProperties} />
-          {PLACES.map((p) => (
-            <NavLink key={p.to} to={p.to} end={p.to === "/"} title={p.label}>
+          {places.map((p, i) => (
+            <NavLink key={p.to} to={p.to} end className={i === navIndex ? "active" : undefined} title={p.label}>
               <Icon name={p.icon} size={17} />
               <span className="nav-text">{p.label}</span>
             </NavLink>

@@ -130,15 +130,18 @@ export const BLOCK_LINKS = {
 
 // ---------- de weergaven ----------
 
-/** Wat geen lijst is maar wel iets met je lijsten doet: de weergaven, meldingen en bronnen buiten de app. */
+/**
+ * Wat geen lijst is maar wel iets met je lijsten doet: wat de app uitrekent (de bronnen van een weergave op je
+ * overzicht: bedragen, wie moet wie, voorraad, eten, gepland, datums, wat loopt), meldingen en bronnen buiten de app.
+ */
 export const VIEWS = {
-  geld: { label: "Geld", to: "/geld" },
-  balans: { label: "Wie moet wie", to: "/geld" },
-  voorraad: { label: "Voorraad", to: "/voorraad" },
-  eten: { label: "Eten", to: "/eten" },
-  tedoen: { label: "Te doen", to: "/te-doen" },
-  agenda: { label: "Agenda", to: "/agenda" },
-  timers: { label: "Loopt nu", to: "/" },
+  geld: { label: "Geld", to: null },
+  balans: { label: "Wie moet wie", to: null },
+  voorraad: { label: "Voorraad", to: null },
+  eten: { label: "Eten", to: null },
+  tedoen: { label: "Te doen", to: null },
+  agenda: { label: "Agenda", to: null },
+  timers: { label: "Loopt nu", to: null },
   herinneringen: { label: "Herinneringen", to: null },
   meldingen: { label: "Meldingen", to: null },
   herhalen: { label: "Herhalen", to: null },

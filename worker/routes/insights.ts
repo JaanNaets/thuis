@@ -1,19 +1,21 @@
-// De ingebouwde weergaven: uitgerekend op de server uit wat de lezer ziet, nooit bewaard. Over alle lijsten heen
-// tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een ding geeft geen bedrag of verdeling).
+// Wat de app uitrekent voor een weergave op je overzicht (GET /insights/view: het logboek, de dingen, de voorraad, wie
+// moet wie, wat er gegeten is, alles met een datum), zoeken en Verbanden: op de server uit wat de lezer ziet, nooit
+// bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een ding geeft geen
+// bedrag of verdeling).
 
 import { Hono } from "hono";
-import { cleanViewBlock, evaluateView, sourceFields, type SourceItem, type ViewResponse } from "../../shared/blocks";
+import { cleanViewBlock, evaluateView, MAX_SHIFT, sourceFields, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
 import { computeLocal } from "../../shared/calc";
-import { canAgenda, MAX_AGENDA_DAYS, occurrences, daysApart } from "../../shared/agenda";
+import { canAgenda, occurrences } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
 import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
-import { isExpense, netBalance, settleUp, sharesOf, type MoneyEvent } from "../../shared/ledger";
+import { netBalance, settleUp, type MoneyEvent } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
-import { canEdit, dayOf, type EventView, type Role, type Status } from "../../shared/model";
+import { canEdit, dayOf, STATUSES, type EventView, type List, type Role, type Status } from "../../shared/model";
 import { formatAmount } from "../../shared/units";
 import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
-import { logbookRows, viewEvents } from "../events-view";
+import { viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
@@ -22,14 +24,6 @@ import { boardsOf } from "./me";
 import { peopleByIds, stockOf, thingRefs } from "./things";
 
 export const insights = new Hono<AppEnv>();
-
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const range = (from: string | undefined, to: string | undefined, today: string): [string, string] => {
-  const f = from && DATE.test(from) ? from : `${today.slice(0, 7)}-01`;
-  const t = to && DATE.test(to) ? to : today;
-  if (t < f) throw new ValidationError("Het einde ligt voor het begin");
-  return [f, t];
-};
 
 /** Gebeurtenissen in de lijsten die je ziet (helemaal), met een extra voorwaarde. */
 async function fullRows(db: D1Database, seen: Map<string, Role>, where: string, binds: unknown[], order = "e.at DESC, e.created_at DESC", limit = 2000): Promise<EventRowDb[]> {
@@ -42,60 +36,6 @@ async function fullRows(db: D1Database, seen: Map<string, Role>, where: string, 
 
 const money = (e: EventView): MoneyEvent => ({ ...e, lines: e.lines.map((l) => ({ price: l.price, owner: l.owner })) });
 
-// ---------- geld ----------
-
-/**
- * Uitgaven over je lijsten: per maand, per soort, per lijst en per winkel, met jouw deel. `from`–`to` (standaard deze
- * maand), en de gebeurtenissen zelf (nieuwste eerst).
- */
-insights.get("/money", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const seen = await seenLists(db, me.id);
-  const [from, to] = range(c.req.query("from"), c.req.query("to"), brusselsToday());
-  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.base != 'overdracht' AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
-  const page = await viewEvents(db, seen, rows);
-  const things = new Map(page.things.map((t) => [t.id, t.name]));
-  const kinds = new Map(page.kinds.map((k) => [k.id, k.name]));
-  const lists = new Map(page.lists.map((l) => [l.id, l.name]));
-  type Sum = { key: string; label: string; total: number; mine: number };
-  const groups = { month: new Map<string, Sum>(), kind: new Map<string, Sum>(), list: new Map<string, Sum>(), store: new Map<string, Sum>() };
-  const add = (g: Map<string, Sum>, key: string, label: string, total: number, mine: number) => {
-    const s = g.get(key) ?? { key, label, total: 0, mine: 0 };
-    s.total += total;
-    s.mine += mine;
-    g.set(key, s);
-  };
-  let total = 0;
-  let mine = 0;
-  for (const e of page.events) {
-    const m = money(e);
-    if (!isExpense(m)) continue;
-    const yours = sharesOf(m).get(me.id) ?? 0;
-    total += e.amount!;
-    mine += yours;
-    add(groups.month, e.at.slice(0, 7), e.at.slice(0, 7), e.amount!, yours);
-    add(groups.kind, e.kind, kinds.get(e.kind) ?? e.kind, e.amount!, yours);
-    add(groups.list, e.list_id, lists.get(e.list_id) ?? "", e.amount!, yours);
-    const store = e.lines.find((l) => l.role === "bij");
-    const storeName = store ? (store.thing_id ? things.get(store.thing_id) : store.text) : null;
-    if (storeName) add(groups.store, store!.thing_id ?? `t:${storeName}`, storeName, e.amount!, yours);
-  }
-  const sorted = (g: Map<string, Sum>) => [...g.values()].sort((a, b) => b.total - a.total);
-  return c.json({
-    from,
-    to,
-    total,
-    mine,
-    months: [...groups.month.values()].sort((a, b) => a.key.localeCompare(b.key)),
-    by_kind: sorted(groups.kind),
-    by_list: sorted(groups.list),
-    by_store: sorted(groups.store).slice(0, 12),
-    ...page,
-    events: page.events.slice(0, 200),
-  });
-});
-
 /**
  * Wie moet wie: over alle uitgaven met een betaler en alle overdrachten die je ziet. Per overschrijving een lijst om
  * de terugbetaling in te loggen: waar jullie het laatst samen iets in logden en jij mag loggen.
@@ -104,25 +44,12 @@ async function balanceOf(db: D1Database, seen: Map<string, Role>) {
   const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL", [], "e.at DESC", 5000);
   const page = await viewEvents(db, seen, rows);
   const net = netBalance(page.events.map(money));
-  return { page, net, transfers: settleUp(net) };
-}
-
-insights.get("/balance", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const seen = await seenLists(db, me.id);
-  const { page, net, transfers: plain } = await balanceOf(db, seen);
-  const transfers = plain.map((t) => {
+  const transfers = settleUp(net).map((t) => {
     const both = page.events.find((e) => canEdit(seen.get(e.list_id)) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.from) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.to));
     return { ...t, list_id: both?.list_id ?? null };
   });
-  return c.json({
-    net: [...net].map(([person_id, amount]) => ({ person_id, amount })).sort((a, b) => b.amount - a.amount),
-    transfers,
-    people: await peopleByIds(db, [...net.keys()]),
-    ibans: await ibansFor(db, transfers.map((t) => t.to)),
-  });
-});
+  return { page, net, transfers };
+}
 
 /** Rekeningnummers van wie iets krijgt (om te betalen met een QR). */
 async function ibansFor(db: D1Database, personIds: string[]): Promise<Record<string, string>> {
@@ -132,14 +59,6 @@ async function ibansFor(db: D1Database, personIds: string[]): Promise<Record<str
 }
 
 // ---------- voorraad ----------
-
-/** Alles in een voorraad die je ziet, wat op of bijna op is eerst. */
-insights.get("/stock", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const seen = await seenLists(db, me.id);
-  return c.json({ things: await stockThings(db, seen.keys()) });
-});
 
 type StockThing = { id: string; name: string; list_id: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null; created_at: string };
 
@@ -164,17 +83,6 @@ async function stockThings(db: D1Database, listIds: Iterable<string>): Promise<S
 }
 
 // ---------- eten ----------
-
-/** Wat er gegeten werd, per dag en per persoon (kcal en voedingswaarden). */
-insights.get("/food", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const seen = await seenLists(db, me.id);
-  const today = brusselsToday();
-  const [from, to] = range(c.req.query("from") ?? addDays(today, -6), c.req.query("to"), today);
-  const { days, who, page, food } = await foodPeriod(db, seen, from, to);
-  return c.json({ from, to, days, eaters: await peopleByIds(db, who), ...page, events: page.events.filter((e) => food.has(e.id)) });
-});
 
 /** Wat er gegeten werd van `from` tot `to` in de lijsten die je ziet: per dag en per persoon. */
 async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string, to: string) {
@@ -221,51 +129,12 @@ const addDays = (day: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-// ---------- logboek over een periode (grafieken) ----------
+// ---------- datums van dingen ----------
 
-/**
- * Wat gebeurde in een lijst (`list`, met wat elders met haar dingen gebeurde) of over al je lijsten, in `from`–`to`:
- * voor een grafiek over het logboek. Hoogstens 2000.
- */
-insights.get("/log", async (c) => {
-  const db = c.env.DB;
-  const seen = await seenLists(db, c.get("person").id);
-  const today = brusselsToday();
-  const [from, to] = range(c.req.query("from") ?? "1900-01-01", c.req.query("to"), today);
-  const list = c.req.query("list");
-  if (list) {
-    if (!seen.has(list)) throw new ValidationError("Die lijst ken je niet");
-    const rows = await logbookRows(db, list, { from, to, limit: 2000 });
-    return c.json(await viewEvents(db, seen, rows));
-  }
-  const rows = await fullRows(db, seen, "e.at >= ?2 AND e.at < ?3", [from, `${to}~`], "e.at DESC", 2000);
-  return c.json(await viewEvents(db, seen, rows));
-});
-
-// ---------- te doen, agenda, timers ----------
-
-/** Alles wat gepland staat in de lijsten die je ziet, het vroegste eerst. */
-insights.get("/todo", async (c) => {
-  const db = c.env.DB;
-  const seen = await seenLists(db, c.get("person").id);
-  const rows = await fullRows(db, seen, "e.status = 'gepland'", [], "e.at ASC, e.created_at ASC", 500);
-  return c.json(await viewEvents(db, seen, rows));
-});
-
-/** Wat op een dag valt: gebeurtenissen (ook gepland) en datums van dingen met "In de agenda". */
-insights.get("/agenda", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const seen = await seenLists(db, me.id);
-  const today = brusselsToday();
-  const [from, to] = range(c.req.query("from"), c.req.query("to") ?? addDays(today, 31), today);
-  if (daysApart(from, to) > MAX_AGENDA_DAYS) throw new ValidationError("Hoogstens twee maanden tegelijk");
-  const rows = await fullRows(db, seen, "e.at >= ?2 AND e.at < ?3 AND e.status != 'afgevinkt'", [from, `${to}~`], "e.at ASC", 1000);
-  const page = await viewEvents(db, seen, rows);
-  // Datums van dingen (garantie, vervaldatum, verjaardag) in lijsten met een agendaveld.
-  const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE id IN (SELECT value FROM json_each(?)) AND archived = 0").bind(ids(seen.keys())).all<ListRow>();
+/** De datums van dingen (de keuring, een verjaardag, het einde van de garantie) in velden met "In de agenda", van–tot. */
+async function datedThings(db: D1Database, lists: List[], from: string, to: string, today: string) {
   const dated: { thing_id: string; name: string; list_id: string; label: string; start: string; end?: string }[] = [];
-  for (const list of listRows.map(toList)) {
+  for (const list of lists) {
     const fields = list.fields.filter((f) => f.agenda && canAgenda(f));
     if (!fields.length) continue;
     const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
@@ -274,16 +143,8 @@ insights.get("/agenda", async (c) => {
       for (const f of fields) for (const o of occurrences(f, data[f.key], from, to)) dated.push({ thing_id: t.id, name: t.name, list_id: list.id, label: f.label, ...o });
     }
   }
-  return c.json({ from, to, ...page, dated });
-});
-
-/** Activiteiten die nu lopen (een timer), van jou of in een lijst die je ziet. */
-insights.get("/timers", async (c) => {
-  const db = c.env.DB;
-  const seen = await seenLists(db, c.get("person").id);
-  const rows = await fullRows(db, seen, "e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd'", [], "e.at DESC", 20);
-  return c.json(await viewEvents(db, seen, rows));
-});
+  return dated;
+}
 
 // ---------- een weergave op een overzicht ----------
 
@@ -299,13 +160,16 @@ insights.get("/view", async (c) => {
   if (!block) throw new ValidationError("Deze weergave klopt niet");
   const seen = await seenLists(db, me.id);
   const today = brusselsToday();
+  // Bladeren: zoveel periodes terug (negatief) of vooruit; enkel die dagen worden geladen.
+  const shift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, Number.parseInt(c.req.query("periode") ?? "0", 10) || 0));
+  const [from, to] = viewSpan(block, today, shift)?.load ?? [null, null];
   const wanted = block.lists.filter((id) => seen.has(id));
   const listIds = block.lists.length ? wanted : [...seen.keys()];
   const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(listIds)).all<ListRow>();
   const lists = listRows.map(toList);
   const only = new Map([...seen].filter(([id]) => lists.some((l) => l.id === id)));
 
-  type Item = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string } };
+  type Item = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string }; settle?: { list: string; iban: string | null } };
   let fields: FieldDef[] = [];
   let items: Item[] = [];
   let people: { id: string; name: string }[] = [];
@@ -313,7 +177,9 @@ insights.get("/view", async (c) => {
 
   if (block.source === "logboek") {
     const own = await kindsFor(db, lists.map((l) => l.id));
-    const rows = lists.length ? await fullRows(db, only, "1 = 1", [], "e.at DESC, e.created_at DESC", 2000) : [];
+    const when = from && to ? "e.at >= ?2 AND e.at < ?3" : from ? "e.at >= ?2" : to ? "e.at < ?2" : "1 = 1";
+    const binds = [from, to && `${to}~`].filter((x): x is string => Boolean(x));
+    const rows = lists.length ? await fullRows(db, only, when, binds, "e.at DESC, e.created_at DESC", 2000) : [];
     const page = await viewEvents(db, seen, rows);
     const kinds = [...new Map([...own, ...page.kinds].map((k) => [k.id, k])).values()];
     const kindName = new Map(kinds.map((k) => [k.id, k.name]));
@@ -353,27 +219,72 @@ insights.get("/view", async (c) => {
       link: `/dingen/${t.id}`,
     }));
   } else if (block.source === "saldo") {
+    // Wie moet wie; Terugbetaald logt een overdracht in een lijst waar beiden in staan (met de IBAN van wie krijgt).
     const { transfers } = await balanceOf(db, only.size ? only : seen);
     const who = await peopleByIds(db, transfers.flatMap((t) => [t.from, t.to]));
+    const ibans = await ibansFor(db, transfers.map((t) => t.to));
     const name = (id: string) => (id === me.id ? "Jij" : (who.find((p) => p.id === id)?.name ?? "Iemand"));
     fields = sourceFields("saldo", { lists, kinds: [] });
     people = who.map((p) => ({ id: p.id, name: p.name }));
-    items = transfers.map((t) => ({ id: `${t.from}-${t.to}`, name: `${name(t.from)} → ${name(t.to)}`, data: { from: t.from, to: t.to, amount: t.amount }, tag_ids: [], created_at: `${today} 12:00:00`, link: "/geld" }));
+    items = transfers.map((t) => ({
+      id: `${t.from}-${t.to}`,
+      name: `${name(t.from)} → ${name(t.to)}`,
+      data: { from: t.from, to: t.to, amount: t.amount },
+      tag_ids: [],
+      created_at: `${today} 12:00:00`,
+      link: null,
+      ...(t.list_id ? { settle: { list: t.list_id, iban: ibans[t.to] ?? null } } : {}),
+    }));
+  } else if (block.source === "datums") {
+    // Alles met een datum: wat gebeurde of gepland staat (niet afgevinkt) en de datums van dingen, in de periode (anders
+    // de komende maanden).
+    const start = from ?? addDays(today, -31);
+    const end = to ?? addDays(today, 366);
+    const rows = lists.length ? await fullRows(db, only, "e.at >= ?2 AND e.at < ?3 AND e.status != 'afgevinkt'", [start, `${end}~`], "e.at ASC", 1000) : [];
+    const page = await viewEvents(db, seen, rows);
+    const kindName = new Map(page.kinds.map((k) => [k.id, k.name]));
+    const listName = new Map(lists.map((l) => [l.id, l.name]));
+    fields = sourceFields("datums", { lists, kinds: [] });
+    items = [
+      ...page.events.map((e) => {
+        const kind = kindName.get(e.kind) ?? e.kind;
+        const running = e.base === "activiteit" && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+        return {
+          id: e.id,
+          name: e.name || kind,
+          data: { at: e.at, ...(e.end_at && e.end_at.slice(0, 10) > e.at.slice(0, 10) ? { end: e.end_at.slice(0, 10) } : {}), list: listName.get(e.list_id) ?? "", what: kind, status: STATUSES[e.status].label },
+          tag_ids: [],
+          created_at: e.created_at,
+          link: `/gebeurtenissen/${e.id}`,
+          event: { status: e.status, running, at: e.at },
+        };
+      }),
+      ...(await datedThings(db, lists, start, end, today)).map((d) => ({
+        id: `${d.thing_id}-${d.label}-${d.start}`,
+        name: d.name,
+        data: { at: d.start, ...(d.end ? { end: d.end } : {}), list: listName.get(d.list_id) ?? "", what: d.label },
+        tag_ids: [],
+        created_at: `${d.start} 12:00:00`,
+        link: `/dingen/${d.thing_id}`,
+      })),
+    ];
+    people = page.people.map((p) => ({ id: p.id, name: p.name }));
   } else {
-    // Wat er gegeten werd: zoveel dagen terug als de zin telt (minstens een week, hoogstens een jaar).
+    // Wat er gegeten werd: in de periode, anders zoveel dagen terug als de zin telt (minstens een week, hoogstens een jaar).
     const t = block.tally;
     const back = Math.min(366, Math.max(7, t ? (t.n || 52) * ({ day: 1, week: 7, month: 31, year: 366 } as const)[t.step] : 93));
-    const { days, who } = await foodPeriod(db, only.size ? only : seen, addDays(today, -back), today);
+    const { days, who } = await foodPeriod(db, only.size ? only : seen, from ?? addDays(today, -back), to ?? today);
     const eaters = await peopleByIds(db, who);
     const name = (id: string) => (id === me.id ? "Jij" : (eaters.find((p) => p.id === id)?.name ?? "Iemand"));
     fields = sourceFields("voeding", { lists, kinds: [] });
     people = eaters.map((p) => ({ id: p.id, name: p.name }));
-    items = days.flatMap((d) => Object.entries(d.people).map(([id, n]) => ({ id: `${d.day}-${id}`, name: name(id), data: { day: d.day, who: id, ...n }, tag_ids: [], created_at: `${d.day} 12:00:00`, link: "/eten" })));
+    items = days.flatMap((d) => Object.entries(d.people).map(([id, n]) => ({ id: `${d.day}-${id}`, name: name(id), data: { day: d.day, who: id, ...n }, tag_ids: [], created_at: `${d.day} 12:00:00`, link: null })));
   }
 
   const personName = new Map(people.map((p) => [p.id, p.name]));
   const outcome = evaluateView(block, fields, items, {
     today,
+    shift,
     me: me.id,
     names: { person: (id) => personName.get(id) ?? "?", item: (id) => refs[id] ?? "?" },
     chart: { people, item: (id) => refs[id], tags: [] },

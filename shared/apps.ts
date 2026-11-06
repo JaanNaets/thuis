@@ -3,21 +3,9 @@
 // icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, en wat je stilzette.
 // Alles verwijst met ids; wat je niet (meer) kan bereiken, valt weg (`cleanAppSettings`, `keepReachable`).
 
-/** De ingebouwde weergaven over al je lijsten. */
-export const VIEWS = {
-  geld: { label: "Geld", path: "/geld" },
-  voorraad: { label: "Voorraad", path: "/voorraad" },
-  eten: { label: "Eten", path: "/eten" },
-  "te-doen": { label: "Te doen", path: "/te-doen" },
-} as const;
-export type ViewKey = keyof typeof VIEWS;
-export const isViewKey = (v: unknown): v is ViewKey => typeof v === "string" && Object.hasOwn(VIEWS, v);
-
-/** Waar iets naartoe gaat. */
+/** Waar iets naartoe gaat: een overzicht (je borden: Geld, Agenda, …), een lijst of een formulier. */
 export type Destination =
   | { kind: "board"; board: string }
-  | { kind: "agenda" }
-  | { kind: "view"; view: ViewKey }
   | { kind: "list"; list: string }
   /** Loggen in een lijst (eventueel met een soort en tekst), of met `thing` een ding toevoegen. */
   | { kind: "form"; list: string; type?: string; thing?: boolean; text?: string };
@@ -26,8 +14,6 @@ export type DestinationKind = Destination["kind"];
 
 export const DESTINATION_KINDS = {
   board: "Overzicht",
-  agenda: "Agenda",
-  view: "Weergave",
   list: "Lijst",
   form: "Formulier",
 } as const satisfies Record<DestinationKind, string>;
@@ -67,10 +53,6 @@ export function cleanDestination(raw: unknown): Destination | null {
   switch (o.kind) {
     case "board":
       return id(o.board) ? { kind: "board", board: o.board as string } : null;
-    case "agenda":
-      return { kind: "agenda" };
-    case "view":
-      return isViewKey(o.view) ? { kind: "view", view: o.view } : null;
     case "list":
       return id(o.list) ? { kind: "list", list: o.list as string } : null;
     case "form": {
@@ -123,11 +105,7 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
 export function destinationPath(d: Destination): string {
   switch (d.kind) {
     case "board":
-      return `/?bord=${encodeURIComponent(d.board)}`;
-    case "agenda":
-      return "/agenda";
-    case "view":
-      return VIEWS[d.view].path;
+      return boardPath(d.board);
     case "list":
       return `/lijsten/${d.list}`;
     case "form": {
@@ -142,7 +120,7 @@ export function destinationPath(d: Destination): string {
 
 /** Wat je kan bereiken: je overzichten, en de lijsten die je ziet (en of je erin mag loggen), met hun soorten. */
 export type Reach = {
-  boards: { id: string; name: string }[];
+  boards: { id: string; name: string; icon?: string }[];
   lists: Map<string, { name: string; one: string | null; edit: boolean; kinds: Map<string, string> }>;
 };
 
@@ -150,9 +128,6 @@ export function reachable(d: Destination, reach: Reach): boolean {
   switch (d.kind) {
     case "board":
       return reach.boards.some((b) => b.id === d.board);
-    case "agenda":
-    case "view":
-      return true;
     case "list":
       return reach.lists.has(d.list);
     case "form": {
@@ -164,15 +139,11 @@ export function reachable(d: Destination, reach: Reach): boolean {
   }
 }
 
-/** Hoe een bestemming heet ("Overzicht Keuken", "Geld", "Voorraad", "Gegeten loggen", "Wijn toevoegen"). */
+/** Hoe een bestemming heet ("Keuken", "Geld", "Wijnen", "Gegeten loggen", "Wijn toevoegen"). */
 export function destinationLabel(d: Destination, reach: Reach): string {
   switch (d.kind) {
     case "board":
       return reach.boards.find((b) => b.id === d.board)?.name ?? "Overzicht";
-    case "agenda":
-      return "Agenda";
-    case "view":
-      return VIEWS[d.view].label;
     case "list":
       return reach.lists.get(d.list)?.name ?? "Lijst";
     case "form": {
@@ -195,6 +166,8 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
 }
 
 export const appPath = (appId: string) => `/app/${appId}`;
+/** Een bord (overzicht) heeft een eigen adres; het eerste is ook het beginscherm (/). */
+export const boardPath = (board: string) => `/bord/${encodeURIComponent(board)}`;
 
 export function sameDestination(a: Destination, b: Destination): boolean {
   const key = (d: Destination) => JSON.stringify(cleanDestination(d));

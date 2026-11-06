@@ -1,20 +1,24 @@
-// Het overzicht: je borden (Overzicht, Keuken) met blokken die je zelf kiest (zie shared/board.ts). Elk blok haalt
-// zijn inhoud op met de gewone routes, dus met jouw rechten. Zie STIJLBOEK.md → Patronen per scherm → Overzicht.
+// Het overzicht: je borden (Thuis, Geld, Agenda, Keuken) met blokken die je zelf kiest (zie shared/board.ts). Elk bord
+// staat met zijn naam en icoon in het menu (het eerste op /); elk blok haalt zijn inhoud op met de gewone routes, dus
+// met jouw rechten. Zie STIJLBOEK.md → Patronen per scherm → Overzicht.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { viewName, type ActionBlock, type ViewBlock } from "../../shared/blocks";
-import { BLOCK_KINDS, blockKey, segmentBlocks, type Block, type BoardInfo } from "../../shared/board";
+import { boardPath } from "../../shared/apps";
+import { BLOCK_KINDS, BOARD_ICON, blockKey, segmentBlocks, type Block, type BoardInfo } from "../../shared/board";
+import type { IconKey } from "../../shared/icons";
 import { formatAmount } from "../../shared/units";
 import { api, useApi } from "../api";
-import { Link } from "../router";
+import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 import { ActionGroup } from "./ActionBlock";
 import { ActionBuilder, AddChoice, EMPTY_VIEW_BLOCK, ViewBuilder } from "./BlockBuilder";
 import { usePalette } from "./CommandPalette";
 import { useConfirm } from "./ConfirmDialog";
-import { CardHead, Tabs } from "./Controls";
+import { CardHead } from "./Controls";
 import { Icon, type IconName } from "./Icon";
+import { IconPicker } from "./IconPicker";
 import { stagger } from "./Motion";
 import { EmptyState, PageHead } from "./Page";
 import { Sheet } from "./Sheet";
@@ -61,33 +65,20 @@ function useMasonry() {
   return ref;
 }
 
-const BOARD_KEY = "thuis.board";
-const storedBoard = () => {
-  try {
-    return localStorage.getItem(BOARD_KEY);
-  } catch {
-    return null;
-  }
-};
-const storeBoard = (id: string) => {
-  try {
-    localStorage.setItem(BOARD_KEY, id);
-  } catch {
-    // Zonder opslag begint dit toestel bij het eerste overzicht.
-  }
-};
+/** Het adres van een bord: het eerste is je beginscherm (/). */
+const hrefOf = (boards: BoardInfo[], id: string) => (boards[0]?.id === id ? "/" : boardPath(id));
 
-export function BoardView({ overview: first, onChanged }: { overview: Overview; onChanged: () => void }) {
+export function BoardView({ overview, onChanged }: { overview: Overview; onChanged: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const palette = usePalette();
+  const navigate = useNavigate();
+  const { reloadMe } = useSession();
   const [params, setParams] = useSearchParams();
-  const [boardId, setBoardId] = useState(() => params.get("bord") ?? storedBoard() ?? first.board);
-  const { data: fetched, mutate } = useApi<Overview>(boardId !== first.board ? `/me/overview?board=${encodeURIComponent(boardId)}` : null);
-  const overview = boardId === first.board ? first : (fetched ?? first);
   const [editing, setEditing] = useState<Block[] | null>(null);
   const [menu, setMenu] = useState<"menu" | "new" | "rename" | null>(null);
   const [boardName, setBoardName] = useState("");
+  const [boardIcon, setBoardIcon] = useState<string>(BOARD_ICON);
   const [busy, setBusy] = useState(false);
   const masonry = useMasonry();
   const current = overview.boards.find((b) => b.id === overview.board);
@@ -100,20 +91,13 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
     setParams({}, { replace: true });
   }, []);
 
-  function chooseBoard(id: string) {
-    setEditing(null);
-    setBoardId(id);
-    storeBoard(id);
-  }
-
   async function save(next: Block[] | null) {
     setBusy(true);
     try {
       await api.put("/me/overview", { board: overview.board, blocks: next });
       setEditing(null);
       toast("Overzicht bewaard");
-      if (boardId === first.board) onChanged();
-      else mutate(await api.get<Overview>(`/me/overview?board=${encodeURIComponent(boardId)}`));
+      onChanged();
     } catch (err) {
       toast((err as Error).message, "alert");
     } finally {
@@ -121,14 +105,17 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
     }
   }
 
-  async function saveBoards(next: { id?: string; name: string }[], go?: (saved: BoardInfo[]) => string) {
+  async function saveBoards(next: { id?: string; name: string; icon?: string }[], go?: (saved: BoardInfo[]) => string) {
     setBusy(true);
     try {
       const { boards } = await api.put<{ boards: BoardInfo[] }>("/me/boards", { boards: next });
       setMenu(null);
       const to = go?.(boards);
-      onChanged();
-      if (to) chooseBoard(to);
+      reloadMe();
+      if (to) {
+        setEditing(null);
+        navigate(hrefOf(boards, to));
+      } else onChanged();
       return true;
     } catch (err) {
       toast((err as Error).message, "alert");
@@ -159,6 +146,7 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
   return (
     <div className="page">
       <PageHead
+        top
         title={current?.name ?? "Overzicht"}
         actions={
           editing ? (
@@ -179,10 +167,6 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
           )
         }
       />
-      {overview.boards.length > 1 && !editing && (
-        <Tabs label="Overzicht" value={overview.board} tabs={overview.boards.map((b) => ({ value: b.id, label: b.name }))} onChange={chooseBoard} />
-      )}
-
       {editing ? (
         <div className="form">
           <BlocksEditor blocks={editing} onChange={setEditing} />
@@ -217,10 +201,12 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
             })}
             {menuRow("plus", "Nieuw overzicht", () => {
               setBoardName("");
+              setBoardIcon(BOARD_ICON);
               setMenu("new");
             })}
-            {menuRow("edit", "Hernoemen", () => {
+            {menuRow("edit", "Naam en icoon", () => {
               setBoardName(current?.name ?? "");
+              setBoardIcon(current?.icon ?? BOARD_ICON);
               setMenu("rename");
             })}
             {overview.boards.length > 1 && menuRow("trash", "Verwijderen", removeBoard)}
@@ -235,14 +221,18 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
                 if (!name) return;
                 if (menu === "new") {
                   const before = new Set(overview.boards.map((b) => b.id));
-                  if (await saveBoards([...overview.boards, { name }], (saved) => saved.find((b) => !before.has(b.id))?.id ?? saved[0].id)) toast(`${name} gemaakt`);
-                } else if (current && (await saveBoards(overview.boards.map((b) => (b.id === current.id ? { ...b, name } : b))))) toast("Hernoemd");
+                  if (await saveBoards([...overview.boards, { name, icon: boardIcon }], (saved) => saved.find((b) => !before.has(b.id))?.id ?? saved[0].id)) toast(`${name} gemaakt`);
+                } else if (current && (await saveBoards(overview.boards.map((b) => (b.id === current.id ? { ...b, name, icon: boardIcon } : b))))) toast("Bewaard");
               }}
             >
               <label className="field">
                 <span className="label">Naam</span>
                 <input autoFocus required maxLength={30} value={boardName} placeholder="bv. Keuken" onChange={(e) => setBoardName(e.target.value)} />
               </label>
+              <div className="field">
+                <span className="label">Icoon</span>
+                <IconPicker value={boardIcon as IconKey} onChange={setBoardIcon} />
+              </div>
               <button type="submit" className="btn btn-primary" disabled={busy || !boardName.trim()}>
                 {menu === "new" ? "Maken" : "Bewaren"}
               </button>

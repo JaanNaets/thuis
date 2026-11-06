@@ -10,7 +10,7 @@ import { api, useApi } from "../api";
 import { listIcon } from "../lists";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
-import { PLACES } from "./Sidebar";
+import { placesOf } from "./Sidebar";
 import { Icon, type IconName } from "./Icon";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
@@ -18,10 +18,6 @@ export type PaletteMode = "search" | "add";
 
 type Found = { lists: { id: string; name: string }[]; things: { id: string; name: string; list: string; icon: string | null }[]; events: { id: string; name: string; list: string; at: string }[] };
 
-const ACTIONS: Entry[] = [
-  ...PLACES.map((p) => ({ key: p.to, group: "Ga naar", label: p.label, icon: p.icon, to: p.to })),
-  { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
-];
 const NEW_LIST: Entry = { key: "new-list", group: "Nieuw", label: "Nieuwe lijst", icon: "folder", to: "/lijsten/nieuw" };
 
 const PER_GROUP = 6;
@@ -36,7 +32,12 @@ export function CommandPalette({ open, mode, text = "", onClose }: { open: boole
   const ref = useRef<HTMLDialogElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { lists, tags } = useSession();
+  const { lists, tags, boards } = useSession();
+  // Ga naar: je borden, Verbanden en jij.
+  const ACTIONS: Entry[] = useMemo(
+    () => [...placesOf(boards).map((p) => ({ key: p.to, group: "Ga naar", label: p.label, icon: p.icon, to: p.to })), { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" }],
+    [boards],
+  );
   const { data: raw } = useApi<Targets>(open ? "/me/targets" : null);
   const targets = useMemo(() => (raw ? buildTargets(raw) : []), [raw]);
   const [query, setQuery] = useState(text);

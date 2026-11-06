@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanActionBlock, cleanViewBlock, columnsOf, evaluateView, chartOf, sourceFields, upgradeBlock, viewName, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
-import { cleanBlock, cleanBlocks, defaultBlocks, segmentBlocks, type Block } from "../shared/board.ts";
+import { agendaDays, cleanActionBlock, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
+import { cleanBlock, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, segmentBlocks, type Block } from "../shared/board.ts";
 import type { FieldDef } from "../shared/fields.ts";
 import { NAME } from "../shared/views.ts";
 
@@ -203,4 +203,77 @@ test("acties na elkaar staan samen op het bord", () => {
   assert.ok(Array.isArray(out[0]) && out[0].length === 1);
   assert.equal((out[1] as Block).kind, "view");
   assert.ok(Array.isArray(out[2]) && out[2].length === 2);
+});
+
+test("bladeren: een periode in woorden, en per maand, per venster of per periode in de voorwaarden", () => {
+  const today = "2026-11-06";
+  assert.equal(rangeLabel("2026-11-05", "2026-11-05", today), "Gisteren");
+  assert.equal(rangeLabel("2026-10-01", "2026-10-31", today), "Vorige maand");
+  assert.equal(rangeLabel("2026-09-01", "2026-09-30", today), "September 2026");
+  assert.equal(rangeLabel("2025-12-01", "2026-05-31", today), "December 2025 – mei 2026");
+  assert.equal(rangeLabel("2024-01-01", "2024-12-31", today), "2024");
+  assert.equal(rangeLabel("2026-10-26", "2026-11-01", today), "Vorige week");
+  assert.equal(rangeLabel("2026-10-12", "2026-10-18", today), "12/10 – 18/10");
+
+  const view = (b: Partial<ViewBlock>): ViewBlock => ({ kind: "view", name: "", source: "logboek", lists: [], where: { match: "all", conditions: [] }, show: "lijst", ...b });
+  // Een agenda: per maand, vooruit en terug, met de weken errond.
+  const agenda = viewSpan(view({ show: "agenda" }), today, -1)!;
+  assert.deepEqual([agenda.label, agenda.month, agenda.from, agenda.to, agenda.later], ["Oktober 2026", "2026-10", "2026-09-28", "2026-11-01", true]);
+  // Een grafiek: per venster terug, niet voorbij vandaag.
+  const bars = view({ show: "staafjes", tally: { agg: "sum", field: "amount", step: "month", n: 6 } });
+  assert.deepEqual(viewSpan(bars, today, 0)!.label, "Laatste 6 maanden");
+  const back = viewSpan(bars, today, -1)!;
+  assert.deepEqual([back.label, back.from, back.to, back.today, back.later], ["December 2025 – mei 2026", "2025-12-01", "2026-05-31", "2026-05-31", true]);
+  assert.equal(viewSpan(bars, today, 3)!.later, false, "niet in de toekomst");
+  const month = view({ show: "getal", tally: { agg: "sum", field: "amount", step: "month", n: 1 } });
+  assert.deepEqual([viewSpan(month, today, 0)!.label, viewSpan(month, today, -1)!.label], ["Deze maand", "Vorige maand"]);
+  // Een lijst met "wanneer in vandaag": per dag, ook vooruit.
+  const eaten = view({ where: { match: "all", conditions: [{ field: "at", op: "in", value: { p: "today" } }] } });
+  assert.deepEqual([viewSpan(eaten, today, 0)!.label, viewSpan(eaten, today, -1)!.label, viewSpan(eaten, today, 1)!.label], ["Vandaag", "Gisteren", "Morgen"]);
+  assert.equal(viewSpan(eaten, today, -2)!.label, "Wo 4 nov");
+  // Zonder periode: niets om door te bladeren.
+  assert.equal(viewSpan(view({}), today, 0), null);
+  assert.equal(viewSpan(view({ show: "getal", tally: { agg: "count", step: "month", n: 0 } }), today, 0), null);
+
+  // Uitgerekend: gisteren gegeten, en het getal van vorige maand.
+  const yesterday = evaluateView({ ...eaten, where: { match: "all", conditions: [...eaten.where.conditions, { field: "kind", op: "any_of", value: ["Gegeten"] }] } }, logFields, items, { ...ctx, shift: -1 });
+  assert.deepEqual(yesterday.rows.map((r) => r.id), ["2"]);
+  assert.equal(yesterday.span?.label, "Gisteren");
+  const kcal = view({ show: "getal", tally: { agg: "sum", field: "kcal", step: "day", n: 1 } });
+  assert.equal(evaluateView(kcal, logFields, items, { ...ctx, shift: -2 }).chart?.total, 300);
+});
+
+test("een agenda: alles op zijn dag in het rooster van de maand, ook de dingen met een datum of periode", () => {
+  const block: ViewBlock = { kind: "view", name: "", source: "logboek", lists: [], where: { match: "all", conditions: [] }, show: "agenda" };
+  const later = [...items, ev("6", "2026-12-24", "Gegeten"), ev("7", "2026-11-30T19:00", "Water")];
+  const out = evaluateView(block, logFields, later, ctx);
+  assert.deepEqual(out.rows.map((r) => r.id), ["3", "2", "1", "4", "5", "7"]);
+  assert.equal(out.span?.month, "2026-11");
+  assert.deepEqual(evaluateView(block, logFields, later, { ...ctx, shift: 1 }).rows.map((r) => r.id), ["7", "6"], "het rooster van december begint op maandag 30 november");
+  // De dingen: volgens een datumveld (het gekozen, anders dat met "In de agenda", anders het eerste).
+  const fields: FieldDef[] = [
+    { key: NAME, label: "Naam", type: "text" },
+    { key: "bought", label: "Gekocht", type: "date" },
+    { key: "keuring", label: "Keuring", type: "date", agenda: true },
+    { key: "trip", label: "Reis", type: "date_range" },
+  ];
+  assert.equal(sourceDate("dingen", fields), "keuring");
+  assert.equal(sourceDate("dingen", fields, "trip"), "trip");
+  assert.deepEqual(agendaDays({ data: { trip: ["2026-11-10", "2026-11-14"] } }, "trip"), { start: "2026-11-10", end: "2026-11-14" });
+  assert.deepEqual(agendaDays({ data: { at: "2026-11-10T08:00", end: "2026-11-10" } }, "at"), { start: "2026-11-10" });
+  assert.equal(agendaDays({ data: {} }, "at"), null);
+  // Het datumveld van vroeger (in tally.date) blijft.
+  const old = cleanViewBlock({ source: "dingen", lists: ["w"], show: "staafjes", tally: { agg: "count", step: "month", n: 6, date: "bought" } });
+  assert.equal(old?.date, "bought");
+  assert.equal(cleanViewBlock({ source: "dingen", lists: ["w"], show: "lijst", date: "bought" })?.date, undefined, "een lijst heeft geen datumveld nodig");
+  // Alles met een datum: wat gebeurde of gepland staat, en de datums van dingen.
+  assert.deepEqual(sourceFields("datums", { lists: [], kinds: [] }).map((f) => f.key), [NAME, "at", "end", "list", "what", "status"]);
+});
+
+test("borden: met een naam en een icoon, nieuw of hernoemd", () => {
+  const boards = cleanBoards({ v: 2, boards: [{ id: "main", name: "Thuis", icon: "home", blocks: [] }, { id: "g", name: "Geld", icon: "<svg>", blocks: [] }] });
+  assert.deepEqual(boards.map((b) => [b.name, b.icon]), [["Thuis", "home"], ["Geld", "project"]]);
+  const next = renameBoards(boards, [{ id: "main", name: "Thuis" }, { id: "g", name: "Geld", icon: "wallet" }, { name: "Agenda", icon: "calendar" }], () => "n1");
+  assert.deepEqual(next.map((b) => [b.id, b.name, b.icon]), [["main", "Thuis", "home"], ["g", "Geld", "wallet"], ["n1", "Agenda", "calendar"]]);
+  assert.deepEqual(cleanBoards(null).map((b) => [b.name, b.icon]), [["Overzicht", "project"]]);
 });

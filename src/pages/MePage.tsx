@@ -19,7 +19,7 @@ import { useSession } from "../session";
  * van je lijsten en een back-up. Je e-mailadres komt van je aanmelding.
  */
 export function MePage() {
-  const { person, lists, reloadMe } = useSession();
+  const { person, lists, reloadMe, boards } = useSession();
   const toast = useToast();
   const { canInstall, install } = useInstall();
   const [name, setName] = useState(person.name);
@@ -48,7 +48,7 @@ export function MePage() {
       <PageHead
         title="Jouw gegevens"
         description={person.email ?? undefined}
-        back={{ to: "/", label: "Overzicht" }}
+        back={{ to: "/", label: boards[0]?.name ?? "Overzicht" }}
         actions={
           canInstall && (
             <button type="button" className="btn btn-outline btn-sm" onClick={install}>

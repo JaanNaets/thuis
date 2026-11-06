@@ -155,6 +155,7 @@ export function StickerPage() {
  * tik) of de foto van wat je logt of toevoegt; enkel tekst opent Toevoegen met die tekst.
  */
 export function SharedPage() {
+  const { boards } = useSession();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const text = params.get("tekst") ?? "";
@@ -203,7 +204,7 @@ export function SharedPage() {
   );
   return (
     <div className="page">
-      <PageHead title="Gedeeld" back={{ to: "/", label: "Overzicht" }} />
+      <PageHead title="Gedeeld" back={{ to: "/", label: boards[0]?.name ?? "Overzicht" }} />
       {preview && <img className="shared-photo" src={preview} alt="" />}
       {buyLists.length > 0 && (
         <>

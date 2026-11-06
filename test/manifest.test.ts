@@ -13,7 +13,7 @@ test("het manifest van de app: je meestgebruikte plekken als snelkoppeling, en d
   assert.equal(m.start_url, "/");
   assert.deepEqual(
     m.shortcuts.map((s) => s.name),
-    [...often.slice(0, SHORTCUT_LISTS).map((o) => o.name), "Toevoegen", "Agenda"],
+    [...often.slice(0, SHORTCUT_LISTS).map((o) => o.name), "Toevoegen"],
   );
   assert.equal(m.share_target.action, SHARE_PATH);
   // Eigen snelkoppelingen winnen.

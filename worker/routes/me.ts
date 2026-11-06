@@ -17,8 +17,8 @@ export const me = new Hono<AppEnv>();
 me.get("/", async (c) => {
   const db = c.env.DB;
   const person = c.get("person");
-  const [{ lists, tags }, ai] = await Promise.all([myLists(db, person.id), aiOn(db, person.id)]);
-  return c.json({ person, lists, tags, ai });
+  const [{ lists, tags }, ai, boards] = await Promise.all([myLists(db, person.id), aiOn(db, person.id), boardsOf(db, person.id)]);
+  return c.json({ person, lists, tags, ai, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
 });
 
 /** Je eigen naam, kleur en rekeningnummer. Je e-mailadres komt van je aanmelding en verandert hier niet. */
@@ -185,7 +185,7 @@ async function reachFor(db: D1Database, personId: string): Promise<Reach> {
   ]);
   const kindMap = new Map(kinds.map((k) => [k.id, k.name]));
   return {
-    boards: boards.map(({ id, name }) => ({ id, name })),
+    boards: boards.map(({ id, name, icon }) => ({ id, name, icon })),
     lists: new Map(results.map((l) => [l.id, { name: l.name, one: l.one, edit: canEdit(seen.get(l.id)), kinds: kindMap }])),
   };
 }
@@ -220,7 +220,7 @@ me.get("/overview", async (c) => {
       .first<{ money: number; stock: number }>();
     blocks = defaultBlocks(lists, { money: Boolean(has?.money), stock: Boolean(has?.stock) });
   }
-  return c.json({ board: board.id, boards: boards.map(({ id, name }) => ({ id, name })), blocks, custom: board.blocks !== null });
+  return c.json({ board: board.id, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })), blocks, custom: board.blocks !== null });
 });
 
 me.put("/overview", async (c) => {
@@ -239,5 +239,5 @@ me.put("/boards", async (c) => {
   const personId = c.get("person").id;
   const boards = renameBoards(await boardsOf(db, personId), asObject(await c.req.json()).boards, () => `b-${crypto.randomUUID().slice(0, 8)}`);
   await saveBoards(db, personId, boards);
-  return c.json({ boards: boards.map(({ id, name }) => ({ id, name })) });
+  return c.json({ boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
 });
