@@ -14,15 +14,16 @@ export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "�
 export type Place = { to: string; label: string; icon: IconName };
 
 /**
- * De plekken bovenaan het menu: je borden (het eerste op /, je beginscherm) en Verbanden. Geld, Agenda, Te doen, … zijn
- * gewone borden die je zelf samenstelt.
+ * De plekken bovenaan het menu: je borden, in jouw volgorde (het eerste op /, je beginscherm). Geld, Agenda, Te doen, …
+ * zijn gewone borden die je zelf samenstelt.
  */
 export function placesOf(boards: BoardInfo[]): Place[] {
-  return [
-    ...boards.map((b, i) => ({ to: i === 0 ? "/" : boardPath(b.id), label: b.name, icon: (b.icon || "project") as IconName })),
-    { to: "/verbanden", label: "Verbanden", icon: "links" as IconName },
-  ];
+  return boards.map((b, i) => ({ to: i === 0 ? "/" : boardPath(b.id), label: b.name, icon: (b.icon || "project") as IconName }));
 }
+
+/** Verbanden: het overzicht van al je lijsten, dus bovenaan de lijsten in het menu en niet tussen de borden. */
+export const LINKS_PLACE: Place = { to: "/verbanden", label: "Verbanden", icon: "links" };
+export const onLinks = (pathname: string) => pathname === LINKS_PLACE.to || pathname.startsWith(`${LINKS_PLACE.to}/`);
 
 /** Welke plek je nu bekijkt (-1: geen, bv. een lijst). */
 export function placeIndex(places: Place[], pathname: string): number {
@@ -34,8 +35,9 @@ export function placeIndex(places: Place[], pathname: string): number {
 export const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
 
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, je borden en Verbanden, en je lijsten per tag
- * (een tag klapt open). Jouw gegevens: je letter rechtsboven in de paneelbalk.
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, je borden, en onder Lijsten Verbanden en je
+ * lijsten per tag (een tag klapt open). Smal (enkel iconen) blijft van de lijsten enkel Verbanden over, onder een
+ * haarlijn. Jouw gegevens: je letter rechtsboven in de paneelbalk.
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { lists, tags, boards } = useSession();
@@ -70,19 +72,26 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           ))}
         </nav>
 
+        <p className="nav-section">Lijsten</p>
+        <nav className="sidebar-nav sidebar-lists" aria-label="Lijsten">
+          <NavLink to={LINKS_PLACE.to} className={onLinks(pathname) ? "active" : undefined} title={LINKS_PLACE.label}>
+            <Icon name={LINKS_PLACE.icon} size={17} />
+            <span className="nav-text">{LINKS_PLACE.label}</span>
+          </NavLink>
+        </nav>
         <TagTree lists={lists} tags={tags} current={current} />
       </div>
     </aside>
   );
 }
 
-/** Je lijsten per tag: elke tag klapt open (open als je er een lijst van bekijkt); wat zonder tag is, onderaan. */
+/** Je lijsten per tag: elke tag klapt open (open als je er een lijst van bekijkt); wat zonder tag is, onderaan. De kop
+ * "Lijsten" en Verbanden staan erboven, bij wie de boom toont. */
 export function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const groups = groupByTag(lists, tags);
   return (
     <div className="sidebar-places">
-      <p className="nav-section">Lijsten</p>
       <ul className="place-tree">
         {groups.map((g) => {
           const key = g.tag?.id ?? "zonder";

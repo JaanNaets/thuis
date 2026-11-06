@@ -803,7 +803,7 @@ dialog.sheet.menu-sheet {
 }
 
 .menu-sheet .sidebar-places {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .menu-sheet .nav-section {
@@ -4138,6 +4138,19 @@ dialog.palette[open]::backdrop {
     color: var(--foreground);
   }
 
+  /* Verbanden, bovenaan de lijsten: geen glijdend vlak, het witte vlak staat op de rij zelf. Smal (enkel iconen) staat
+     het onder een haarlijn, los van je borden. */
+  .sidebar-lists {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .sidebar-lists a.active {
+    background: var(--surface);
+    box-shadow: var(--shadow-surface);
+  }
+
   .sidebar-nav a:active svg {
     transform: scale(0.86);
   }
@@ -4343,6 +4356,12 @@ dialog.palette[open]::backdrop {
   .nav-section,
   .sidebar-places {
     display: block;
+  }
+
+  .sidebar-lists {
+    margin: 0 0 1px;
+    padding: 0;
+    border: 0;
   }
 
   .workspace,

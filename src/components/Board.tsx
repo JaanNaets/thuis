@@ -76,7 +76,7 @@ export function BoardView({ overview, onChanged }: { overview: Overview; onChang
   const { reloadMe } = useSession();
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Block[] | null>(null);
-  const [menu, setMenu] = useState<"menu" | "new" | "rename" | null>(null);
+  const [menu, setMenu] = useState<"menu" | "new" | "rename" | "order" | null>(null);
   const [boardName, setBoardName] = useState("");
   const [boardIcon, setBoardIcon] = useState<string>(BOARD_ICON);
   const [busy, setBusy] = useState(false);
@@ -192,7 +192,7 @@ export function BoardView({ overview, onChanged }: { overview: Overview; onChang
         </div>
       )}
 
-      <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>
+      <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : menu === "order" ? "Volgorde" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>
         {menu === "menu" ? (
           <ul className="rows sheet-menu">
             {menuRow("sliders", "Aanpassen", () => {
@@ -209,8 +209,17 @@ export function BoardView({ overview, onChanged }: { overview: Overview; onChang
               setBoardIcon(current?.icon ?? BOARD_ICON);
               setMenu("rename");
             })}
+            {overview.boards.length > 1 && menuRow("grip", "Volgorde", () => setMenu("order"))}
             {overview.boards.length > 1 && menuRow("trash", "Verwijderen", removeBoard)}
           </ul>
+        ) : menu === "order" ? (
+          <BoardOrder
+            boards={overview.boards}
+            busy={busy}
+            onSave={async (next) => {
+              if (current && (await saveBoards(next, () => current.id))) toast("Bewaard");
+            }}
+          />
         ) : (
           menu && (
             <form
@@ -240,6 +249,43 @@ export function BoardView({ overview, onChanged }: { overview: Overview; onChang
           )
         )}
       </Sheet>
+    </div>
+  );
+}
+
+/** De volgorde van je borden (zo staan ze in het menu; het bovenste is je beginscherm): slepen aan de greep, dan bewaren. */
+function BoardOrder({ boards, busy, onSave }: { boards: BoardInfo[]; busy: boolean; onSave: (next: BoardInfo[]) => void }) {
+  const [order, setOrder] = useState(() => boards.map((b) => b.id));
+  const byId = new Map(boards.map((b) => [b.id, b]));
+  const sortable = useSortable(order, setOrder, (id) => byId.get(id)?.name ?? "Overzicht");
+  const changed = order.some((id, i) => boards[i]?.id !== id);
+  return (
+    <div className="form">
+      <ul className="rows sort-list">
+        {order.map((id) => {
+          const b = byId.get(id);
+          if (!b) return null;
+          return (
+            <li key={id} {...sortable.itemProps(id)}>
+              <div className="row">
+                <button {...sortable.handleProps(id)}>
+                  <Icon name="grip" size={16} />
+                </button>
+                <span className="cell-main">
+                  <span className="row-media">
+                    <Icon name={(b.icon || BOARD_ICON) as IconName} size={16} />
+                  </span>
+                  <span className="row-title">{b.name}</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {sortable.status}
+      <button type="button" className="btn btn-primary" disabled={busy || !changed} onClick={() => onSave(order.map((id) => byId.get(id)!))}>
+        Bewaren
+      </button>
     </div>
   );
 }

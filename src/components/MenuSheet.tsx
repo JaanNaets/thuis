@@ -5,11 +5,11 @@ import { useSession } from "../session";
 import { Avatar } from "./Controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
-import { currentList, placeIndex, placesOf, TagTree } from "./Sidebar";
+import { currentList, LINKS_PLACE, onLinks, placeIndex, placesOf, TagTree } from "./Sidebar";
 
 /**
- * Het menublad (gsm, achter de tab Menu; zie STIJLBOEK.md → Gsm): zoeken, je borden en Verbanden, je lijsten per tag en
- * jij, op de schil. Een tik op een rij of een nieuwe pagina sluit het blad.
+ * Het menublad (gsm, achter de tab Menu; zie STIJLBOEK.md → Gsm): zoeken, je borden, onder Lijsten Verbanden en je
+ * lijsten per tag, en jij, op de schil. Een tik op een rij of een nieuwe pagina sluit het blad.
  */
 export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose: () => void; onSearch: () => void }) {
   const { lists, tags, person, boards } = useSession();
@@ -39,6 +39,13 @@ export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose:
               <span>{p.label}</span>
             </NavLink>
           ))}
+        </nav>
+        <p className="nav-section">Lijsten</p>
+        <nav className="menu-places" aria-label="Lijsten">
+          <NavLink to={LINKS_PLACE.to} className={`menu-row${onLinks(pathname) ? " active" : ""}`}>
+            <Icon name={LINKS_PLACE.icon} size={18} />
+            <span>{LINKS_PLACE.label}</span>
+          </NavLink>
         </nav>
         <TagTree lists={lists} tags={tags} current={currentList(pathname)} />
         <Link to="/ik" className="menu-row menu-me">

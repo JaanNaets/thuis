@@ -165,13 +165,12 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
   [zoekpalet](#zoekpalet-commandpalette)) en **jouw letter** (naar `/ik`). Zodra de grote titel onder de kop
   schuift, verschijnt hij klein in het midden.
 - **De onderbalk** (`.tabbar`): vast onderaan, van rand tot rand, op de schil met een waas en een dekkende lijn
-  erboven. Je eerste drie **borden** (met hun icoon en naam; met minder borden ook **Verbanden**) rond de gele **+**,
-  en **Menu**. Het witte vlak glijdt naar waar je bent; Menu licht op voor wat enkel in het menublad staat (een lijst,
+  erboven. Je eerste drie **borden** (met hun icoon en naam, in jouw volgorde) rond de gele **+**, en **Menu**. Het witte vlak glijdt naar waar je bent; Menu licht op voor wat enkel in het menublad staat (een lijst,
   je andere borden, …) en zolang dat open is.
 - **De +** doet wat het scherm vraagt (`useAddAction` of `<PhoneAdd>` uit `src/shell.ts`: een lijst voegt een ding
   toe of logt), anders opent hij het palet om toe te voegen. Er is geen zwevende knop.
-- **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), je borden en
-  Verbanden, je lijsten per tag en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
+- **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), je borden, onder
+  Lijsten Verbanden en je lijsten per tag, en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
 
 ### Tablet en kiosk (vanaf 768px)
@@ -183,6 +182,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 │ ◖Thuis◗          ├────────────────────────────────────────────────────────┤ │
 │ Geld, Agenda …   │ Wijnen                                          (⋯)    │ │  ← titel 24px
 │ LIJSTEN          │ [ Wijnen · Logboek ]                                   │ │  ← tabs
+│ ⌇ Verbanden      │                                                        │ │
 │ ⌄ Huis           │ zijkolom (320px)        zoeken, filters                │ │
 │ │ Voorraad       │ Wie                     Wijn          Wijnhuis   Fles  │ │
 │ │ Wijnen         │ ───────────             ─────────────────────────────  │ │
@@ -195,8 +195,9 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
   **paneel** (10px marge, een dekkende haarlijn `--line`, afronding 18px, geen schaduw). Het paneel scrollt zelf; de
   zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje met "Thuis" (naar je eerste bord), het
-  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden en Verbanden, en de
-  [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen item ligt op het **witte vlak** dat meeglijdt.
+  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden, en onder Lijsten Verbanden en
+  de [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen bord ligt op het **witte vlak** dat
+  meeglijdt. Smal (enkel iconen) blijft van de lijsten enkel Verbanden over, onder een haarlijn (`.sidebar-lists`).
 - **Paneelbalk** (56px, wit, plakt bovenaan het paneel met een haarlijn eronder; de inhoud scrollt eronder door):
   kruimelpad met `›` links ("Thuis › Wijnen": je eerste bord; een bord of Verbanden zelf staat er alleen, `top`),
   rechts de hoofdactie (gele knop) en jouw letter in een wit rondje (naar `/ik`).
@@ -417,9 +418,10 @@ glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? V
 
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
-Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam (het eerste op `/`, de andere op `/bord/:id`) en
-**Verbanden**. Er zijn geen vaste pagina's voor geld, voorraad, eten, te doen of de agenda: dat zijn borden die je zelf
-samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: per tag een
+Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam, in jouw volgorde (het eerste op `/`, de andere
+op `/bord/:id`). Er zijn geen vaste pagina's voor geld, voorraad, eten, te doen of de agenda: dat zijn borden die je
+zelf samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: eerst **Verbanden** (`LINKS_PLACE`, het overzicht van
+al je lijsten, geen bord), dan per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
@@ -954,7 +956,8 @@ Lijn, Gebied, Per keuze, Verdeling, Getal of Voortgang.
 
 **Een bord** (`/` het eerste, `/bord/:id` de andere; `BoardView` in `Board.tsx`): `PageHead` (`top`) met de naam van
 het bord, `primary` **Toevoegen** (op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen,
-Nieuw overzicht, Naam en icoon (`IconPicker`), Verwijderen. Je wisselt van bord in het menu (zijbalk, onderbalk,
+Nieuw overzicht, Naam en icoon (`IconPicker`), Volgorde (een `sort-list` met greep en Bewaren; het bovenste wordt je
+beginscherm), Verwijderen. Je wisselt van bord in het menu (zijbalk, onderbalk,
 menublad, palet), niet met tabs. Vanzelf (zolang je niets koos): Uitgaven deze maand, Te doen, Bijna op en Wie moet
 wie, als weergaven. Onder een bord staat niets anders dan zijn blokken: je lijsten
 staan in de zijbalk en onder Menu (en in Verbanden). Elk blok is een [weergave of actie](#weergaven-en-acties-op-een-overzicht-viewcard-actiontile-viewbuilder-actionbuilder)
