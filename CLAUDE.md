@@ -1,7 +1,7 @@
 # Thuis: werkafspraken
 
-App voor thuis op Cloudflare (Workers, D1, R2): projecten, mensen met rollen, en items met eigen velden. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten,
-commits en uitleg.
+App voor thuis op Cloudflare (Workers, D1, R2): lijsten met dingen en een logboek, mensen per lijst, tags om te
+groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, commits en uitleg.
 
 ## Ontwerp: lees eerst het stijlboek
 
@@ -20,174 +20,90 @@ commits en uitleg.
 
 - Navigeren altijd met `Link`, `NavLink` en `useNavigate` uit `src/router.tsx` (vloeiende schermwissels), nooit
   rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
+- Bedragen in cent, datums als `YYYY-MM-DD` (een tijdstip `YYYY-MM-DDTHH:MM`, tijd in België). Opmaak via `src/format.ts`.
 
-- Bedragen in cent, datums als `YYYY-MM-DD`. Opmaak via `src/format.ts`.
-- Alles is een **project** (een boom: `parent_id`), ook "Huishouden": achter de schermen is geen enkel project
-  speciaal. Een persoon (`people`) krijgt per project een **rol** (`memberships`); die geldt ook in de subprojecten,
-  tenzij er dichter een eigen lidmaatschap is. Wat een rol mag, staat in `shared/access.ts`: `manage`, `members`,
-  `create`, `delete`, en per lijst en per veld Niet zien / Zien / Wijzigen. Een lijst heet in de code `item_type`;
-  in alles wat de gebruiker leest is het een **lijst** (nooit "soort").
-- Elke route die iets van een project raakt, haalt eerst de toegang op met `requireProject` (of `projectAccess`) uit
-  `worker/context.ts`, en een item met `requireItem` (`worker/routes/items.ts`). Geen lidmaatschap = 404 "niet
-  gevonden"; ontbreekt een recht, dan `need(access, …)` of een `ForbiddenError`. Bij twijfel: weigeren.
-- Een verwijzing (`item`, `items`) wijst naar `ref_type` en eventueel meer lijsten (`ref_also`, uit eender welk
-  project dat de bewerker ziet); gebruik altijd `refLists(def)`, nooit enkel `ref_type`. Met `free` mag één
-  verwijzing ook vrije tekst zijn (`{ text }`, geen verwijzing: niets na te kijken, af te trekken of over te nemen).
-  De keuzes komen per bladzijde (`GET /items?type=…`, met `more`); is een lijst groter, dan zoekt de server (`q`,
-  `nameMatches`), vindt hij de namen in een getypte tekst (`in`, `nameIn`, voor snel invullen) en de naam van wat al
-  gekozen is (`ids`). Nooit alle items van een lijst naar de browser sturen.
-- Velden van een item gaan altijd door `prepareData`: `cleanAttributes` (`shared/fields.ts`), dan `mergeEditable`
-  (velden die je niet mag wijzigen, houden hun waarde), verwijzingen naar personen en items gecontroleerd. Wat je
-  terugstuurt, gaat door `visibleData`. Wat van buiten komt (ids van lijsten, tags, rollen, personen) controleer je
-  tegen de keten van het project (`access.chain`). Uitzondering: een verwijzing of samenvatting mag ook naar een lijst
-  in een ander project die de bewerker ziet (`fieldListsFor` → `visibleLists`); wie de items leest, ziet er enkel
-  van wat hij in dat project mag zien (namen, opzoeken, samenvatten en "verwijst hiernaar" kijken per item na).
-- Er moet altijd iemand overblijven die het hoofdproject kan instellen (`assertKeepsAdmin`), en enkel wie zelf
-  `manage` heeft, geeft een rol met `manage` (`assertRoleAllowed`).
-- Een use case (verdelen, voorraad, calorieën, …) bouw je bovenop de kern, niet erin: uit velden (die zelf invullen
-  wat leeg is: `applyFieldDefaults`), berekeningen en **totalen** op een lijst (`shared/totals.ts`, nagekeken met
-  `cleanTotals`, gefilterd met `visibleTotals`), als sjabloon (`shared/templates.ts`). Kosten verdelen is zo een
-  totaal dat verrekent (`settle`: Wie moet wie). Een totaal rekent de API uit per lezer (`itemsAsSeen` in
-  `worker/compute.ts`): elk item met de rechten van de lezer in zijn eigen project, ook bij subprojecten en lijsten
-  uit andere projecten ("ook uit", nagekeken met `checkSources`).
-- Een **berekening** (veldsoort `calc`, `shared/calc.ts`) wordt nooit bewaard: de API kijkt ze na met `checkCalcs`
-  en rekent ze uit bij het lezen (`withCalcs` in `worker/compute.ts`), enkel op wat de lezer mag zien. Opzoeken en
-  samenvatten halen andere items op en kijken per item project, lijst en veld na.
-- **Sjablonen delen** (`shared/template-file.ts`): een bestand zonder items, mensen, rollen of standaardverdelingen.
-  Wat binnenkomt, gaat door `parseTemplateFile`; verwijzingen wijzen enkel naar lijsten uit het sjabloon (in hetzelfde
-  project of erboven) of uit de eigen keten (`planTemplate` → `resolveTemplateLists`); wat niet klopt, valt weg.
-- **Snel invullen** (`shared/quickfill.ts`, `POST /projects/:id/items/read`): getypte tekst eerst met code naar de
-  velden (getest in `test/quickfill.test.ts`); enkel een hele zin gaat naar de AI (zelfde `useAiBudget` als een foto),
-  en wat de code vond, wint; de AI enkel met ✨. In een lijst met productinfo herkent de AI ook in tekst wat het is
-  ("groentesoep"): in een tweede, eigen vraag (`foodQuestion`, `foodAnswer` in `shared/product.ts`) schat ze de
-  voedingswaarde en hoeveel (anders één gewone portie; zonder energie of alles 0 telt het niet), en daarna komen de echte
-  gegevens uit NEVO of Open Food Facts zoals bij een foto (`source`: databank of geschat); andere getallen raadt ze nooit.
-  Een getal dat je typt, gaat nooit vanzelf naar productinfo (kcal per 100 g, portie: "pizza 300" is Hoeveel), en een
-  getal voor een gewoon woord is een aantal, geen gewicht ("2 boterhammen" blijft in de naam). Een bedrag zonder
-  geldveld en een maat zonder plaats vallen weg (nooit in de naam), een getal met een maat is nooit een bedrag ("120
-  gram"), "6 stuks" vult ook de eenheid van dat getal in (`unitFieldOf`: `measure.unit` of `adjust.unit_by`), en de naam
-  komt enkel van de eerste verwijzing (het product, nooit de winkel). In het palet zet een prijs in de tekst (`hasPrice`)
-  de lijsten met aankopen eerst, ook als je met een project begint dat ze bijvullen. In het formulier van een aankoop
-  wordt een getypt product een nieuw product (Nieuw product in, via `new_ref` op `/items/batch`). **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
-  (`AiMark`), ze start nooit vanzelf (ook een gedeelde foto wacht), de melding zegt "met AI", en per persoon staat ze
-  aan of uit (`AppSettings.ai`, `PUT /me/ai`, `useSession().ai`); uit = geen ✨-knoppen en `useAiBudget` weigert. Alles daarna gewoon door het formulier en `prepareData`. De code vult
-  **live** in (één motor voor formulier en blok: `useQuickFill`; `ItemForm` zet de lezing in zijn velden met `applyLive`,
-  `QuickAdd` stelt er de gegevens mee samen; `quickFill` geeft met `parts` welke tekst in welk veld kwam, zodat wissen
-  terugzet wat er stond). `QuickInput` toont keuzes uit de velden (`typedFragments`, `formSuggestions`,
-  `matchSuggestions`; items enkel via `GET /items?type=…&q=` of `in=`, nooit een hele lijst) en waar een getal of datum
-  naartoe kan (`moveTargets`, `moveValue`); een keuze telt als zelf ingevuld (`setField`, zoals `changeField`), en wat
-  je typt wint van overnemen, Vaak, productinfo en een foto. **Geheugen** (`remember` op een veld): een nieuw item
-  begint met jouw laatste waarde of een vaste waarde (`remember_fixed`, tabel `fixed_values`, de eerste keer vanzelf,
-  Vastzetten met `PUT …/items/remembered`), voor alles of per keuze in een ander veld (`remember_by`, `rememberKey`:
-  Hoeveel bij Pasta). `GET /projects/:id/items/remembered` (`?by=&value=`): enkel velden die je mag wijzigen, en
-  een keuze in een veld dat je niet ziet, telt niet.
-- **Productinfo** (`shared/product.ts`, `worker/products.ts`): Open Food Facts krijgt enkel een barcode of een
-  productnaam, nooit iets van de gebruiker; resultaten staan 30 dagen in `products`. Liever geen match dan een
-  verkeerd product (`bestMatch`), en de app toont altijd of iets uit de databank komt of geschat is.
-  **Porties**: een getal met `portion` (de sleutel van een getal Portie, productinfo `serving`) krijgt ½ · 1 · 2
-  porties in het formulier, en snel invullen rekent "2 porties" om (`QuickContext.values`). **NEVO** (`shared/nevo.ts`,
-  `shared/nevo-data.ts` uit `scripts/nevo.mjs`): gewone voedingsmiddelen zonder netwerk (`nevoByName`,
-  `GET /products/nevo`), ongewijzigd en altijd met `nevoCredit` erbij; zonder merk eerst NEVO, dan Open Food Facts.
-- **Weergaven** (`shared/views.ts`: filters, sortering, kolommen, groeperen, als agenda, **Ook uit**; de volgorde altijd met
-  `orderItems`, optellen enkel waar het zin heeft: `canSum`) en de **agenda** (`shared/agenda.ts`,
-  velden met `agenda`) zijn generiek over alle veldsoorten. Een weergave is geen beveiliging: wat iemand niet mag zien,
-  krijgt hij niet, en een voorwaarde daarop telt voor hem niet mee. `/agenda` kijkt per item de rechten in zijn
-  project na. Wat binnenkomt, gaat door `cleanView`.
-- **Ook uit** (`also` in een weergave of grafiek, `?also=`, `itemsAlso` in `worker/routes/items.ts`): dezelfde lijst uit
-  andere projecten (`alsoFits`: minstens de helft van de velden dezelfde), elk item met de rechten van de lezer in zijn
-  eigen project (geen lidmaatschap = niets) en enkel met de velden die hier hetzelfde zijn (`alsoData`). Delen blijft per
-  project: een project bepaalt wie iets ziet, een veld (Eigenaar, Verdeling) van wie het is; Ook uit toont het samen.
-- **Jouw deel** (`mine` op een totaal of grafiek, `onlyMine` in `shared/totals.ts`): enkel de items waar de lezer in
-  een veld met mensen staat; bij een verdeling telt van het getal enkel zijn deel (tot op de cent). Ben je alleen in
-  een project, dan staan velden die zich met jou invullen niet in het formulier (`selfOnly` in `ItemForm`).
-- **Met subprojecten** (`?sub=1`, `tree` in een weergave): de items van een lijst ook uit de subprojecten
-  (`itemsIn` in `worker/routes/items.ts`), elk met de rechten van de lezer in zijn eigen project (daar kan hij een
-  andere rol hebben). Een subproject kiest lijsten van erboven als tab (`shown_lists`, `PUT /projects/:id/shown`,
-  enkel lijsten uit de keten erboven die je ziet).
-- **Snel naar een formulier**: één palet voor zoeken en toevoegen (`CommandPalette`, `usePalette`; `GET /me/lists` =
-  `addTargets`, `matchTargets` in `shared/quickadd.ts`, `strong` zet Toevoegen bovenaan; de rest van de tekst gaat als
-  `?tekst=` naar het formulier), een QR-sticker, Op je beginscherm (maakt of hergebruikt een app, `sameDestination`;
-  `/snel/:id/:typeId` met `GET /projects/:id/manifest/:typeId` blijft enkel voor iconen van vroeger), het manifest van de app per persoon (`GET /me/manifest`: je drie meestgebruikte lijsten als
-  snelkoppeling, `share_target` naar `/delen`, opgevangen in `sw/sw.js`). Een gedeelde foto staat even in de cache
-  `gedeeld` (`src/shared-file.ts`) en wordt na gebruik opgeruimd. **De app instellen** (`shared/apps.ts`,
-  `people.app_settings`, `GET/PUT /me/app`): eigen apps (`/app/:id`, manifest `GET /me/apps/:id/manifest`), eigen
-  snelkoppelingen en wat een gedeelde foto doet, enkel naar wat je bereikt (`keepReachable`, `reachFor`: enkel de
-  projecten waarnaar ze verwijzen). Waar de app opent, is per toestel (`src/start.ts`, localStorage).
-- **Overzicht** (`shared/overview.ts`, `people.overview`, `PUT /me/overview`): per persoon één of meer overzichten
-  (`Board`, `cleanBoards`: het oude formaat wordt het eerste; `PUT /me/boards` hernoemt, schikt, voegt toe en haalt
-  weg, er blijft er altijd één; `?board=`), elk met blokken (project met
-  verborgen lijsten en per lijst eventueel een weergave om te tellen, lijst, snel toevoegen, totaal, waarde van een
-  item, Wie moet wie; een lijst met een bewaarde weergave en als aantal of als items, elk blok eventueel breed), enkel ids,
-  nagekeken met `cleanBlocks`. Een lijstblok haalt enkel
-  de eerste items en het aantal (`GET /projects/:id/items?type=&view=&limit=`, met `count`), nooit de hele lijst. Een
-  blok haalt zijn inhoud op met de gewone routes (dus met de rechten van de lezer); `null` = vanzelf (`defaultBlocks`:
-  elk project, of bij meer dan `DEFAULT_ALL` enkel die bovenaan). `GET /me/overview` geeft enkel de lijsten van de
-  projecten in de blokken (`blockProjects`: elk blok met een project, of `?projects=`). Een snel-toevoegen-blok
-  (`QuickAdd`) bewaart meteen via de gewone route, met Ongedaan maken (verwijderen, enkel met `can_delete`). Opstarten blijft licht bij 1000 projecten: geen lijst
-  of boom die alles tegelijk tekent (de zijbalk tekent een tak pas als hij open gaat).
-- **Grafieken** (`shared/charts.ts`, blok `chart` op een overzicht, `GET /projects/:id/chart`): helemaal zelf samen te
-  stellen (`cleanChart` op vorm, `fitChart` op de velden die de lezer ziet), uitgerekend op de server met
-  `computeChart` over `itemsIn` (rechten per item in zijn project, weergave als filter); de browser krijgt enkel de
-  uitkomsten. Kleuren in vaste volgorde (`--chart-*`), de kleur volgt de keuze. `?periode=` (`BOARD_PERIODS`) voor
-  een verslag van het hele overzicht.
-- **Verbanden** (`shared/links.ts`, `worker/routes/links.ts`, `/projecten/:id/verbanden` en `/verbanden` voor het hele web
-  over al je projecten): worden nooit bewaard, maar afgeleid uit de velden, berekeningen en totalen die de lezer
-  ziet (`listLinks`, met `visibleFields` en `visibleTotals`). **Verbanden gaan altijd mee**: elke eigenschap van
-  `FieldDef`, `TotalDef` en elke soort berekening staat in `FIELD_LINKS`, `TOTAL_LINKS` of `CALC_LINKS` (TypeScript
-  weigert te bouwen tot een nieuwe erin staat); wat lijsten verbindt (`true`), toont `listLinks`, met een voorbeeld in
-  `test/links.test.ts`. Een kaart is één project met hoogstens `MAX_COLUMNS` subprojecten en `MAX_OUTSIDE` lijsten van
-  elders, met een vast aantal vragen aan de databank (ook bij 1000 projecten). De schikking is een vaste regel
-  (`layoutLinks`): een rij per lijst waar iets toekomt, kolommen per project. **Problemen** (`adjustProblems`): wie
-  een item met een verwijzing die telt mag bewaren, maar het getal aan de andere kant niet mag wijzigen (dichtste rol
-  per project); enkel voor wie de mensen in beide projecten beheert, met twee vragen aan de databank.
-- **Verwijzingen die tellen** (`adjust`, `shared/effects.ts`, `worker/effects.ts`): wat een item aan andere items deed,
-  staat in `items.applied` (nooit naar de browser). Bewaren past enkel het verschil toe, in dezelfde batch, en weigert
-  als de bewerker dat getal daar niet mag wijzigen; verwijderen draait terug waar het mag. Overnemen (`copy`) gebeurt
-  in het formulier en gaat daarna door `prepareData` zoals alles. **Eenheden** (`shared/units.ts`): een voorraad telt
-  per item in een eenheid (`measure` op het getal: welk veld de eenheid, de inhoud per stuk en per verpakking zegt);
-  wat telt, mag een eenheid hebben (`adjust.unit`, 500 g of 2 zak) en wordt in `inTargetUnits` omgerekend naar die
-  van het item, vóór het in `applied` komt (of per lijn in een ander veld: `adjust.unit_by`). Geen eenheid = zoals het
-  staat. **Meteen ook** (`spawn` op een ja/nee, `shared/spawn.ts`, `worker/spawn.ts`): een nieuw item met dat vinkje
-  aan maakt ook een item in de eerste van die lijsten waarin de bewaarder mag toevoegen (Gegeten → je eigen Eten), in
-  dezelfde batch en door `prepareData`; het neemt naam, velden met dezelfde sleutel, het product en hoeveel (omgerekend)
-  over. Ids van lijsten die de bewerker niet ziet, blijven staan als ze er al stonden (`cleanTypeFields(…, before)`). **Hoeveelheden** (veldsoort `amounts`):
-  per regel een item (of tekst), hoeveel en de eenheid; met `adjust` trekt elke regel af (een maaltijd uit een recept),
-  met `per` (porties) rekent overnemen uit een recept mee. Waar code `item`/`items` behandelt, hoort `amounts` erbij. Een kasticket rekent de maat op de lijn om
-  (`receiptAmount`) en onthoudt een gekoppelde lijn in een tekstveld met `aliases` (enkel als je dat veld mag wijzigen).
-  **Kasticket per lijn** (`shared/receipt.ts`, `worker/routes/receipt.ts`, `ReceiptToLines`): wat de velden doen,
-  volgt uit de velden (`receiptPlan`: het eerste geldveld, de eerste verwijzing die telt, het kasticket = een verwijzing
-  naar een lijst met een datum die deze lijnen optelt); `POST /projects/:id/items/scan-receipt` leest (AI) en koppelt
-  enkel aan items die de lezer ziet, bewaart niets. Bewaren met `POST /projects/:id/items/batch` (alles of niets, elk
-  item door `prepareData`, met `group`: het kasticket in dezelfde batch; met `new_ref` op een lijn eerst een nieuw
-  product, want een verwijzing moet bestaan: lukt de rest niet, dan gaat het weer weg); `POST /items/:id/alias` onthoudt
-  de naam op het ticket. Een gekoppelde lijn staat in de eenheid van het product (`inProductUnit`), en krijgt wat ze
-  vorige keer had (velden met `remember` per naam, enkel als je bovenaan niets kiest). `POST /items/bought` vinkt open
-  items af die naar het gekochte product verwijzen (het eerste ja/nee als kolom, enkel waar die verwijzing niets telt),
-  met de rechten van de lezer per project. Een voorraad waarbij een aankoop al bijtelt (`boughtVia`, `AddTarget.stocks`),
-  krijgt een kasticket via die aankopen, nooit rechtstreeks.
-- **Timer** (veldsoort `timer`, `{ start, end? }` in UTC): `timer_goal` (melding in `sendTimerGoals`, elk kwartier,
-  aan wie het item maakte als die het nog ziet), `timer_into` (de duur in een Duur van de lijst, `applyTimers` in
-  `prepareData`, enkel als je dat veld mag wijzigen). `POST /items/:id/timer` (start/stop met de tijd van de server),
-  `GET /projects/:id/timer` voor het blok `timer`.
-- **Melding bij een nieuw item** (`shared/notify.ts`, `item_types.notify`, `worker/notify.ts`): per lijst niet, aan
-  iedereen die de lijst ziet, of aan wie in een veld met mensen staat; nooit aan wie het toevoegde of wie het project
-  (of een erboven) stilzette (`AppSettings.muted`, `PUT /me/muted`); per ontvanger zijn eigen rechten
-  (`projectAccess`, `visibleData`); kort na elkaar één melding (`tag`). Op de achtergrond (`waitUntil`).
-- **Herinneren en herhalen** (`shared/remind.ts`, `worker/cron.ts`, elk kwartier; om 7 u herhalen en de gewone
-  herinneringen, met `remind_at` op het uur van een uurveld, voor het voorbije kwartier, zonder bij te houden wat al
-  verstuurd is: `timedRemindersDue`): een melding gaat enkel naar wie
-  het item en de datum (en alles waarvan ze afhangt) nu mag zien; een herhaling maakt het nieuwe item met de rechten
-  die wie ze instelde nu heeft, door `prepareData`, en stopt als dat niet meer mag. Meldingen (web push,
-  `shared/webpush.ts`) gaan enkel naar de pushdiensten van de browsers (`isPushEndpoint`).
-- **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`, op Jouw gegevens): enkel de projecten waar je alles
-  beheert (`manage` én `members`), met wat je ziet (`visibleFields`, `visibleData`, `visibleTotals`); nooit `applied`,
-  een rekeningnummer of andermans eigen weergaven. Terugzetten maakt altijd een nieuwe kopie (`freshIds`, `remap`) en
-  kijkt alles na zoals bij gewoon invoeren (`cleanTypeFields`, `cleanAttributes`, personen uit het project,
-  verwijzingen die bestaan en die je ziet); wat niet klopt, valt weg. Foto's en bestanden enkel uit items die nog
-  bestaan en die je ziet. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES` waarom
-  niet; `test/backup.test.ts` leest de migraties na).
+### Het model (`shared/model.ts`, `migrations/0029_lijsten.sql`)
+
+- Er zijn enkel **lijsten** (`lists`). Een lijst heeft **dingen** (`things`, allemaal met dezelfde velden: `fields`;
+  `one` = hoe één ding heet, leeg = een lijst zonder dingen), altijd een **logboek** met **gebeurtenissen**
+  (`events`), **mensen** (`list_people`) en **tags** (`list_tags`, `list_tag_links`). Geen projecten, geen lijsten in
+  lijsten: tags groeperen, een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "ding" en "logboek".
+- Een gebeurtenis heeft een **soort**: één van zes basissoorten (`BASES`: aankoop, gebruik, dienst, activiteit, meting,
+  overdracht) of een eigen soort van een lijst (`kinds`, met eigen velden; Gegeten, Tankbeurt). Ze heeft **lijnen**
+  (`lines`): `in` (erbij), `uit` (eraf), `voor` (waarvoor, de wagen) en `bij` (waar, de winkel), naar een ding of als
+  tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon). Status: `gebeurd`,
+  `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee).
+- Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen, getoond in **weergaven**
+  (`/geld`, `/voorraad`, `/eten`, `/te-doen`, `/agenda`; uitgerekend in `worker/routes/insights.ts`).
+- Dingen houden bij het overzetten de id van hun oude item (foto's in R2: `items/{id}/photo`); een gebeurtenis
+  gebruikt `events/{id}/photo` (`worker/media.ts`).
+
+### Rechten (`shared/rights.ts`, `worker/access.ts`)
+
+- Vaste rollen per lijst: **beheerder** (instellen, mensen), **lid** (dingen en loggen), **gast** (kijken), en
+  rechtstreeks **geen** (een uitzondering). Er zijn geen rechten per veld.
+- Een **regel op een tag** (`tag_rules`, "Jana altijd beheerder bij Huis") geeft een rol op elke lijst met die tag,
+  maar enkel waar wie de regel maakte zelf rechtstreeks beheerder is; wie een tag zet, ziet wie er zo bij komt; een
+  rechtstreekse rij op de lijst wint, ook `geen`. Uitgerekend in één vraag: `seenLists` (wat iemand ziet, met rol).
+- Elke route haalt eerst de toegang op: `requireList`, `requireThing` (geen toegang = 404 "niet gevonden"), daarna
+  `needEdit` of `needManage`. Bij twijfel: weigeren. Er blijft altijd een rechtstreekse beheerder (`keepsAdmin`).
+- **Lijnen zien**: een lijn `in`/`uit`/`voor` is ook zichtbaar voor wie de lijst van het ding ziet (in het logboek
+  van die lijst, als "gedeeltelijk": zonder bedrag, naam of andere lijnen); een lijn `bij` enkel met de hele
+  gebeurtenis (anders ziet Jana via Dr. Peeters het doktersbezoek van Jaan). Zie `lineVisible`, `viewEvents`.
+- Velden van een ding of soort gaan altijd door `prepareData` (`worker/prepare.ts`): `cleanAttributes`, enkel gekende
+  personen, verwijzingen enkel naar dingen die de bewerker ziet. Lijstvelden door `cleanListFields`
+  (`shared/listdef.ts`).
+
+### Wat afgeleid wordt (nooit bewaard)
+
+- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): de laatste telling (een meting `voor` het ding) plus `in`
+  min `uit`, enkel `gebeurd`, omgerekend met `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op
+  onder het minimum; zonder minimum enkel in een lijst met een minimumveld en als er ooit iets was.
+- **Geld** (`shared/ledger.ts`): `sharesOf` (lijnen met `owner` zijn van die persoon, de rest volgens `split`, anders
+  van wie betaalde), `netBalance` en `settleUp` voor Wie moet wie; een overdracht verrekent.
+- **Eten** (`shared/food.ts`): een gebruik met kcal (in de soort, of uit een ding met kcal per 100 g × gram; `isFood`).
+- **Berekeningen** (veldsoort `calc`, `shared/calc.ts`) enkel binnen het ding; geen verwijzende berekeningen meer.
+- Een **logboek als tabel** (`shared/logview.ts`: `logFields`, `logItem`) zodat filters, weergaven
+  (`shared/views.ts`) en grafieken (`shared/charts.ts`) ook op gebeurtenissen werken.
+
+### Eén ingang
+
+- **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de rest van de tekst gaat
+  als `?tekst=` naar het formulier.
+- **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, dingen met
+  hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Dingen komen van
+  `GET /things?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
+- **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (ook een
+  gedeelde foto wacht), per persoon aan of uit (`useAiBudget`). Kasticket lezen
+  (`POST /lists/:id/events/read-receipt`, `shared/receipt.ts`): één aankoop met een lijn per product, koppelt enkel
+  aan dingen die de lezer ziet, bewaart niets; de naam op het ticket wordt onthouden (`POST /things/:id/alias`, een
+  tekstveld met `aliases`). Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
+  zonder AI); de app toont altijd of iets uit een databank komt of geschat is.
+- **Productinfo**: Open Food Facts krijgt enkel een barcode of productnaam, nooit iets van de gebruiker; NEVO
+  (`shared/nevo.ts`) zonder netwerk, met `nevoCredit`.
+
+### De rest
+
+- **Herhalen en herinneren** (`worker/cron.ts`, elk kwartier): een gebeurde gebeurtenis met `repeat` krijgt kopieën tot
+  vandaag met de rechten die wie ze maakte nu heeft (stopt als dat niet meer mag); een geplande met `repeat` maakt de
+  volgende bij afvinken. Om 7 u herinneringen voor datums van dingen en wat vandaag gepland staat. Een timer is een
+  activiteit zonder einde (`POST /events/:id/stop`, `kinds.goal` voor een melding).
+- **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een lijst): aan iedereen die de lijst ziet of aan wie in
+  de verdeling staat; nooit aan wie het logde of wie de lijst of tag stilzette.
+- **Overzicht** (`shared/board.ts`): borden met blokken (lijst, uitgaven, Wie moet wie, te doen, bijna op, eten,
+  timers, snel loggen, één ding, grafiek), enkel ids, nagekeken met `cleanBlocks`; elk blok haalt zijn inhoud met de
+  gewone routes. Opstarten blijft licht: geen lijst die alles tegelijk tekent.
+- **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
+  (`keepReachable`).
+- **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
+  nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
+  waarom niet; `test/backup.test.ts` leest de migraties na).
+- **Sjabloon delen** (`shared/template-file.ts`): de opbouw van een lijst, zonder dingen of mensen.
+- De oude tabellen (projecten, items, …) staan er nog maar worden niet meer gebruikt; ze gaan weg in een latere
+  migratie.
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
-  `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit.
+  `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit (een andere tak rolt
+  nooit uit: `scripts/only-main.mjs`).
 - Gedeelde types en logica in `shared/`, met tests in `test/` (`npm test`).
 - Controle voor oplevering: `npx tsc -b`, `npm test`, `npm run build`.

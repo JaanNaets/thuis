@@ -1,19 +1,17 @@
 # Thuis
 
-Onze eigen app voor thuis, volledig op Cloudflare. Ze is volledig **generiek**: je bouwt zelf wat je wil bijhouden.
+Onze eigen app voor thuis, volledig op Cloudflare. Ze is **generiek**: je bouwt zelf wat je wil bijhouden, met
+één opbouw voor alles.
 
-- **Projecten** en subprojecten: "Huishouden" is gewoon een project, met daaronder bv. "Wijnkelder" en "Fietsen".
-- **Mensen met een rol** per project: wat ze mogen zien en wijzigen, tot op het niveau van één veld.
-- **Lijsten** met eigen velden (Wijnen met jaargang en druiven, Klantenkaarten met een barcode), ook velden die de
-  app zelf uitrekent (de waarde van je kelder, wanneer het volgende onderhoud is, een eigen formule).
-- **Totalen** op een lijst: de som, het gemiddelde of het aantal, per dag, week, maand of jaar, met een doel (de kcal
-  van vandaag, wat je deze maand uitgaf).
-- **Items** in een lijst, met tags, een foto, bestanden en een logboek.
-- **Verbanden**: per project een kaart van wat de lijsten met elkaar doen (aftrekken, uitrekenen, meetellen,
-  verwijzen, in de agenda), ook over projecten heen.
-
-Regels voor een bepaalde use case (kosten verdelen, voorraad, calorieën, klantenkaarten offline, kastickets lezen)
-komen er bovenop: als sjabloon met deze bouwstenen, of als eigen onderdeel.
+- **Lijsten** met **dingen**: Wijnen, Voorraad, Wagens, Bezit, Winkels. De dingen van een lijst hebben dezelfde
+  velden (jaargang en druiven, merk en nummerplaat), ook velden die de app zelf uitrekent.
+- Elke lijst heeft een **logboek** met **gebeurtenissen**: een aankoop, iets gebruikt of gegeten, een dienst (de
+  garage, de dokter), een activiteit (werk, sport, slaap), een meting (gewicht, een telling) of een overdracht
+  (terugbetaald). Een gebeurtenis heeft lijnen naar dingen: wat erbij kwam, wat eraf ging, waarvoor en waar.
+- **Mensen** per lijst (beheerder, lid of gast), en **tags** om lijsten te groeperen (Huis, Jaan, Wijnkelder). Een
+  regel op een tag ("Jana altijd beheerder bij Huis") geeft toegang tot elke lijst met die tag.
+- Wat je gewoonlijk als aparte lijst bijhoudt, rekent de app zelf uit: **Geld** (uitgaven, jouw deel, Wie moet wie),
+  **Voorraad** (wat er is, wat bijna op is), **Eten** (kcal per persoon), **Te doen** en de **Agenda**.
 
 Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kioskmodus.
 
@@ -22,7 +20,7 @@ Werkt op de gsm (mobile first, installeerbaar als app) en op een tablet in kiosk
 ```
 src/         React-app (wat je op het scherm ziet)
 worker/      API op Cloudflare Workers (Hono)
-shared/      Types en logica die app en API allebei gebruiken (velden, berekeningen, rechten, sjablonen)
+shared/      Types en logica die app en API allebei gebruiken (model, rechten, voorraad, geld, velden)
 migrations/  Databaseschema (D1), één SQL-bestand per wijziging
 sw/          Service worker: de app opent ook zonder internet
 STIJLBOEK.md Hoe de app eruitziet en aanvoelt: lees dit voor je iets bouwt
@@ -154,8 +152,9 @@ Venster gemist? Je vindt de waarden ook terug:
 Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
 e-mailadres in, krijgt een code per mail, en komt in de app. Bij **Jouw gegevens** (je letter rechtsboven) staat waarmee je aangemeld bent.
 
-Wie de eerste keer aanmeldt, ziet nog geen projecten. Maak er een (bv. "Huishouden" met het sjabloon
-Huishouden), en voeg de anderen toe bij **Instellen → Mensen** met het e-mailadres waarmee ze aanmelden.
+Wie de eerste keer aanmeldt, ziet nog geen lijsten. Maak er een (bv. "Voorraad" met het sjabloon Voorraad en de tag
+Huis), en voeg de anderen toe bij **Instellen → Mensen** met het e-mailadres waarmee ze aanmelden, of met een regel op
+de tag (bij de tag: Altijd erbij).
 
 ### Lukt inloggen niet?
 
@@ -175,8 +174,8 @@ code, controleer dan:
 - **Android** (of Chrome en Edge op je computer): tik bij **Jouw gegevens** op **App installeren**, of open het
   menu van de browser (⋮) → **App installeren**.
 
-Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je projecten, hun
-lijsten, een item) blijft op het toestel bewaard. Een **nieuw item** bewaren lukt ook offline: het wacht op je
+Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je lijsten, een ding,
+het logboek) blijft op het toestel bewaard. Iets **nieuws** loggen of toevoegen lukt ook offline: het wacht op je
 toestel en gaat vanzelf mee zodra je weer internet hebt. Wijzigen en verwijderen vragen internet.
 
 Wil je **meldingen** (een herinnering 's morgens, zie Herinneren en herhalen): zet ze aan bij **Ik → Meldingen**,
@@ -200,530 +199,72 @@ In kioskmodus:
 
 ## Hoe het werkt
 
-### Het overzicht
+### Lijsten, dingen en het logboek
 
-De startpagina toont per project een kaart met zijn lijsten (Wijnen, Klantenkaarten, Voorraad, ...) en hoeveel erin
-zit: één tik en je bent er. Heb je meer dan 12 projecten, dan staan vanzelf enkel de projecten bovenaan erop. De volgorde van je projecten sleep je bij **Jouw gegevens** (je letter rechtsboven) (dat is per persoon); die van de
-subprojecten bij **Instellen → Algemeen**, als je het project instelt. De volgorde van de lijsten (en dus van de tabs
-in een project) sleep je bij **Instellen → Lijsten**, die van de velden in het formulier van een lijst.
+Een lijst heeft dingen (allemaal met dezelfde velden) en een logboek. Een lijst zonder dingen kan ook: dan is ze
+enkel een logboek (Jaan: eten, gewicht, werk, dokter). Een nieuwe lijst begin je uit een sjabloon (Voorraad, Wijnen,
+Wagens, Bezit, Afspraken, Winkels, Pellets, Persoonlijk, Taken, Recepten) of uit een bestand dat iemand deelde
+(Instellen → Als sjabloon).
 
-Met **Aanpassen** stel je je overzicht zelf samen (enkel voor jou): schik de blokken, verberg lijsten van een project,
-en zet er een lijst, **snel toevoegen** ("Eten toevoegen"), een **totaal** (Kcal vandaag) of de **waarde van een
-item** bij (Pellets · Aantal, ook een berekening zoals Laatst bijgevuld; bij een voorraad met − en +). Een lijst kan
-ook met een **weergave** ("Te kopen": hoeveel er te kopen is) en met **Items** als kleine tabel (de eerste vijf, met −
-en + bij een voorraad); de kop opent de lijst met die weergave. Ook in een project kan een lijst tellen volgens een
-weergave (Voorraad: 3 te kopen). **Breed** zet een blok over twee kolommen; de blokken schuiven in elkaar zonder
-gaten.
-**Standaard** zet het terug zoals het vanzelf is. Wat je niet (meer) mag zien, verschijnt ook niet.
+Een gebeurtenis heeft een soort: een van de zes basissoorten, of een eigen soort van de lijst met eigen velden
+(Tankbeurt met liter en km, Gegeten met kcal). Haar lijnen wijzen naar dingen, ook in andere lijsten:
 
-### Grafieken, dashboards en een verslag
+| Lijn  | Betekent                     | Voorbeeld                           |
+| ----- | ---------------------------- | ----------------------------------- |
+| erbij | er komt iets bij             | 6 yoghurt op een kasticket          |
+| eraf  | er gaat iets uit             | 300 g pasta gegeten, 1 zak pellets  |
+| voor  | waarvoor het was             | een tankbeurt voor de Sprinter      |
+| bij   | waar het gebeurde            | bij Colruyt, bij Dr. Peeters        |
 
-Een overzicht wordt een dashboard met **grafieken** die je helemaal zelf samenstelt (Aanpassen → Toevoegen →
-Grafiek). Er staat niets vast: je kiest een lijst, en dan
+Het logboek van een lijst toont wat er in gelogd werd, en ook lijnen van elders die haar dingen raken (een fles wijn
+op een kasticket in Voorraad staat ook in het logboek van Wijnen, zonder de rest van dat ticket).
 
-- **Als**: Staafjes of Lijn (over de tijd), Getal (één uitkomst, tegenover de periode ervoor, eventueel met een
-  doelbalk), Per keuze (een staafje per keuze, de grootste eerst) of Verdeling (één geheel in stukken).
-- **Wat**: Aantal, of de Som, het Gemiddelde, het Hoogste of het Laagste van een getal of bedrag (ook een berekening).
-- **Volgens** een datum (of wanneer het toegevoegd werd), **per** dag, week, maand of jaar, de **laatste** zoveel.
-- **Per** of **Apart per** een keuzelijst, persoon, verwijzing, ja/nee of de tags (bv. uitgaven per persoon per week).
-- Eventueel een bewaarde **weergave** als filter, **met subprojecten**, **ook uit** dezelfde lijst in een ander
-  project, **enkel van jou** (of **enkel jouw deel** van een verdeling), een **doel** en een eigen **titel**.
+### Wie wat ziet
 
-Een voorbeeld kijkt meteen mee terwijl je kiest. Elke grafiek heeft een tooltip per periode (ook met de pijltjes) en
-kan ook **als tabel**. Een blok **Tekst** zet er een titel en wat uitleg bij. Met **Periode** bovenaan geldt één
-periode voor alle grafieken (bv. Vorige maand), en ⋯ → **Afdrukken of als pdf** maakt er een verslag van: de naam
-van het overzicht en de periode bovenaan, de blokken in twee kolommen. De API rekent elke grafiek uit met jouw
-rechten (`GET /projects/:id/chart`): enkel de items en velden die je ziet, en de browser krijgt enkel de uitkomsten.
-
-### Wie betaalde wat
-
-Kosten verdelen is gebouwd uit gewone velden en een **totaal dat verrekent** (zie Totalen); de sjablonen Huishouden
-en Gedeelde uitgaven zetten het klaar.
-
-- **Uitgaven**: elke uitgave heeft een bedrag, wie betaalde en een verdeling. Betaald door **begint met jou**, en een
-  lege verdeling wordt de gewone verdeling van de lijst (bv. 60/40), of gelijk over iedereen in het project. Een cent
-  die niet deelbaar is, draagt wie betaalde. Het totaal: de som van Bedrag apart per Betaald door, tegenover Verdeling.
-- **Terugbetalingen**: geld van iemand aan iemand anders (Van tegenover Aan).
-
-Op het project staat dan **Wie moet wie**: zo weinig mogelijk overschrijvingen, met alles uit het project en zijn
-subprojecten (en uit lijsten in andere projecten als je die bij het totaal kiest). Heb je het overgeschreven, druk dan op **Terugbetaald** (minder mag ook: dan blijft de rest openstaan).
-Vul je bij **Jouw gegevens** (je letter rechtsboven) je rekeningnummer in, dan ziet wie jou moet bij Terugbetaald een **betaal-QR**: scannen met de
-bank-app, en het bedrag en je IBAN staan al ingevuld. Een verdeling kan gelijk, in procent of in **bedragen**
-("Jaan € 12, Jana € 8"), en een bedrag in een andere munt ("45 USD") rekent de app om met de dagkoers van de ECB.
-Is er nog geen lijst Terugbetalingen, dan zet wie het project instelt ze daar met één knop klaar. Wat je niet mag zien
-(een lijst, of het bedrag), telt voor jou niet mee.
-
-### Projecten en subprojecten
-
-Een project is een map voor alles wat bij elkaar hoort: "Huishouden", "Wijnkelder", "Verbouwing". Een project kan
-subprojecten hebben, zo diep als je wil. Een nieuw project begint met een **sjabloon** (Leeg project, Huishouden, Wijnkelder,
-Koersfietsen, Gedeelde uitgaven, Voeding, Recepten, Notities, Huisdieren, Reizen, Sport, Verzameling) dat de lijsten met
-hun velden klaarzet. Daarna kan je alles aanpassen bij **Instellen**.
-Losse lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken, ...) voeg je toe bij **Instellen →
-Lijsten → Uit sjabloon**.
-
-**Wie wat ziet**: een project bepaalt wie iets ziet, een veld (Eigenaar, Verdeling) van wie het is. Deel je iets met
-andere mensen, maak er dan een project voor met hen erin (je eigen project, het huis met je partner, een wijnkelder met
-vrienden). Met **Ook uit** (bij Meer opties van een lijst, of in een grafiek) zie je dezelfde lijst uit je andere
-projecten samen in één tabel, en met **Enkel jouw deel** telt een totaal of grafiek enkel jouw deel (van € 60 voor
-twee € 30, van een fles van drie ⅓). Ben je alleen in een project, dan vullen Betaald door, Verdeling en Wie zich
-vanzelf met jou in en staan ze niet in het formulier.
-
-### Sjablonen delen
-
-Heb je een project goed ingericht, dan kan je het delen: **Instellen → Algemeen → Delen als sjabloon** bewaart een
-bestand (`.thuis.json`) met de lijsten, velden, berekeningen en totalen van het project en zijn subprojecten. Er staan
-**geen** items, mensen, rollen, tags of verdelingen in. Eén lijst delen kan ook, onderaan het formulier van die lijst.
-
-Wie het bestand krijgt, kiest bij **Nieuw project → Uit een bestand**, of voegt de lijsten toe aan een bestaand
-project bij **Instellen → Lijsten → Uit sjabloon → Uit een bestand**. Verwijst een lijst naar een andere (de wijnen
-naar de verkopers) en bestaat die erboven al, dan wordt die gebruikt. De app en de API kijken alles na wat binnenkomt.
-
-### Back-up
-
-Bij **Jouw gegevens** → **Back-up** → **Downloaden** bewaar je één bestand met alles van de projecten die je helemaal
-beheert: subprojecten, lijsten, items, tags, rollen, mensen, logboek, herhalingen en weergaven, en welke foto's en
-bestanden erbij horen. **Terugzetten** zet zo'n bestand er altijd als kopie bij: er wordt niets overschreven, en jij
-beheert de kopie. Foto's en bestanden komen mee zolang het origineel er nog staat. Aantallen staan zoals in de
-back-up: wat een item aftrok of bijtelde, gebeurt niet opnieuw.
-
-### Mensen en rollen
-
-Elk project heeft rollen. Er zijn er drie om mee te beginnen:
-
-| Rol | Mag |
-| --- | --- |
-| Beheerder | Alles: het project instellen, mensen toevoegen, items toevoegen, wijzigen en verwijderen |
-| Lid | Items toevoegen, wijzigen en verwijderen |
-| Lezer | Enkel bekijken |
-
-Een rol maak of pas je aan bij **Instellen → Rollen**: per lijst en zelfs per veld kies je **Niet zien**, **Zien**
-of **Wijzigen** (bv. een proever die de wijnen ziet maar de aankoopprijs niet). Een rol geldt ook in de
-subprojecten, tenzij je iemand daar een andere rol geeft.
-
-Iemand toevoegen doe je bij **Instellen → Mensen**: met een e-mailadres (die persoon meldt later zelf aan; dat
-adres moet dan ook in de Access-policy staan), of zonder, voor iemand die nooit aanmeldt maar wel ergens bij
-hoort (bv. als eigenaar van een fiets). Er blijft altijd minstens één beheerder over.
-
-### Lijsten en velden
-
-Een lijst heeft een naam ("Wijnen"), een naam voor één item ("Wijn", voor de knop "Wijn toevoegen") en velden. Een
-veld kan zijn:
-
-| Groep | Veldsoorten |
-| --- | --- |
-| Tekst | tekst, lange tekst, webadres, e-mail, telefoon, adres (opent een kaart), barcode of QR-code |
-| Getallen en geld | getal (met eenheid), bedrag, score op 5 |
-| Datum en tijd | datum, periode van datums (een reis), uur, duur ("1 u 30 min"), jaar, periode van jaren (drinkklaar 2026–2032), herhaling ("elke 6 maanden") |
-| Keuzes en lijstjes | keuzelijst, meerdere waarden, ja/nee, takenlijst (afvinken op de fiche) |
-| Mensen en verwijzingen | persoon, personen, eigenaars (wie welk deel heeft), verwijzing en verwijzingen naar andere items |
-| Berekenen | een berekening (zie hieronder) |
-
-Een veld kan een kolom in de lijst zijn, een filter, of verplicht. Een datum kan **beginnen met vandaag** (een nieuw
-item krijgt de datum van vandaag), een persoon kan **beginnen met jou**, en een verdeling kan zich **zelf invullen**
-(de gewone verdeling, of gelijk over iedereen). Bij het kiezen van een veldsoort staat telkens wat ze doet. De
-lijsten van een project gelden ook in zijn subprojecten.
-
-Een subproject toont zijn eigen lijsten, en een lijst van erboven zodra er iets in staat. Wil je die lijst er al
-eerder (bv. de Uitgaven van het huishouden in het subproject Pelletkachel), zet ze dan aan bij **Instellen → Lijsten**
-van het subproject. Wat je daar ingeeft, staat in het subproject en telt erboven mee (Wie moet wie met de
-subprojecten). Bovenaan zie je die items in de lijst met de filter **Met subprojecten**, elk met zijn subproject
-erbij; dat kan je ook als weergave bewaren en zo exporteren. Elk item toont wat jij in zijn eigen project mag zien.
-
-Een verwijzing kan ook naar een lijst in een **ander project** wijzen (bv. de Verkopers van Huishouden vanuit een los
-project), als je dat project ziet. Wie er niet in zit, ziet bij dat veld "Verborgen" en kan er niets kiezen.
-
-### Berekeningen
-
-Een berekening rekent de app zelf uit; je vult ze nooit in. Er zijn acht soorten, elk met een voorbeeld in de app:
-
-- **Rekensom**: Aantal × Prijs, of Totaal × 1,21 (op een andere berekening verder bouwen mag).
-- **Formule**: een eigen som met velden tussen [ ], zoals `[kcal per 100 g] × [Hoeveel] ÷ 100`. Ook haakjes,
-  `afronden(x; 1)`, `min(a; b)`, `max(a; b)`, `als([Aantal] < 3; dan; anders)` en `of(a; b)` (het eerste dat
-  ingevuld is: je eigen kcal, anders die van het gerecht). Tik op een veld om het in te
-  voegen; de app bewaart de formule zo dat ze blijft kloppen als je een veld hernoemt. Een getal naast een bedrag telt
-  in euro (`[Prijs] + 2` is twee euro meer).
-- **Vergelijking**: ja als Aantal ≤ Bijna op onder (zo zie en filter je wat je moet kopen).
-- **Dagen tot** een datum ("over 12 dagen"), **tijd sinds** een datum of jaar ("10 jaar"), en **datum plus**
-  een vaste tijd of een herhaling (laatst onderhouden + elk jaar = volgende keer).
-- **Uit een gelinkt item**: een veld van het item waarnaar een verwijzing wijst (het land van het wijnhuis).
-- **Samenvatten**: hoeveel, de som, het gemiddelde, het kleinste of het grootste van gelinkte items, of van de
-  items die naar dit item verwijzen (wat je bij een verkoper uitgaf, en wanneer het laatst), ook vanuit een
-  subproject of een ander project.
-
-Een berekening telt enkel wat jij mag zien: mag je een veld waarvan ze afhangt niet zien, dan blijft ze leeg. De
-uitleg (i) naast een berekening zegt wat ze uitrekent.
-
-### Totalen
-
-Onderaan het formulier van een lijst stel je **totalen** in (hooguit zes): wat (de som, het gemiddelde, het
-kleinste, het grootste of hoeveel items), van welk getal, bedrag of duur (ook een berekening), en over welke periode:
-alles samen, of per dag, week, maand of jaar volgens een datumveld. Verder:
-
-- **Waar**: enkel dit project, of met de subprojecten.
-- **Ook uit**: lijsten uit andere projecten met dezelfde velden (bv. de Voeding van twee mensen, of de uitgaven van
-  Huishouden én een skireis). Wie niet in dat andere project zit, ziet er niets van mee.
-- **Apart per** persoon, eigenaar of keuze (een bedrag met een verdeling telt per persoon zijn deel), eventueel
-  **tegenover** een tweede veld: een saldo (betaald door − verdeling = wie nog geld krijgt).
-- **Verrekenen**: zo'n saldo tussen personen wordt Wie moet wie op het project.
-- Een **doel**: "niet meer dan" (een budget, je calorieën) of "minstens" (stappen, water).
-- **Van wie**: iedereen samen, of enkel van wie kijkt (volgens een veld Persoon). Zo ziet elk zijn eigen calorieën,
-  gewicht en water in hetzelfde project, met een **doel per persoon**.
-- **Klein**: een tegeltje naast de andere kleine (eiwit, koolhydraten, vet). **Als lijn**: de vorige periodes als
-  lijn in plaats van staafjes (je gewicht).
-
-Op het project staan ze boven de lijst die openstaat: het getal van vandaag (of deze week, maand, jaar), een balk
-naar het doel, staafjes voor de vorige periodes en per persoon of keuze. De API rekent ze uit zoals jij de items
-ziet, per project met jouw rol daar: een totaal op een veld dat je niet mag zien, krijg je niet.
-
-Het sjabloon **Voeding** zet dit klaar:
-
-- **Eten**: de datum (begint met vandaag), de maaltijd, wie (standaard jij), kcal, eiwit, koolhydraten en vet per
-  100 g, en hoeveel. De app rekent de kcal en macro's uit en telt ze per dag: "Kcal per dag" groot, de macro's als
-  tegels, elk enkel van zichzelf. Een foto van de verpakking vult de naam en de voedingswaarde in (zie hieronder).
-- **Gerechten** en hun **Ingrediënten**: wat je zelf maakt. De kcal per 100 g volgt uit de ingrediënten (en wat het
-  klaar weegt, want koken maakt het lichter), en per portie. Kies je bij Eten een gerecht, dan komt de kcal daarvan.
-- **Gewicht**: een weging per keer, per week het gemiddelde als lijn.
-- **Water**: per dag opgeteld, met als doel minstens 2.000 ml.
-
-Een doel stel je zelf in bij het totaal, voor iedereen of per persoon. In een lijst met een datum die met vandaag
-begint, mag de naam leeg ("Weging 30/10/2026"), en staat het nieuwste bovenaan.
+Je ziet een lijst als je er rechtstreeks bij bent, of via een regel op een tag. Een regel werkt enkel op lijsten waar
+wie hem maakte zelf beheerder is, en een rechtstreekse keuze op de lijst wint (ook "geen toegang"). Van een
+gebeurtenis in een lijst die je niet ziet, zie je enkel de lijnen naar jouw dingen (een fles erbij), nooit het bedrag
+of waar het was.
 
 ### Voorraad
 
-Een **recept** heeft ingrediënten met hoeveelheden (400 g aardappelen, 30 g Nutella, zout) voor een aantal porties.
-Eet je het (een Maaltijd, of Eten in Voeding), kies dan het recept en hoeveel porties: de ingrediënten komen in het
-formulier, omgerekend naar je porties, en je past ze nog aan voor je bewaart. Bewaren trekt ze af van de voorraad, elk
-in de eenheid van het product (800 g van aardappelen in kg is 0,8 kg; 60 g van een pot van 400 g is 0,15 pot).
+Een lijst kan voorraad tellen (Instellen → Voorraad): in welke eenheid een ding telt, wat er in één stuk of
+verpakking zit en vanaf wanneer het bijna op is. De voorraad wordt nooit bewaard maar uitgerekend: de laatste telling
+plus wat erbij kwam min wat eraf ging, omgerekend (500 g van iets in kg, een zak van 15 kg). De − en + in de lijst
+loggen een telling.
 
-Een product telt in zijn eigen **eenheid**: pellets in kg (met als verpakking een zak van 15 kg), aardappelen in kg,
-Nutella per pot (van 400 g), eieren per stuk. Eén product, ook als de zak de ene keer 15 kg en de andere keer 5 kg is:
-+ in de lijst telt een hele verpakking bij, en een tik op het getal laat je een hoeveelheid typen (Eraf 500 g). Wat
-je eet of bijvult, rekent de app om: 500 g aardappelen gaat als 0,5 kg van de voorraad, 2 zakken pellets als 30 kg.
+### Geld en Wie moet wie
 
-Een getal kan **− en + in de lijst** krijgen (in Voorraad: Aantal). Dan tel je bij of af met één tik in de lijst, of
-met **Scannen** (bij **Meer opties**, de knop naast het zoekveld): scan de ene barcode na de andere, en de voorraad
-gaat erbij (gekocht) of eraf (opgebruikt). Met **Kasticket bijtellen** trek je een foto van het ticket: de app koppelt de lijnen aan je producten ("BONI VOLLE MELK 1L" →
-Melk), jij kiest wat erbij komt, en wat nog niet bestaat, wordt een nieuw product. De maat op het ticket rekent de
-app om naar de eenheid van het product ("AARDAPPELEN 5KG" is 5 kg, "COLA 6X33CL" zijn 6 blikken), en een lijn die je
-aan een product koppelt, onthoudt dat product (bij **Op het kasticket**): het volgende ticket koppelt vanzelf. Wat je moet kopen, zie je met de
-filter **Kopen: Ja**.
+Een aankoop of dienst heeft een bedrag, wie betaalde en met wie het gedeeld is; een lijn kan enkel van één persoon zijn
+(het broodje op het gezamenlijke kasticket). Geld toont per maand wat er uitgegeven werd, per soort, lijst en winkel,
+met jouw deel, en wie wie nog moet betalen (met een betaal-QR). Terugbetaald loggen is een overdracht.
 
-### Aankopen: een kasticket per lijn
+### Iets loggen
 
-In **Uitgaven** (Geld) is elke lijn een gekocht product: **Wat** kies je uit de Voorraad, de Wijnen of de Pellets
-(of je typt het), met hoeveel, de eenheid en het bedrag. Bewaren telt het bij de voorraad (2 zakken pellets = 30 kg),
-en bij het product zie je wanneer je het laatst kocht, de gemiddelde en de laagste prijs (per eenheid). Met **Gegeten**
-aan komt het ook in je Eten (een broodje onderweg), met **Van mij** betaal je het alleen.
+- **Toevoegen** (de + of ⌘K): typ wat er gebeurde ("gegeten pasta 300 g", "tankbeurt sprinter 84,50 52 liter") en kies
+  waar; het formulier opent met alles al ingevuld.
+- **Typ wat je weet** bovenaan het formulier vult live in: datum en uur, bedrag, de dingen met hoeveelheid en prijs,
+  velden van de soort. Pas je zelf iets aan, dan blijft dat staan.
+- **Kasticket ✨**: een foto van een kasticket wordt één aankoop met een lijn per product, gekoppeld aan wat je al hebt;
+  wat nieuw is, komt in de voorraad. De naam op het ticket wordt onthouden voor de volgende keer.
+- Een ding met **Barcode** (Open Food Facts, zonder AI) of **Foto ✨** (etiket of product; de app zegt of het uit een
+  databank komt of geschat is).
+- Een gedeelde foto (Android: delen met Thuis) wacht tot je ✨ tikt. De AI staat per persoon aan of uit (Jouw gegevens).
+- Boodschappen en taken zijn geplande gebeurtenissen: afvinken, en een aankoop van hetzelfde ding vinkt een boodschap
+  vanzelf af.
 
-Een heel ticket in één keer: **Meer opties → Kasticket lezen** (✨). De AI leest de winkel, de datum en elke lijn met
-haar prijs; de app koppelt de lijnen aan je producten (ook op hoe ze vroeger op een ticket stonden). Wat ze niet kent,
-wordt een **nieuw product in de Voorraad** (met de eenheid van het ticket), zodat je ook daarvan de prijs volgt; tik op
-de lijn om toch een bestaand product te kiezen (heet het op het ticket anders, dan onthoudt de app dat), een andere
-lijst (Wijnen) of "enkel tekst" (batterijen, een cadeau). Een broodje dat je meteen opeet (Gegeten), wordt geen
-product. Bovenaan staat wat voor alle lijnen geldt (datum, winkel, wie betaalde, de verdeling; laat je de categorie
-leeg, dan krijgt elke lijn die van vorige keer), daaronder elke lijn: vink uit wat niet hoeft, tik Gegeten of Van mij
-aan, en tik op een lijn om het product, hoeveel of de prijs aan te passen. Een gekend product staat in zijn eigen
-eenheid (een zak van 5 kg aardappelen = 5 kg), zodat de prijs per eenheid eerlijk te vergelijken is; ook in het
-formulier neemt Eenheid die van het product over. Wat je koopt, vinkt de app af op de **Boodschappen**. Fout gelezen?
-**Ongedaan maken** in de melding draait alles terug. Eén aankoop typ je ook gewoon: **+** en "yoghurt colruyt 6 stuks 6
-euro" (staat er een prijs in, dan komt **Uitgave** bovenaan). Een product dat nog niet bestaat, komt dan in de Voorraad. In de Voorraad leidt **Kasticket lezen** naar de Uitgaven, zodat
-niets twee keer telt; ook bij Wijnen en Pellets zie je wanneer je het laatst kocht en wat het kostte. **Bewaar** zet alles in
-Uitgaven, met het ticket zelf (en de foto) in **Kastickets**, dat het totaal en het aantal lijnen toont. De
-**Boodschappen** zijn een takenlijst: afvinken telt niets meer bij, dat doet de aankoop.
+### Herhalen, herinneren en meldingen
 
-### Items
+Een gebeurtenis kan herhalen (Netflix elke maand: de app logt ze zelf), een geplande taak maakt bij afvinken de
+volgende. Om 7 u komt een melding voor datums van dingen (keuring, garantie) en wat vandaag gepland staat. Per lijst
+kies je of een nieuwe gebeurtenis een melding geeft, en elk lijst of tag kan je voor jezelf stilzetten.
 
-Items voeg je toe in een lijst, of importeer je uit een tabel (Google Sheets als CSV, Excel, of geplakte cellen):
-je kiest per kolom welk veld het wordt, en wat we niet herkennen gaat bij de lange tekst. Een item heeft tags,
-een foto, bestanden (factuur, handleiding) en een logboek. Weg maar de geschiedenis houden? **Archiveren**.
+### Het overzicht
 
-### Een verwijzing naar meer lijsten
+Je overzicht bestaat uit blokken: uitgaven deze maand, Wie moet wie, te doen, bijna op, eten vandaag, wat nu loopt,
+snel loggen, één ding, een lijst of een grafiek. Je kan meer overzichten hebben (Keuken, Garage).
 
-Een veld **Verwijzing** kan naar meer lijsten wijzen, ook uit andere projecten (bij het veld, onder ⋯: **Nog een
-lijst**). Zo kiest "Wat" in Voeding uit de voorraad van de Slachterijstraat én die van de Kerkstraat: typ om te
-zoeken, en heten de lijsten hetzelfde, dan staat het project erbij. Met **Ook vrije tekst** mag je ook iets typen dat
-er niet bij staat (dat telt dan nergens af). Aftrekken en overnemen gebeuren per veld met dezelfde naam, dus geef die
-lijsten dezelfde velden.
+### Back-up
 
-### Verwijzingen die tellen en overnemen
-
-Een verwijzing (een veld dat naar een item uit een andere lijst wijst, ook uit een ander project) kan meer dan wijzen:
-
-- **Neemt waarden over**: kies je een item, dan krijgen de lege velden hier de waarden van de velden met dezelfde
-  naam daar (zacht blauw, je kan ze aanpassen). Eten "Uit voorraad" neemt zo de kcal, macro's en inhoud van het
-  product over, en de naam.
-- **Past het gekozen item aan**: bij bewaren trekt het een getal van dat item af, of telt het erbij, met 1 of met een
-  getal of berekening van hier. Eten trekt van de Voorraad af wat je opat (Hoeveel ÷ Inhoud per stuk: 30 g van een
-  pot van 400 g = 0,075); de Winkellijst telt bij de Voorraad wat je afvinkt als gekocht. Wijzig je het item, dan past
-  de app enkel het verschil aan; verwijder je het, dan draait ze het terug. Je moet dat getal daar wel mogen
-  wijzigen, anders bewaart de app niets.
-- **Maakt ook een item** (bij een vinkje): een nieuwe uitgave met **Gegeten** aan zet het gekochte broodje meteen in
-  je Eten, met hetzelfde product en hoeveel (1 yoghurt van 125 g = 125 g). Kopen telt het bij de voorraad, eten trekt
-  het er weer af. Staan er meer lijsten (jouw Eten en dat van Jana), dan komt het in de eerste waarin jij mag
-  toevoegen.
-
-Alle drie stel je in bij het veld (onder ⋯). Staat Voeding onder je huishouden, dan wijst "Uit voorraad" vanzelf naar je
-Voorraad; anders kies je bij het veld de Voorraad (ook uit een ander project). Importeren uit een tabel past niets
-aan.
-
-### Filteren en weergaven
-
-Boven elke lijst staat **Filters**: kies zoveel voorwaarden als je wil, op elk veld (en op de naam, de tags en
-wanneer iets toegevoegd werd). Getallen en bedragen (groter dan, tussen), keuzes en personen ("Wie is jij"), en
-datums: vandaag, deze week, vorige maand, de laatste 30 dagen, tussen twee datums, of als patroon (de eerste week van
-de maand, op een maandag). Alles moet kloppen, of één ervan. Sorteer op elk veld (of tik op een kolomkop) en kies
-welke kolommen je ziet. Met **Groeperen op** staan de items per categorie, per persoon of per maand, elk met het
-aantal en de som; onderaan staat het **totaal** van wat je ziet (bedragen, duur en getallen met een eenheid, niet het
-aantal in een voorraad).
-
-Op je gsm staat de lijst van een project meteen in beeld: de totalen en wat je nog moet krijgen of betalen staan
-erboven op één regel, en een tik klapt ze open.
-
-Bewaar dat als **weergave** ("Deze week", "Te kopen", "Van mij"): ze staan als knoppen boven de lijst. Een weergave
-is van jou, of (als je het project instelt) voor iedereen in het project. Exporteren volgt wat je ziet.
-
-### Agenda
-
-De **Agenda** (in het menu) toont per maand wat op een dag valt, uit al je projecten: elk datumveld waarbij **In de
-agenda** aanstaat (bij het veld, onder ⋯). Ook een berekende datum (het volgende onderhoud), een periode (een reis) en
-een verjaardag (elk jaar). De sjablonen zetten het al aan voor taken, onderhoud, abonnementen, verjaardagen, reizen
-en de maaltijdplanning. Elke lijst met een datum kan je ook zelf als agenda bekijken (Filters → Als agenda); daar
-voeg je ook iets toe op een dag (bv. een maaltijd op dinsdag).
-
-### Verbanden
-
-Bij een project (knop **Verbanden**, of zoek "verbanden") zie je wat de lijsten met elkaar doen, als kaart of als
-lijst. Elk project is een kolom (eerst het project zelf, dan zijn subprojecten), elke lijst een punt, elk verband een
-lijn in de kleur van zijn soort: **telt bij of af** (Bijvullen trekt af van de Voorraad), **totalen** (Uitgaven tellen
-mee in Wie moet wie), **berekeningen** (Laatst bijgevuld komt uit Bijvullen), **agenda**, **verwijzingen** en een
-lijst als **tab** in een subproject. Lijsten in andere projecten staan rechts onder "Elders". Kies een lijst en je
-ziet wat erop inwerkt en waar ze op inwerkt; de soorten zet je aan en uit met de filters.
-
-Beheer je de mensen, dan zie je bovenaan ook wat **niet voor iedereen werkt**: mag Jana Bijvullen invullen maar
-het Aantal van de Voorraad niet wijzigen (haar rol in dat project is Lezer, of ze zit er niet in), dan zou bewaren
-voor haar mislukken. Die lijn is rood gestreept, en één tik opent haar rol of de mensen van dat project.
-
-**Verbanden** in het menu toont het hele web over al je projecten heen: elk project en subproject met verbanden is
-een kolom (bv. Eten in Voeding dat aftrekt van de voorraad in de Slachterijstraat én in de Kerkstraat). Een kolom
-opent de kaart van dat project; bij heel veel projecten staan die met de meeste verbanden op de kaart en de rest bij
-naam.
-
-Niets hiervan wordt bewaard: de kaart volgt uit de velden, berekeningen en totalen van de lijsten, en toont enkel wat
-jij mag zien (een lijst, veld of project dat je niet ziet, staat er niet op). Ze blijft licht, ook met 1000 projecten:
-hoogstens zes subprojecten en 24 lijsten van elders per kaart; de andere subprojecten hebben elk hun eigen kaart.
-
-### Exporteren
-
-Elke lijst heeft rechts van het zoekveld een knop om ze te **exporteren als CSV** (voor Excel, Numbers of Google
-Sheets): de velden die jij mag zien, met de berekeningen, namen van personen en verwijzingen, en de tags. Getallen
-en bedragen zonder eenheid, zodat je ermee kan rekenen. In het archief exporteer je het archief.
-
-### Opnieuw
-
-Iets dat je vaker toevoegt (hetzelfde ontbijt, dezelfde fles), hoef je niet opnieuw in te vullen: **Opnieuw** op de
-fiche maakt een nieuw item met dezelfde waarden, en in een nieuw formulier stelt de naam eerdere items voor. Tik je
-in "Typ wat je weet" voor je iets typt, dan staat er wat je het **vaakst** toevoegde, met één tik ingevuld. Een datum die met vandaag begint, wordt vandaag.
-Gratis, zonder AI. Op het overzicht heeft elke lijst een **+**: zo voeg je iets toe zonder eerst het project te openen.
-
-### Een timer
-
-Een veld **Timer** start en stop je met één tik: vasten, slapen, de auto laden, werkuren. Terwijl hij loopt, telt hij
-live op (tot op de seconde). In het lijstformulier geef je hem eventueel een **Doel** (bv. 16 u: dan zie je wat er nog
-rest, en krijgt wie hem startte een melding als het zover is; de server kijkt elk kwartier) en **Duur in** (een veld
-Duur van dezelfde lijst: bij het stoppen komt de duur daarin, zodat totalen, grafieken en weergaven er gewoon mee
-werken). Op de fiche staat de timer in een eigen kaart; een blok **Timer** op je overzicht toont de timer die nu loopt
-met Stop, of Start (dat maakt meteen een nieuw item, "Vasten 5/11"), en de vorige keer. In een grafiek kan je per
-dag waarop hij startte tellen.
-
-### Een melding bij een nieuw item
-
-In het formulier van een lijst kies je **Melden bij een nieuw item**: Niet, Aan iedereen die de lijst ziet, of Aan
-wie in een veld staat (Betaald door, Verdeling, Wie). Voegt Jana een uitgave toe, dan krijg jij "Jana voegde uitgave
-toe · Pizza · € 40,00" (enkel wat jij van dat item mag zien), wie het toevoegde niet. Voegt iemand er kort na elkaar
-meer toe, dan blijft het één melding ("Jana voegde 3 uitgaven toe"). Wil je van een project niets horen (ook niet van
-zijn subprojecten), zet het dan **stil** bij Jouw gegevens → Meldingen. De melding vertrekt op de achtergrond
-(`worker/notify.ts`); bewaren wacht er niet op.
-
-### Herinneren en herhalen
-
-Elke ochtend om 7 uur doet de app twee dingen (`worker/cron.ts`, de cron in `wrangler.jsonc`, die elk kwartier loopt):
-
-- **Herinneren**: een datum kan bij het veld (onder ⋯) **Herinneren** krijgen: op de dag zelf, of 1 dag tot 1 maand
-  vooraf. Ook een berekende datum, zoals de volgende onderhoudsbeurt. Met **Elk jaar** voor een verjaardag. Wie het
-  item en die datum mag zien en meldingen aanzette (bij Jouw gegevens), krijgt een melding ("Verwarming · Volgende keer: over 7
-  dagen (6/11)"). Hooguit vijf per ochtend, de rest samen in één. De sjablonen zetten het al aan voor onderhoud,
-  opzeggen, verjaardagen, taken, het einde van de garantie en wat bijna vervalt (**Houdbaar tot** bij een product,
-  niet verplicht). Heeft de lijst een **uur** (een veld Uur), kies dan bij Herinneren **Om**: de melding komt dan op
-  dat uur (een afspraak om 18:30), in plaats van 's morgens.
-- **Herhalen**: op de fiche van een item zet **Herhalen** het om de zoveel dagen, weken, maanden of jaren opnieuw
-  klaar (de huur, elke maand). Op die dag maakt de app een nieuw item zoals dit, met de datum van die dag in elke
-  ingevulde datum, met de rechten van wie het instelde. Mag die daar niets meer toevoegen, dan stopt het. Liep de app
-  een tijd niet, dan haalt ze in (hooguit een maand dagelijks).
-
-Meldingen gaan via de pushdienst van je browser (Google, Apple, Mozilla, Microsoft), versleuteld zodat enkel je
-toestel ze kan lezen (RFC 8291, `shared/webpush.ts`). De sleutels van de app maakt de Worker de eerste keer zelf en
-bewaart ze in de database (`settings`); er is niets in te stellen.
-
-### Snel invullen: typ wat je weet
-
-Bovenaan het formulier van een nieuw item typ je wat je weet: "21-10 eten komkommer 200 g" zet de datum, Wat (uit je
-voorraad, of als vrije tekst) en Hoeveel. De app doet dat zelf: datums ("21-10",
-"gisteren", "maandag", "21 okt"), uren, bedragen ("€ 5,20", "12 euro"), getallen met hun eenheid, keuzes, personen,
-items uit je lijsten en ja/nee; de naam van de lijst ("eten" bij Eten) telt niet. Wil je dat de AI je tekst leest
-("ik at gisteren een halve pizza op restaurant"), tik dan op ✨ naast het veld: de gratis AI van Cloudflare leest ze
-(met dezelfde daglimiet als een foto), en wat de app zelf al vond, blijft staan. Bij eten herkent ze ook gewoon
-"groentesoep": de voedingswaarde komt uit NEVO of Open Food Facts als ze het daar vindt, anders schat ze die (en
-hoeveel, anders één gewone portie); de melding zegt welk van de twee. Een getal dat je typt, is bij eten altijd
-hoeveel je at ("pizza 300", "soep 250 g"), nooit de kcal per 100 g; "2 boterhammen" is een aantal en blijft in de naam.
-Wat je typt, is ook de uitleg bij een foto.
-
-Wat je typt, vult **meteen** in, ook getallen, datums en bedragen; onder het veld staat een rijtje met wat er ingevuld is ("Datum 4/11 · Zakken 2 · Uit voorraad Pellets"), en de velden lichten even op. Wis je een woord, dan komt terug wat er stond. Terwijl je typt, verschijnt ook wat past bij het woord dat je aan het typen bent, uit alle velden van het formulier: "pel" toont Pellets (Voor de voorraad), "ene" Energie (Categorie), "ja" Jana (Betaald door), en namen van eerder. Tik erop (of ↓ en Enter): het woord wordt aangevuld en dat veld staat ingevuld; een recept kiezen neemt zijn ingrediënten over. Kwam een getal in het verkeerde veld, tik dan in het getal (of op het rijtje) en kies het andere veld, of druk Tab op een computer. "4 porties" en "2 zakken" horen bij hun getal, en "400 g aardappelen, 2 eieren, zout" worden regels bij Ingrediënten. Enter vult in met code; voor een hele zin tik je op ✨: die leest de AI.
-
-Per veld kies je in de lijst wat het **onthoudt** (enkel voor jou):
-
-- **Je laatste waarde**: een nieuw item begint met wat jij de vorige keer invulde (zacht blauw), bv. de categorie of
-  het aantal zakken.
-- **Een vaste waarde**: de eerste keer dat je iets bewaart, wordt dat de vaste waarde; wat je daarna eens anders
-  invult, verandert ze niet. Met de punaise naast het veld zet je de waarde van nu vast (nog eens tikken: niet meer vast).
-- **Per**: voor alles samen, of per naam of per keuze in een ander veld. Hoeveel per Naam: kies je Pasta, dan staat er
-  250 g; eet je eens 300 g, dan staat er de volgende keer toch weer 250 g (vast), of 300 g (laatste waarde). Kies je
-  iets anders, dan wisselt het mee. Met ↓ en ↑ ga je door het formulier, Ctrl/⌘ + Enter bewaart.
-
-### Snel naar het juiste formulier
-
-- **Toevoegen en zoeken in één veld** (de +, Zoeken of ⌘K): typ "bijvulling 3 zakken pellets", kies Bijvulling, en het
-  formulier opent met alles ingevuld. Noem je geen lijst, dan zoek je gewoon. Met de + staan je meestgebruikte lijsten
-  bovenaan; Nieuw project is de laatste keuze.
-- **Meer overzichten** (⋯ → Nieuw overzicht): bv. "Keuken" met snel toevoegen en de voorraad. Elk toestel onthoudt
-  welk overzicht het toont. Een blok **Snel toevoegen** bewaart meteen met **Bewaar** (met Ongedaan maken).
-- **QR-sticker** (in een lijst: Meer opties → Snelkoppeling): druk hem af en kleef hem op de pelletkachel; scannen
-  opent het formulier, eventueel met tekst ("pellets"). Werkt op iPhone en Android.
-- **Op je beginscherm** (zelfde plek): maakt een app "Bijvulling" (die je bij Jouw gegevens → App ziet en kan
-  aanpassen) en opent ze in de browser; zet ze daar op je beginscherm. Op een iPhone heeft elk icoon zijn eigen
-  aanmelding (één keer per sessie van Cloudflare Access, zie Langer ingelogd blijven).
-- **Android**: lang op het app-icoon drukken toont je drie meestgebruikte lijsten; een foto (kasticket) of tekst
-  deel je vanuit een andere app met Thuis (Delen → Thuis). Kies dan waar ze heen moet: de foto komt bij het nieuwe
-  item, en de AI leest ze enkel als je op ✨ Foto lezen (of ✨ Kasticket lezen) tikt.
-
-**De app instellen** (Jouw gegevens → App):
-
-- **Openen op**: per toestel waar de app opent (een overzicht, de agenda, een project, een lijst of een formulier),
-  bv. de keukentablet op Keuken en je gsm op Uitgave toevoegen. De kiosk keert daar ook naar terug.
-- **Apps**: zoveel eigen apps als je wil, elk met een eigen naam en bestemming ("Pellets" → Bijvulling met
-  "pellets", "Keuken" → het overzicht Keuken). Met Op je beginscherm zet je elk als eigen icoon op je gsm.
-- **Snelkoppelingen** (Android): vanzelf je meestgebruikte lijsten, of zelf tot vier gekozen.
-- **Gedeelde foto** (Android): telkens vragen, of meteen als kasticket bij een voorraad (enkel met de AI aan; ook
-  dan leest ze pas na ✨ Kasticket lezen).
-
-Een iPhone leest het manifest enkel als je het icoon op je beginscherm zet: een app die je daarna aanpast, gaat wel
-naar haar nieuwe bestemming (die vraagt ze bij het openen), maar haar naam onder het icoon blijft. Android neemt
-nieuwe snelkoppelingen over binnen een dag.
-
-### Een foto lezen: etiket, kasticket, factuur, product
-
-Bij een nieuw item kan je een foto nemen van een etiket, typeplaatje, **kasticket of factuur**, of een PDF kiezen: de
-app vult de naam en de velden in (zacht blauw tot je ze zelf aanpast) en bewaart de foto (en de PDF bij de bestanden).
-Dat gebeurt met Workers AI. Bij een kasticket neemt ze het totaal, de datum van aankoop en de winkel. Een verwijzing
-zoals **Verkoper** koppelt ze op naam aan een verkoper die je al hebt ("COLRUYT LAAGSTE PRIJZEN HALLE" → Colruyt);
-staat de winkel er nog niet in, dan voeg je ze met één tik toe. Wat de AI zegt, gaat door dezelfde controle als wat
-je zelf typt; er wordt nooit iets bewaard zonder dat je op **Opslaan** drukt.
-
-Op een gsm of tablet opent **Uit foto** de fotokiezer van je toestel (op een recente Android met je albums uit Google
-Foto's); een PDF (een factuur uit je mail) deel je daar met Thuis (Delen → Thuis). Op een computer heet de knop **Uit
-bestand** en kan je ook een PDF kiezen.
-
-Bij de foto kan je de AI een korte **uitleg** meegeven ("ik at de helft", "enkel de boodschappen, niet de tankbeurt").
-Pas je die achteraf aan, dan laat je de foto opnieuw lezen (dat telt als een extra lezing). Staat er een barcode op de
-foto en geef je uitleg, dan komen de gegevens uit de barcode en leest de AI enkel de rest (zoals hoeveel je at).
-
-Heeft een lijst velden **uit productinfo** (zoals kcal per 100 g bij Voeding), dan zoekt de app echte gegevens op in
-[Open Food Facts](https://world.openfoodfacts.org), een open en gratis databank, zo zuinig mogelijk:
-
-1. **Barcode**: tik op **Foto** en hou de barcode in beeld: de camera leest ze live (zonder AI), het product is exact
-   en de velden staan meteen ingevuld. Staat het product niet in Open Food Facts, dan blijft de camera open en trek
-   je met de ontspanknop (✨) een foto die de AI leest. Een barcode op een foto uit je album leest de app ook zelf.
-2. **Foto zonder barcode**: de AI herkent wat erop staat. Een gekend product (bv. Nutella van Ferrero) zoekt de app
-   op naam en merk op in Open Food Facts; een gerecht of iets dat niet gevonden wordt, blijft een schatting. De app
-   zegt altijd welk van de twee, en welk product ze vond. Hoeveel je at, blijft een schatting: kijk het na.
-3. **Meerdere dingen op één foto** (een bord met rijst, kip en broccoli): het grootste komt in het formulier, de rest
-   staat eronder bij "Ook op de foto". Aangevinkt wordt elk een eigen item, met dezelfde datum, maaltijd en persoon.
-
-**Porties**: Open Food Facts kent vaak de portie van een product (Nutella: 15 g); die komt in een veld met productinfo
-**Portie (g)**. Rekent een getal in porties van dat veld (in de lijst: Hoeveel → **In porties van** Portie), dan staan
-er onder het veld knoppen ½ portie · 1 portie · 2 porties, en rekent snel invullen "2 porties nutella" om naar 30 g.
-Het sjabloon Voeding heeft dat al bij Eten.
-
-**NEVO** (gewone voedingsmiddelen: een appel, gekookte rijst, spaghetti bolognese) is de tweede databank, naast Open
-Food Facts (merkproducten). Typ je in een lijst met productinfo een naam die in NEVO staat, of herkent de AI zo'n
-voedingsmiddel op een foto, dan komen de voedingswaarden daaruit, met de bron erbij ("NEVO-online versie 2025/9.0,
-RIVM, Bilthoven"); je naam blijft staan. NEVO zit in de app zelf (`shared/nevo-data.ts`): wat je typt, gaat nergens
-heen. De gegevens zijn gratis en worden ongewijzigd gebruikt, zoals de voorwaarden van het RIVM vragen. Om ze erin te
-zetten: vraag het bestand aan bij het RIVM, zet het in `data/` en draai `node scripts/nevo.mjs data/<bestand>.csv
-2025/9.0`. Zolang dat niet gebeurde, is NEVO leeg en gebruikt de app enkel Open Food Facts.
-
-Open Food Facts krijgt enkel een barcode of een productnaam, nooit iets van jou. Wat de app opzocht, onthoudt ze 30
-dagen (tabel `products`). De AI heeft een harde limiet: 25 foto's per persoon en 50 samen per dag
-(`AI_PERSON_LIMIT`, `AI_DAILY_LIMIT`), ruim binnen de gratis hoeveelheid van Workers AI. Daarboven leest de AI niets
-meer tot de volgende dag (een UTC-dag) en vul je het zelf in; de rest van de app werkt gewoon.
-
-**Je ziet altijd wanneer de AI meeleest.** Elke knop die de AI gebruikt, draagt een kleine ✨ (Foto, Uit bestand,
-Kasticket lezen, en de ✨ naast "Typ wat je weet"); een barcode, Open Food Facts en het snel invullen met code niet.
-De AI start nooit vanzelf: een foto die je deelt vanuit een andere app, komt bij het item en wacht op **✨ Foto lezen**.
-Achteraf zegt de melding "Gelezen met AI". Bij **Jouw gegevens → AI** zet je **Lezen met AI** uit (enkel voor jezelf,
-in `people.app_settings`): dan zijn er geen ✨-knoppen meer, en weigert de server elke AI-vraag van jou
-(`useAiBudget`). Staat ze aan, dan zie je er hoe vaak je de AI vandaag liet lezen.
-
-## Hoe de gegevens ingedeeld zijn
-
-| Tabel | Wat |
-| ----- | --- |
-| `people` | Personen. Met een e-mailadres als ze aanmelden, zonder als ze nooit aanmelden. `overview`: de blokken van hun overzicht (leeg = vanzelf). |
-| `projects` | Projecten, als boom (`parent_id`). |
-| `roles` | Rollen per project; `rights` zegt wat de rol mag (zie `shared/access.ts`). |
-| `memberships` | Wie welke rol heeft in welk project. Geldt ook in de subprojecten. `sort_order` is jouw volgorde op het overzicht. |
-| `item_types` | Lijsten: naam, naam van één item, velden (`fields`, met de berekeningen, zie `shared/calc.ts`) en totalen (`totals`, zie `shared/totals.ts`), als JSON. |
-| `items` | Items: naam en de waarden van de velden (`data`, als JSON). |
-| `tags` + `item_tags` | Tags per project, en welke items ze hebben. |
-| `item_files` | Bestanden bij een item (in R2). De foto staat apart in R2 (`items/<id>/photo`). |
-| `item_log` | Het logboek van een item. |
-| `ai_usage`, `ai_usage_people` | Hoeveel AI-lezingen er vandaag al waren, samen en per persoon. |
-| `products` | Productinfo uit Open Food Facts (op barcode of naam), 30 dagen bijgehouden. |
-| `settings` | Gegevens van de app zelf: de dagkoersen van de ECB, de sleutels voor meldingen. |
-| `push_subscriptions` | Toestellen die meldingen willen: het adres bij hun pushdienst en hun sleutels. Uitzetten verwijdert de rij. |
-| `repeats` | Items die zich herhalen: om de hoeveel, de volgende keer, en wie het instelde. |
-| `views` | Bewaarde weergaven van een lijst (filters, sortering, kolommen, met subprojecten), voor jezelf of voor iedereen. |
-| `shown_lists` | Lijsten van erboven die een subproject als eigen tab toont (bv. Uitgaven in Pelletkachel). |
-
-Velden en rechten controleert de Worker, niet de database (`shared/fields.ts` en `shared/access.ts`). Zo kan er
-later een veldsoort of recht bij zonder de tabellen te herbouwen.
-
-## De database aanpassen
-
-Elke schemawijziging is een nieuw SQL-bestand in `migrations/`. Pas nooit een bestaand bestand aan.
-
-1. Nieuwe migratie aanmaken:
-   ```sh
-   npx wrangler d1 migrations create huishouden-db korte_omschrijving
-   ```
-2. Schrijf je SQL in het nieuwe bestand.
-3. Lokaal toepassen en testen:
-   ```sh
-   npm run db:migrate:local
-   ```
-4. Push. `npm run deploy` past de migratie online toe.
-
-Pas je `wrangler.jsonc` aan (bv. een nieuwe binding)? Draai dan `npm run cf-typegen`, zodat de types kloppen.
-
-## Goed om te weten
-
-- **Bedragen** staan in cent (`64900` = € 649,00). Zo vermijd je afrondingsfouten.
-- **Foto's** worden in de browser verkleind tot max. 2000 px voor de upload.
-- **Barcodes** worden altijd zwart op wit getoond: kassascanners lezen gekleurde codes slecht.
-- **Ontwerp**: zie [STIJLBOEK.md](STIJLBOEK.md). Daar staat hoe elk scherm, onderdeel en elke tekst eruitziet,
-  met een checklist voor nieuwe onderdelen. Raadpleeg het altijd voor je iets aan de app verandert.
-- **Offline**: alleen klantenkaarten. Al de rest bekijken of aanpassen vraagt internet.
-- De R2-bucket staat in de regio *ENAM* (Noord-Amerika). Wil je je bestanden in Europa, maak dan een
-  nieuwe bucket aan met `npx wrangler r2 bucket create huishouden-bestanden-eu --jurisdiction eu`. Pas daarna
-  in `wrangler.jsonc` de `bucket_name` aan en voeg `"jurisdiction": "eu"` toe. Doe dat bij voorkeur voor je
-  echte bestanden uploadt.
+Jouw gegevens → Back-up: een bestand met de lijsten die je beheert (dingen, logboek, soorten, tags, weergaven).
+Terugzetten maakt altijd een nieuwe kopie; er wordt niets overschreven.

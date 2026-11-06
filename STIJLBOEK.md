@@ -15,7 +15,7 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 | --- | --- |
 | Kleuren, maten, schaduwen, curves | `src/styles.css`, bovenaan in `:root` |
 | Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`) |
-| Lijsten, velden en items | `src/components/Fields.tsx`, `ItemsView.tsx` en `shared/fields.ts` |
+| Lijsten, velden en dingen | `src/components/Fields.tsx`, `ThingsView.tsx` en `shared/fields.ts` |
 | Berekeningen | `src/components/CalcEditor.tsx` en `shared/calc.ts` |
 | Sjablonen (ingebouwd en gedeeld) | `shared/templates.ts`, `shared/template-file.ts` en `src/components/TemplateShare.tsx` |
 | Rechten | `shared/access.ts` (wat een rol mag, per lijst en per veld) |
@@ -52,7 +52,7 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
     uitlegzin onder een veld of kaart, geen "· optioneel", geen tellers of rollen als bijlabel. Snapt iemand een
     scherm niet zonder uitleg, dan is de opbouw of het label fout: maak het label duidelijker, zet iets op een
     betere plaats, of laat het weg. Grijze tekst onder een titel is enkel voor **gegevens** (de beschrijving van
-    een project, je e-mailadres, "2 van 3 klaar", "Deze maand") of een **toestand** (een fout, "enkel zien").
+    een lijst, je e-mailadres, "2 van 3 klaar", "Deze maand") of een **toestand** (een fout, "enkel zien").
     Uitleg op vraag kan enkel bij een berekening (`Tip`) of als titel van een keuze in een `select`.
 
 ---
@@ -93,9 +93,9 @@ kleurenblindheid: geen tweede accent, en nooit voor tekst. Eén reeks is grijs (
 nu zwart (`--primary`); meer reeksen krijgen elk een vaste kleur, de rest is "Overige" (`--chart-other`).
 
 **Tonen** (`tone-peach`, `tone-butter`, `tone-sage`, `tone-mint`, `tone-sky`, `tone-lilac`, `tone-rose`) zijn de
-kleuren van projecten, tags en personen. Ze geven `--tone`, `--tone-soft`, `--tone-line`, `--tone-mid`
+kleuren van lijsten, tags en personen. Ze geven `--tone`, `--tone-soft`, `--tone-line`, `--tone-mid`
 en `--tone-ink`. Gebruik ze **enkel** voor stipjes (`.dot`), avatars, het vierkantje voor een rij (`.row-media`),
-de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of grote vlakken.
+de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grote vlakken.
 
 ### Typografie
 
@@ -136,7 +136,7 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 - Witte achtergrond, inhoud met 16px marge, een grote titel (30px).
 - **Onderbalk**: een zwevende glazen pil (20px van de randen) met drie tabs: **Overzicht**, **Agenda** en
   **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)). Een grijs vlak veert naar de actieve tab. Een
-  project en een fiche horen bij Overzicht.
+  lijst en een ding horen bij Overzicht.
 - **Jouw gegevens** (`/ik`): je letter rechts naast de titel van een hoofdscherm (een scherm zonder terug, zoals het
   overzicht). Geen tab: je hebt het zelden nodig.
 - **Zwevende + knop** (zwart, 56px) rechts boven de onderbalk voor de hoofdactie van het scherm.
@@ -150,15 +150,15 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
 ┌ canvas #eef0f2 ────────────────────────────────────────────────────────────┐
 │ ▣ Thuis          ┌ paneel (wit, geen rand, 18px) ─────────────────────────┐ │
 │ [⌕ Zoeken  ⌘K]   │ ╭ glas ────────────────────────────────────────────╮ │ │
-│ ◖Overzicht  4◗   │ │ Slachterijstraat 1 › Wijnkelder  (+ Wijn toevoegen) J│ │ │  ← paneelbalk 60px, zweeft
-│ Projecten        │ ╰──────────────────────────────────────────────────╯ │ │
-│ ● Slachterijstr. │ Wijnkelder                              (Instellen)    │ │  ← titel 32px
-│ │ Wijnkelder     │                                                        │ │
-│ │ Huishouden     │ [ Wijnen 12 · Wijnhuizen 3 ]                           │ │  ← tabs per lijst
-│ ● Test           │ zijkolom (320px)        zoeken, filters                │ │
-│ + Project        │ Wie moet wie            Wijn          Wijnhuis   Jaar  │ │
-│                  │ ───────────             ─────────────────────────────  │ │
-│                  │ Subprojecten            rijen …                        │ │
+│ ◖Overzicht◗      │ │ Overzicht › Wijnen               (+ Wijn toevoegen) J│ │ │  ← paneelbalk 60px, zweeft
+│ Lijsten          │ ╰──────────────────────────────────────────────────╯ │ │
+│ ⌄ Huis           │ Wijnen                                          (⋯)    │ │  ← titel 32px
+│ │ Voorraad       │                                                        │ │
+│ │ Wijnen         │ [ Wijnen · Logboek ]                                   │ │  ← tabs
+│ › Jaan           │ zijkolom (320px)        zoeken, filters                │ │
+│ › Wijnkelder     │ Wie                     Wijn          Wijnhuis   Fles  │ │
+│ + Lijst          │ ───────────             ─────────────────────────────  │ │
+│                  │ Tags                    rijen …                        │ │
 │ ◉ Jaan           └────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -167,13 +167,13 @@ de iconen van projecten in de zijbalk en tags. Nooit voor knoppen, kaarten of gr
   **paneel** (10px marge, geen rand, afronding 18px). Het paneel scrollt zelf; de zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het zwarte merktegeltje met "Thuis" (naar het overzicht), het
   zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), Overzicht, Agenda, Verbanden en de
-  [projectboom](#projectboom-zijbalk). Het actieve item ligt onder een **glazen lens** die meeveert.
+  [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het actieve item ligt onder een **glazen lens** die meeveert.
 - **Paneelbalk** (60px, een glazen balk die 10px van de randen zweeft en blijft staan; de inhoud scrollt eronder
   door): kruimelpad met `›` links ("Slachterijstraat 1 › Wijnkelder"), rechts de hoofdactie (zwarte pil, 40px) en
   jouw letter in een glazen rondje (naar `/ik`, de enige weg ernaartoe op tablet).
 - **Kop**: een grote titel (32px) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
   item rechts (`btn-outline btn-sm`, glas). Geen lijn eronder.
-- Inhoud daaronder met 20px marge. Een project en een fiche gebruiken de [zijkolom](#zijkolom-split).
+- Inhoud daaronder met 20px marge. Een lijst en een ding gebruiken de [zijkolom](#zijkolom-split).
 - Geen + knop: de hoofdactie staat in de paneelbalk.
 
 ### Opbouw van elk scherm
@@ -200,24 +200,24 @@ met de zwevende terugknop en het titelpilletje (gsm).
 <PageHead
   title="Wijnkelder"
   badge={<span className="badge">Gearchiveerd</span>}                 // optioneel, kort
-  description={project.description}                                    // enkel gegevens, nooit uitleg
-  back={{ to: `/projecten/${parent.id}`, label: parent.name }}        // het project erboven, of terug
+  description={person.email}                                           // enkel gegevens, nooit uitleg
+  back={{ to: -1, label: list.name }}                                  // de lijst, of terug
   actions={<Link className="btn btn-outline btn-sm" …>Instellen</Link>} // acties op dit scherm, rechts naast de titel
   primary={<Link className="btn btn-primary" …><Icon name="plus" size={16} /> Wijn toevoegen</Link>} // in de paneelbalk
 />
 ```
 
-- Een overzichtsscherm (een project) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
+- Een overzichtsscherm (een lijst) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
 - Formulieren: `back={{ to: -1, label: … }}` (gewoon terug), geen `primary`.
-- `description` is enkel voor gegevens van de gebruiker (de beschrijving van een project, je e-mailadres). Nooit een
-  zin die het scherm uitlegt, en nooit wat het kruimelpad al zegt (de naam van het project).
+- `description` is enkel voor gegevens van de gebruiker (je e-mailadres). Nooit een
+  zin die het scherm uitlegt, en nooit wat het kruimelpad al zegt (de naam van de lijst).
 - Op gsm toont een hoofdscherm (zonder `back`) vanzelf jouw letter rechts naast de titel.
 - Meer acties dan plaats (op gsm: Opnieuw + Bewerken)? Dan springen de acties onder de titel; de titel breekt nooit
   midden in een woord.
 
 ### Zijkolom: `split`
 
-Voor een fiche en een project: links de kern, rechts de lijst of de rest.
+Voor een ding en een lijst: links de kern, rechts de lijst of de rest.
 
 ```tsx
 <div className="split">
@@ -235,8 +235,8 @@ Voor een fiche en een project: links de kern, rechts de lijst of de rest.
 - In een `.split` is een `card` **geen kaart maar een sectie**: geen vlak, geen schaduw, een haarlijn ertussen. De
   tekst van een sectie staat onder de paginatitel; wat geen kaart is (knoppen, een lege staat, het zoekveld) schuift
   vanzelf mee in.
-- Op gsm en smalle tablets staan beide onder elkaar. Is de rechterkant het belangrijkste (de lijst van een
-  project), zet dan `split split-main-first`: onder 960px komt die eerst.
+- Op gsm en smalle tablets staan beide onder elkaar. Is de rechterkant het belangrijkste (de dingen of het
+  logboek van een lijst), zet dan `split split-main-first`: onder 960px komt die eerst.
 - Vanaf 960px: zijkolom van 320px, zonder lijn ernaast. Zet de `.split` direct in `.page`, na `PageHead`.
 
 ### Knoppen
@@ -245,7 +245,7 @@ Alle knoppen zijn **pillen**. Indrukken veert terug (schaal 0,96).
 
 | Klasse | Wanneer |
 | --- | --- |
-| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuw project): zwart met een glanslijn |
+| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuwe lijst): zwart met een glanslijn |
 | `btn btn-outline` | Gewone acties naast de hoofdactie (Bewerken, Instellen, Notitie): **glas**, komt 1px omhoog bij aanwijzen |
 | `btn btn-ghost` | Stille acties in een rij (archiveren, sluiten) |
 | `btn` | Een zachte grijze pil (zelden; liever een van de andere) |
@@ -271,9 +271,9 @@ Hetzelfde `card` ziet er anders uit naargelang waar het staat; je kiest dat niet
 
 | Waar | Hoe |
 | --- | --- |
-| Overzicht en elders | **Kaart**: wit, afronding 20px, `--shadow-card`; een projectkaart komt 2px omhoog bij aanwijzen |
+| Overzicht en elders | **Kaart**: wit, afronding 20px, `--shadow-card`; een kaart op het overzicht komt 2px omhoog bij aanwijzen |
 | In een formulier (`.page.form`) en bij Instellen | **Groep**: een grijs vlak (`--group`), afronding 24px, geen schaduw |
-| In een `.split` (project, fiche) | **Sectie**: geen vlak, een haarlijn tussen secties |
+| In een `.split` (lijst, ding) | **Sectie**: geen vlak, een haarlijn tussen secties |
 
 - `CardHead`: titel 15,5px, gewicht 600, eventueel gegevens eronder in grijs ("2 van 3 klaar", "Deze maand"),
   eventueel een actie rechts (glazen knop). Geen icoon, geen uitleg.
@@ -307,7 +307,7 @@ Hetzelfde `card` ziet er anders uit naargelang waar het staat; je kiest dat niet
 
 - Rijen staan **ingezet** in hun kaart (6px): de haarlijnen ertussen (`--divider`) raken de rand niet, en hover is
   een afgerond zacht vlak (14px).
-- Een rij is 60px hoog, met `row-media` (36px tegel zonder rand, in de toon van het project, of `round` voor
+- Een rij is 60px hoog, met `row-media` (36px tegel zonder rand, in de toon van de lijst, of `round` voor
   personen), titel (550), grijze regel en rechts een waarde of `row-chevron` (schuift 3px bij aanwijzen).
 - Rij met eigen knoppen (zoals −/+): de rij zelf is een `div.row`, de link zit in `.row-link`.
 - Groeperen: `<li className="group-row"><span className="dot tone-x" /> Voeding <span className="group-count">5</span></li>`
@@ -332,7 +332,7 @@ Dezelfde rijen worden op tablet een tabel; de kolomkoppen staan erboven als **st
 </div>
 ```
 
-- Een lijst (`ItemsView`) is `.table-items`: de kolommen komen van de velden met `column` (de naam en
+- De dingen van een lijst (`ThingsView`) zijn `.table-items`: de kolommen komen van de velden met `column` (de naam en
   hooguit twee velden; naast de zijkolom is er niet meer plaats). Getallen (bedrag, getal, score, jaar) zijn 110px
   breed en rechts uitgelijnd (`col-end`), tekst `minmax(0, 160px)`. Daarom staat `--cols` op de tabel zelf.
 - Een andere tabel met vaste kolommen krijgt een eigen klasse met `--cols` in `styles.css`; de eerste kolom is
@@ -349,7 +349,7 @@ Dezelfde rijen worden op tablet een tabel; de kolomkoppen staan erboven als **st
 ```
 
 Een grijs spoor met een glazen witte duim die naar de actieve tab **veert**. Geen tellers: het aantal staat bij de lijst zelf. Voor
-verschillende **weergaves binnen één scherm** (de lijsten van een project, de onderwerpen bij Instellen). Niet voor
+verschillende **weergaves binnen één scherm** (dingen en logboek van een lijst, de onderwerpen bij Instellen). Niet voor
 navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?tab=`), zodat je ernaar kan linken.
 
 ### Filters: `FilterSelect` en `FilterToggle`
@@ -363,9 +363,8 @@ navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?t
 
 Een grijze pil zonder rand: grijs label, donkere waarde. Een actieve filter komt naar voren als **glas**. Filters
 staan onder het zoekveld.
-In `ItemsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
-wordt een schakelaar "Label: nu"), plus Tag, Met subprojecten (icoon `project`, enkel als het project
-subprojecten heeft) en Archief. Toon een filter pas als er iets te kiezen valt.
+In `ThingsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
+wordt een schakelaar "Label: nu"), plus Archief. Toon een filter pas als er iets te kiezen valt.
 
 ### Segmenten: `Segmented`
 
@@ -377,19 +376,20 @@ met een glazen duim die meeveert. Meer dan 4 opties: gebruik een `select`.
 Eén veld voor zoeken én toevoegen. Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk of Zoeken in de onderbalk
 (modus zoeken), of met de + op het overzicht (modus toevoegen; `usePalette()("add", tekst)` vanuit een scherm): een
 glazen venster boven een zacht vervaagd scherm. Zoekt zonder op hoofdletters of accenten te letten in acties, je
-projecten en (via `/api/search`) de items die je mag zien, en biedt de lijsten aan om in toe te voegen
-(`GET /me/lists`, `matchTargets`): noemen de eerste woorden een lijst ("uitgave 12 euro"), dan staat **Toevoegen**
-("Uitgave: 12 euro", de rest gaat als `?tekst=` naar het formulier) bovenaan, anders wat je zoekt. Met de + staan de
-lijsten altijd eerst (je meestgebruikte bovenaan) en Nieuw project als laatste. Pijltjes kiezen (een grijs vlak
+lijsten en tags, en (via `/insights/search`) de dingen en gebeurtenissen die je ziet, en biedt aan waar je kan loggen
+of toevoegen (`GET /me/targets`, `matchTargets`): noemen de eerste woorden een soort of lijst ("gegeten pasta"), dan
+staat **Toevoegen** ("Gegeten: pasta", de rest gaat als `?tekst=` naar het formulier) bovenaan, anders wat je zoekt. Met de + staan de
+lijsten altijd eerst (je meestgebruikte bovenaan) en Nieuwe lijst als laatste. Pijltjes kiezen (een grijs vlak
 glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als groep in
 `CommandPalette.tsx`.
 
-### Projectboom (zijbalk)
+### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
-Je hoofdprojecten, elk met zijn icoon in zijn toon, een pijltje om de subprojecten open te klappen (de rij
-groeit van `0fr` naar `1fr`, kinderen schuiven één voor één in) en een hulplijn links van de kinderen
-(`place-link child`). De boom waarin het project zit dat je bekijkt, staat open. Onderaan "+ Project".
-Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--depth`.
+Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen), daaronder **Lijsten**: per tag een
+rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
+tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
+onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
+Onderaan "+ Lijst". Op gsm en tablet tot 1100px staan je lijsten per tag onder het overzicht (`.home-projects`).
 
 ### Formulier
 
@@ -433,9 +433,9 @@ Op het overzicht (`Home`) staat dezelfde boom als rijen die inspringen met `--de
 
 ### Lijsten en velden: `Fields.tsx`
 
-Alles wat je bijhoudt, is een **item** in een **lijst**: een lijst heeft eigen velden (Wijnen met jaargang en
-druiven, Klantenkaarten met een barcode). De lijsten van een project gelden ook in zijn subprojecten. In de code heet
-een lijst `item_type` (`ItemType`, `type_id`); in alles wat de gebruiker leest, is het een **lijst**. De veldsoorten
+Wat je bijhoudt, is een **ding** in een **lijst**, of een **gebeurtenis** in haar logboek. De dingen van een lijst
+hebben dezelfde velden (Wijnen met jaargang en druiven); een eigen soort (Tankbeurt) heeft eigen velden voor haar
+gebeurtenissen. Beide gebruiken dezelfde veldsoorten. De veldsoorten
 staan in `FIELD_TYPES` (`shared/fields.ts`), elk met een groep (`FIELD_GROUPS`) en één zin uitleg (de titel van de keuze); een nieuwe
 veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`formatFieldValue`), tekst lezen
 (`parseFieldText`) en hier een invoer.
@@ -452,7 +452,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | Component of hulpje | Wat |
 | --- | --- |
 | `AmountsPicker` (`ItemPicker.tsx`) | Hoeveelheden (de ingrediënten van een recept): per regel een `ItemPicker` (met vrije tekst, "zout"), hoeveel en de eenheid (`.amount-row-line`), onderaan een lege regel om toe te voegen. Op de fiche een `.amount-list`: de hoeveelheid grijs voor de naam. Overgenomen uit een recept rekent het mee met de porties (`per`). |
-| `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes zweven eronder als glas (`.picker-list`), met het project erbij als ze uit meer projecten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
+| `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes zweven eronder als glas (`.picker-list`), met de lijst erbij als ze uit meer lijsten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
 | `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling, **Onthouden** (`select`: Niet · Je laatste waarde · Een vaste waarde) en **Per** (Voor alles · Naam · een keuzeveld van de lijst): een nieuw item begint met wat jij de vorige keer (bij die keuze) invulde, of met de vaste waarde, zacht blauw) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
@@ -460,18 +460,17 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | `PeoplePicker` | Personen aanvinken: `tag person-chip` (een tag met avatar) |
 | `ItemsSelect` | Meerdere items uit een andere lijst: kleine tags met een kruisje (`.ref-chips`), een keuzelijst eronder |
 | `CodeInput`, `CodeView` | Een barcode of QR-code: typen, formaat kiezen of scannen; groot tonen om te laten scannen (zwart op wit) |
-| `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een ander project. Je kiest enkel uit items die je mag zien |
-| `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van het project samen |
+| `ItemSelect` | Een verwijzing naar een item uit een andere lijst (de wijn → het wijnhuis), ook uit een andere lijst. Je kiest enkel uit dingen die je ziet |
+| `SharesField` (`sharesDraft`) | **Eigenaar** of **Verdeling**: wie welk deel heeft (Niemand · Gelijk · Procent · Bedrag). In bedragen begint het gelijk verdeeld (tot op de cent) en zegt het in rood als het samen niet op het bedrag van het formulier uitkomt (dan naar verhouding). Leeg = van iedereen samen |
 | `MoneyInput` | Een bedrag in euro; "45 USD", "$45" of "£12,50" rekent het veld bij het verlaten om met de dagkoers van de ECB (`/rates`, `shared/money.ts`), met eronder wat het was |
 | `ScoreInput`, `ScoreStars` | Score op 5 met halve sterren (tik nog eens voor een halve) |
 | Porties (`PortionChips` in `FieldInputs`) | Bij een getal **In porties van** een ander getal (Hoeveel per Portie): onder het veld `.portion-chips`, drie `tag`-knoppen "½ portie 7,5 g", "1 portie 15 g", "2 porties 30 g" (de grammen grijs), enkel als de portie gekend is |
 | Vastzetten (`FieldPin` in `FieldInputs`) | Bij een veld met een vaste waarde (`remember_fixed`): een kleine punaise (`.field-pin`, icoon `pushpin`, 28px) rechts naast het label, naast het veld (nooit in het `label`). Stil grijs = de waarde van nu staat niet vast (tik: vastzetten voor de keuze, bv. "Vastzetten voor Pasta"); zwart (`aria-pressed`) = ze staat vast (tik: niet meer vast). Een toast zegt wat er gebeurde |
-| `LabelScanner` | Groep "Snel invullen" (bij productinfo "Product") bij een nieuw item: één veld "Typ wat je weet" (`QuickInput`) met rechts een stille ✨ (`.ai-button`, `btn-ghost btn-icon`, "Lezen met AI": enkel als je de AI de hele tekst wil laten lezen; wat de code al vond, wint), daaronder het rijtje (`QuickChips`) en Foto · Uit foto, met een kleine grijze ✨ (`AiMark`), want een foto leest de AI. **Uit foto** aanvaardt op een gsm of tablet (`isTouch`) enkel foto's: zo opent de fotokiezer van het toestel (met Google Foto's); op een computer heet ze **Uit bestand** en mag ook een PDF. In een lijst met productinfo is **Foto** één camera (`BarcodeScanner` met `onPhoto`): een barcode leest ze live en vult ze in uit Open Food Facts, zonder AI; staat ze er niet in, dan blijft de camera open en trek je met de ontspanknop (wit, met ✨) een foto voor de AI. Met de AI uit staat daar **Barcode** (enkel live scannen) en zoekt Uit foto enkel een barcode op de foto. Een gedeelde foto (`initial`) staat er als klein beeld (`.shared-pending`) bovenaan met **✨ Foto lezen**: ze komt bij het item, en de AI leest ze pas na die tik. Staat de AI voor jou uit (`useSession().ai`), dan geen ✨ en (buiten een productlijst) geen fotoknoppen. Enter vult in met code (zonder AI). Wat je typt, is ook de uitleg bij een foto. Een foto leest een etiket, kasticket, factuur of typeplaatje, ook een PDF (de eerste pagina; de PDF komt bij de bestanden). Wat de app invult, is zacht blauw (`auto`). De motor (live lezen, keuzes, verplaatsen) is `useQuickFill`, ook in `QuickAdd`. |
-| `QuickInput` | Het veld "Typ wat je weet" in `LabelScanner` (bij een nieuw item staat de cursor er meteen in). Wat je typt, vult **live** in met code (zonder AI; `quickFill`, met `parts`: welke tekst in welk veld kwam): wis je een woord, dan komt terug wat er stond. Eronder zweven (`.picker-list`, zo breed als de hele rij: `.picker.is-row`) de waarden die passen bij het woord bij de cursor, uit alle velden die je mag wijzigen: items (van de server, per groep lijsten), keuzes, personen, ja/nee en namen van eerder; rechts het label van het veld (`.picker-place`). Staat de cursor in een getal of datum die al ergens staat, dan tonen de keuzes de andere velden waar het naartoe kan; Tab (Shift+Tab) doet dat op een computer. Kiezen vult het veld in zoals zelf invullen (overnemen uit een recept gebeurt ook) en telt als jouw keuze; wis je dat woord, dan vervalt ze. Enter zonder keuze is **Invullen** (een hele zin gaat dan naar de AI). Escape sluit. |
-| `QuickChips` | Het rijtje onder "Typ wat je weet": per veld wat de tekst of je keuzes invulden (`.tag.is-filled`: zacht blauw, het label grijs, een lange waarde afgekapt), in de volgorde van het formulier. Een tik opent een `Sheet` met **Naar …** (de andere velden waar de waarde kan) en **Weghalen** (dan verdwijnt het ook uit je tekst). |
-| `ItemPhoto` | De foto van een item bovenaan de fiche: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
-| `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een project of lijst (`ICONS` in `shared/templates.ts`): grijze tegeltjes, het gekozen is zwart |
-| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette projecten als rijen met × (weer laten melden) en een `select` "Project stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
+| Typ wat je weet (`EventForm`) | Het eerste veld van Loggen (placeholder "Typ wat je weet…", de cursor staat er meteen in). Wat je typt, vult **live** in met code (`readEvent` in `shared/parse.ts`): datum en uur, bedrag, dingen met hoeveelheid, eenheid en prijs, velden van de soort; wat overblijft is de omschrijving. Enkel wat de tekst zelf zette, verandert mee: pas je iets aan, dan blijft dat staan; wis je een woord, dan komt terug wat er stond. Begint de tekst met een soort ("gegeten"), dan die soort. Eronder **Kasticket ✨**. |
+| Barcode en Foto (`ThingForm`) | Onder de naam van een nieuw ding: **Barcode** (lijsten met productinfo: `BarcodeScanner`, zoekt in Open Food Facts, zonder AI) en **Foto ✨** (een etiket of product; enkel met de AI aan). Eronder in grijs waar het vandaan komt ("Uit Open Food Facts: …", "Uit NEVO: …", "Geschat met AI"). Een gedeelde foto staat klaar als **Foto lezen ✨**: de AI leest pas na die tik; de foto komt bij het ding. |
+| `ItemPhoto` | De foto van een ding of gebeurtenis bovenaan: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
+| `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een lijst (`ICONS` in `shared/icons.ts`): grijze tegeltjes, het gekozen is zwart |
+| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette lijsten en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
 | `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
@@ -494,8 +493,8 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   Op de dag zelf, 1, 2, 3 dagen, 1 of 2 weken, 1 maand vooraf), met **Elk jaar** (`yearly`) voor een verjaardag.
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
   lijst toont het nieuwste eerst.
-- Een nieuw project begint met een **sjabloon** (`PROJECT_TEMPLATES` in `shared/templates.ts`, `.template-picker`):
-  lijsten met hun velden. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
+- Een nieuwe lijst begint met een **sjabloon** (`TEMPLATES` in `shared/catalog.ts`, `.template-picker`): velden,
+  voorraad en eigen soorten. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
   met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
   uit de bouwstenen (velden, formule, totalen): **Voeding** is Eten (kcal en macro's per 100 g × Hoeveel als
   formule, of de kcal van een Gerecht met `of(…)`), Gerechten (de kcal uit hun Ingrediënten), Gewicht en Water, met
@@ -523,7 +522,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - Snel veel invullen: "Opslaan en volgende" (`.form-actions`, een `btn-outline` naast de hoofdknop). Een tabel
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm. Exporteren is een iconknop `download` in de toolbar: een gewone `<a download>`
-  naar `/items/export` (CSV met ; en een komma in getallen, voor Excel; `shared/csv.ts`), met enkel wat jij mag zien.
+  naar een CSV-bestand (CSV met ; en een komma in getallen, voor Excel; `shared/csv.ts`), met enkel wat jij mag zien.
 - **Offline**: zonder internet staat bovenaan `.offline-note` (op gsm onder de terugknop). Een nieuw item bewaren
   lukt toch: het wacht op het toestel (`src/outbox.ts`, IndexedDB) en de melding zegt hoeveel er wacht; met internet
   gaat het vanzelf mee (toast "2 items van offline verstuurd"). Wijzigen en verwijderen vragen internet.
@@ -553,9 +552,8 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
   de API kijkt hetzelfde na (`checkCalcs`) en weigert een kring.
 - De uitkomst toont zoals een veld van die soort (bedrag, datum, ja/nee, getal met eenheid); een opgezocht webadres
   is een link. Ze kan een kolom of filter zijn.
-- Een verwijzing en een samenvatting kunnen ook naar een lijst in een ander project dat je ziet; in de keuzelijst
-  staat dan het project erbij ("Verkopers · Slachterijstraat 1"). Wie dat project niet ziet, krijgt op de fiche
-  "Verborgen", en opzoeken of samenvatten blijft voor hem leeg.
+- Een berekening rekent enkel binnen het ding (zijn eigen velden); wat over gebeurtenissen gaat (prijs per eenheid,
+  laatst gekocht), toont de tijdlijn van het ding.
 - Rechten: een berekening telt enkel wat jij mag zien. Mag je een veld waarvan ze afhangt niet zien, dan blijft
   ze leeg (ook een som over gelinkte items als je bij één ervan het veld niet ziet).
 - Opzoeken en samenvatten rekent de API uit (`worker/compute.ts`); in het formulier staan die er niet, op de fiche wel.
@@ -563,7 +561,7 @@ soorten, elk met één vraag (`CALC_KINDS` in `shared/calc.ts`, met uitleg):
 ### Filters en weergaven: `ViewEditor`, `ConditionPills`, `ViewChips`
 
 Een lijst filter, sorteer en toon je zoals je wil (`shared/views.ts`); dat bewaar je als **weergave**, voor jezelf of
-(wie het project instelt) voor iedereen. Generiek: elke veldsoort heeft zijn vergelijkingen (tekst: bevat, is, begint
+(wie de lijst instelt) voor iedereen. Generiek: elke veldsoort heeft zijn vergelijkingen (tekst: bevat, is, begint
 met; getal en bedrag: is, kleiner dan, minstens, tussen; datum: valt in een periode, in week … van de maand, op een
 maandag; keuze, persoon, verwijzing: is een van, met **jij** als keuze; ja/nee; leeg of ingevuld). Periodes zijn
 relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen twee datums. Ook op de naam, de tags en
@@ -571,17 +569,11 @@ relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen t
 
 | Waar | Hoe |
 | --- | --- |
-| Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden, Met subprojecten en Archief |
-| Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting), Kolommen (`tag-picker`, leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen in dit project, Bijwerken / Als nieuwe bewaren / Verwijderen) |
+| Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden en Archief |
+| Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting), Kolommen (`tag-picker`, leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen in deze lijst, Bijwerken / Als nieuwe bewaren / Verwijderen) |
 | Kolomkoppen (tablet) | Een kop sorteert (`.table-sort`): oplopend, aflopend, weer zoals de lijst; een pijltje `up`/`down` toont welke |
 
 - Wat je koos, blijft staan zolang de app openstaat (per lijst, `sessionStorage`). Exporteren volgt het filter.
-- Met subprojecten (`tree` in de weergave): een item uit een subproject krijgt de naam van dat project vooraan in
-  de rij (`.row-meta`) en het icoon in de toon van dat project.
-- **Ook uit** (`also` in de weergave, `AlsoPicker` onderaan Meer opties): dezelfde lijst uit andere projecten erbij
-  ("Wijnen · Gezamenlijke wijnkelder", enkel lijsten die passen: minstens de helft van de velden is dezelfde). Zo'n
-  item krijgt de naam van zijn project zoals bij subprojecten; staat het aan, dan staat **Ook uit** als actieve filter
-  in de rij. Ieder ziet er enkel wat hij in dat project mag zien.
 - Een voorwaarde op een veld dat iemand niet mag zien, telt voor hem niet mee; een weergave is geen beveiliging.
 
 ### Agenda: `CalendarMonth`
@@ -589,52 +581,13 @@ relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen t
 Een maandkalender (`Calendar.tsx`): bovenaan de maand ("November 2026") met Vandaag (`btn-ghost btn-sm`) en vorige en
 volgende (`btn-outline btn-icon btn-sm`), dan zeven kolommen (ma–zo). Een dag is een zacht vlak (`--muted`, afronding
 `--radius-lg`), de dagen van een andere maand enkel een lijntje, vandaag een zwart rondje, de gekozen dag wit en een
-beetje omhoog. Per dag hooguit drie pilletjes (`.calendar-entry`, in de toon van het project) en "+2"; op een gsm enkel
+beetje omhoog. Per dag hooguit drie pilletjes (`.calendar-entry`, in de toon van de lijst) en "+2"; op een gsm enkel
 stipjes. Onder de kalender wat op de gekozen dag valt, als gewone `rows`, met eventueel "+ Maaltijd toevoegen" (begint
 op die dag: `?veld=datum&op=2026-11-03`). Een periode (een reis) staat op elke dag ervan.
 
 - **Agenda** (`/agenda`, in de zijbalk en de onderbalk): elk veld met **In de agenda** (`agenda` op een datum, een
-  periode of een berekende datum) uit al je projecten, met jouw rechten per project. Filter op project.
+  periode of een berekende datum) uit al je lijsten, met jouw rechten per lijst.
 - Een lijst als agenda: de weergave **Als agenda** (volgens een datumveld naar keuze).
-
-### Totalen: `TotalsEditor` en `TotalsCards`
-
-Een **totaal** vat de items van een lijst samen (`shared/totals.ts`): de som, het gemiddelde, het kleinste, het
-grootste of hoeveel, van een getal, bedrag of duur (ook een berekening), alles samen of per dag, week (vanaf
-maandag), maand of jaar volgens een datumveld. Eventueel apart per persoon, eigenaar of keuze, en met een doel
-("niet meer dan" of "minstens"). Hooguit zes per lijst. "Kcal per dag", "Uitgaven per maand per persoon",
-"Gemiddelde score" en Wie moet wie zijn hetzelfde onderdeel.
-
-- **Waar**: dit project, of met de subprojecten. **Ook uit**: lijsten uit andere projecten met dezelfde velden (op
-  sleutel, van dezelfde soort; een lijst uit hetzelfde sjabloon past altijd). Hooguit vijf.
-- **Tegenover** (een saldo): per persoon of keuze de som bij Apart per, min die bij Tegenover. Betaald door tegenover
-  Verdeling = wie nog geld krijgt (+) of moet (−).
-- **Verrekenen**: een saldo van een bedrag tussen personen (Apart per en Tegenover zijn een Persoon of Personen met
-  aandeel), alles samen, met de subprojecten. Dat is Wie moet wie; het krijgt geen eigen kaart.
-- **Van wie** (`mine`: een veld Persoon, Personen of Verdeling): enkel de items van wie kijkt ("Enkel van jou"; bij
-  een verdeling of eigenaars "Enkel jouw deel": van € 60 voor jullie twee telt € 30, van een fles van drie ⅓). Elk
-  ziet zijn eigen kcal, gewicht of water in hetzelfde project. Dan kan het doel ook **per persoon** (`goals`; leeg = het gewone
-  doel); de API stuurt per lezer zijn doel mee.
-- **Klein** (`size: "small"`): een tegel naast de andere kleine (eiwit, koolhydraten, vet). **Als lijn** (`chart:
-  "line"`): de vorige periodes als lijn in plaats van staafjes (je gewicht per week).
-
-| Waar | Hoe |
-| --- | --- |
-| Formulier van een lijst, onder de totalen | Een eigen groep met één `select` **Melden bij een nieuw item**: Niet · Aan iedereen die de lijst ziet · Aan wie in … staat (per veld met mensen: Persoon, Personen, Personen met aandeel) |
-| Formulier van een lijst, groep "Totalen" (onder de velden) | `TotalsEditor`: per totaal een wit kaartje: de naam (leeg = een naam uit wat het telt, als placeholder), Wat, Van, Periode en Waar (`Segmented`), Volgens, Apart per, Tegenover (bij een som per persoon of keuze), Doel (soort + getal), de schakelaar Verrekenen (als het kan), en Ook uit (`tag-picker`: "Uitgaven · Skireis", enkel lijsten die passen). "Totaal toevoegen" als `btn-outline btn-sm` |
-| Project, zijkolom, bovenaan (`split-lead`) | `TotalsCards`: per groot totaal een sectie. Titel = naam, eronder de periode ("Vandaag", "Deze maand"). Een groot getal (32px, 600, telt op met `useCountUp`), de doelbalk (`.total-bar`, groeit vanaf links), staafjes per periode (`.total-history`: de huidige zwart, boven de grens rood, het doel als stippellijn) en per persoon of keuze (`.total-groups`; bij een saldo met + of −). Met **Als lijn** een `.total-line`: een SVG-lijn (84px hoog) met een stip per periode, de huidige zwart, het doel gestippeld. De kleine samen in één sectie `.total-tiles`: per tegel het label (12,5px, grijs, hooguit twee regels; de waarden blijven op één lijn), de waarde (17px, 600) en een dunne doelbalk |
-| Formulier van een lijst, Totalen, bij een veld met mensen | "Van wie" (`select`: Iedereen samen / Enkel van jou / Enkel jouw deel), dan "Doel per persoon" (een getal per lid, `.goal-people`), en de schakelaars Klein en Als lijn |
-
-- Enkel de lijst die openstaat: wissel je van tab, dan wisselen de totalen mee.
-- De API rekent uit (`/projects/:id/totals`), per lezer: elk item met jouw rechten in zijn project. Wat je daar niet
-  mag zien (het project, de lijst, een veld van het totaal of iets waarvan het afhangt), telt niet; zit je niet in
-  het andere project, dan telt er niets van. Een totaal op een veld dat je in het project zelf niet mag zien, stuurt
-  de API niet mee (`visibleTotals`). Zonder archief.
-- Kleur: zwart is gewoon; rood (`--danger-solid`) enkel boven een "niet meer dan"; groen (`--success-solid`) als
-  "minstens" gehaald is. De tekst eronder zegt het ook ("Nog 307 kcal tot 1.800 kcal", "120 kcal boven 1.800 kcal").
-- Getallen via `formatTotal` (`src/format.ts`): duizendtallen, vanaf 100 zonder kommagetal. Bedragen en duur zoals
-  overal (`formatCents`, `formatDuration`).
-- Bij een bedrag met een verdeling ("apart per Verdeling") telt per persoon zijn deel.
 
 ### Uitleg: `Tip`
 
@@ -645,28 +598,15 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
   items" bij samenvatten). Nergens anders: zie principe 11.
 - Op een `label` werkt de (i) zonder het veld te focussen.
 
-### Sjablonen delen: `ShareTemplate` en `TemplateFilePicker` (`TemplateShare.tsx`)
+### Sjabloon delen (`shared/template-file.ts`)
 
-Een project (met zijn subprojecten) of één lijst kan je delen als bestand (`.thuis.json`, `shared/template-file.ts`):
-de lijsten, velden, berekeningen en totalen, **zonder** items, mensen, rollen, tags, gewone verdelingen of lijsten
-uit andere projecten bij "ook uit". Een sjabloon van vroeger met regels wordt bij het inlezen velden en een totaal.
-
-| Waar | Wat |
-| --- | --- |
-| Instellen → Algemeen, kaart "Delen als sjabloon" | `ShareTemplate`: "Als bestand bewaren", en op een gsm ook "Delen…" (deelmenu). Niet op een kiosk |
-| Formulier van een lijst, kaart "Deze lijst delen" | Dezelfde knoppen, voor één lijst (met de lijsten waarnaar ze verwijst) |
-| Nieuw project → "Uit een bestand" | Kies het bestand; naam, icoon, kleur en beschrijving komen eruit, wat erin zit staat in `.template-file` |
-| Instellen → Lijsten → "Uit sjabloon" | Een `Sheet`: bovenaan "Uit een bestand…", daaronder de ingebouwde lijsten (een badge "Staat er al" als die naam al bestaat) |
-| Instellen → Lijsten van een subproject | Onder de eigen lijsten een zin (`card-body muted small`: "Van erboven: …"), dan de lijsten van erboven als rij met "van Slachterijstraat 1" (en "3 items hier") en rechts een kale `.switch` met `aria-label` "… als tab tonen". Staan er al items in, dan staat hij aan en `disabled` (de tab blijft) |
-
-- Een lijst die meekomt omdat ernaar verwezen wordt (de Verkopers bij Wijnen), wordt bij het importeren hergebruikt
-  als er erboven al een lijst met die naam is.
-- Wat binnenkomt, kijkt zowel de app als de API na; een verwijzing kan enkel naar een lijst uit het sjabloon of uit
-  de eigen keten. Wat niet klopt, valt weg in plaats van alles te weigeren (behalve een kapot bestand).
+Instellen → Algemeen → **Als sjabloon** (`btn-ghost`, icoon download) bewaart de opbouw van de lijst als bestand:
+naam, hoe één ding heet, icoon, velden, voorraad en eigen soorten, zonder dingen, logboek of mensen. Bij een nieuwe
+lijst is **Uit bestand** de laatste tegel van de sjablonen; het gekozen bestand staat daarna als eerste tegel.
 
 ### Volgorde: `useSortable` (`Sortable.tsx`)
 
-Alles wat de gebruiker zelf ordent (projecten, lijsten, velden), sleep je aan een **greep** (`grip`, links in de rij).
+Alles wat de gebruiker zelf ordent (lijsten, velden, soorten), sleep je aan een **greep** (`grip`, links in de rij).
 Op het toetsenbord werkt dezelfde greep met ↑ ↓ Home End. Bouw nooit "Hoger/Lager"-knoppen.
 
 ```tsx
@@ -690,155 +630,77 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
   geeft een toast en zet de volgorde terug.
 - Een lijst die je niet mag ordenen, toont geen greep.
 - Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
-- Wat de volgorde betekent: de projecten bovenaan je overzicht zijn **jouw** volgorde (per persoon); subprojecten
-  en lijsten zijn die van het project (enkel met `manage`), en de lijsten bepalen ook de volgorde van de tabs.
-- Volgorde is een instelling, geen knop op een overzicht: je projecten bij **Jouw gegevens** (je letter rechtsboven), subprojecten bij **Instellen →
-  Algemeen** (`ProjectOrder`), lijsten bij **Instellen → Lijsten**, velden in het formulier van een lijst.
+- Wat de volgorde betekent: de volgorde van je lijsten is **jouw** volgorde (per persoon, `list_order`); velden en
+  soorten zijn die van de lijst (enkel voor een beheerder).
+- Volgorde is een instelling, geen knop op een overzicht: je lijsten bij **Jouw gegevens** (je letter rechtsboven),
+  velden en soorten bij **Instellen** van de lijst.
 
 ### Kosten verdelen: `BalanceCard`
 
-Kosten verdelen is geen apart onderdeel meer, maar velden en een totaal dat verrekent (de sjablonen Uitgaven en
-Terugbetalingen zetten het klaar):
+Kosten verdelen is geen lijst: elke aankoop of dienst heeft Bedrag, Betaald door (begint met jou) en Gedeeld met
+(`SharesField`), en een lijn kan enkel van één persoon zijn. Wie moet wie rekent de app uit over alles wat je ziet
+(`shared/ledger.ts`); een terugbetaling is een overdracht.
 
-| Lijst | Velden | Totaal |
-| --- | --- | --- |
-| Uitgaven | Bedrag, Betaald door (**Begint met jou**), Verdeling (**Leeg = verdelen**, met de gewone verdeling) | Som van Bedrag apart per Betaald door, tegenover Verdeling, verrekenen |
-| Terugbetalingen | Bedrag, Van, Aan (twee personen) | Som van Bedrag apart per Van, tegenover Aan, verrekenen. "Terugbetaald" bewaart hier |
-
-- Wat velden zelf invullen (`applyFieldDefaults`): een Persoon met "Begint met jou" krijgt bij een nieuw item jou
-  (als je in het project zit); Personen met aandeel met "Leeg = verdelen" krijgt de gewone verdeling, anders gelijk
-  over iedereen. De API doet hetzelfde bij bewaren en importeren; wat ingevuld is, blijft.
-- Ben je alleen in een project (je eigen project), dan staan die velden niet in het formulier: ze vullen zich met
-  jou in. Staat er al iemand anders in, of komt er iemand bij, dan staan ze er weer.
-- Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde. Een uitgave telt
-  enkel mee als ze een bedrag, iemand die betaalde en een verdeling heeft (anders kwam het niet op 0 uit).
-
-- `BalanceCard` ("Wie moet wie") staat in de zijkolom van een project, met alles eronder. Per overschrijving één
+- Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde.
+- `BalanceCard` ("Wie moet wie") staat op Geld en als blok op het overzicht. Per overschrijving één
   rij: avatar, "Jana moet jou nog", rechts het bedrag, en een `link-button` "Terugbetaald" (een `Sheet` met bedrag
   en datum; minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Jouw gegevens** (je letter rechtsboven)), dan staat daar een
   betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Alles is verrekend."
 - Op gsm komt de kaart vóór de lijst: geef ze `split-lead` (de zijkolom valt open onder 960px).
 - "Jij/jou" in plaats van je eigen naam ("Jij moet Jaan nog", "Jana moet jou nog").
-- Telt enkel wat je mag zien (de lijst en de velden van het totaal, per project); wat verborgen is, telt niet mee.
+- Telt enkel wat je helemaal ziet (een gebeurtenis in een lijst waar je bij bent); wat je niet ziet, telt niet mee.
 - Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
   echt niet gaat, een eigen onderdeel bovenop de kern.
 
-### Voorraad en afvinken: `RowStepper`, `RowCheck`, `StockScanner`, `ReceiptToStock` (`Stock.tsx`)
+### Voorraad: `StockStepper` (`ThingsView.tsx`)
 
-Een **ja/nee-veld als kolom** dat je mag wijzigen (Gekocht, Klaar) is in elke rij rechts een vinkje (`RowCheck`,
-`.row-check`, 44px om op te tikken), in de lijst en in een lijstblok op het overzicht; het is dan geen kolom meer.
-Een tik bewaart meteen (`/items/:id/check`, door dezelfde controle als het formulier: een gekochte boodschap telt
-bij de voorraad), zonder toast. Het item blijft staan tot je de lijst opnieuw opent (zo kan je een tik terugnemen).
-Een lijst met − en + krijgt geen vinkje.
+Een lijst die voorraad telt, toont rechts in elke rij hoeveel er is (`.row-stepper`: − het aantal +, de eenheid erbij,
+rood als het bijna op is: `.row-stepper-value.is-low`). − en + loggen na een korte pauze één telling (een meting
+"Telling"), nooit een gebeurtenis per tik. Wat er is, rekent de app uit (`shared/stock.ts`); in een tabel is dat de
+laatste kolom (Voorraad), naast die kolom staat er één veld minder. Geplande aankopen (boodschappen) staan in het
+logboek met een vinkje (`.row-check`, 44px); afgevinkt is doorstreept en stil (`.log-row.is-done`).
 
-Een getal met **Met − en + in de lijst** (`counter`, bv. Aantal in Voorraad) maakt van een lijst een voorraad:
+### Kasticket (`EventForm.tsx`)
 
-- In elke rij rechts `− 3 +` (`.row-stepper`); de rij is dan een `div.row` met de naam als `.row-link`. Dat getal is
-  geen kolom meer (het staat al rechts). Elke tik gaat in één keer naar de database (`/items/:id/adjust`, nooit
-  onder 0), zonder toast: het getal zelf is de bevestiging.
-- Met een eenheid (`measure` op het getal, zie `shared/units.ts`) staat ze erbij (`− 45 kg +`) en telt een tik een
-  hele verpakking (een zak van 15 kg; "Pellets: één zak meer"). Het getal is dan een knop (`.row-stepper-value
-  .as-button`): een `Sheet` met `Segmented` Eraf · Erbij, het getal met de eenheid ernaast (`.amount-row`: de eigen
-  eenheid, de verpakking, en g/kg of ml/cl/l als dat omrekent) en één knop die zegt wat het wordt ("Wordt 57,5 kg").
-- Bij **Meer opties** van de lijst: **Scannen** (`scan`, als de lijst een barcodeveld heeft): een `Sheet` met
-  Erbij (gekocht) · Eraf (opgebruikt), daarna blijft de camera scannen (`BarcodeScanner continuous`) en staat het
-  resultaat onderaan in beeld. En **Kasticket bijtellen** (`receipt`, enkel als de AI voor jou aan staat): Foto ·
-  Uit foto met `AiMark` (een gedeelde foto wacht met **✨ Kasticket lezen**), de lijnen worden gekoppeld aan je items
-  (`.receipt-lines`: aanvinken, "op het ticket: …" of "nieuw item", hoeveel erbij in de eenheid van het product,
-  die rechts in het veld staat), daarna "Bijtellen".
-- Een boodschappenlijst is de filter **Kopen: Ja** (een vergelijking Aantal ≤ Bijna op onder) met de + in de rij.
+Onder "Typ wat je weet" staat **Kasticket ✨** (`btn-outline btn-sm`, icoon receipt, `AiMark`), enkel als de AI voor
+jou aan staat en de soort een bedrag heeft of de lijst voorraad telt. De foto wordt één aankoop: de winkel als lijn
+**bij**, elk product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding dat je ziet; wat
+nieuw is, krijgt **Nieuw in** (de lijst met voorraad). Het totaal komt in Bedrag, de datum in Wanneer, de foto bij de
+gebeurtenis. De melding zegt "met AI". Een gedeelde foto staat klaar als **Kasticket lezen ✨** (`btn-primary`): de AI
+leest pas na die tik.
 
-### Kasticket per lijn: `ReceiptToLines` (`Receipt.tsx`)
+### Dingen tonen: `ThingsView` en het logboek: `LogList`
 
-Een lijst met een bedrag en een product dat telt (Uitgaven: Wat → Voorraad, Wijnen, Pellets; zie `shared/receipt.ts`)
-heeft bij **Meer opties** **Kasticket lezen** (enkel met de AI aan). Een `Sheet`: Foto · Uit foto met `AiMark` (een
-gedeelde foto wacht met **✨ Kasticket lezen**), daarna van boven naar onder:
+**Dingen** (`ThingsView`): bovenaan zoeken, ⋯ (weergaven en CSV), de bewaarde weergaven als filterpillen ("Alles",
+"Van mij"), Filters en per veld met `filter` een `FilterSelect`. Op gsm rijen (`ThingRowView`: icoon of foto, naam, de
+kolommen als grijze meta), op tablet een tabel (`card table`, `--cols`; kolommen = velden met `column`, of die van de
+weergave; de cellen van de rij-link staan in de kolommen). Met een datumveld kan een weergave een agenda zijn.
 
-- **Voor alle lijnen**: gewoon `FieldInputs` met de velden die niet per lijn verschillen (datum en winkel van het
-  ticket, Betaald door, Categorie, Verdeling), ingevuld zoals een nieuw item.
-- **De lijnen** (`.receipt-lines.receipt-review`): per lijn een vinkje, de naam (het product, of de naam van het ticket
-  leesbaar gemaakt en zonder maat: "AARDAPPELEN 5KG" → "Aardappelen") met eronder hoeveel en wat er op het ticket
-  stond, of "nieuw in Voorraad" (een lijn die de app niet kent, wordt een nieuw product), rechts de prijs.
-  Daaronder twee `tag`-knoppen (`aria-pressed`): het ja/nee met Meteen ook (**Gegeten**) en **Van mij** (de verdeling
-  enkel jij; enkel met meer mensen in het project). Gegeten bij een lijn zonder product maakt er tekst van (een broodje
-  is geen voorraad). Een tik op de naam klapt open (`.receipt-line-edit`): het product (`ItemPicker`: een bestaand
-  kiezen of de naam aanpassen), zonder product **Nieuw product in** (een `select` met de lijsten waarin je mag toevoegen
-  en "Geen, enkel tekst"), hoeveel, de eenheid en het bedrag.
-- **Totaal** (`.receipt-total`) van wat aan staat; wijkt de som van de lijnen af van het ticket, dan een stille
-  `Alert`: "Op het ticket staat € 24,10."
-- **Bewaar 12 uitgaven** (`btn-primary btn-lg`): alles in één keer (`/items/batch`, met het kasticket zelf als
-  `group` als de lijst er een heeft; de foto komt bij het kasticket; een nieuw product met `new_ref`). Daarna vinkt de
-  app open boodschappen van dezelfde producten af (`/items/bought`). Toast "12 uitgaven bewaard, 2 nieuwe producten, ook
-  bij Eten, 3 afgevinkt bij Boodschappen" met **Ongedaan maken** (enkel met `can_delete`): alles terug, ook de voorraad
-  en de boodschappen.
-- In het formulier van een aankoop staat onder Wat, als je een product typt dat nog niet bestaat, **Nieuw product in**
-  (een `select` met de lijsten waarin je mag toevoegen en "Geen, enkel tekst"; `FieldInputs` `after`). Toast
-  "Yoghurt bewaard, nieuw in Voorraad, afgevinkt bij Boodschappen".
-- Een voorraad waarbij een aankoop al bijtelt (`boughtVia`), heeft geen **Kasticket bijtellen**: daar staat
-  **Kasticket lezen**, dat het nakijken in die aankopen opent (`?kasticket=lezen`), zodat niets twee keer telt. Ook
-  een gedeelde foto gaat dan naar de aankopen.
+**Logboek** (`LogList`, `EventRow` in `Log.tsx`): per dag (Vandaag, Gisteren, "4 nov 2026") rijen met het icoon van
+de basissoort in zijn toon (`BASE_TONES`), de titel ("Gegeten: Yoghurt", of de omschrijving), als meta het uur, de
+lijst (enkel als het elders gelogd werd), waar en wie, en rechts het bedrag, een hoeveelheid (+2, −300 g) of de
+waarde van een meting (82,4 kg). Een lijn van elders zonder de rest ("gedeeltelijk") toont enkel wat jouw dingen
+raakt, zonder bedrag. Gepland: met een vinkje vooraan.
 
-### Verbanden: `LinkMapView`, `LinkDetail`, `LinkList`, `LinkProblems` (`LinkMap.tsx`)
+### Lijnen: `LinesEditor` (`Lines.tsx`)
 
-De verbanden van een project (`/projecten/:id/verbanden`, knop **Verbanden** naast Instellen), en over al je
-projecten (`/verbanden`, in de zijbalk onder Agenda): daar is elk project (ook een subproject) met verbanden een
-kolom, zonder agenda of Wie moet wie. Bovenaan `Tabs`
-**Kaart · Lijst** (op gsm begint het met Lijst), daaronder een `FilterToggle` per soort verband met het streepje in
-zijn kleur (`.lm-swatch`).
-
-- **Kaart** (`LinkMapView`, een SVG): een kolom per project in zijn toon (`--tone-soft`, de naam in `--tone-ink`),
-  het project zelf eerst, "Elders" (`--subtle`) rechts. Een lijst is een wit punt met een rand, een lijst waar iets
-  toekomt een groter punt; een lijn heeft de kleur van haar soort (`--tone-ink` van peach, sky, lilac of mint;
-  verwijzingen en tabs grijs `--faint`, tabs gestippeld). Meer soorten op één rij rijden naast elkaar (7px). Waar de
-  plaats van alles vandaan komt: `layoutLinks` in `shared/links.ts`; teken er niets zelf bij.
-- Een punt kiezen (klik, Enter of spatie) licht zijn lijnen op en dimt de rest (`.lm-dim`); de keuze staat in het
-  adres (`?punt=`). De naam van een kolom opent de kaart van dat subproject.
-- Past de kaart niet, dan verkleint ze tot 72%. Is ze dan nog te breed, dan schuift ze **binnen haar eigen vlak**
-  (`.linkmap`): de enige plaats waar iets opzij schuift; de pagina zelf nooit.
-- **Gekozen lijst** (`LinkDetail`): een `card` met `CardHead` (naam, project, aantal, "Lijst openen") en `rows` in
-  twee groepen, **Komt van** en **Gaat naar**, een rij per andere lijst met de streepjes van haar soorten en wat het
-  verband doet ("Trekt Zakken af van Aantal").
-- **Lijst** (`LinkList`): per project een `group-row` met zijn stipje, en per lijst een rij met het aantal verbanden.
-- Onder de kaart in `.lm-more`: subprojecten zonder verbanden en wat niet meer op de kaart past (met een link naar
-  hun eigen kaart).
-- **Werkt niet voor iedereen** (`LinkProblems`, boven kaart en lijst; enkel voor wie de mensen in beide projecten
-  beheert): een `card` met een rij per persoon ("Jana mag Aantal van Voorraad niet wijzigen", of "Jana zit niet in
-  Kerkstraat") met een rood `alert`-icoon (`--danger` op `--danger-bg`); de rij opent haar rol in dat project, of de
-  mensen. Op de kaart is zo'n lijn rood gestreept (`.lm-problem`, `--danger`). Geen problemen: geen kaart.
-
-### Een lijst tonen: `ItemsView`
-
-`<ItemsView project={detail} type={type} />` is één lijst in een project: het zoekveld met één knop **Meer opties**
-(`dots`), de filters uit de velden en Tag, en de tabel `.table-items`. Wat zelden nodig is, staat bij Meer opties in
-een `Sheet` als menu (`.sheet-menu`: Scannen, Kasticket bijtellen of Kasticket lezen, Importeren, Exporteren), met daaronder de
-schakelaars Met subprojecten en Archief en Ook uit; staat zo'n schakelaar aan, dan staat hij ook als actieve filter in de rij
-(één tik zet hem uit). Geen rij iconknoppen naast het zoekveld. Gebruik `ItemsView` overal waar items van een lijst
-staan; bouw geen eigen lijst (op het overzicht hergebruikt `ListBlock` haar `ItemRow`).
-
-- **Volgorde**: `orderItems` (`shared/views.ts`), dezelfde regel op het scherm en op de server: een logboek het
-  nieuwste eerst, anders op naam, of zoals de weergave sorteert.
-- **Groeperen** (Filters → Groeperen op: een keuze, ja/nee, een persoon, een verwijzing of een datum, per maand): een
-  `group-row table-sum` per groep met de naam, het aantal (`.group-count`) en de som onder haar kolom (op gsm rechts).
-- **Totaalrij** (`.table-total`, onderaan bij twee of meer items): de som van elke kolom waar optellen zin heeft
-  (`canSum`: bedragen, duur, een getal met eenheid dat geen voorraad is). Geen totaal bij een aantal in een voorraad.
-- Op een breed scherm (vanaf 1100px) tot vier kolommen die de lijst als kolom toont, op tablet twee.
+Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Erbij, Eraf, Voor, Bij: een keuzelijst,
+`.line-role`) en met wat (`Combo`: typ of kies een ding, of laat tekst staan) met × om weg te halen; eronder Hoeveel,
+de eenheid, de prijs (bij geld), houdbaar tot (bij erbij) en Gedeeld of Van <persoon>. Tekst zonder ding in een lijn
+erbij of eraf krijgt **Nieuw in** (een lijst waarin je mag toevoegen, of Enkel tekst). Onderaan "+ Lijn". Op gsm komt
+het ding onder de rol.
 
 ### Rechten in de app
 
-De API beslist wat iemand mag en weigert de rest. De app **verbergt** wat niet mag, zodat niemand tegen een fout
-aanloopt. Wat de app daarvoor krijgt:
+De API beslist wat iemand mag en weigert de rest; de app **verbergt** wat niet mag. Wat ze krijgt: de rol per lijst
+(`useSession().lists[].role`, `ListDetail.role`): **beheerder** (Instellen, mensen, soorten), **lid** (dingen
+toevoegen en loggen), **gast** (kijken). Toevoegen en loggen enkel met `canEdit`, Instellen enkel met `canManage`.
 
-| Waar | Wat |
-| --- | --- |
-| `project.rights` (in `ProjectDetail` en `useSession().projects`) | `manage` (instellen, lijsten, rollen), `members` (mensen), `create`, `delete`, en `items` (standaard Niet zien / Zien / Wijzigen) |
-| `type.access`, `type.field_access`, `type.can_create`, `type.can_delete` | Per lijst en per veld wat jij mag (`ItemTypeView`) |
-| `item.access`, `item.field_access`, `item.can_delete` | Hetzelfde op de fiche (`ItemDetail`) |
-
-- Een knop die iets toevoegt: enkel bij `can_create`. Bewerken: enkel bij `access === "edit"`. Een veld met
-  `field_access` `view` staat alleen-lezen in het formulier; `none` staat er niet.
-- Een rol stel je in met `RoleForm`: schakelaars voor het project, een standaard, en per lijst en per veld een
-  `Segmented` met "Standaard" erbij (open per lijst met "Per veld", `.role-type`; de velden in een wit kaartje,
-  `.role-fields`).
+- **Mensen** (Instellen → Mensen): per persoon een rij met de rol als compacte keuzelijst (`member-actions` +
+  `scope-select`) en ×; via een tag staat de keuze "Via Huis (beheerder)" bovenaan, en **Geen toegang** is een
+  uitzondering op die regel.
+- **Altijd erbij** (bij een tag, `RulesForm`): personen met een rol; enkel op lijsten waar jij rechtstreeks beheerder
+  bent. Wie een tag kiest, ziet wie er zo bij komt.
 - Afbeeldingen en bestanden uit de API altijd via `apiUrl("/…")`.
 
 ### Kleine bouwstenen
@@ -850,7 +712,7 @@ aanloopt. Wat de app daarvoor krijgt:
 | `.tips-block` | Een lange tekst op de fiche, met de regels zoals getypt |
 | `.timeline` + `.timeline-date` | Logboek: datum links, notitie rechts |
 | `.member-actions` | Rol (een `select`), bewerken en weghalen naast iemand in een lijst |
-| `.dashboard` + `.dash-card` + `.dash-head` | Het overzicht: zachte witte kaarten zo breed als past, die 2px omhoog komen bij aanwijzen; de kop opent het project, de rijen eronder de lijsten |
+| `.dashboard` + `.dash-card` + `.dash-head` | Het overzicht: zachte witte kaarten zo breed als past, die 2px omhoog komen bij aanwijzen; een blok dat als geheel opent is een `dash-link` |
 | `.sr-only` | Tekst enkel voor schermlezers (bv. de nieuwe plaats na het verslepen) |
 
 ### Badges, tags, stipjes, avatars
@@ -863,7 +725,7 @@ aanloopt. Wat de app daarvoor krijgt:
 | `badge badge-danger` | Voorbij (vervallen) |
 | `badge badge-accent` | Nieuw of info |
 | `tag tone-x` | Tags van de gebruiker: pillen, niet gekozen grijs, gekozen in de kleur van de tag (met een vinkje) |
-| `dot tone-x` | De kleur van een project of tag in een lijst |
+| `dot tone-x` | De kleur van een lijst of tag in een rij |
 | `Avatar` | Personen: pastel rondje met een dunne gekleurde letter; `size="sm"` in tekst, gewoon in lijsten, `lg` in kaarten |
 
 Badges zijn kort: 1–3 woorden.
@@ -904,16 +766,11 @@ Twee soorten, inline in `Icon.tsx`:
 
 ---
 
-### Timer: `TimerInput`, `TimerLive`, `TimerCard`, `TimerBlock` (`Timer.tsx`)
+### Wat nu loopt (activiteiten)
 
-- **Live** (`.timer`): de tijd groot (32px, 600, `tabular-nums` zodat ze niet verspringt; grijs als hij niet loopt,
-  zwart als hij loopt: "1:23:45"), rechts **Start** of **Stop** (`btn-primary`); met een doel eronder een dunne
-  doelbalk (`.chart-meter`) en "Nog 2 u 10 min · doel 16 u" of "Doel 16 u bereikt".
-- **Formulier** (`TimerInput`, breed): Start/Stop, en zodra hij liep Begin en Einde (`datetime-local`) om zelf aan te
-  passen. In de lijst instellen: **Doel** (een duur, "16 u") en **Duur in** (een veld Duur van de lijst).
-- **Fiche** (`TimerCard`): een eigen kaart met de naam van het veld als titel, niet bij de gegevens; Start enkel als hij
-  nog nooit liep. **Overzicht** (`TimerBlock`, blok Timer): titel het lopende item (of de lijst), het veld als gegeven (enkel als de lijst meer timers heeft),
-  Start maakt een nieuw item, en "Vorige keer: 16 u 30 min · Vasten 4/11" als link (`.timer-last`).
+Een activiteit met een uur en zonder einde loopt nog (werk, vasten): ze staat in het blok **Loopt nu** met de tijd die
+live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`). Een soort met een doel
+(16 u vasten) geeft een melding als dat doel bereikt is.
 
 ### Grafieken
 
@@ -941,7 +798,7 @@ maakt).
   de tabel (`.chart-table`): de tooltip is nooit de enige weg naar een getal.
 - **Samenstellen** (`ChartBuilder` in een `Sheet`): Als (Staafjes · Lijn · Getal · Per keuze · Verdeling), Wat en
   Van, Per (bij Per keuze en Verdeling), Volgens, Per / Periode en Laatste (leeg = Alles), Apart per, Weergave, Doel,
-  Van wie (zoals bij totalen), Met subprojecten, Ook uit (`AlsoPicker`), Titel (de naam vanzelf als placeholder), en
+  Van wie, Titel (de naam vanzelf als placeholder), en
   eronder een voorbeeld (`.chart-preview`) dat meekijkt.
 - **Overzicht als verslag**: staat er een grafiek op, dan een rij `filters` met `FilterSelect` **Periode** ("Zoals
   ingesteld" of Deze week, Deze maand, Vorige maand, …) voor alle grafieken; een korte periode neemt een kleinere
@@ -991,7 +848,7 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 | Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
 | Indrukken | knop, filter en tag schalen naar 0,96 en veren terug, icoon in menu naar 0,86 | 0,35 s |
 | Ingevuld door de app | veld (`auto`) of chip (`.tag.is-filled`) krijgt een lichtblauwe ring die vervaagt (`auto-flash`, enkel `box-shadow`) | 0,9 s |
-| Hover | vlak wordt iets donkerder, glazen knop en projectkaart komen 1–2px omhoog, pijltje schuift 3px, + draait 90° | 0,2–0,45 s |
+| Hover | vlak wordt iets donkerder, glazen knop en kaart op het overzicht komen 1–2px omhoog, pijltje schuift 3px, + draait 90° | 0,2–0,45 s |
 
 Regels:
 
@@ -1008,78 +865,61 @@ Regels:
 
 ## 6. Patronen per scherm
 
-**Overzicht** (`/`): `PageHead` met de naam van het overzicht als titel, `primary` **Toevoegen** (en de `fab` met
-hetzelfde) en in `actions` enkel ⋯ (`btn-outline btn-icon`, "Meer opties") → een `Sheet` met `sheet-menu`: Aanpassen,
-Nieuw overzicht, Hernoemen, Verwijderen (een naam vraagt het blad zelf, `form` met één veld). Meer overzichten
-(`shared/overview.ts`: `Board`, tot `MAX_BOARDS`): `Tabs` onder de titel; dit toestel onthoudt welk (`thuis.board`,
-`?bord=`), zo toont de keukentablet "Keuken". Een leeg overzicht: "Leeg overzicht" met Aanpassen. **Toevoegen**
-(het [zoekpalet](#zoekpalet-commandpalette) in de modus toevoegen): typ waar het heen moet en wat je weet
-("bijvulling 3 zakken pellets"); jouw meestgebruikte lijsten bovenaan, de rest van je tekst gaat mee naar het
-formulier (`?tekst=`), Nieuw project als laatste. → de blokken die je koos
-(`BlockView` in `OverviewBlocks.tsx`, zie `shared/overview.ts`), of vanzelf per project (in de volgorde van de boom)
-een `dash-card`: de kop opent het project (met het project erboven), de rijen eronder openen elke lijst (`?lijst=`)
-met het aantal, en rechts een + (`btn-ghost btn-icon btn-sm`, "Eten toevoegen", enkel als je er iets mag toevoegen)
-→ daaronder **Projecten** (`.home-projects`: je projecten bovenaan als rijen met icoon in hun toon, enkel tot 1100px, waar
-de zijbalk geen projecten toont: zo raak je op gsm en tablet altijd bij een project, wat er ook op het overzicht staat)
-→ gearchiveerde projecten apart. Andere blokken zijn ook een `dash-card`: **snel toevoegen** (`QuickAdd`: de kop
-opent het formulier, eronder `QuickInput` met `QuickChips` en **Bewaar**: meteen bewaard, met **Ongedaan maken** in
-de toast; ontbreekt er iets verplichts (of bij eten de kcal: niets uit je geheugen of de voorraad), dan heet de knop Verder en opent het formulier met je tekst; de kaart komt
-niet omhoog bij aanwijzen), een totaal
-(`TotalsCards only`), één waarde (`.dash-value`, groot; de naam van het item als titel, het veld eronder, − en + bij
-een voorraadgetal, en een `badge` per berekend ja/nee-veld dat aan staat, bv. Kopen), **Wie moet wie** (`BalanceCard`
-van een project, met alles eronder; niets te verrekenen: geen blok) en **één lijst** (`ListBlock`):
-als rij met het aantal, of met een bewaarde **weergave** ("Te kopen" · Voorraad · project, met het aantal dat erin
-past), of met **Items** de eerste `BLOCK_ITEMS` items zelf in een `dash-card` met kop (opent de lijst met die
-weergave, `?weergave=`) en `ItemRow`s eronder (− en + bij een voorraad; een gegroepeerde weergave met de groepen
-als `group-row`; leeg: "Leeg" in `.dash-empty`). In een projectblok telt een lijst ook volgens een weergave
-(Voorraad, met "Te kopen" eronder en dat aantal). Een blok met **Breed** (`.dash-block.is-wide`) neemt twee kolommen
-en toont dan tot drie kolommen als tabel. De blokken staan als metselwerk (`useMasonry`, rijen van 8px): elk blok zo
-hoog als het is, een kort blok vult een gat erboven. **Aanpassen** (`BlocksEditor`): een `sort-list` met greep en ×,
-bij een project de lijsten als filterpillen (aan = zichtbaar; met bewaarde weergaven een `FilterSelect`: Alles, een
-weergave om te tellen, of Verborgen), een
-filterpil Breed (enkel op tablet, bij een project, totaal, grafiek, tekst of lijst met items), bij een grafiek of
-tekst een potlood (Aanpassen, een `Sheet`), "Toevoegen" in een `Sheet` (bij een
-lijst: Weergave en Toon `Segmented` Aantal · Items; bij een grafiek `ChartBuilder`, zie [Grafieken](#grafieken)), en onderaan "Klaar" (`btn-primary btn-lg`; dan geen primary in
-de paneelbalk) en "Standaard" (ghost) bij de titel. Het kruimelpad toont hier enkel "Overzicht".
+**Overzicht** (`/`, `BoardView` in `Board.tsx`): `PageHead` met de naam van het overzicht, `primary` **Toevoegen**
+(en de `fab`), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
+overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf: Uitgaven deze maand, Te doen, Bijna
+op en Wie moet wie (geen blok per lijst: die staan in de zijbalk, en op gsm per tag onder het overzicht). Elk blok is
+een `dash-card`; een blok dat als geheel opent, is een `dash-link`; het aantal staat rechts in de kop
+(`.dash-count`, enkel als het niet 0 is). De blokken staan als metselwerk (`useMasonry`). **Aanpassen**
+(`BlocksEditor`): een `sort-list` met greep en ×, Breed als filterpil, Toevoegen in een `Sheet`, onderaan Klaar.
 
-**Project** (`/projecten/:id`): `PageHead` met `back` (het project erboven), `actions` "Instellen" (enkel met
-`manage` of `members`) en `primary` "<Wijn> toevoegen" → `Tabs` per lijst (enkel als er meer dan één is) →
-`split split-main-first`: rechts `ItemsView`, in de zijkolom de totalen van de open lijst en Wie moet wie (als er
-een lijst is die verrekent), Subprojecten en Wie (met de rol, en "via …" als het lidmaatschap van een project erboven komt) → `fab`. Op gsm staat de lijst meteen in
-beeld: daarboven één regel `LeadSummary` (`.lead-summary`, zacht vlak `--subtle`: per totaal het label en de waarde,
-en "Je krijgt nog" / "Je moet nog"; een pijltje klapt de kaarten van de totalen en Wie moet wie open). Zonder
-lijsten: een lege staat met "Lijst maken".
+**Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); noemen de
+eerste woorden een soort of lijst, dan staat die bovenaan, staat er een ding in je tekst, dan loggen in zijn lijst
+eerst; de rest van je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
 
-**Snel naar een formulier** (`QuickLinks.tsx`, `shared/manifest.ts`): bij een lijst onder Meer opties
-**Snelkoppeling** → een `Sheet` met "Met tekst" (bv. pellets), de QR (`Barcode` in `.sticker`), **QR-sticker** (naar
-`/projecten/:id/sticker`: de sticker groot, Afdrukken; bij afdrukken enkel de sticker, zwart op wit met een rand) en
-**Op je beginscherm** (maakt een app naar dit formulier, of neemt de app die er al heen gaat, zie Jouw gegevens → App, en opent `/app/:id` in de browser: de naam van de app, Openen en `HomeScreenHint`; zo heet het icoon "Bijvulling" en opent het meteen het formulier; `/snel/:id/:lijst` blijft enkel voor iconen van vroeger). Delen met Thuis (Android, `share_target`): `/delen` toont de foto en twee groepen
-rijen, Kasticket lezen (lijsten met een bedrag per product, zoals Uitgaven) en Kasticket bijtellen (lijsten met een voorraad), beide enkel met de AI aan, en Toevoegen in (de lijsten, die bij de tekst passen eerst; de foto komt bij het item); de AI leest een gedeelde foto nooit vanzelf; enkel
-tekst opent Toevoegen. Lang op het app-icoon drukken (Android): je drie meestgebruikte lijsten, Toevoegen en Agenda.
+**Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, QR-sticker, Op je beginscherm) en `primary`
+"<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland) → `split
+split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `fab`.
 
-**Fiche** (`/items/:id`): `PageHead` met `back` en `actions` (Bewerken) → `split`: in de zijkolom de foto, de
-`dl` met de velden, tags, en per lange tekst een kaart; rechts codes (`CodeView`), wat ernaar verwijst, het
-logboek (nieuwste eerst, toevoegen in een `Sheet`) en bestanden → onderaan stille knoppen (archiveren,
-`btn-danger-ghost` verwijderen).
+**Ding** (`/dingen/:id`): `PageHead` met Loggen en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
+velden (`dl`), rechts de **Tijdlijn** (alles wat ermee gebeurde: wanneer, waar, erbij of eraf, prijs per eenheid;
+gaat een gebeurtenis enkel over dit ding, dan haar bedrag), de delen, wat ernaar verwijst en bestanden → onderaan
+Archiveren en Verwijderen.
 
-**Formulier**: zie [Formulier](#formulier). Een item: eventueel de lijst kiezen, `LabelScanner`, `FieldInputs`,
-tags, "Opslaan" en "Opslaan en volgende". Na bewaren: toast + naar de fiche.
+**Gebeurtenis** (`/gebeurtenissen/:id`): de velden (soort, wanneer, bedrag, betaald door, gedeeld met, gelogd door,
+lijst) in de zijkolom, rechts de **Lijnen** en wat ze afvinkte → Verwijderen.
 
-**Instellen** (`/projecten/:id/instellingen`): `Tabs` Algemeen · Lijsten · Rollen · Mensen · Tags (in het adres:
-`?tab=mensen`), één kaart per tab (Algemeen heeft er ook een voor de volgorde van de subprojecten). Een lijst en een rol zijn eigen formulieren; iemand toevoegen, een persoon of
-een tag bewerken gaat in een `Sheet`. Wat je niet mag, zie je niet.
+**Loggen** (`/lijsten/:id/loggen`, `EventForm`): bovenaan **Typ wat je weet** (vult live in, zie `shared/parse.ts`)
+met Kasticket ✨, dan Soort (filterpillen: de eigen soorten, dan de basissoorten; soorten van andere lijsten in
+"Andere soort…"), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland; bij geld Bedrag, Betaald
+door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van de
+soort; Herhalen en Foto. Een prijs in de tekst zonder gekozen soort maakt er een aankoop van.
 
-**Jouw gegevens** (`/ik`, je letter rechtsboven): je naam, kleur en rekeningnummer, met je e-mailadres als ondertitel. Daaronder Meldingen, de kaart
-**AI** (`AiCard` in `AppSettings.tsx`: `CardHead` met als gegeven "Vandaag 3 van 25 keer" als ze aan staat, en een
-`Switch` "Lezen met AI", enkel voor jou), de kaart
-**App** (`AppCard` in `AppSettings.tsx`, zie `shared/apps.ts`) en de volgorde van je projecten op het overzicht. De kaart App:
-**Openen op** (per toestel: "Het overzicht" of een bestemming), **Apps** (rijen met naam en bestemming, rechts Op je
-beginscherm; een tik opent een `Sheet` met Naam, de bestemming, Maken/Bewaren en Verwijderen; onderaan Nieuwe app),
-**Snelkoppelingen (Android)** (`Segmented` Vanzelf · Zelf kiezen; zelf: per snelkoppeling een bestemming met ×, tot
-vier, en Bewaren) en **Gedeelde foto (Android)** (Telkens vragen, Kasticket lezen in Uitgaven of Kasticket bijtellen in een voorraad; enkel met de AI aan). Een
-bestemming kies je met `DestinationPicker`: Naar (Overzicht, Agenda, Project, Lijst, Formulier), dan welk, en bij
-een formulier eventueel Met tekst. Een eigen app (`/app/:id`, `AppPage`): als app meteen naar haar bestemming; in de
-browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de browser het aan (`useInstall`), dan staat in `actions` "App installeren" (`btn-outline btn-sm`).
+**Een ding toevoegen** (`/lijsten/:id/nieuw`, `ThingForm`): Naam, met eronder **Barcode** (lijsten met productinfo)
+en **Foto ✨**, en daaronder de bron ("Uit Open Food Facts: …", "Geschat met AI"); dan de velden, Deel van, Opslaan
+en Opslaan en volgende.
+
+**Geld** (`/geld`): links Wie moet wie (`BalanceCard`: per overdracht een rij met Terugbetaald, een betaal-QR met het
+rekeningnummer), rechts de maand (`calendar-head`: de maand en ‹ ›), het totaal groot (`total-value`) met jouw deel,
+`Segmented` Per soort · Per lijst · Per winkel, en de gebeurtenissen van die maand.
+
+**Voorraad, Eten, Te doen, Agenda**: Voorraad toont elk ding uit een lijst met voorraad (Bijna op · Lijst als
+filters); Eten per dag de gebeurtenissen met kcal en per persoon de som; Te doen al wat gepland staat, met een vinkje;
+de Agenda een maand met gebeurtenissen en datums van dingen.
+
+**Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). Algemeen:
+naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, Archiveren en Verwijderen.
+
+**Tag** (`/tags/:id`): de lijsten met die tag (met jouw rol), Tag weghalen, en **Altijd erbij** met Aanpassen.
+
+**Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en wat je stilzette), **App** (`AppCard`: Openen
+op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht, Agenda,
+Weergave, Lijst of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI**, de
+volgorde van je lijsten en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
+
+**Snel naar een formulier** (`QuickLinks.tsx`): de **QR-sticker** (`/lijsten/:id/sticker`, Afdrukken), een eigen app
+(`/app/:id`: als app meteen naar haar bestemming, in de browser `HomeScreenHint`) en **Gedeeld** (`/delen`: een
+gedeelde foto als kasticket ✨ of bij wat je toevoegt).
 
 ## 7. Toegankelijkheid
 
@@ -1091,7 +931,7 @@ browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de brow
   kolomkoppen). `--faint` enkel voor iconen en bijzaken.
 - Glas is nooit de enige drager van tekst: wat erop staat, is donker genoeg, ook als het toestel geen vervaging kan.
 - Het zoekpalet is een `listbox` met `aria-activedescendant`; dichtgeklapte boomtakken zijn `inert`.
-- Keuzes onder een veld (`ItemPicker`, `QuickInput`) zijn een `combobox` met `listbox` en `aria-activedescendant`; het rijtje met wat ingevuld is (`QuickChips`) is `aria-live="polite"`.
+- Keuzes onder een veld (`Combo` in `ItemPicker.tsx`, het zoekpalet) zijn een `combobox` met `listbox` en `aria-activedescendant`.
 
 ---
 
@@ -1109,7 +949,7 @@ browser haar naam als titel, `primary` Openen en `HomeScreenHint`. Biedt de brow
 - Nederlands zoals in Vlaanderen gesproken, met **je/jij**. "Kastickets", "gsm", "verkoper".
 - Knoppen zijn werkwoorden of korte zinnen: "Opslaan", "Wijn toevoegen", "Lijst maken", "Instellen".
 - Titels zonder punt. Geen uitleg (zie principe 11).
-- Fouten zeggen wat er is en wat je kan doen: "Er moet altijd iemand overblijven die het project kan instellen."
+- Fouten zeggen wat er is en wat je kan doen: "Er moet altijd een beheerder overblijven."
 - Lege staat: wat er nog niet is, en hooguit één knop om te beginnen. "Nog geen wijnen" + "Wijn toevoegen".
 - Wat de gebruiker maakt, heet zoals hij het noemt: de naam van één item van de lijst ("Wijn toevoegen"), niet "item". Het
   algemene woord voor een formulier met eigen velden is **lijst**, nooit "soort", "type" of "categorie".
