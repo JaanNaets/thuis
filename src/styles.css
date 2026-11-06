@@ -5424,6 +5424,17 @@ dialog.palette[open]::backdrop {
 }
 
 /* Projecten in volgorde slepen (ProjectOrder): bij Jouw gegevens en bij Instellen → Algemeen. */
+/* Breed: enkel op tablet, waar een blok over twee kolommen kan (de filterpil zou .wide-only anders overschrijven). */
+.sort-list .filter.wide-only {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .sort-list .filter.wide-only {
+    display: inline-flex;
+  }
+}
+
 .sort-list {
   margin: 0;
   padding: 0 6px 6px;
@@ -7398,6 +7409,13 @@ label.lm-row-main {
   line-height: 1.1;
 }
 
+.chart-number-goal {
+  color: var(--muted-foreground);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 .chart-number-delta {
   color: var(--muted-foreground);
   font-size: 13px;
@@ -7779,6 +7797,574 @@ label.lm-row-main {
   background: var(--muted);
   box-shadow: none;
   cursor: default;
+}
+
+/* Een teller (hoeveel vandaag) en een timer (hoe lang al) rechts op de knop; een lopende timer krijgt een groene rand. */
+.quick-tile-count {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  flex: none;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quick-tile-time {
+  flex: none;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick-tile.is-running {
+  box-shadow: 0 0 0 1.5px var(--success-solid), var(--shadow-card);
+}
+
+button.quick-tile[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+/* ---------- weergaven op het overzicht (ViewBlock.tsx) ----------
+ * Eén kaart per weergave: een lijst (de laatste kolom rechts, de rest grijs), een tabel, een getal of voortgang, een
+ * grafiek of een kalender. Voorwaarden kleuren een rij of de uitkomst (met de statuskleuren, nooit enkel kleur: een rij
+ * in het rood krijgt ook een rand links).
+ */
+.view-card.is-loading {
+  min-height: 120px;
+  background: var(--subtle);
+  box-shadow: none;
+}
+
+.view-rows .row {
+  gap: 10px;
+}
+
+.view-check {
+  flex: none;
+}
+
+.view-running {
+  flex: none;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.view-more,
+.view-empty {
+  margin: 0;
+  padding: 4px 18px 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.view-empty {
+  padding-top: 6px;
+}
+
+.tone-text-rood {
+  color: var(--danger);
+}
+
+.tone-text-oranje {
+  color: var(--warning);
+}
+
+.tone-text-groen {
+  color: var(--success);
+}
+
+.tone-row-rood {
+  box-shadow: inset 3px 0 0 var(--danger-solid);
+}
+
+.tone-row-oranje {
+  box-shadow: inset 3px 0 0 var(--warning-solid);
+}
+
+.tone-row-groen {
+  box-shadow: inset 3px 0 0 var(--success-solid);
+}
+
+.view-card.tone-rood .chart-number-value {
+  color: var(--danger);
+}
+
+.view-card.tone-oranje .chart-number-value {
+  color: var(--warning);
+}
+
+.view-card.tone-groen .chart-number-value {
+  color: var(--success);
+}
+
+.view-table-wrap {
+  overflow-x: auto;
+  padding: 0 10px 8px;
+}
+
+.view-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.view-table th {
+  padding: 6px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.view-table td {
+  padding: 9px 8px;
+  border-top: 1px solid var(--divider);
+  white-space: nowrap;
+}
+
+.view-table .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.view-table td:first-child {
+  font-weight: 500;
+  white-space: normal;
+}
+
+.view-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 252px;
+}
+
+.view-calendar-day {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-align: center;
+}
+
+.view-calendar-cell {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--muted);
+}
+
+.view-calendar-cell[data-level="1"] {
+  background: color-mix(in oklab, var(--chart-1) 25%, white);
+}
+
+.view-calendar-cell[data-level="2"] {
+  background: color-mix(in oklab, var(--chart-1) 50%, white);
+}
+
+.view-calendar-cell[data-level="3"] {
+  background: color-mix(in oklab, var(--chart-1) 75%, white);
+}
+
+.view-calendar-cell[data-level="4"] {
+  background: var(--chart-1);
+}
+
+.view-calendar-scale {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+
+.view-calendar-scale .view-calendar-cell {
+  width: 12px;
+}
+
+/* ---------- de bouwer (BlockBuilder.tsx) ----------
+ * Een zin met aantikbare stukken: elk stuk is een witte pil met een pijltje, met de gewone keuzelijst van het toestel
+ * erover (zoals een filterpil). Op tablet links de zin en rechts het voorbeeld; op gsm het voorbeeld erboven.
+ */
+dialog.sheet.builder-sheet {
+  padding-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  dialog.sheet.builder-sheet {
+    width: min(1080px, 94vw);
+    max-height: min(92dvh, 960px);
+  }
+}
+
+.builder {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 900px) {
+  .builder:not(.builder-narrow) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .builder:not(.builder-narrow) .builder-actions {
+    grid-column: 1 / -1;
+  }
+
+  .builder-preview {
+    position: sticky;
+    top: 0;
+  }
+}
+
+@media (max-width: 899px) {
+  .builder-preview {
+    order: -1;
+  }
+}
+
+.builder-main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.builder-preview {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.builder-section {
+  display: grid;
+  gap: 8px;
+}
+
+.cap-label {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.builder-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  box-shadow: 0 -1px 0 var(--divider);
+}
+
+@media (min-width: 768px) {
+  .builder-actions {
+    margin: 0 -20px;
+    padding: 12px 20px 16px;
+  }
+}
+
+.sentence {
+  display: grid;
+  gap: 4px;
+}
+
+.sentence-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  color: var(--muted-foreground);
+  font-size: 15.5px;
+}
+
+.sentence-soft {
+  color: var(--muted-foreground);
+}
+
+.tok {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  max-width: 100%;
+  padding: 0 9px 0 11px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border-strong), var(--shadow-xs);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  transition:
+    box-shadow var(--dur),
+    background-color var(--dur);
+}
+
+.tok > svg {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.tok-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tok select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tok:focus-within {
+  box-shadow: 0 0 0 1px var(--border-strong), var(--focus-ring);
+}
+
+.tok-empty {
+  color: var(--muted-foreground);
+}
+
+.tok-add {
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .tok:not(.tok-input):hover {
+    background: var(--hover);
+  }
+}
+
+.tok-input {
+  width: auto;
+  min-width: 3.5ch;
+  padding: 0 10px;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.tok-input:focus {
+  box-shadow: 0 0 0 1px var(--border-strong), var(--focus-ring);
+}
+
+.tok-chip {
+  padding-right: 3px;
+  background: var(--muted);
+  box-shadow: none;
+}
+
+.tok-x {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .tok-x:hover {
+    color: var(--foreground);
+    background: var(--hover);
+  }
+}
+
+.rule-line {
+  padding: 4px 10px;
+  border-radius: var(--radius-lg);
+  background: var(--subtle);
+}
+
+.rule-row {
+  display: grid;
+}
+
+.show-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .show-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.show-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--hit);
+  padding: 10px 6px 8px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.show-tile:not(.does-tile) svg {
+  width: 40px;
+  height: 26px;
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 0.55;
+}
+
+.show-tile[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1.5px var(--foreground);
+}
+
+.show-tile[aria-pressed="true"] svg {
+  color: var(--chart-1);
+  opacity: 1;
+}
+
+.show-tile:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.does-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.does-tile {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 12px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.builder-chips {
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.builder-preview-tile {
+  display: grid;
+  justify-items: center;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  background: var(--subtle);
+}
+
+.builder-preview-tile .quick-tile {
+  width: min(220px, 100%);
+}
+
+.prefill {
+  display: grid;
+  gap: 8px;
+}
+
+.prefill-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.prefill-row > span:first-child {
+  color: var(--muted-foreground);
+}
+
+.prefill-row input[type="checkbox"] {
+  justify-self: start;
+}
+
+.prefill-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-choice {
+  display: grid;
+  gap: 10px;
+}
+
+.add-choice-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .add-choice-row:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+}
+
+.add-choice-row .row-title {
+  flex: 1;
+  font-size: 15px;
+}
+
+.add-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-lg);
+  background: var(--tone-soft, var(--muted));
+  color: var(--tone-mid, var(--foreground));
+}
+
+.add-choice-icon.is-brand,
+.row-media.is-brand {
+  background: var(--brand);
+  color: var(--brand-foreground);
+  box-shadow: var(--brand-edge);
 }
 
 /* Lijnen van een gebeurtenis (LinesEditor): per lijn een wit kaartje in de groep, bovenaan wat er gebeurt en met wat,

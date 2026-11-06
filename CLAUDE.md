@@ -90,9 +90,14 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   activiteit zonder einde (`POST /events/:id/stop`, `kinds.goal` voor een melding).
 - **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een lijst): aan iedereen die de lijst ziet of aan wie in
   de verdeling staat; nooit aan wie het logde of wie de lijst of tag stilzette.
-- **Overzicht** (`shared/board.ts`): borden met blokken (lijst, uitgaven, Wie moet wie, te doen, bijna op, eten,
-  timers, snel loggen, één ding, grafiek), enkel ids, nagekeken met `cleanBlocks`; elk blok haalt zijn inhoud met de
-  gewone routes. Opstarten blijft licht: geen lijst die alles tegelijk tekent.
+- **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden met blokken van twee soorten. Een **weergave** is een
+  zin: bron (logboek, dingen, voorraad, saldo's, voeding) + lijsten + voorwaarden (`ViewDef`) + tellen (`Tally`) + één
+  van tien vormen (`SHOWS`) + voorwaarden op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
+  verbergen als er niets is; de uitkomst kleuren). De server rekent ze uit met de rechten van de lezer
+  (`GET /insights/view`, `evaluateView`). Een **actie** logt: soort, vooraf ingevulde velden en wat een tik doet
+  (formulier, meteen bewaren met Ongedaan maken, tellen, timer). Geen vaste blokken of voorbeelden; oude blokken
+  (todo, money, stock, quick, chart, …) worden bij het lezen een gelijke zin (`upgradeBlock`). Automatisaties (iets
+  dat zelf handelt) zijn voor later. Opstarten blijft licht: elk blok haalt zijn eigen inhoud.
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
   (`keepReachable`).
 - **Verbanden** (`shared/links.ts`, `GET /insights/links`, `/verbanden`): hoe je lijsten samenhangen (verwijzingen,

@@ -1,36 +1,26 @@
 // Het overzicht: je borden (Overzicht, Keuken) met blokken die je zelf kiest (zie shared/board.ts). Elk blok haalt
 // zijn inhoud op met de gewone routes, dus met jouw rechten. Zie STIJLBOEK.md → Patronen per scherm → Overzicht.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { BLOCK_ITEMS, BLOCK_KINDS, blockKey, segmentBlocks, type Block, type BoardInfo, type QuickBlock } from "../../shared/board";
-import { CHART_AGGS, CHART_FORMS, CHART_STEPS, computeChart, isDateField, isGroupField, isNumberField, type ChartDef, type ChartForm, type ChartStep } from "../../shared/charts";
-import type { Transfer } from "../../shared/ledger";
-import { logFields, logItem } from "../../shared/logview";
-import { brusselsNow, minutesBetween, type EventView, type ListDetail, type ThingRow } from "../../shared/model";
-import type { Nutrition } from "../../shared/food";
-import { formatDuration } from "../../shared/fields";
+import { viewName, type ActionBlock, type ViewBlock } from "../../shared/blocks";
+import { BLOCK_KINDS, blockKey, segmentBlocks, type Block, type BoardInfo } from "../../shared/board";
 import { formatAmount } from "../../shared/units";
-import { viewFields } from "../../shared/views";
-import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
-import { formatCents, formatTotal, today } from "../format";
-import { listIcon, listTone } from "../lists";
 import { Link } from "../router";
 import { useSession } from "../session";
-import { ChartView } from "./Chart";
+import { ActionGroup } from "./ActionBlock";
+import { ActionBuilder, AddChoice, EMPTY_VIEW_BLOCK, ViewBuilder } from "./BlockBuilder";
 import { usePalette } from "./CommandPalette";
 import { useConfirm } from "./ConfirmDialog";
-import { CardHead, Segmented, Tabs } from "./Controls";
-import { namesFrom } from "./Fields";
+import { CardHead, Tabs } from "./Controls";
 import { Icon, type IconName } from "./Icon";
-import { Combo, useThingOptions } from "./ItemPicker";
-import { EventRow, usePageNames, type EventPage } from "./Log";
 import { stagger } from "./Motion";
 import { EmptyState, PageHead } from "./Page";
 import { Sheet } from "./Sheet";
 import { useSortable } from "./Sortable";
 import { useToast } from "./Toast";
+import { ViewCard } from "./ViewBlock";
 
 export type Overview = { board: string; boards: BoardInfo[]; blocks: Block[]; custom: boolean };
 
@@ -213,7 +203,7 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
       ) : (
         <div className="dashboard stagger" ref={masonry}>
           {segmentBlocks(blocks).map((b, i) =>
-            Array.isArray(b) ? <QuickGroup key={`snel:${blockKey(b[0])}`} blocks={b} index={i} /> : <BlockView key={blockKey(b)} block={b} index={i} />,
+            Array.isArray(b) ? <ActionGroup key={`acties:${blockKey(b[0])}`} blocks={b} index={i} /> : <BlockView key={blockKey(b)} block={b} index={i} />,
           )}
         </div>
       )}
@@ -267,285 +257,11 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
 // ---------- blokken ----------
 
 function BlockView({ block, index }: { block: Block; index: number }) {
-  const wide = block.wide ? " is-wide" : "";
-  const body = (() => {
-    switch (block.kind) {
-      case "list":
-        return <ListBlock block={block} />;
-      case "money":
-        return <MoneyBlock />;
-      case "balance":
-        return <BalanceBlock />;
-      case "todo":
-        return <TodoBlock />;
-      case "stock":
-        return <StockBlock />;
-      case "food":
-        return <FoodBlock />;
-      case "timers":
-        return <TimersBlock />;
-      case "quick":
-        // Gewoonlijk samen in QuickGroup (segmentBlocks); los ook gewoon als knop.
-        return (
-          <div className="quick-grid">
-            <QuickButton block={block} />
-          </div>
-        );
-      case "thing":
-        return <ThingBlock id={block.thing} />;
-      case "chart":
-        return <ChartBlock block={block} />;
-    }
-  })();
+  if (block.kind === "action") return <ActionGroup blocks={[block]} index={index} />;
   return (
-    <div className={`dash-block${wide}`} style={stagger(index)}>
-      {body}
+    <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
+      {block.kind === "view" ? <ViewCard block={block} /> : <ThingBlock id={block.thing} />}
     </div>
-  );
-}
-
-/** Een lijst: als rij met het aantal, met haar eerste dingen, of met haar laatste gebeurtenissen. */
-function ListBlock({ block }: { block: Extract<Block, { kind: "list" }> }) {
-  const { data: detail } = useApi<ListDetail>(`/lists/${block.list}`);
-  const { data: things } = useApi<{ things: ThingRow[] }>(block.show === "things" ? `/lists/${block.list}/things` : null);
-  const { data: log } = useApi<EventPage>(block.show === "log" ? `/lists/${block.list}/events?status=klaar&limit=${BLOCK_ITEMS}` : null);
-  const names = usePageNames(log);
-  if (!detail) return null;
-  const { list, counts } = detail;
-  const head = (
-    <Link to={`/lijsten/${list.id}`} className="dash-head">
-      <span className={`row-media tone-${listTone(list)}`}>
-        <Icon name={listIcon(list)} size={16} />
-      </span>
-      <span className="row-title">{list.name}</span>
-      <span className="dash-count">{list.one ? counts.things : counts.events}</span>
-    </Link>
-  );
-  return (
-    <section className="card dash-card">
-      {head}
-      {block.show === "things" && things && (
-        <ul className="rows">
-          {things.things.slice(0, BLOCK_ITEMS).map((t) => (
-            <li key={t.id}>
-              <Link to={`/dingen/${t.id}`} className="row">
-                <span className="cell-main">
-                  <span className="row-title">{t.name}</span>
-                </span>
-                {t.stock && <span className={`row-end${t.stock.low ? " is-low" : ""}`}>{formatAmount(t.stock.amount, t.stock.unit)}</span>}
-              </Link>
-            </li>
-          ))}
-          {!things.things.length && <li className="dash-empty">Leeg</li>}
-        </ul>
-      )}
-      {block.show === "log" && log && (
-        <ul className="rows">
-          {log.events.map((e) => (
-            <li key={e.id}>
-              <EventRow e={e} names={names} home={list.id} withDay />
-            </li>
-          ))}
-          {!log.events.length && <li className="dash-empty">Nog niets gelogd</li>}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function MoneyBlock() {
-  const { data } = useApi<{ total: number; mine: number }>("/insights/money");
-  if (!data) return null;
-  return (
-    <Link to="/geld" className="card dash-card dash-link">
-      <CardHead title="Uitgaven deze maand" />
-      <div className="card-body money-total">
-        <span className="total-value">{formatCents(data.total)}</span>
-        {data.mine !== data.total && <span className="muted">Jouw deel {formatCents(data.mine)}</span>}
-      </div>
-    </Link>
-  );
-}
-
-function BalanceBlock() {
-  const { person } = useSession();
-  const { data } = useApi<{ transfers: Transfer[]; people: Person[] }>("/insights/balance");
-  if (!data || !data.transfers.length) return null;
-  const name = (id: string) => (id === person.id ? "Jij" : (data.people.find((p) => p.id === id)?.name ?? "Iemand"));
-  return (
-    <Link to="/geld" className="card dash-card dash-link">
-      <CardHead title="Wie moet wie" />
-      <ul className="rows">
-        {data.transfers.map((t, i) => (
-          <li key={i} className="row">
-            <span className="cell-main">
-              <span className="row-title">
-                {name(t.from)} → {name(t.to)}
-              </span>
-            </span>
-            <span className="row-end">{formatCents(t.amount)}</span>
-          </li>
-        ))}
-      </ul>
-    </Link>
-  );
-}
-
-function TodoBlock() {
-  const { data, reload } = useApi<EventPage>("/insights/todo");
-  const names = usePageNames(data);
-  const toast = useToast();
-  if (!data) return null;
-  async function tick(e: EventView) {
-    try {
-      await api.post(`/events/${e.id}/tick`, e.status === "gepland" ? {} : { undo: true });
-      reload();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  return (
-    <section className="card dash-card">
-      <Link to="/te-doen" className="dash-head">
-        <span className="row-title">Te doen</span>
-        {data.events.length > 0 && <span className="dash-count">{data.events.length}</span>}
-      </Link>
-      <ul className="rows">
-        {data.events.slice(0, BLOCK_ITEMS).map((e) => (
-          <li key={e.id}>
-            <EventRow e={e} names={names} home={null} onTick={tick} withDay />
-          </li>
-        ))}
-        {!data.events.length && <li className="dash-empty">Niets te doen</li>}
-      </ul>
-    </section>
-  );
-}
-
-type StockItem = { id: string; name: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null };
-
-function StockBlock() {
-  const { data } = useApi<{ things: StockItem[] }>("/insights/stock");
-  if (!data) return null;
-  const low = data.things.filter((t) => t.low);
-  return (
-    <section className="card dash-card">
-      <Link to="/voorraad" className="dash-head">
-        <span className="row-title">Bijna op</span>
-        {low.length > 0 && <span className="dash-count">{low.length}</span>}
-      </Link>
-      <ul className="rows">
-        {low.slice(0, BLOCK_ITEMS + 1).map((t) => (
-          <li key={t.id}>
-            <Link to={`/dingen/${t.id}`} className="row">
-              <span className="cell-main">
-                <span className="row-main">
-                  <span className="row-title">{t.name}</span>
-                  <span className="row-meta">
-                    <span>{t.list}</span>
-                  </span>
-                </span>
-              </span>
-              <span className="row-end is-low">{formatAmount(t.amount, t.unit)}</span>
-            </Link>
-          </li>
-        ))}
-        {!low.length && <li className="dash-empty">Alles is er</li>}
-      </ul>
-    </section>
-  );
-}
-
-function FoodBlock() {
-  const { person } = useSession();
-  const day = today();
-  const { data } = useApi<{ days: { day: string; people: Record<string, Nutrition> }[]; eaters: Person[] }>(`/insights/food?from=${day}&to=${day}`);
-  if (!data) return null;
-  const todayPer = data.days.find((d) => d.day === day)?.people ?? {};
-  const ids = Object.keys(todayPer);
-  return (
-    <Link to="/eten" className="card dash-card dash-link">
-      <CardHead title="Eten vandaag" />
-      <ul className="rows">
-        {ids.map((id) => (
-          <li key={id} className="row">
-            <span className="cell-main">
-              <span className="row-title">{id === person.id ? "Jij" : (data.eaters.find((p) => p.id === id)?.name ?? "Iemand")}</span>
-            </span>
-            <span className="row-end">{formatTotal(todayPer[id].kcal ?? 0)} kcal</span>
-          </li>
-        ))}
-        {!ids.length && <li className="dash-empty">Nog niets gegeten</li>}
-      </ul>
-    </Link>
-  );
-}
-
-/** Wat nu loopt (een timer), met de duur tot nu en Stoppen. */
-function TimersBlock() {
-  const { data, reload } = useApi<EventPage>("/insights/timers");
-  const names = usePageNames(data);
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  if (!data || !data.events.length) return null;
-  const now = brusselsNow();
-  return (
-    <section className="card dash-card">
-      <CardHead title="Loopt nu" />
-      <ul className="rows">
-        {data.events.map((e) => (
-          <li key={e.id} className="row">
-            <Link to={`/gebeurtenissen/${e.id}`} className="row-link">
-              <span className="cell-main">
-                <span className="row-main">
-                  <span className="row-title">{names.title(e)}</span>
-                  <span className="row-meta">
-                    <span>{formatDuration(Math.max(0, minutesBetween(e.at, now) ?? 0))}</span>
-                  </span>
-                </span>
-              </span>
-            </Link>
-            <button type="button" className="btn btn-outline btn-sm" onClick={async () => (await api.post(`/events/${e.id}/stop`, {}), reload())}>
-              Stoppen
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Snel loggen in een lijst: de kop opent het formulier, het veld gaat met je tekst naar het formulier. */
-/** Snel loggen na elkaar: een rij knoppen (twee per rij op gsm, zoveel als past op tablet); vanaf drie breed. */
-function QuickGroup({ blocks, index }: { blocks: QuickBlock[]; index: number }) {
-  return (
-    <div className={`dash-block quick-group${blocks.length > 2 ? " is-wide" : ""}`} style={stagger(index)}>
-      <div className="quick-grid">
-        {blocks.map((b) => (
-          <QuickButton key={blockKey(b)} block={b} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Eén knop: het icoon en de naam van de soort (of de lijst); een tik opent het formulier van die lijst en soort. */
-function QuickButton({ block }: { block: QuickBlock }) {
-  const { data: detail } = useApi<ListDetail>(`/lists/${block.list}`);
-  if (!detail) return <span className="quick-tile is-loading" aria-hidden="true" />;
-  const kind = block.type ? detail.kinds.find((k) => k.id === block.type) : undefined;
-  const label = kind?.name ?? detail.list.name;
-  return (
-    <Link to={`/lijsten/${block.list}/loggen${kind ? `?soort=${kind.id}` : ""}`} className="quick-tile" aria-label={`${label} loggen`}>
-      <span className={`row-media tone-${listTone(detail.list)}`}>
-        <Icon name={(kind?.icon ?? listIcon(detail.list)) as IconName} size={16} />
-      </span>
-      <span className="quick-tile-name">{label}</span>
-      <Icon name="plus" size={16} className="quick-tile-plus" />
-    </Link>
   );
 }
 
@@ -565,188 +281,32 @@ function ThingBlock({ id }: { id: string }) {
   );
 }
 
-// ---------- grafieken ----------
-
-/** De velden en rijen van de bron van een grafiek: het logboek (van een lijst of alles) of de dingen van een lijst. */
-function useChartSource(list: string | null, source: "logboek" | "dingen") {
-  const { person, lists } = useSession();
-  const { data: detail } = useApi<ListDetail>(list ? `/lists/${list}` : null);
-  const { data: log } = useApi<EventPage>(source === "logboek" ? `/insights/log${list ? `?list=${list}` : ""}` : null);
-  const { data: things } = useApi<{ things: ThingRow[]; people: Person[]; refs: { id: string; name: string; list_id: string; list: string }[] }>(source === "dingen" && list ? `/lists/${list}/things` : null);
-  const names = usePageNames(log);
-  return useMemo(() => {
-    if (source === "dingen") {
-      if (!detail || !things) return null;
-      const fields = detail.list.fields;
-      const n = namesFrom(things.people, things.refs);
-      return {
-        fields,
-        title: detail.list.name,
-        items: things.things.map((t) => ({ name: t.name, data: t.data, tag_ids: [], created_at: t.created_at })),
-        names: { people: things.people, item: (id: string) => n.item(id), tags: [] },
-      };
-    }
-    if (!log) return null;
-    const fields = logFields(log.kinds, log.lists.length ? log.lists : lists);
-    return {
-      fields,
-      title: detail ? detail.list.name : "Alles",
-      items: log.events.filter((e) => !e.partial).map((e) => logItem(e, { kind: names.kind(e).name, list: names.list(e.list_id), me: person.id, title: names.title(e) })),
-      names: { people: log.people, item: (id: string) => names.thing(id)?.name, tags: [] },
-    };
-  }, [source, detail, things, log, names, lists, person.id]);
-}
-
-function ChartBlock({ block }: { block: Extract<Block, { kind: "chart" }> }) {
-  const src = useChartSource(block.list, block.source);
-  const [table, setTable] = useState(false);
-  const data = useMemo(() => (src ? computeChart(block.chart, viewFields(src.fields), src.items, src.names, today()) : null), [src, block.chart]);
-  if (!src || !data) return null;
-  const field = block.chart.field ? src.fields.find((f) => f.key === block.chart.field)?.label : undefined;
-  const title = [src.title, block.chart.agg === "count" ? "Aantal" : field].filter(Boolean).join(" · ");
-  return (
-    <section className="card dash-card">
-      <CardHead
-        title={title}
-        description={data.window}
-        action={
-          <button type="button" className="btn btn-ghost btn-icon btn-sm chart-toggle" aria-pressed={table} aria-label={table ? "Als grafiek" : "Als tabel"} title={table ? "Als grafiek" : "Als tabel"} onClick={() => setTable(!table)}>
-            <Icon name="table" size={15} />
-          </button>
-        }
-      />
-      <div className="card-body">
-        <ChartView data={data} table={table} />
-      </div>
-    </section>
-  );
-}
-
-/** Een grafiek samenstellen: bron, vorm, wat ze telt, per welke periode en hoeveel, apart per een keuze. */
-function ChartBuilder({ value, onChange }: { value: Extract<Block, { kind: "chart" }>; onChange: (b: Extract<Block, { kind: "chart" }>) => void }) {
-  const { lists } = useSession();
-  const src = useChartSource(value.list, value.source);
-  const fields = src?.fields ?? [];
-  const numbers = fields.filter(isNumberField);
-  const groups = fields.filter(isGroupField);
-  const dates = fields.filter(isDateField);
-  const c = value.chart;
-  const set = (patch: Partial<ChartDef>) => onChange({ ...value, chart: { ...c, ...patch } });
-  return (
-    <div className="form">
-      <div className="field-row">
-        <label className="field">
-          <span className="label">Uit</span>
-          <select value={value.source} onChange={(e) => onChange({ ...value, source: e.target.value as "logboek" | "dingen", chart: { ...c, date: e.target.value === "logboek" ? "at" : "created", field: undefined, agg: "count", by: undefined } })}>
-            <option value="logboek">Het logboek</option>
-            <option value="dingen" disabled={!value.list}>
-              De dingen
-            </option>
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">Van</span>
-          <select value={value.list ?? ""} onChange={(e) => onChange({ ...value, list: e.target.value || null, source: e.target.value ? value.source : "logboek" })}>
-            <option value="">Al je lijsten</option>
-            {lists.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="field">
-        <span className="label">Als</span>
-        <Segmented label="Als" value={c.form} onChange={(form: ChartForm) => set({ form, by: form === "ranked" || form === "parts" ? (c.by ?? groups[0]?.key) : c.by })} options={Object.entries(CHART_FORMS).map(([v, l]) => ({ value: v as ChartForm, label: l }))} />
-      </div>
-      <div className="field-row">
-        <label className="field">
-          <span className="label">Telt</span>
-          <select value={c.agg === "count" ? "count" : `${c.agg}:${c.field}`} onChange={(e) => (e.target.value === "count" ? set({ agg: "count", field: undefined }) : set({ agg: e.target.value.split(":")[0] as ChartDef["agg"], field: e.target.value.split(":")[1] }))}>
-            <option value="count">Aantal</option>
-            {numbers.flatMap((f) =>
-              (["sum", "avg", "max"] as const).map((agg) => (
-                <option key={`${agg}:${f.key}`} value={`${agg}:${f.key}`}>
-                  {agg === "sum" ? f.label : `${CHART_AGGS[agg]} ${f.label.toLowerCase()}`}
-                </option>
-              )),
-            )}
-          </select>
-        </label>
-        {dates.length > 0 && (
-          <label className="field">
-            <span className="label">Volgens</span>
-            <select value={c.date} onChange={(e) => set({ date: e.target.value })}>
-              {value.source === "dingen" && <option value="created">Toegevoegd op</option>}
-              {dates.map((f) => (
-                <option key={f.key} value={f.key}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-      <div className="field-row">
-        <label className="field">
-          <span className="label">Periode</span>
-          <select value={c.step} onChange={(e) => set({ step: e.target.value as ChartStep })}>
-            {Object.entries(CHART_STEPS).map(([k, s]) => (
-              <option key={k} value={k}>
-                {s.per}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span className="label">Hoeveel</span>
-          <select value={c.count} onChange={(e) => set({ count: Number(e.target.value) })}>
-            {[4, 6, 8, 12, 24, 0].map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? "Alles" : `Laatste ${n} ${CHART_STEPS[c.step].many}`}
-              </option>
-            ))}
-          </select>
-        </label>
-        {groups.length > 0 && (
-          <label className="field">
-            <span className="label">Apart per</span>
-            <select value={c.by ?? ""} onChange={(e) => set({ by: e.target.value || undefined })}>
-              {c.form !== "ranked" && c.form !== "parts" && <option value="">Niets</option>}
-              {groups.map((f) => (
-                <option key={f.key} value={f.key}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ---------- aanpassen ----------
 
 function blockLabel(b: Block, lists: { id: string; name: string }[]): string {
-  const list = "list" in b && b.list ? lists.find((l) => l.id === b.list)?.name : undefined;
-  if (b.kind === "list") return `${list ?? "Lijst"}${b.show === "things" ? " · dingen" : b.show === "log" ? " · logboek" : ""}`;
-  if (b.kind === "quick") return `Snel loggen · ${list ?? "lijst"}`;
-  if (b.kind === "chart") return `Grafiek · ${list ?? "alles"}`;
-  return BLOCK_KINDS[b.kind];
+  const listName = (id: string) => lists.find((l) => l.id === id)?.name;
+  if (b.kind === "view") return viewName(b, listName);
+  if (b.kind === "action") return b.name || `${BLOCK_KINDS.action} · ${listName(b.list) ?? "lijst"}`;
+  return BLOCK_KINDS.thing;
 }
+
+/** Wat de bouwer toont: kiezen tussen weergave en actie, of een weergave of actie samenstellen (`index` null: nieuw). */
+type Building = { step: "choose" } | { step: "view"; index: number | null; block: ViewBlock } | { step: "action"; index: number | null; block: ActionBlock };
 
 function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Block[]) => void }) {
   const { lists } = useSession();
-  const [adding, setAdding] = useState(false);
-  const [editingChart, setEditingChart] = useState<number | null>(null);
-  const keys = blocks.map(blockKey);
+  const [building, setBuilding] = useState<Building | null>(null);
+  const keys = blocks.map((b, i) => `${i}:${blockKey(b)}`);
   const sortable = useSortable(
     keys,
     (next) => onChange(next.map((k) => blocks[keys.indexOf(k)])),
     (k) => blockLabel(blocks[keys.indexOf(k)], lists),
   );
+  function put(index: number | null, b: Block) {
+    onChange(index === null ? [...blocks, b] : blocks.map((x, k) => (k === index ? { ...b, ...(x.wide ? { wide: true } : {}) } : x)));
+    setBuilding(null);
+  }
+  const close = () => setBuilding(null);
   return (
     <>
       <ul className="rows sort-list">
@@ -757,10 +317,18 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
                 <Icon name="grip" size={16} />
               </button>
               <span className="cell-main">
+                <span className={`row-media${b.kind === "action" ? " is-brand" : ""}`}>
+                  <Icon name={b.kind === "view" ? "table" : b.kind === "action" ? "plus" : "package"} size={15} />
+                </span>
                 <span className="row-title">{blockLabel(b, lists)}</span>
               </span>
-              {b.kind === "chart" && (
-                <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Grafiek aanpassen" onClick={() => setEditingChart(i)}>
+              {b.kind !== "thing" && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon btn-sm"
+                  aria-label={`${blockLabel(b, lists)} aanpassen`}
+                  onClick={() => setBuilding(b.kind === "view" ? { step: "view", index: i, block: b } : { step: "action", index: i, block: b })}
+                >
                   <Icon name="edit" size={15} />
                 </button>
               )}
@@ -775,114 +343,33 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
         ))}
       </ul>
       {sortable.status}
-      <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => setAdding(true)}>
+      <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => setBuilding({ step: "choose" })}>
         <Icon name="plus" size={15} /> Toevoegen
       </button>
-      <Sheet open={adding} title="Blok toevoegen" onClose={() => setAdding(false)}>
-        {adding && (
-          <AddBlock
-            onAdd={(b) => {
-              onChange([...blocks, b]);
-              setAdding(false);
-            }}
+      <Sheet
+        open={building !== null}
+        title={building?.step === "view" ? "Weergave" : building?.step === "action" ? "Actie" : "Blok toevoegen"}
+        onClose={close}
+        className={building && building.step !== "choose" ? "builder-sheet" : undefined}
+      >
+        {building?.step === "choose" && (
+          <AddChoice
+            onPick={(kind) =>
+              setBuilding(
+                kind === "view"
+                  ? { step: "view", index: null, block: EMPTY_VIEW_BLOCK }
+                  : { step: "action", index: null, block: { kind: "action", name: "", list: lists[0]?.id ?? "", type: "", does: "form", values: {} } },
+              )
+            }
           />
         )}
-      </Sheet>
-      <Sheet open={editingChart !== null} title="Grafiek" onClose={() => setEditingChart(null)}>
-        {editingChart !== null && blocks[editingChart]?.kind === "chart" && (
-          <>
-            <ChartBuilder value={blocks[editingChart] as Extract<Block, { kind: "chart" }>} onChange={(b) => onChange(blocks.map((x, k) => (k === editingChart ? b : x)))} />
-            <button type="button" className="btn btn-primary" onClick={() => setEditingChart(null)}>
-              Klaar
-            </button>
-          </>
+        {building?.step === "view" && (
+          <ViewBuilder key={building.index ?? "nieuw"} initial={building.block} saveLabel={building.index === null ? "Op het bord zetten" : "Bewaren"} onSave={(b) => put(building.index, b)} onCancel={close} />
+        )}
+        {building?.step === "action" && (
+          <ActionBuilder key={building.index ?? "nieuw"} initial={building.block} saveLabel={building.index === null ? "Op het bord zetten" : "Bewaren"} onSave={(b) => put(building.index, b)} onCancel={close} />
         )}
       </Sheet>
     </>
   );
 }
-
-function AddBlock({ onAdd }: { onAdd: (b: Block) => void }) {
-  const { lists } = useSession();
-  const [kind, setKind] = useState<Block["kind"]>("list");
-  const [list, setList] = useState(lists[0]?.id ?? "");
-  const [show, setShow] = useState<"count" | "things" | "log">("count");
-  const [thing, setThing] = useState<{ id: string; name: string } | null>(null);
-  const [text, setText] = useState("");
-  const { options, placeOf } = useThingOptions([], text);
-  const [chart, setChart] = useState<Extract<Block, { kind: "chart" }>>({ kind: "chart", list: null, source: "logboek", chart: { form: "bars", agg: "count", date: "at", step: "month", count: 6 } });
-  const needsList = kind === "list" || kind === "quick";
-  const ready = (!needsList || list) && (kind !== "thing" || thing);
-  function add() {
-    if (kind === "list") onAdd({ kind, list, show });
-    else if (kind === "quick") onAdd({ kind, list });
-    else if (kind === "thing" && thing) onAdd({ kind, thing: thing.id });
-    else if (kind === "chart") onAdd(chart);
-    else onAdd({ kind } as Block);
-  }
-  return (
-    <div className="form">
-      <label className="field">
-        <span className="label">Blok</span>
-        <select value={kind} onChange={(e) => setKind(e.target.value as Block["kind"])}>
-          {Object.entries(BLOCK_KINDS).map(([k, l]) => (
-            <option key={k} value={k}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </label>
-      {needsList && (
-        <label className="field">
-          <span className="label">Lijst</span>
-          <select value={list} onChange={(e) => setList(e.target.value)}>
-            {lists.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {kind === "list" && (
-        <div className="field">
-          <span className="label">Toon</span>
-          <Segmented
-            label="Toon"
-            value={show}
-            onChange={setShow}
-            options={[
-              { value: "count", label: "Aantal" },
-              { value: "things", label: "Dingen" },
-              { value: "log", label: "Logboek" },
-            ]}
-          />
-        </div>
-      )}
-      {kind === "thing" && (
-        <div className="field">
-          <span className="label">Ding</span>
-          <Combo
-            label="Ding"
-            text={thing && !text ? thing.name : text}
-            options={options}
-            placeOf={placeOf}
-            disabled={false}
-            placeholder="Zoek of kies…"
-            onText={setText}
-            onPick={(o) => {
-              setThing(o);
-              setText("");
-            }}
-          />
-        </div>
-      )}
-      {kind === "chart" && <ChartBuilder value={chart} onChange={setChart} />}
-      <button type="button" className="btn btn-primary" disabled={!ready} onClick={add}>
-        Toevoegen
-      </button>
-    </div>
-  );
-}
-
-export type { EventView };

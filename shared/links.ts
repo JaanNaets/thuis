@@ -123,16 +123,9 @@ export const LINE_LINKS = {
 
 /** Blokken op een overzicht. */
 export const BLOCK_LINKS = {
-  list: true,
-  money: false, // een weergave, geen lijst
-  balance: false,
-  todo: false,
-  stock: false,
-  food: false,
-  timers: false,
-  quick: true,
+  view: true, // een weergave toont de lijsten in haar zin
+  action: true, // een actie logt in een lijst
   thing: true,
-  chart: true,
 } as const satisfies Record<BlockKind, boolean>;
 
 // ---------- de weergaven ----------
@@ -223,7 +216,7 @@ export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[
 /** Verbanden en wat een lijst met haar eigen dingen doet (dat is geen lijn op de kaart). */
 export type LinkResult = { links: Link[]; own: Record<string, string[]> };
 
-const BLOCK_TEXT: Partial<Record<BlockKind, string>> = { list: "een blok", quick: "Snel loggen", thing: "één ding", chart: "een grafiek" };
+const BLOCK_TEXT: Partial<Record<BlockKind, string>> = { view: "een weergave", action: "een actie", thing: "één ding" };
 const PRODUCT_SOURCE = "uit Open Food Facts of NEVO";
 
 const times = (n: number) => `${n}×`;

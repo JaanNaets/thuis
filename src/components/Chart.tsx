@@ -104,7 +104,7 @@ function Tip({ x, width, title, rows, unit }: { x: number; width: number; title:
 }
 
 /** Staafjes en Lijn: de periodes op de as. */
-function TimeChart({ data }: { data: ChartData }) {
+function TimeChart({ data, area: filled = false }: { data: ChartData; area?: boolean }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const line = data.form === "line";
@@ -185,10 +185,10 @@ function TimeChart({ data }: { data: ChartData }) {
         if (cur) parts.push(cur);
         const stroke = single ? "var(--primary)" : seriesColor(s.slot);
         const lastIdx = s.values.reduce<number>((acc, v, b) => (v !== null ? b : acc), -1);
-        const area = single && parts.length === 1 && lastIdx > 0 ? `${parts[0]} L${x(lastIdx)},${y(0)} L${x(s.values.findIndex((v) => v !== null))},${y(0)} Z` : null;
+        const area = (single || filled) && parts.length === 1 && lastIdx > 0 ? `${parts[0]} L${x(lastIdx)},${y(0)} L${x(s.values.findIndex((v) => v !== null))},${y(0)} Z` : null;
         return (
           <g key={s.key}>
-            {area && <path d={area} fill="var(--primary)" opacity={0.06} />}
+            {area && <path d={area} fill={filled ? stroke : "var(--primary)"} opacity={filled ? (single ? 0.16 : 0.12) : 0.06} />}
             {parts.map((d, i) => (
               <path key={i} d={d} fill="none" stroke={stroke} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
             ))}
@@ -354,7 +354,10 @@ function NumberChart({ data }: { data: ChartData }) {
   const goal = data.goal;
   return (
     <div className="chart-number">
-      <p className="chart-number-value">{formatChartValue(data.unit, value)}</p>
+      <p className="chart-number-value">
+        {formatChartValue(data.unit, value)}
+        {goal !== undefined && goal > 0 && <span className="chart-number-goal"> / {formatChartValue(data.unit, goal)}</span>}
+      </p>
       {delta !== null && (
         <p className="chart-number-delta">
           {delta >= 0 ? "+" : "−"}
@@ -423,7 +426,7 @@ export function ChartTable({ data }: { data: ChartData }) {
 }
 
 /** Een grafiek, in de vorm die ze kreeg. Leeg (niets in deze periode): een rustige zin. */
-export function ChartView({ data, table = false }: { data: ChartData; table?: boolean }) {
+export function ChartView({ data, table = false, area = false }: { data: ChartData; table?: boolean; area?: boolean }) {
   const empty =
     data.form === "number"
       ? data.total === null
@@ -438,6 +441,6 @@ export function ChartView({ data, table = false }: { data: ChartData; table?: bo
     case "parts":
       return <PartsChart data={data} />;
     default:
-      return <TimeChart data={data} />;
+      return <TimeChart data={data} area={area} />;
   }
 }

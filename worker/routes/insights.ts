@@ -2,13 +2,16 @@
 // tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een ding geeft geen bedrag of verdeling).
 
 import { Hono } from "hono";
+import { cleanViewBlock, evaluateView, sourceFields, type SourceItem, type ViewResponse } from "../../shared/blocks";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, MAX_AGENDA_DAYS, occurrences, daysApart } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
 import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
 import { isExpense, netBalance, settleUp, sharesOf, type MoneyEvent } from "../../shared/ledger";
-import { canEdit, dayOf, type EventView, type Role } from "../../shared/model";
+import { LOG_KEYS, logItem } from "../../shared/logview";
+import { canEdit, dayOf, type EventView, type Role, type Status } from "../../shared/model";
+import { formatAmount } from "../../shared/units";
 import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
 import { logbookRows, viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
@@ -16,7 +19,7 @@ import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
 import { listPeople } from "./lists";
 import { boardsOf } from "./me";
-import { peopleByIds, stockOf } from "./things";
+import { peopleByIds, stockOf, thingRefs } from "./things";
 
 export const insights = new Hono<AppEnv>();
 
@@ -97,15 +100,19 @@ insights.get("/money", async (c) => {
  * Wie moet wie: over alle uitgaven met een betaler en alle overdrachten die je ziet. Per overschrijving een lijst om
  * de terugbetaling in te loggen: waar jullie het laatst samen iets in logden en jij mag loggen.
  */
+async function balanceOf(db: D1Database, seen: Map<string, Role>) {
+  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL", [], "e.at DESC", 5000);
+  const page = await viewEvents(db, seen, rows);
+  const net = netBalance(page.events.map(money));
+  return { page, net, transfers: settleUp(net) };
+}
+
 insights.get("/balance", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const seen = await seenLists(db, me.id);
-  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL", [], "e.at DESC", 5000);
-  const page = await viewEvents(db, seen, rows);
-  const events = page.events.map(money);
-  const net = netBalance(events);
-  const transfers = settleUp(net).map((t) => {
+  const { page, net, transfers: plain } = await balanceOf(db, seen);
+  const transfers = plain.map((t) => {
     const both = page.events.find((e) => canEdit(seen.get(e.list_id)) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.from) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.to));
     return { ...t, list_id: both?.list_id ?? null };
   });
@@ -131,23 +138,30 @@ insights.get("/stock", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const seen = await seenLists(db, me.id);
+  return c.json({ things: await stockThings(db, seen.keys()) });
+});
+
+type StockThing = { id: string; name: string; list_id: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null; created_at: string };
+
+/** Alles in een voorraad van deze lijsten (die je ziet), wat op of bijna op is eerst. */
+async function stockThings(db: D1Database, listIds: Iterable<string>): Promise<StockThing[]> {
   const { results: listRows } = await db
     .prepare("SELECT * FROM lists WHERE stock IS NOT NULL AND archived = 0 AND id IN (SELECT value FROM json_each(?))")
-    .bind(ids(seen.keys()))
+    .bind(ids(listIds))
     .all<ListRow>();
-  const out: { id: string; name: string; list_id: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null }[] = [];
+  const out: StockThing[] = [];
   for (const list of listRows.map(toList)) {
     const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name LIMIT 2000").bind(list.id).all<ThingRowDb>();
     const rows = results.map(toThing);
     const levels = await stockOf(db, list, rows);
     for (const t of rows) {
       const s = levels.get(t.id);
-      if (s) out.push({ id: t.id, name: t.name, list_id: list.id, list: list.name, ...s });
+      if (s) out.push({ id: t.id, name: t.name, list_id: list.id, list: list.name, ...s, created_at: t.created_at });
     }
   }
   out.sort((a, b) => Number(b.low) - Number(a.low) || (a.expires ?? "9").localeCompare(b.expires ?? "9") || a.name.localeCompare(b.name, "nl"));
-  return c.json({ things: out });
-});
+  return out;
+}
 
 // ---------- eten ----------
 
@@ -158,6 +172,12 @@ insights.get("/food", async (c) => {
   const seen = await seenLists(db, me.id);
   const today = brusselsToday();
   const [from, to] = range(c.req.query("from") ?? addDays(today, -6), c.req.query("to"), today);
+  const { days, who, page, food } = await foodPeriod(db, seen, from, to);
+  return c.json({ from, to, days, eaters: await peopleByIds(db, who), ...page, events: page.events.filter((e) => food.has(e.id)) });
+});
+
+/** Wat er gegeten werd van `from` tot `to` in de lijsten die je ziet: per dag en per persoon. */
+async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string, to: string) {
   const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.base = 'gebruik' AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
   const page = await viewEvents(db, seen, rows);
   // De dingen met hun velden (productinfo) en voorraad-eenheden, ook uit lijsten die je niet ziet (enkel de getallen).
@@ -192,8 +212,8 @@ insights.get("/food", async (c) => {
     for (const id of per.keys()) who.add(id);
     days.push({ day, people: Object.fromEntries(per) });
   }
-  return c.json({ from, to, days, eaters: await peopleByIds(db, who), ...page, events: page.events.filter((e) => food.has(e.id)) });
-});
+  return { days, who, page, food };
+}
 
 const addDays = (day: string, n: number) => {
   const d = new Date(`${day}T00:00:00Z`);
@@ -263,6 +283,102 @@ insights.get("/timers", async (c) => {
   const seen = await seenLists(db, c.get("person").id);
   const rows = await fullRows(db, seen, "e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd'", [], "e.at DESC", 20);
   return c.json(await viewEvents(db, seen, rows));
+});
+
+// ---------- een weergave op een overzicht ----------
+
+/**
+ * Een weergave (shared/blocks.ts) uitgerekend: haar bron geladen met de rechten van wie kijkt (enkel lijsten die je
+ * ziet; een lijst die je niet meer ziet, telt niet), dan de zin, de voorwaarden en de grafiek of de rijen. `def`: het
+ * blok als JSON, nagekeken met `cleanViewBlock`.
+ */
+insights.get("/view", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const block = cleanViewBlock(parseJson(c.req.query("def") ?? "", null));
+  if (!block) throw new ValidationError("Deze weergave klopt niet");
+  const seen = await seenLists(db, me.id);
+  const today = brusselsToday();
+  const wanted = block.lists.filter((id) => seen.has(id));
+  const listIds = block.lists.length ? wanted : [...seen.keys()];
+  const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(listIds)).all<ListRow>();
+  const lists = listRows.map(toList);
+  const only = new Map([...seen].filter(([id]) => lists.some((l) => l.id === id)));
+
+  type Item = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string } };
+  let fields: FieldDef[] = [];
+  let items: Item[] = [];
+  let people: { id: string; name: string }[] = [];
+  let refs: Record<string, string> = {};
+
+  if (block.source === "logboek") {
+    const own = await kindsFor(db, lists.map((l) => l.id));
+    const rows = lists.length ? await fullRows(db, only, "1 = 1", [], "e.at DESC, e.created_at DESC", 2000) : [];
+    const page = await viewEvents(db, seen, rows);
+    const kinds = [...new Map([...own, ...page.kinds].map((k) => [k.id, k])).values()];
+    const kindName = new Map(kinds.map((k) => [k.id, k.name]));
+    const listName = new Map(lists.map((l) => [l.id, l.name]));
+    fields = sourceFields("logboek", { lists, kinds });
+    const fixed = new Set(LOG_KEYS as readonly string[]);
+    items = page.events.map((e) => {
+      const kind = kindName.get(e.kind) ?? e.kind;
+      const row = logItem(e, { kind, list: listName.get(e.list_id) ?? "", me: me.id, title: e.name || kind });
+      const running = e.base === "activiteit" && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+      const own = Object.fromEntries(Object.entries(e.data).filter(([k]) => !fixed.has(k)));
+      return { ...row, id: e.id, data: { ...own, ...row.data, ...(running ? { running: true } : {}) }, link: `/gebeurtenissen/${e.id}`, event: { status: e.status, running, at: e.at } };
+    });
+    people = page.people.map((p) => ({ id: p.id, name: p.name }));
+    refs = Object.fromEntries(page.things.map((t) => [t.id, t.name]));
+  } else if (block.source === "dingen") {
+    const { results } = lists.length
+      ? await db.prepare("SELECT * FROM things WHERE archived = 0 AND list_id IN (SELECT value FROM json_each(?)) ORDER BY name LIMIT 2000").bind(ids(lists.map((l) => l.id))).all<ThingRowDb>()
+      : { results: [] as ThingRowDb[] };
+    const byList = new Map(lists.map((l) => [l.id, l]));
+    fields = sourceFields("dingen", { lists, kinds: [] });
+    items = results.map(toThing).map((t) => ({ id: t.id, name: t.name, data: computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
+    // Namen van personen en verwijzingen in de velden.
+    const values = items.flatMap((i) => Object.values(i.data));
+    const strings = values.flatMap((v) => (typeof v === "string" ? [v] : Array.isArray(v) ? (v as unknown[]).flatMap((x) => (typeof x === "string" ? [x] : x && typeof x === "object" ? Object.values(x as object).filter((y): y is string => typeof y === "string") : [])) : []));
+    people = (await peopleByIds(db, strings.filter((x) => /^[0-9a-f-]{36}$/.test(x)))).map((p) => ({ id: p.id, name: p.name }));
+    refs = Object.fromEntries((await thingRefs(db, seen, strings.filter((x) => /^[0-9a-f-]{36}$/.test(x)))).map((t) => [t.id, t.name]));
+  } else if (block.source === "voorraad") {
+    const stock = await stockThings(db, lists.map((l) => l.id));
+    fields = sourceFields("voorraad", { lists: lists.filter((l) => l.stock), kinds: [] });
+    items = stock.map((t) => ({
+      id: t.id,
+      name: t.name,
+      data: { list: t.list, level: formatAmount(t.amount, t.unit), amount: t.amount, low: t.low, out: t.amount <= 0, ...(t.expires ? { expires: t.expires } : {}) },
+      tag_ids: [],
+      created_at: t.created_at,
+      link: `/dingen/${t.id}`,
+    }));
+  } else if (block.source === "saldo") {
+    const { transfers } = await balanceOf(db, only.size ? only : seen);
+    const who = await peopleByIds(db, transfers.flatMap((t) => [t.from, t.to]));
+    const name = (id: string) => (id === me.id ? "Jij" : (who.find((p) => p.id === id)?.name ?? "Iemand"));
+    fields = sourceFields("saldo", { lists, kinds: [] });
+    people = who.map((p) => ({ id: p.id, name: p.name }));
+    items = transfers.map((t) => ({ id: `${t.from}-${t.to}`, name: `${name(t.from)} → ${name(t.to)}`, data: { from: t.from, to: t.to, amount: t.amount }, tag_ids: [], created_at: `${today} 12:00:00`, link: "/geld" }));
+  } else {
+    // Wat er gegeten werd: zoveel dagen terug als de zin telt (minstens een week, hoogstens een jaar).
+    const t = block.tally;
+    const back = Math.min(366, Math.max(7, t ? (t.n || 52) * ({ day: 1, week: 7, month: 31, year: 366 } as const)[t.step] : 93));
+    const { days, who } = await foodPeriod(db, only.size ? only : seen, addDays(today, -back), today);
+    const eaters = await peopleByIds(db, who);
+    const name = (id: string) => (id === me.id ? "Jij" : (eaters.find((p) => p.id === id)?.name ?? "Iemand"));
+    fields = sourceFields("voeding", { lists, kinds: [] });
+    people = eaters.map((p) => ({ id: p.id, name: p.name }));
+    items = days.flatMap((d) => Object.entries(d.people).map(([id, n]) => ({ id: `${d.day}-${id}`, name: name(id), data: { day: d.day, who: id, ...n }, tag_ids: [], created_at: `${d.day} 12:00:00`, link: "/eten" })));
+  }
+
+  const personName = new Map(people.map((p) => [p.id, p.name]));
+  const outcome = evaluateView(block, fields, items, {
+    today,
+    me: me.id,
+    names: { person: (id) => personName.get(id) ?? "?", item: (id) => refs[id] ?? "?" },
+    chart: { people, item: (id) => refs[id], tags: [] },
+  });
+  return c.json({ ...outcome, fields, people, items: refs } satisfies ViewResponse);
 });
 
 // ---------- zoeken ----------
@@ -376,8 +492,8 @@ insights.get("/links", async (c) => {
   }
   const uses: BoardUse[] = boards.flatMap((b) =>
     (b.blocks ?? []).flatMap((x): BoardUse[] => {
-      if (x.kind === "list" || x.kind === "quick") return [{ board: b.name, list: x.list, block: x.kind }];
-      if (x.kind === "chart" && x.list) return [{ board: b.name, list: x.list, block: "chart" }];
+      if (x.kind === "view") return x.lists.map((list) => ({ board: b.name, list, block: "view" as const }));
+      if (x.kind === "action") return [{ board: b.name, list: x.list, block: "action" }];
       const list = x.kind === "thing" ? thingList.get(x.thing) : undefined;
       return list ? [{ board: b.name, list, block: "thing" }] : [];
     }),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
-import type { Interval } from "../../shared/fields";
+import type { Attributes, Interval } from "../../shared/fields";
 import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { hasPrice } from "../../shared/targets";
@@ -90,8 +90,17 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const base = BASES[kind.base];
 
   const now = brusselsNow();
+  // Vooraf ingevuld door een actie op het overzicht (`?vooraf=`): de omschrijving en velden van de soort.
+  const prefill = useMemo(() => {
+    try {
+      const raw = JSON.parse(params.get("vooraf") ?? "null");
+      return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }, [params]);
   const [typed, setTyped] = useState(() => (event ? "" : (params.get("tekst") ?? "")));
-  const [name, setName] = useState(event?.name ?? "");
+  const [name, setName] = useState(event?.name ?? (typeof prefill.name === "string" ? prefill.name : ""));
   const [day, setDay] = useState((event?.at ?? now).slice(0, 10));
   const [time, setTime] = useState(event ? event.at.slice(11, 16) : kind.base === "activiteit" ? now.slice(11, 16) : "");
   const [endTime, setEndTime] = useState(event?.end_at?.slice(11, 16) ?? "");
@@ -100,7 +109,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
   const [shares, setShares] = useState<SharesDraft>(() => sharesDraft(event?.split ?? undefined));
-  const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? {}));
+  const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? (Object.fromEntries(Object.entries(prefill).filter(([k]) => k !== "name")) as Attributes)));
   const [lines, setLines] = useState<LineDraft[]>(() =>
     event
       ? event.lines.map((l) =>

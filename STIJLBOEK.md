@@ -511,7 +511,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   staat wat de app las ("= 1 u 30 min") als dat anders is dan wat je typte.
 - Een datum kan **Begint met vandaag** hebben (`today`, schakelaar onder ⋯): een nieuw item krijgt de datum van
   vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; enkel een verplichte datum die
-  leeg blijft (Start in een timerblok) krijgt van de API vandaag.
+  leeg blijft (een actie die start) krijgt van de API vandaag.
   Een verwijzing kan **Neemt waarden over** (`copy`, schakelaar): kies je een item, dan krijgen de lege velden hier
   de waarden van de velden met dezelfde sleutel daar (zacht geel, `auto`; en de naam als die leeg is). En **Past het
   gekozen item aan** (`adjust`, keuzelijst "Trekt af van Aantal" / "Telt bij Aantal", met "Met": 1 per item of een
@@ -519,8 +519,8 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   Een ja/nee kan **Aan: ook een item in** (`spawn`, lijsten kiezen onder ⋯): een nieuw item met dat vinkje aan maakt
   ook een item in de eerste van die lijsten waarin je mag toevoegen (Gegeten bij een uitgave → je eigen Eten), met de
   naam, de velden met dezelfde sleutel, hetzelfde product (met wat het overneemt) en hoeveel, omgerekend naar de
-  eenheid daar. De toast zegt "Yoghurt bewaard, ook bij Eten" met **Openen**; Ongedaan maken in een snel-toevoegen-blok
-  haalt beide weg.
+  eenheid daar. De toast zegt "Yoghurt bewaard, ook bij Eten" met **Openen**; Ongedaan maken na een actie die meteen
+  bewaart haalt beide weg.
   Een datum, periode of berekende datum kan **In de agenda** (`agenda`, schakelaar): ze staat dan in de Agenda.
   Een datum (of een berekende datum, zoals Volgende keer) kan **Herinneren** (`remind`, keuzelijst onder ⋯: Niet,
   Op de dag zelf, 1, 2, 3 dagen, 1 of 2 weken, 1 maand vooraf), met **Elk jaar** (`yearly`) voor een verjaardag.
@@ -801,9 +801,10 @@ Twee soorten, inline in `Icon.tsx`:
 
 ### Wat nu loopt (activiteiten)
 
-Een activiteit met een uur en zonder einde loopt nog (werk, vasten): ze staat in het blok **Loopt nu** met de tijd die
-live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`). Een soort met een doel
-(16 u vasten) geeft een melding als dat doel bereikt is.
+Een activiteit met een uur en zonder einde loopt nog (werk, vasten). In een weergave met **Loopt nu** = ja staat ze
+met de tijd die live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`); een actie
+die start en stopt toont dezelfde tijd op de knop. Een soort met een doel (16 u vasten) geeft een melding als dat doel
+bereikt is.
 
 ### Verbanden: `LinkMapView`, `LinkSchema` (`LinkMap.tsx`), `LinkSearch`, `LinkDetail`, `LinkInline`, `LinkProblems`, `SelectionCard` (`LinkParts.tsx`), `LinkList` (`LinkList.tsx`) en `LinksPage`
 
@@ -872,96 +873,68 @@ Kasticket lezen, Overzicht). Wat een verband doet, staat er als gewone zin (`lin
   je in `shared/links.ts` beslist of ze iets verbindt (`FIELD_LINKS` …); wat verbindt, krijgt een voorbeeld in
   `test/links.test.ts`. Zo blijft alles zichtbaar.
 
+### Weergaven en acties op een overzicht: `ViewCard`, `ActionTile`, `ViewBuilder`, `ActionBuilder`
+
+Een bord heeft twee soorten blokken (`shared/blocks.ts`): een **weergave** (iets tonen) en een **actie** (iets loggen).
+Er zijn geen vaste blokken en geen voorbeelden: Toevoegen → **Blok toevoegen** (`AddChoice`: Weergave · Actie, zonder
+ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en Loopt nu zijn gewoon zinnen.
+
+- **De zin** (`ViewBuilder` in een `Sheet` met `builder-sheet`): een weergave lees je als een zin, elk stuk is een
+  witte pil met een pijltje (`.tok`, met de gewone keuzelijst van het toestel erover), wat je toevoegt een stille
+  `+ …` (`.tok-add`), wat je weghaalt een ×. "**Toon** het logboek **van** al je lijsten / Jaan · Voorraad **waar**
+  dingen bevat komkommer **en** wanneer in deze maand **tel** de som van bedrag **per** maand **over** de laatste 12
+  maanden **met als doel** …". Bronnen (`SOURCES`): het logboek, de dingen, de voorraad, wie moet wie, wat er gegeten
+  is. Een lijst krijgt **gesorteerd op** en **hoogstens N rijen**; tellen enkel bij een vorm die telt.
+- **Tonen als** (`.show-grid`, tien `.show-tile`s met een klein tekeningetje, het gekozen wit met een rand en blauw):
+  Lijst, Tabel, Getal, Voortgang, Staafjes, Lijn, Gebied, Per keuze, Verdeling, Kalender. Geen 3D, geen
+  grafiekenbibliotheek. **Kolommen** als chips (`.builder-chips`) bij Lijst en Tabel.
+- **Voorwaarden** (`RulesEditor`, `.rule-line`): over wat je ziet, nooit iets dat handelt. "Als een rij waar … →
+  rood / oranje / groen kleuren, bovenaan, verbergen", "Als er niets is → het blok verbergen", "Als de uitkomst > … →
+  kleuren". Een gekleurde rij krijgt een balkje links (`.tone-row-*`) en gekleurde tekst; een gekleurde uitkomst
+  kleurt het getal.
+- **Voorbeeld** (`.cap-label` Voorbeeld): de echte weergave met jouw gegevens, die meekijkt terwijl je bouwt
+  (`GET /insights/view`, 300 ms na de laatste wijziging); in het voorbeeld doet een rij niets. Op tablet (vanaf 900px)
+  links de zin en rechts het voorbeeld, op gsm het voorbeeld bovenaan. **Naam** bovenaan, met de naam die vanzelf
+  komt als placeholder ("Het logboek", "Bijna op"). Onderaan, altijd zichtbaar (`.builder-actions`): Annuleren en **Op
+  het bord zetten** / **Bewaren**.
+- **Een weergave op het bord** (`ViewCard`): een `dash-card` met `CardHead`, de periode eronder ("Laatste 6 maanden")
+  tenzij de naam ze al zegt ("Water vandaag"). Lijst: rijen met de naam, de kolommen in grijs, de laatste rechts; een
+  geplande rij heeft een vinkje (afvinken), een lopende de tijd en Stop; meer dan het maximum is "+13". Tabel
+  (`.view-table`): kleine grijze koppen, getallen rechts. Kalender (`.view-calendar`): per dag een vakje van hoogstens
+  32px, de weekdagen erboven, van licht naar donker in één kleur (`--chart-1`) met "minder … meer". Niets: "Niets"; een
+  weergave die verbergt als er niets is, staat er dan niet.
+- **Een actie** (`ActionBuilder`): bovenaan de knop zoals hij wordt (`.builder-preview-tile`), dan Lijst, Soort (chips),
+  **Een tik** (`.does-grid`, vier keuzes: Opent het formulier · Bewaart meteen · Telt er een bij · Start en stopt, die
+  laatste enkel bij een activiteit), **Vooraf ingevuld** (`.prefill`: de omschrijving en de velden van de soort, het
+  formulier krijgt ze via `?vooraf=`) en **Naam op de knop**.
+- **Een actie op het bord** (`ActionTile`, `.quick-tile`): geen kaart maar een knop van 56px, het icoon van de soort
+  op de tint van de lijst, de naam en rechts wat een tik doet (+ formulier of tellen, ✓ bewaren, klok timer).
+  Bewaren en tellen tonen een toast met **Ongedaan maken**; tellen toont hoeveel vandaag (`.quick-tile-count`), een
+  lopende timer de tijd (`.quick-tile-time`, de knop krijgt `.is-running`). Acties na elkaar staan samen
+  (`segmentBlocks`, `ActionGroup`): twee per rij op gsm, vanaf drie een breed blok met vier naast elkaar op tablet.
+
 ### Grafieken
 
-`ChartBlock`, `ChartBuilder`, `TextBlock` (`ChartBlock.tsx`) en `ChartView`, `ChartTable` (`Chart.tsx`), uit
-`shared/charts.ts`. Een grafiek is een blok op een overzicht; niets staat vast (er is geen grafiek tot je er een
-maakt).
+`ChartView`, `ChartTable` (`Chart.tsx`), uit `shared/charts.ts`. Een grafiek is een weergave in de vorm Staafjes,
+Lijn, Gebied, Per keuze, Verdeling, Getal of Voortgang.
 
-- **Kaart**: `dash-card` met `CardHead`: de titel (eigen titel, of de lijst · wat ze telt: "Uitgaven · Bedrag"), de
-  periode als gegeven eronder ("Laatste 12 weken", "1/10 – 31/10") en rechts een stille knop met het icoon `table`
-  (Als tabel / Als grafiek). Tijdens het herladen blijft de vorige grafiek staan, zachter (`.is-stale`): geen flits.
+- **Kaart**: `ViewCard` met rechts een stille knop met het icoon `table` (Als tabel / Als grafiek).
 - **Staafjes**: hoogstens 24px breed, 4px rond aan de top en recht aan de basis; gestapeld met 2px wit ertussen.
-  **Lijn**: 2px, een punt van 8px met een witte rand aan het eind, één reeks met een zachte vlakte eronder. Haarfijne
-  rasterlijnen (`--chart-grid`), de nullijn iets sterker; een **doel** is de enige stippellijn ("Doel € 1.200,00").
-  Eén waarde staat erbij (de periode van nu), niet bij elke staaf. Vanaf twee reeksen een legende (`.chart-legend`:
-  een vierkantje bij staafjes, een streepje bij lijnen).
+  **Lijn**: 2px, een punt van 8px met een witte rand aan het eind, één reeks met een zachte vlakte eronder; **Gebied**
+  vult elke reeks. Haarfijne rasterlijnen (`--chart-grid`), de nullijn iets sterker; een **doel** is de enige
+  stippellijn ("Doel € 1.200,00"). Eén waarde staat erbij (de periode van nu), niet bij elke staaf. Vanaf twee reeksen
+  een legende (`.chart-legend`: een vierkantje bij staafjes, een streepje bij lijnen).
 - **Per keuze** (`.chart-ranked`): per keuze een rij (naam, een zwart staafje van 12px, de waarde rechts), de
   grootste eerst, hoogstens 12 en de rest als Overige. **Verdeling** (`.chart-parts`): één balk van 28px in stukken
   (hoogstens zes), 2px wit ertussen, het aandeel erin enkel als het past (anders in de tooltip en de tabel), de namen
   in de legende. **Getal** (`.chart-number`): de uitkomst groot (32px, 600), "+12% tegenover de periode ervoor" in
-  grijs, een doelbalk (`.chart-meter`, rood boven de grens) en een kleine grijze lijn per periode.
+  grijs en een kleine grijze lijn per periode. **Voortgang**: het getal met "/ 8" in grijs (`.chart-number-goal`) en
+  een doelbalk (`.chart-meter`, rood boven de grens).
 - **Kleur volgt de keuze**, niet haar plaats: een persoon, keuze of tag houdt zijn kleur (de volgorde van de keuzes,
   de leden, de namen), wat ook de rangorde is.
 - **Tooltip** (`.chart-tip`, wit vlak): per periode één tooltip met alle reeksen, de waarde vooraan en vet; het raakvlak
   is de hele periode (groter dan het staafje). Met het toetsenbord: focus op de grafiek en ← →. Alles staat ook in
   de tabel (`.chart-table`): de tooltip is nooit de enige weg naar een getal.
-- **Samenstellen** (`ChartBuilder` in een `Sheet`): Als (Staafjes · Lijn · Getal · Per keuze · Verdeling), Wat en
-  Van, Per (bij Per keuze en Verdeling), Volgens, Per / Periode en Laatste (leeg = Alles), Apart per, Weergave, Doel,
-  Van wie, Titel (de naam vanzelf als placeholder), en
-  eronder een voorbeeld (`.chart-preview`) dat meekijkt.
-- **Overzicht als verslag**: staat er een grafiek op, dan een rij `filters` met `FilterSelect` **Periode** ("Zoals
-  ingesteld" of Deze week, Deze maand, Vorige maand, …) voor alle grafieken; een korte periode neemt een kleinere
-  stap (een maand per week). ⋯ → **Afdrukken of als pdf**: bij afdrukken de naam en de periode bovenaan
-  (`.print-title`), de blokken in twee kolommen met een haarlijn, zonder zijbalk, knoppen of tooltips.
-- **Tekst** (`TextBlock`): een titel en alinea's (`.text-card-p`), bv. bovenaan een verslag.
-
-## 5. Beweging
-
-Curves (in `:root`): `--ease-out` voor bijna alles, ook een vlak dat glijdt en een blad dat opent · `--ease-close`
-voor wat weggaat (een blad dat sluit, een melding) · `--spring` enkel voor een klein wipje van een icoon, nooit voor iets
-dat aan een rand hangt · `--ease-in-out` voor heen-en-weer (scanlijn). Duren: `--dur` 150ms (kleur, hover),
-`--dur-page` 260ms, `--dur-glide` 320ms, `--dur-sheet-open` 300ms en `--dur-sheet-close` 200ms. Een beweging speelt één
-keer, bij het openen of kiezen; nooit bij het scrollen (behalve de titel die in de kop verschijnt).
-
-### Schermwissels (View Transitions)
-
-Elke navigatie loopt via een **View Transition**. Daarvoor gebruikt de app een data-router (`createBrowserRouter`
-in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigate` in `src/router.tsx` die
-`viewTransition` standaard aanzetten.
-
-- **Importeer `Link`, `NavLink` en `useNavigate` altijd uit `src/router.tsx`**, nooit uit `react-router`.
-  (`useParams`, `useSearchParams`, `useLocation` mogen wel rechtstreeks.)
-- Op tablet vloeit **enkel het paneel** over (`view-transition-name: panel`); de zijbalk blijft live, zodat het
-  witte vlak naar het nieuwe item glijdt. Op gsm vloeit het scherm over en blijft de onderbalk staan.
-- De inhoud van het nieuwe scherm schuift daarbij 5px omhoog (automatisch via `.page`; in een `.split` komen
-  zijkolom en kaarten na elkaar).
-- Filters in het adres (`setSearchParams`) wisselen **zonder** overgang: dat is geen nieuw scherm.
-- Grote code laad je pas als ze nodig is, met `lazy`: de barcodecode (±1 MB, `Barcode` in `Fields.tsx`) en pdf.js
-  (`PdfPages` in `FileViewer`). Een groot scherm kan een `lazy` route in `routes.tsx` zijn: de router wacht tot het
-  geladen is, zodat de overgang vloeiend blijft, en toont zolang een zwart laadstreepje.
-
-### Micro-animaties
-
-| Moment | Animatie | Duur |
-| --- | --- | --- |
-| Nieuw scherm | paneel vloeit over, inhoud schuift 5px omhoog | 0,26 s |
-| Lijst verschijnt | rij na rij (`stagger` + `stagger(i)`), 28 ms tussen rijen, max 14 | 0,3 s |
-| Tab, segment, menu, onderbalk wisselt | het witte vlak glijdt naar de nieuwe keuze (`--ease-out`, zonder nawiebelen) | 0,32 s |
-| Zoekresultaat wisselt | grijs vlak glijdt mee | 0,3 s |
-| Titel in de kop (gsm) bij scrollen | verschijnt klein in het midden van de kop | 0,15 / 0,32 s |
-| Boom klapt open | rij groeit (`grid-template-rows`), kinderen schuiven één voor één in, pijltje draait | 0,4 s |
-| Getal verandert | rolt in de richting van de verandering (`Num`) | 0,38 s |
-| Totaal verschijnt | telt op (`useCountUp`) | 0,9 s |
-| Balk of meter | groeit vanaf links / van onder (`.total-bar`, `.total-history`, `LevelMeter`) | 0,5–1 s |
-| Onderblad, venster, zoekpalet | glijdt in (`@starting-style`, `--ease-out`) en uit (`--ease-close`); een onderblad veeg je aan de greep dicht (verder dan 120px of snel: dicht, anders terug) | 0,3 / 0,2 s |
-| Melding | komt op uit een waas en gaat erin weg (met een knop zoals Ongedaan maken: `.toast-action`, 7 s in beeld) | 0,4 / 0,2 s |
-| Vinkje | tekent zichzelf (`draw`) | 0,4 s |
-| Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
-| Indrukken | knop en filter zakken 1px, een icoon in menu of onderbalk krimpt even | 0,15 s |
-| Ingevuld door de app | veld (`auto`) of chip (`.tag.is-filled`) krijgt een gele ring die vervaagt (`auto-flash`, enkel `box-shadow`) | 0,9 s |
-| Hover | vlak wordt iets donkerder, de ring van een kaart iets sterker, pijltje schuift 3px | 0,15 s |
-
-Regels:
-
-- **`backwards`, nooit `both` of `forwards`.** Een animatie die na afloop een transform laat staan, maakt van het
-  element het referentiekader voor vaste elementen (de kop, de onderbalk) en breekt die.
-- Animeer `transform` en `opacity`. Uitzonderingen: de tablijn/het tabvlak (breedte) en de boom (`grid-template-rows`).
-- Eerste keer tonen = rustig. Enkel **veranderingen** krijgen een opvallende animatie (`Num` beweegt pas bij een wijziging).
-- Een venster opent met `@starting-style` en sluit met `transition-behavior: allow-discrete` (zie `dialog.sheet`,
-  `dialog.palette`): nooit een venster dat zonder animatie verschijnt of verdwijnt.
-- "Minder beweging" in het toestel zet alles uit, ook de schermwissels (staat onderaan `styles.css`). Test dat je
-  scherm zonder animatie even duidelijk is.
 
 ---
 
@@ -969,15 +942,12 @@ Regels:
 
 **Overzicht** (`/`, `BoardView` in `Board.tsx`): `PageHead` met de naam van het overzicht, `primary` **Toevoegen**
 (op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
-overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf: Uitgaven deze maand, Te doen, Bijna
-op en Wie moet wie. Onder een bord staat niets anders dan zijn blokken: je lijsten staan in de zijbalk en onder
-Menu (en in Verbanden); een lijst op een bord is een lijstblok dat je zelf kiest. Elk blok is
-een `dash-card`; een blok dat als geheel opent, is een `dash-link`; het aantal staat rechts in de kop
-(`.dash-count`, enkel als het niet 0 is). De blokken staan als metselwerk (`useMasonry`). **Snel loggen** is geen
-kaart maar een knop (`QuickGroup`, `.quick-tile`): het icoon van de soort op de tint van de lijst, haar naam en een +
-rechts, 56px hoog; een tik opent het formulier van die lijst en soort (met Typ wat je weet bovenaan). Snel loggen na elkaar staat samen
-(`segmentBlocks`): twee knoppen per rij op gsm, vanaf drie een breed blok met vier naast elkaar op tablet. **Aanpassen**
-(`BlocksEditor`): een `sort-list` met greep en ×, Breed als filterpil, Toevoegen in een `Sheet`, onderaan Klaar.
+overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf (zolang je niets koos): Uitgaven deze
+maand, Te doen, Bijna op en Wie moet wie, als weergaven. Onder een bord staat niets anders dan zijn blokken: je lijsten
+staan in de zijbalk en onder Menu (en in Verbanden). Elk blok is een [weergave of actie](#weergaven-en-acties-op-een-overzicht-viewcard-actiontile-viewbuilder-actionbuilder)
+(of één ding); de blokken staan als metselwerk (`useMasonry`). **Aanpassen** (`BlocksEditor`): een `sort-list` met
+greep, de naam, een potlood (de bouwer), Breed als filterpil (enkel op tablet) en ×, Toevoegen → Blok toevoegen, onderaan
+Klaar.
 
 **Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); noemen de
 eerste woorden een soort of lijst, dan staat die bovenaan, staat er een ding in je tekst, dan loggen in zijn lijst
