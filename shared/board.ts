@@ -128,7 +128,7 @@ export function defaultBlocks(lists: { id: string; archived: 0 | 1 }[], has: { m
   out.push({ kind: "todo" });
   if (has.stock) out.push({ kind: "stock" });
   if (has.money) out.push({ kind: "balance" });
-  // Zonder lijsten als blok: die staan in de zijbalk (of op een gsm per tag onder het overzicht).
+  // Zonder lijsten als blok: die staan in de zijbalk en onder Menu (een lijstblok kies je zelf).
   if (!lists.some((x) => !x.archived)) return [];
   return out;
 }

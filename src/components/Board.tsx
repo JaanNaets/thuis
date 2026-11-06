@@ -15,7 +15,7 @@ import { viewFields } from "../../shared/views";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
 import { formatCents, formatTotal, today } from "../format";
-import { groupByTag, listIcon, listTone } from "../lists";
+import { listIcon, listTone } from "../lists";
 import { Link } from "../router";
 import { useSession } from "../session";
 import { ChartView } from "./Chart";
@@ -88,7 +88,6 @@ const storeBoard = (id: string) => {
 };
 
 export function BoardView({ overview: first, onChanged }: { overview: Overview; onChanged: () => void }) {
-  const { lists, tags } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
   const palette = usePalette();
@@ -217,37 +216,6 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
             Array.isArray(b) ? <QuickGroup key={`snel:${blockKey(b[0])}`} blocks={b} index={i} /> : <BlockView key={blockKey(b)} block={b} index={i} />,
           )}
         </div>
-      )}
-
-      {/* Zonder zijbalk met lijsten (gsm, tablet): je lijsten per tag onder het overzicht. */}
-      {!editing && (
-        <section className="home-projects">
-          {groupByTag(lists, tags).map((g) => (
-            <div key={g.tag?.id ?? "zonder"}>
-              <h2 className="section-title">{g.tag?.name ?? "Zonder tag"}</h2>
-              <div className="card">
-                <ul className="rows">
-                  {g.lists.map((l) => (
-                    <li key={l.id}>
-                      <Link to={`/lijsten/${l.id}`} className="row">
-                        <span className="cell-main">
-                          <span className={`row-media tone-${listTone(l)}`}>
-                            <Icon name={listIcon(l)} size={16} />
-                          </span>
-                          <span className="row-title">{l.name}</span>
-                        </span>
-                        <Icon name="next" size={16} className="row-chevron" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ))}
-          <Link to="/lijsten/nieuw" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }}>
-            <Icon name="plus" size={15} /> Lijst
-          </Link>
-        </section>
       )}
 
       <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>

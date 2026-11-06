@@ -7642,13 +7642,6 @@ label.lm-row-main {
   cursor: pointer;
 }
 
-/* Je projecten onder het overzicht: enkel zonder zijbalk met projecten (gsm en tablet tot 1100px). */
-@media (min-width: 1100px) {
-  .home-projects {
-    display: none;
-  }
-}
-
 /* ---------- Lijsten, logboek en lijnen (het model van lijsten en gebeurtenissen) ---------- */
 
 /* Een lijst in de zijbalk: een klein tegeltje in de toon van de lijst, onder haar tag. */

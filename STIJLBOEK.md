@@ -421,8 +421,8 @@ Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen,
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
-Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); op gsm en tablet tot 1100px staan je
-lijsten per tag ook onder het overzicht (`.home-projects`). Een sectiekop ("Lijsten") staat in kleine kapitalen.
+Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); onder het overzicht staan geen lijsten.
+Een sectiekop ("Lijsten") staat in kleine kapitalen.
 
 ### Formulier
 
@@ -970,7 +970,8 @@ Regels:
 **Overzicht** (`/`, `BoardView` in `Board.tsx`): `PageHead` met de naam van het overzicht, `primary` **Toevoegen**
 (op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
 overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf: Uitgaven deze maand, Te doen, Bijna
-op en Wie moet wie (geen blok per lijst: die staan in de zijbalk, en op gsm per tag onder het overzicht). Elk blok is
+op en Wie moet wie. Onder een bord staat niets anders dan zijn blokken: je lijsten staan in de zijbalk en onder
+Menu (en in Verbanden); een lijst op een bord is een lijstblok dat je zelf kiest. Elk blok is
 een `dash-card`; een blok dat als geheel opent, is een `dash-link`; het aantal staat rechts in de kop
 (`.dash-count`, enkel als het niet 0 is). De blokken staan als metselwerk (`useMasonry`). **Snel loggen** is geen
 kaart maar een knop (`QuickGroup`, `.quick-tile`): het icoon van de soort op de tint van de lijst, haar naam en een +
