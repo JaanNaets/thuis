@@ -250,12 +250,6 @@ export function BoardView({ overview: first, onChanged }: { overview: Overview; 
         </section>
       )}
 
-      {!editing && (
-        <button type="button" className="fab" aria-label="Toevoegen" onClick={() => palette("add")}>
-          <Icon name="plus" size={24} />
-        </button>
-      )}
-
       <Sheet open={menu !== null} title={menu === "new" ? "Nieuw overzicht" : (current?.name ?? "Overzicht")} onClose={() => setMenu(null)}>
         {menu === "menu" ? (
           <ul className="rows sheet-menu">

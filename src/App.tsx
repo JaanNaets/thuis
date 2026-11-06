@@ -4,17 +4,19 @@ import { useApi } from "./api";
 import { CommandPalette, PaletteContext, type PaletteMode } from "./components/CommandPalette";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { Icon } from "./components/Icon";
+import { MenuSheet } from "./components/MenuSheet";
 import { Sidebar } from "./components/Sidebar";
 import { ToastProvider } from "./components/Toast";
 import { isKiosk, useIdleReset, useOnline } from "./device";
 import { useOutbox } from "./outbox";
-import { NavLink, useNavigate } from "./router";
+import { Link, NavLink, useNavigate } from "./router";
+import { AddContext, type AddAction } from "./shell";
 import { openingPath, startPath } from "./start";
 import { SessionContext, type Me } from "./session";
 
 const KIOSK_IDLE_MS = 5 * 60 * 1000;
 
-/** Het geraamte rond elk scherm: zijbalk (tablet), onderbalk (gsm), het witte paneel en het zoekpalet. */
+/** Het geraamte rond elk scherm: zijbalk (tablet), onderbalk en menublad (gsm), het witte paneel en het zoekpalet. */
 export function App() {
   const { data: me, error, reload: reloadMe } = useApi<Me>("/me");
   if (error && !me) return <p className="error page">{error}</p>;
@@ -30,6 +32,10 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   // Het palet (zoeken en toevoegen): dicht, of open in een modus, eventueel met tekst.
   const [palette, setPalette] = useState<{ mode: PaletteMode; text: string } | null>(null);
   const openPalette = useCallback((mode: PaletteMode, text = "") => setPalette({ mode, text }), []);
+  // De + in de onderbalk: wat het scherm vraagt, anders het palet om toe te voegen.
+  const [add, setAdd] = useState<AddAction | null>(null);
+  const [menu, setMenu] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
   const navigate = useNavigate();
   const { search } = useLocation();
   // Waar de app opent op dit toestel (zie start.ts); de kiosk keert daar ook naar terug.
@@ -61,40 +67,67 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
 
   const session = useMemo(() => ({ person: me.person, lists: me.lists, tags: me.tags, ai: me.ai !== false, reloadMe, openSearch: () => openPalette("search") }), [me, reloadMe]);
 
-  // De onderbalk op een gsm: overzicht, agenda, geld en zoeken. Jouw gegevens: je letter bij de titel van het overzicht.
-  const tabIndex = pathname.startsWith("/agenda") ? 1 : pathname.startsWith("/geld") ? 2 : 0;
+  // De onderbalk op een gsm: Overzicht, Agenda, de +, Geld en Menu. Menu licht op voor wat enkel in het menublad staat,
+  // en zolang dat open is.
+  const tabIndex = menu ? 4 : pathname === "/" ? 0 : pathname.startsWith("/agenda") ? 1 : pathname.startsWith("/geld") ? 3 : 4;
 
   return (
     <SessionContext value={session}>
       <PaletteContext value={openPalette}>
+      <AddContext value={setAdd}>
       <ToastProvider>
         <ConfirmProvider>
           <div className="app">
+            <a
+              href="#inhoud"
+              className="skiplink"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("inhoud")?.focus();
+              }}
+            >
+              Naar de inhoud
+            </a>
             <div className="nav-progress" data-active={navigation.state !== "idle"} aria-hidden="true" />
 
             <Sidebar onSearch={() => openPalette("search")} />
 
-            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 4 } as CSSProperties}>
+            <nav className="tabbar" aria-label="Hoofdmenu" style={{ "--n": 5 } as CSSProperties}>
               <span className="tabbar-indicator" style={{ "--i": tabIndex } as CSSProperties} />
-              <NavLink to="/" className={({ isActive }) => (isActive || !/^\/(agenda|geld)/.test(pathname) ? "active" : "")}>
-                <Icon name="project" size={21} />
+              <NavLink to="/" end className={tabIndex === 0 ? "active" : ""}>
+                <Icon name="project" size={20} />
                 <span>Overzicht</span>
               </NavLink>
-              <NavLink to="/agenda">
-                <Icon name="calendar" size={21} />
+              <NavLink to="/agenda" className={tabIndex === 1 ? "active" : ""}>
+                <Icon name="calendar" size={20} />
                 <span>Agenda</span>
               </NavLink>
-              <NavLink to="/geld">
-                <Icon name="wallet" size={21} />
+              {add?.to ? (
+                <Link to={add.to} className="tab-add" aria-label={add.label}>
+                  <span>
+                    <Icon name="plus" size={20} />
+                  </span>
+                </Link>
+              ) : (
+                <button type="button" className="tab-add" aria-label={add?.label ?? "Toevoegen"} onClick={add?.onClick ?? (() => openPalette("add"))}>
+                  <span>
+                    <Icon name="plus" size={20} />
+                  </span>
+                </button>
+              )}
+              <NavLink to="/geld" className={tabIndex === 3 ? "active" : ""}>
+                <Icon name="wallet" size={20} />
                 <span>Geld</span>
               </NavLink>
-              <button type="button" className="tab-button" onClick={() => openPalette("search")}>
-                <Icon name="search" size={21} />
-                <span>Zoeken</span>
+              <button type="button" className={`tab-button${tabIndex === 4 ? " active" : ""}`} aria-expanded={menu} onClick={() => setMenu(true)}>
+                <Icon name="menu" size={20} />
+                <span>Menu</span>
               </button>
             </nav>
 
-            <main>
+            <MenuSheet open={menu} onClose={closeMenu} onSearch={() => openPalette("search")} />
+
+            <main id="inhoud" tabIndex={-1}>
               {!online && (
                 <p className="offline-note" role="status">
                   {outbox
@@ -109,6 +142,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
           </div>
         </ConfirmProvider>
       </ToastProvider>
+      </AddContext>
       </PaletteContext>
     </SessionContext>
   );

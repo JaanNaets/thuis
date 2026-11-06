@@ -14,6 +14,7 @@ import { useToast } from "../components/Toast";
 import { listIcon } from "../lists";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
+import { PhoneAdd } from "../shell";
 
 type Tab = "dingen" | "logboek" | "gepland";
 
@@ -134,11 +135,12 @@ export function ListPage() {
           )}
         </ul>
       </Sheet>
-      {primary && (
-        <Link to={tab === "dingen" ? `/lijsten/${list.id}/nieuw` : `/lijsten/${list.id}/loggen`} className="fab" aria-label={tab === "dingen" ? `${list.one} toevoegen` : "Loggen"}>
-          <Icon name="plus" size={24} />
-        </Link>
-      )}
+      {edit &&
+        (tab === "dingen" ? (
+          <PhoneAdd label={`${list.one} toevoegen`} to={`/lijsten/${list.id}/nieuw`} />
+        ) : (
+          <PhoneAdd label={tab === "gepland" ? "Plannen" : "Loggen"} to={`/lijsten/${list.id}/loggen${tab === "gepland" ? "?gepland=1" : ""}`} />
+        ))}
     </div>
   );
 }

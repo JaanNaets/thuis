@@ -305,7 +305,7 @@ function previewData(defs: FieldDef[], draft: AttributeDraft): Attributes {
 
 /**
  * De velden van een lijst in een formulier. `access`: per veld wat je mag (enkel zien = uitgeschakeld).
- * `auto`: velden die de app invulde (etiket), zacht blauw tot je ze aanpast. `people`: wie je kan kiezen.
+ * `auto`: velden die de app invulde (etiket), zacht geel tot je ze aanpast. `people`: wie je kan kiezen.
  */
 export function FieldInputs({
   defs,

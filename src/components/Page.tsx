@@ -9,17 +9,17 @@ export type { Tone };
 
 type Back = { to: string | -1; label: string };
 
-function BackLink({ back, className, compact, children }: { back: Back; className?: string; compact?: boolean; children: ReactNode }) {
+function BackLink({ back, className, label, children }: { back: Back; className?: string; label?: string; children: ReactNode }) {
   const navigate = useNavigate();
   if (back.to === -1) {
     return (
-      <button type="button" className={className} data-compact={compact} aria-label={compact ? back.label : undefined} onClick={() => navigate(-1)}>
+      <button type="button" className={className} aria-label={label} onClick={() => navigate(-1)}>
         {children}
       </button>
     );
   }
   return (
-    <Link to={back.to} className={className} data-compact={compact} aria-label={compact ? back.label : undefined}>
+    <Link to={back.to} className={className} aria-label={label}>
       {children}
     </Link>
   );
@@ -32,10 +32,11 @@ function BackLink({ back, className, compact, children }: { back: Back; classNam
  * - `description`: korte uitleg; op tablet klein en grijs naast de titel;
  * - `back`: waar "terug" naartoe gaat; wordt ook het eerste stuk van het kruimelpad;
  * - `actions`: acties op het item zelf (bv. Bewerken), rechts naast de titel;
- * - `primary`: de hoofdactie van het scherm. Op tablet rechtsboven in de paneelbalk; op een gsm doet de zwevende + knop dat.
+ * - `primary`: de hoofdactie van het scherm. Op tablet rechtsboven in de paneelbalk; op een gsm doet de + in de
+ *   onderbalk dat (`useAddAction`).
  *
- * Op een gsm zweeft "terug" als glazen pil linksboven. Zodra de grote titel uit beeld schuift, krimpt die pil tot
- * een rondje en verschijnt de titel in een glazen pilletje in het midden.
+ * Op een gsm staat bovenaan de kop (48 px, op de schil): terug of het merk links, zoeken en jouw letter rechts. Zodra
+ * de grote titel onder de kop schuift, verschijnt hij klein in het midden van de kop.
  */
 export function PageHead({
   title,
@@ -52,7 +53,7 @@ export function PageHead({
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
-  const { person: me } = useSession();
+  const { person: me, openSearch } = useSession();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [compact, setCompact] = useState(false);
 
@@ -62,7 +63,8 @@ export function PageHead({
     const check = () => {
       frame = 0;
       const el = titleRef.current;
-      if (el) setCompact(el.getBoundingClientRect().bottom < 50);
+      const head = document.querySelector(".phone-head")?.getBoundingClientRect().bottom ?? 48;
+      if (el) setCompact(el.getBoundingClientRect().bottom < head);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(check);
@@ -101,12 +103,33 @@ export function PageHead({
         </div>
       </div>
 
-      {back && (
-        <BackLink back={back} className="crumb" compact={compact}>
-          <Icon name="back" size={18} />
-          <span className="crumb-label">{back.label}</span>
-        </BackLink>
-      )}
+      <header className="phone-head" data-compact={compact}>
+        {back ? (
+          <BackLink back={back} className="phone-head-button" label={`Terug naar ${back.label}`}>
+            <Icon name="back" size={20} />
+          </BackLink>
+        ) : (
+          <Link to="/" className="phone-head-brand">
+            <span className="brand-mark">
+              <Icon name="home" size={15} />
+            </span>
+            <span>Thuis</span>
+          </Link>
+        )}
+        <span className="phone-head-title" aria-hidden="true">
+          {title}
+        </span>
+        <div className="phone-head-actions">
+          <button type="button" className="phone-head-button" aria-label="Zoeken" onClick={openSearch}>
+            <Icon name="search" size={18} />
+          </button>
+          {me.id && (
+            <Link to="/ik" className="phone-head-avatar" aria-label="Jouw gegevens">
+              <Avatar member={me} />
+            </Link>
+          )}
+        </div>
+      </header>
       <header className="page-head">
         <div className="page-title">
           <h1 ref={titleRef}>
@@ -116,17 +139,7 @@ export function PageHead({
           {description && <p className="page-desc">{description}</p>}
         </div>
         {actions && <div className="page-actions">{actions}</div>}
-        {/* Op een gsm, bij een hoofdscherm (zonder terug): jouw letter, zoals de paneelbalk op tablet. */}
-        {!back && me.id && (
-          <Link to="/ik" className="head-avatar" aria-label="Jouw gegevens">
-            <Avatar member={me} />
-          </Link>
-        )}
       </header>
-
-      <div className="topbar" data-visible={compact} aria-hidden="true">
-        <span className="topbar-title">{title}</span>
-      </div>
     </>
   );
 }

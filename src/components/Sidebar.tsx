@@ -20,7 +20,7 @@ export const PLACES: { to: string; label: string; icon: IconName }[] = [
 ];
 
 /** De lijst die je nu bekijkt (uit het adres). */
-const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
+export const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
 
 /**
  * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, de vaste plekken en je lijsten per tag
@@ -65,7 +65,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 }
 
 /** Je lijsten per tag: elke tag klapt open (open als je er een lijst van bekijkt); wat zonder tag is, onderaan. */
-function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
+export function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const groups = groupByTag(lists, tags);
   return (

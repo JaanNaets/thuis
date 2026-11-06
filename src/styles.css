@@ -5,62 +5,63 @@
    ------------------------------------------------------------------ */
 
 :root {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
 
   /*
-   * Vlakken: wit paneel op een koel lichtgrijs canvas. Grijs is een doorschijnend vlak (werkt op wit én op een
-   * grijze groep), nooit een rand.
+   * Vlakken: een warme grijze schil met de pagina op één wit paneel. Grijs in het paneel is een doorschijnende tint
+   * van zwart (werkt op wit én op een grijze groep), nooit een rand.
    */
-  --canvas: #eef0f2;
-  --background: #ffffff;
-  --subtle: rgb(118 118 128 / 0.06); /* zacht vlak: lege staat, bestanden, lange tekst */
-  --group: rgb(118 118 128 / 0.045); /* een groep velden in een formulier */
-  --muted: rgb(118 118 128 / 0.1); /* pillen, zachte knoppen, sporen van tabs en segmenten */
-  --muted-strong: rgb(118 118 128 / 0.16); /* hover daarvan */
-  --field: rgb(118 118 128 / 0.08); /* invoervelden (worden wit bij focus) */
-  --field-hover: rgb(118 118 128 / 0.12);
-  --hover: rgb(0 0 0 / 0.025); /* hover van een rij */
-  --press: rgb(0 0 0 / 0.055); /* ingedrukt, gekozen zoekresultaat, actieve tab onderaan */
+  --canvas: #f2f2ef; /* de schil: achter het paneel, de zijbalk, op de gsm de kop en de onderbalk */
+  --background: #ffffff; /* het paneel, de pagina op de gsm, kaarten */
+  --surface: #ffffff; /* het witte vlak: wat gekozen is, wat zweeft (blad, palet, melding, keuzelijst) */
+  --subtle: rgb(0 0 0 / 0.03); /* zacht vlak: lege staat, bestanden, lange tekst */
+  --group: rgb(0 0 0 / 0.025); /* een groep velden in een formulier */
+  --muted: rgb(0 0 0 / 0.045); /* pillen, zachte knoppen, sporen van tabs en segmenten */
+  --muted-strong: rgb(0 0 0 / 0.075); /* hover daarvan */
+  --muted-solid: #f5f5f5; /* hetzelfde grijs, dekkend: hover van een knop met rand */
+  --field: #ffffff; /* invoervelden: wit met een rand */
+  --hover: rgb(0 0 0 / 0.04); /* hover van een rij of menu-item */
+  --press: rgb(0 0 0 / 0.055); /* gekozen menu-item of rij, ingedrukt */
 
-  /*
-   * Glas: enkel voor wat zweeft, plakt of gekozen is (paneelbalk, onderbalk, gekozen tab of segment, toast,
-   * onderblad, zoekpalet, de secundaire knop). Nooit voor een vlak waar gewoon inhoud op staat.
-   */
-  --glass: linear-gradient(180deg, rgb(255 255 255 / 0.82), rgb(255 255 255 / 0.6));
-  --glass-bar: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.76)); /* balken boven scrollende inhoud */
-  --glass-strong: linear-gradient(180deg, rgb(255 255 255 / 0.94), rgb(255 255 255 / 0.84));
-  --glass-blur: blur(22px) saturate(180%);
-  --glass-edge: rgb(255 255 255 / 0.78);
-  --glass-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 1px rgb(0 0 0 / 0.03), 0 10px 30px -14px rgb(16 24 40 / 0.24),
-    0 0 0 0.5px rgb(16 24 40 / 0.07);
+  /* Balken op de gsm die boven scrollende inhoud liggen: de schil, net doorzichtig, met een waas. */
+  --bar: rgb(242 242 239 / 0.95);
+  --bar-blur: blur(8px);
+  --bar-line: rgb(0 0 0 / 0.06);
 
-  /* Tekst: bijna zwart, en drie zachte grijzen. */
-  --foreground: #1d1d1f;
-  --text-soft: #3a3a3c;
-  --muted-foreground: #6b6b70; /* haalt 4,5:1 op wit en op een grijs vlak */
-  --faint: #a1a1a6; /* enkel iconen, chevrons en bijzaken, nooit lopende tekst */
+  /* Tekst: bijna zwart, en drie grijzen. */
+  --foreground: #0a0a0a;
+  --text-soft: #404040;
+  --muted-foreground: #6b6b6b; /* haalt 4,5:1 op wit én op de schil */
+  --faint: #a3a3a3; /* enkel iconen, chevrons en bijzaken, nooit lopende tekst */
 
-  /* Lijnen: haarfijn. Tussen rijen en secties een lijntje dat de rand niet raakt. */
-  --border: rgb(16 24 40 / 0.08);
-  --border-strong: rgb(16 24 40 / 0.14);
-  --divider: rgb(0 0 0 / 0.05);
-  --input: rgb(16 24 40 / 0.1);
-  --ring: rgb(16 24 40 / 0.16);
+  /* Lijnen: één pixel, dekkend, zodat een lijn op wit en op de schil dezelfde kleur heeft. */
+  --line: #e3e3e1; /* de rand van het paneel, van een blad en van de onderbalk */
+  --border: #e5e5e5; /* de gewone haarlijn: velden, de kop van een kaart, scheidingen */
+  --border-strong: #d4d4d4;
+  --divider: rgb(0 0 0 / 0.06); /* tussen rijen in een kaart (altijd op wit) */
+  --input: #e5e5e5;
+  --ring: #a1a1a1;
 
-  /* Acties: zwart is de actie. */
-  --primary: #1d1d1f;
-  --primary-hover: #2c2c2f;
+  /* Acties: de hoofdknop is geel met zwarte tekst. Zwart blijft voor schakelaars, vinkjes, vandaag en grafieken. */
+  --brand: #f7ff8b;
+  --brand-hover: color-mix(in oklab, var(--brand) 93%, black);
+  --brand-press: color-mix(in oklab, var(--brand) 86%, black);
+  --brand-foreground: #0a0a0a;
+  --brand-edge: inset 0 0 0 1px rgb(80 86 0 / 0.14); /* geel op wit heeft een randje nodig */
+  --primary: #0a0a0a;
+  --primary-hover: #262626;
   --primary-foreground: #ffffff;
-  --destructive: #c62a2f;
+  --destructive: #c10007;
+  --destructive-soft: color-mix(in oklab, var(--destructive) 10%, transparent);
+  --destructive-soft-hover: color-mix(in oklab, var(--destructive) 18%, transparent);
 
-  /* Eén accent: helder blauw. Voor merk, info, selectie en meldingen; nooit voor grote vlakken. */
-  --accent: #2f86eb;
-  --accent-strong: #1f74da;
-  --accent-soft: #eaf4fe;
-  --accent-line: #a7cff6;
-  --accent-ink: #2a7fd8;
+  /* Het accent is het geel: enkel als vlak (met zwarte tekst) of als zachte tint, nooit als tekst of dunne lijn. */
+  --accent: var(--brand);
+  --accent-strong: var(--brand-hover);
+  --accent-soft: color-mix(in oklab, var(--brand) 32%, white);
+  --accent-line: color-mix(in oklab, var(--brand) 82%, black);
+  --accent-ink: var(--foreground);
 
   /* Status */
   --success: #1a7f45;
@@ -69,40 +70,52 @@
   --warning: #b25e09;
   --warning-bg: #fff6e8;
   --warning-solid: #f5a524;
-  --danger: #c62a2f;
+  --danger: #c10007;
   --danger-bg: #fdf0f0;
   --danger-solid: #ef4b51;
 
-  /* Afronding: zacht en ruim. Knoppen, filters en tags zijn pillen (999px). */
-  --radius-sm: 8px; /* badges */
-  --radius: 10px; /* menu-items, kleine tegels */
-  --radius-md: 12px; /* velden, tabs, segmenten */
-  --radius-lg: 14px; /* rijen, kaartjes in een groep */
-  --radius-xl: 20px; /* kaarten, lege staat */
-  --radius-2xl: 24px; /* groepen in een formulier, zoekpalet, venster */
-  --radius-panel: 18px; /* paneel en paneelbalk */
+  /* Afronding: één schaal (10, 14, 18, 20). Filters, tags en badges zijn pillen (999px), knoppen niet. */
+  --radius-sm: 6px; /* badges, vinkvakjes */
+  --radius: 10px; /* knoppen, velden, menu-items, rijen */
+  --radius-md: 10px; /* velden, tabs, segmenten */
+  --radius-lg: 10px; /* rijen, kleine tegels */
+  --radius-xl: 14px; /* kaarten, lege staat, het palet */
+  --radius-2xl: 18px; /* groepen in een formulier, venster */
+  --radius-sheet: 20px; /* een blad */
+  --radius-panel: 18px; /* het paneel */
   --radius-pill: 999px;
 
-  /* Schaduwen: zacht en ver. Een kaart heeft een haarfijne rand van schaduw, iets dat zweeft een diepe. */
-  --shadow-xs: 0 1px 1px 0 rgb(16 24 40 / 0.04);
-  --shadow-sm: 0 2px 6px -1px rgb(16 24 40 / 0.18), 0 0 0 0.5px rgb(16 24 40 / 0.06);
-  --shadow-card: 0 0 0 1px rgb(16 24 40 / 0.06), 0 10px 26px -20px rgb(16 24 40 / 0.25);
-  --shadow-card-hover: 0 0 0 1px rgb(16 24 40 / 0.05), 0 18px 36px -18px rgb(16 24 40 / 0.22);
-  --shadow-inset: 0 0 0 0.5px rgb(16 24 40 / 0.06); /* een wit kaartje in een grijze groep */
-  --shadow-md: 0 10px 24px -10px rgb(16 24 40 / 0.22), 0 0 0 0.5px rgb(16 24 40 / 0.06);
-  --shadow-lg: 0 40px 80px -24px rgb(16 24 40 / 0.38), 0 0 0 0.5px rgb(16 24 40 / 0.1);
-  --shadow-primary: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 8px 18px -8px rgb(16 24 40 / 0.5);
-  --focus-ring: 0 0 0 4px rgb(47 134 235 / 0.14);
-  --focus-line: rgb(47 134 235 / 0.5);
+  /* Randen zijn een ring van 1 px als schaduw (tekent binnen de maat). Echte schaduw enkel voor wat zweeft. */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-surface: 0 0 0 1px rgb(24 24 27 / 0.06), 0 1px 2px rgb(24 24 27 / 0.06); /* het witte vlak */
+  --shadow-sm: var(--shadow-surface);
+  --shadow-card: 0 0 0 1px rgb(24 24 27 / 0.07), 0 1px 2px rgb(24 24 27 / 0.03);
+  --shadow-card-hover: 0 0 0 1px rgb(24 24 27 / 0.11), 0 1px 2px rgb(24 24 27 / 0.05);
+  --shadow-inset: 0 0 0 1px rgb(24 24 27 / 0.06); /* een wit kaartje in een grijze groep */
+  --shadow-md: 0 0 0 1px rgb(24 24 27 / 0.06), 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 0 0 1px rgb(24 24 27 / 0.08), 0 24px 48px -16px rgb(23 36 32 / 0.35); /* erover */
+  --shadow-sheet: 0 0 0 1px rgb(24 24 27 / 0.08), 0 -10px 30px -12px rgb(23 36 32 / 0.25); /* een blad van onder */
+  --focus-ring: 0 0 0 3px rgb(161 161 161 / 0.5);
+  --focus-line: var(--ring);
+  --focus-outline: rgb(115 115 115 / 0.7);
 
-  /* Beweging: één familie curves, zie STIJLBOEK.md → Beweging. */
+  /* Beweging: één familie curves en drie duren, zie STIJLBOEK.md → Beweging. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --ease-close: cubic-bezier(0.4, 0, 1, 1);
+  --spring: cubic-bezier(0.34, 1.25, 0.64, 1); /* een klein wipje: iconen en duimen, nooit iets aan een rand */
+  --dur: 150ms; /* kleur, rand, hover */
+  --dur-page: 260ms; /* een nieuw scherm */
+  --dur-glide: 320ms; /* een vlak dat naar je keuze glijdt */
+  --dur-sheet-open: 300ms;
+  --dur-sheet-close: 200ms;
 
+  /* Maten */
+  --control: 32px; /* knoppen en velden (sm 28, lg 36) */
+  --control-touch: 40px; /* op een aanraakscherm (sm 36, lg 44) */
+  --hit: 44px; /* elk raakvlak is minstens zo groot, ook als de knop kleiner is */
   --sidebar: 68px;
-  --tabbar: 62px;
-  --float-bottom: max(20px, calc(env(safe-area-inset-bottom) + 6px)); /* waar de onderbalk zweeft (gsm) */
+  --tabbar: 56px;
 
   /* Grafieken (zie STIJLBOEK → Grafieken): acht reekskleuren in vaste volgorde, nagekeken op kleurenblindheid (de
      buren in deze volgorde blijven te onderscheiden); enkel voor staafjes, lijnen en stukken, nooit voor tekst. */
@@ -114,8 +127,8 @@
   --chart-6: #008300;
   --chart-7: #6250d6;
   --chart-8: #e34948;
-  --chart-other: #a1a1a6; /* Overige */
-  --chart-muted: #d1d1d6; /* één reeks: de vorige periodes (die van nu is zwart) */
+  --chart-other: #a3a3a3; /* Overige */
+  --chart-muted: #d4d4d4; /* één reeks: de vorige periodes (die van nu is zwart) */
   --chart-grid: rgb(0 0 0 / 0.06);
   --chart-axis: rgb(0 0 0 / 0.16);
 
@@ -269,9 +282,9 @@ kbd {
   color: var(--accent-ink);
   font-weight: 500;
   text-decoration: underline;
-  text-decoration-color: var(--accent-line);
+  text-decoration-color: var(--border-strong);
   text-underline-offset: 3px;
-  transition: text-decoration-color 0.2s;
+  transition: text-decoration-color var(--dur);
 }
 
 .link:hover {
@@ -279,21 +292,21 @@ kbd {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
 }
 
-/* Merktegeltje (zijbalk, "Nog geen toegang"): zwart, zoals de hoofdknop. */
+/* Merktegeltje (zijbalk, "Nog geen toegang"): geel, zoals de hoofdknop. */
 .brand-mark {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   flex: none;
-  border-radius: 9px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  box-shadow: var(--shadow-primary);
+  border-radius: 8px;
+  background: var(--brand);
+  color: var(--brand-foreground);
+  box-shadow: var(--brand-edge);
 }
 
 /* ---------- beweging ---------- */
@@ -387,18 +400,18 @@ kbd {
 
 /* Lijsten komen rij na rij binnen (zet --i per rij met stagger(i)). */
 .stagger > * {
-  animation: rise-in 0.45s var(--ease-out) backwards;
+  animation: rise-in 0.3s var(--ease-out) backwards;
   animation-delay: calc(min(var(--i, 0), 14) * 28ms);
 }
 
 /* Een nieuw scherm schuift zacht binnen; vaste elementen doen niet mee. */
-.page > :not(.fab, .topbar, .panel-bar, .split, dialog, .scanner, .viewer) {
-  animation: page-in 0.45s var(--ease-out) backwards;
+.page > :not(.phone-head, .panel-bar, .split, dialog, .scanner, .viewer) {
+  animation: page-in var(--dur-page) var(--ease-out) backwards;
 }
 
 /* In een zijkolom-scherm komen zijkolom en kaarten na elkaar binnen. */
 .split > * {
-  animation: page-in 0.45s var(--ease-out) backwards;
+  animation: page-in var(--dur-page) var(--ease-out) backwards;
 }
 
 .split > * + * {
@@ -440,7 +453,7 @@ kbd {
   inset: 0 0 auto;
   z-index: 300;
   height: 2px;
-  background: var(--accent);
+  background: var(--foreground);
   transform: scaleX(0);
   transform-origin: left;
   opacity: 0;
@@ -460,52 +473,177 @@ kbd {
 
 /* ---------- app-schaal (gsm) ---------- */
 
-.app main {
-  padding: calc(env(safe-area-inset-top) + 20px) 16px calc(var(--tabbar) + var(--float-bottom) + 92px);
+/* Naar de inhoud: onzichtbaar tot je met Tab begint. */
+.skiplink {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 8px;
+  z-index: 400;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  transform: translateY(-200%);
 }
 
-/* Onderbalk: een zwevende glazen pil met drie tabs (Overzicht, Agenda, Zoeken); een vlak schuift naar de actieve. */
+.skiplink:focus-visible {
+  transform: none;
+}
+
+main:focus {
+  outline: none;
+}
+
+.app main {
+  padding: 0 16px calc(var(--tabbar) + env(safe-area-inset-bottom) + 32px);
+}
+
+/*
+ * De kop (gsm): 48 px op de schil, plakt bovenaan met een haarlijn eronder. Links terug of het merk, rechts zoeken en
+ * jouw letter; de titel verschijnt klein in het midden zodra de grote titel eronder schuift.
+ */
+.phone-head {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: calc(48px + env(safe-area-inset-top));
+  margin: 0 -16px 16px;
+  padding: env(safe-area-inset-top) 10px 0;
+  background: var(--bar);
+  -webkit-backdrop-filter: var(--bar-blur);
+  backdrop-filter: var(--bar-blur);
+  box-shadow: 0 1px 0 var(--bar-line);
+}
+
+.phone-head-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.phone-head-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color var(--dur),
+    background-color var(--dur);
+}
+
+.phone-head-button::after,
+.phone-head-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+.phone-head-button:active {
+  background: var(--hover);
+  color: var(--foreground);
+}
+
+.phone-head-title {
+  position: absolute;
+  left: 50%;
+  max-width: calc(100% - 200px);
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--dur),
+    transform var(--dur-glide) var(--ease-out);
+  pointer-events: none;
+}
+
+.phone-head[data-compact="true"] .phone-head-title {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.phone-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.phone-head-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.phone-head-avatar .avatar {
+  width: 30px;
+  height: 30px;
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/*
+ * De onderbalk (gsm): van rand tot rand onderaan op de schil, een haarlijn erboven. Vijf tabs; het witte vlak glijdt
+ * naar waar je bent. In het midden de gele + (wat het scherm vraagt, anders toevoegen via het palet).
+ */
 .tabbar {
   position: fixed;
-  left: 20px;
-  right: 20px;
-  bottom: var(--float-bottom);
+  inset: auto 0 0;
   z-index: 40;
   display: grid;
   grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr));
-  height: var(--tabbar);
-  padding: 5px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-pill);
-  background: var(--glass-bar);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.95),
-    0 14px 34px -12px rgb(16 24 40 / 0.3),
-    0 0 0 0.5px rgb(16 24 40 / 0.08);
+  height: calc(var(--tabbar) + env(safe-area-inset-bottom));
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--bar);
+  -webkit-backdrop-filter: var(--bar-blur);
+  backdrop-filter: var(--bar-blur);
   user-select: none;
 }
 
 .tabbar-indicator {
   position: absolute;
-  top: 5px;
-  left: 5px;
-  width: calc((100% - 10px) / var(--n, 5));
+  top: 6px;
+  left: 6px;
+  width: calc((100% - 12px) / var(--n, 5));
   height: calc(var(--tabbar) - 12px);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
   transform: translateX(calc(var(--i, 0) * 100%));
-  transition:
-    transform 0.55s var(--spring),
-    opacity 0.2s;
+  transition: transform var(--dur-glide) var(--ease-out);
   pointer-events: none;
-}
-
-.tabbar-indicator::before {
-  content: "";
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--press);
 }
 
 .tabbar a,
@@ -515,37 +653,37 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  border-radius: var(--radius-pill);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 550;
-  transition: color 0.25s;
-}
-
-.tabbar a.active {
-  font-weight: 600;
-}
-
-.tabbar .tab-button {
-  padding: 0;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 2px;
   border: 0;
+  border-radius: var(--radius-xl);
   background: transparent;
-  font-family: inherit;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
+  transition: color var(--dur);
+}
+
+.tabbar a > span,
+.tabbar .tab-button > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabbar a.active,
+.tabbar .tab-button.active {
+  color: var(--foreground);
 }
 
 .tabbar a svg,
 .tabbar .tab-button svg {
-  transition: transform 0.35s var(--spring);
-}
-
-.tabbar a.active {
-  color: var(--foreground);
-}
-
-.tabbar a.active svg {
-  transform: translateY(-1px) scale(1.06);
+  transition: transform var(--dur) var(--spring);
 }
 
 .tabbar a:active svg,
@@ -553,34 +691,134 @@ kbd {
   transform: scale(0.88);
 }
 
+/* De + : een geel vak midden in de balk. */
+.tabbar .tab-add {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab-add > span {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--brand);
+  box-shadow: var(--brand-edge);
+  color: var(--brand-foreground);
+  transition:
+    background-color var(--dur),
+    transform var(--dur);
+}
+
+.tab-add:active > span {
+  background: var(--brand-press);
+  transform: translateY(1px);
+}
+
 .sidebar,
 .panel-bar {
   display: none;
 }
 
-.fab {
-  position: fixed;
-  right: 20px;
-  bottom: calc(var(--float-bottom) + var(--tabbar) + 14px);
-  z-index: 39;
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    0 14px 28px -10px rgb(16 24 40 / 0.55);
-  animation: pop-in 0.5s 0.15s var(--spring) backwards;
-  transition:
-    transform 0.35s var(--ease-out),
-    background-color 0.2s;
+/* Het menublad (gsm): op de schil, met zoeken bovenaan en het witte vlak op waar je bent. */
+dialog.sheet.menu-sheet {
+  background: var(--canvas);
 }
 
-.fab:active {
-  transform: scale(0.92);
+.menu-body {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin-bottom: 10px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.menu-places {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.menu-row svg {
+  color: var(--muted-foreground);
+}
+
+.menu-row:active {
+  background: var(--hover);
+}
+
+.menu-row.active {
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.menu-row.active svg {
+  color: var(--foreground);
+}
+
+.menu-me {
+  margin-top: 8px;
+  border-top: 1px solid var(--divider);
+  border-radius: 0;
+  padding-top: 6px;
+}
+
+.menu-me .avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.menu-sheet .sidebar-places {
+  margin-top: 4px;
+}
+
+.menu-sheet .nav-section {
+  padding: 16px 12px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.menu-sheet .place-link,
+.menu-sheet .place-add {
+  height: 44px;
+  font-size: 15px;
 }
 
 .offline-note {
@@ -629,51 +867,15 @@ kbd {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 30px;
-  font-weight: 650;
-  line-height: 1.1;
-  letter-spacing: -0.028em;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 .page-head h1 .badge {
   letter-spacing: 0;
-}
-
-/* Jouw letter bij de titel van een hoofdscherm, enkel op gsm (op tablet staat ze in de paneelbalk): vast rechtsboven,
-   acties springen eronder als er geen plaats is. */
-.page-head:has(> .head-avatar) {
-  position: relative;
-}
-
-.page-head:has(> .head-avatar) > .page-title,
-.page-head:has(> .head-avatar) > .page-actions {
-  margin-right: 48px;
-}
-
-.head-avatar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  border-radius: 50%;
-}
-
-.head-avatar .avatar {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-@media (min-width: 768px) {
-  .head-avatar {
-    display: none;
-  }
-
-  .page-head:has(> .head-avatar) > .page-title,
-  .page-head:has(> .head-avatar) > .page-actions {
-    margin-right: 0;
-  }
 }
 
 .page-desc {
@@ -688,152 +890,55 @@ kbd {
   flex: none;
 }
 
-/*
- * Terug (gsm): een glazen pil die linksboven zweeft, boven de inhoud. Zodra de titel uit beeld schuift, krimpt
- * ze tot een rondje (het label schuift weg).
- */
-.crumb {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 14px);
-  left: 16px;
-  z-index: 36;
-  display: inline-flex;
-  align-items: center;
-  height: 44px;
-  max-width: calc(100% - 32px);
-  padding: 0 16px 0 11px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-pill);
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  color: var(--foreground);
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 550;
-  cursor: pointer;
-  transition:
-    padding 0.45s var(--spring),
-    transform 0.35s var(--ease-out);
-}
-
-.crumb:active {
-  transform: scale(0.96);
-}
-
-.crumb-label {
-  min-width: 0;
-  max-width: 60vw;
-  margin-left: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    max-width 0.45s var(--ease-out),
-    margin 0.45s var(--ease-out),
-    opacity 0.25s;
-}
-
-.crumb[data-compact="true"] {
-  padding: 0 12px 0 11px;
-}
-
-.crumb[data-compact="true"] .crumb-label {
-  max-width: 0;
-  margin-left: 0;
-  opacity: 0;
-}
-
-/* Ruimte voor de zwevende terugknop; de offline-melding komt eronder (en de pagina schuift niet verder op). */
-@media (max-width: 767px) {
-  .page:has(> .crumb) {
-    padding-top: 58px;
-  }
-
-  main:has(.crumb) > .offline-note {
-    margin: 58px 0 -42px;
-  }
-}
-
-/* Titelpilletje (gsm): verschijnt in het midden zodra de grote titel uit beeld schuift. */
-.topbar {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 14px);
-  left: 50%;
-  z-index: 35;
-  display: flex;
-  align-items: center;
-  height: 44px;
-  max-width: calc(100% - 152px);
-  padding: 0 18px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-pill);
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  opacity: 0;
-  transform: translate(-50%, -8px) scale(0.96);
-  pointer-events: none;
-  transition:
-    opacity 0.25s,
-    transform 0.45s var(--spring);
-}
-
-.topbar[data-visible="true"] {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.topbar-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
 /* ---------- knoppen ---------- */
 
-/* Knoppen zijn pillen. Indrukken veert terug (schaal 0,96). */
+/*
+ * Knoppen: rond met --radius, 32 px hoog (op een aanraakscherm 40), het raakvlak altijd minstens --hit. Ingedrukt
+ * zakt een knop 1 px. De hoofdknop is geel met zwarte tekst, één per scherm.
+ */
 .btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 16px;
+  gap: 6px;
+  height: var(--control);
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   background: var(--muted);
   color: var(--foreground);
   font: inherit;
   font-size: 14px;
-  font-weight: 550;
-  letter-spacing: -0.005em;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
   transition:
-    background-color 0.25s,
-    border-color 0.25s,
-    color 0.25s,
-    box-shadow 0.3s,
-    transform 0.35s var(--ease-out);
+    background-color var(--dur),
+    border-color var(--dur),
+    color var(--dur),
+    box-shadow var(--dur),
+    transform var(--dur);
+}
+
+/* Het raakvlak: een onzichtbare rand die uitsteekt tot --hit, zonder dat de opmaak verschuift. */
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: min(0px, calc((100% - var(--hit)) / 2));
+}
+
+.btn:has(> svg:first-child:not(:only-child)) {
+  padding-left: 10px;
 }
 
 .btn svg {
-  transition:
-    color 0.2s,
-    transform 0.3s var(--spring);
+  transition: color var(--dur);
 }
 
 .btn:active:not(:disabled) {
-  transform: scale(0.96);
+  transform: translateY(1px);
 }
 
 .btn:disabled,
@@ -847,23 +952,26 @@ kbd {
 
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgb(47 134 235 / 0.3);
+  border-color: var(--ring);
+  box-shadow: var(--focus-ring);
 }
 
-/* Zwart, met een glanslijntje bovenaan. Eén per scherm. */
+/* Geel met zwarte tekst en een randje. Eén per scherm. */
 .btn-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  box-shadow: var(--shadow-primary);
+  background: var(--brand);
+  color: var(--brand-foreground);
+  box-shadow: var(--brand-edge);
 }
 
-/* Glas: de gewone knop naast de hoofdactie. Het icoon volgt de tekst. */
+.btn-primary:focus-visible {
+  box-shadow: var(--brand-edge), var(--focus-ring);
+}
+
+/* Met rand: de gewone knop naast de hoofdactie, op wit of op de schil. */
 .btn-outline {
-  border-color: var(--glass-edge);
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
+  border-color: var(--border);
+  background: var(--background);
+  box-shadow: var(--shadow-xs);
   color: var(--foreground);
 }
 
@@ -876,12 +984,10 @@ kbd {
   color: var(--muted-foreground);
 }
 
+/* Rood is een zachte tint met rode tekst, nooit een rood vlak. */
 .btn-danger {
-  background: var(--destructive);
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    0 8px 18px -8px rgb(198 42 47 / 0.55);
+  background: var(--destructive-soft);
+  color: var(--destructive);
 }
 
 .btn-danger-ghost {
@@ -894,71 +1000,82 @@ kbd {
     background: var(--muted-strong);
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--primary-hover);
+    background: var(--brand-hover);
+  }
+  .btn-primary:active:not(:disabled) {
+    background: var(--brand-press);
   }
   .btn-outline:hover:not(:disabled) {
-    background: var(--glass-strong);
-    transform: translateY(-1px);
-  }
-  .btn-outline:active:not(:disabled) {
-    transform: scale(0.96);
+    background: var(--muted-solid);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: rgb(0 0 0 / 0.04);
+    background: var(--muted);
     color: var(--foreground);
   }
   .btn-ghost:hover:not(:disabled) svg {
     color: var(--text-soft);
   }
   .btn-danger:hover:not(:disabled) {
-    background: #b0242a;
+    background: var(--destructive-soft-hover);
   }
   .btn-danger-ghost:hover:not(:disabled) {
-    background: var(--danger-bg);
+    background: var(--destructive-soft);
   }
 }
 
 .btn-sm {
-  height: 32px;
-  padding: 0 13px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
   font-size: 13px;
-  gap: 6px;
+  gap: 5px;
+}
+
+.btn-sm:has(> svg:first-child:not(:only-child)) {
+  padding-left: 8px;
 }
 
 .btn-lg {
-  height: 48px;
-  padding: 0 24px;
-  font-size: 15px;
-  font-weight: 600;
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
 }
 
-.btn-icon {
-  width: 38px;
+.btn-icon,
+.btn-icon:has(> svg:first-child) {
+  width: var(--control);
   padding: 0;
 }
 
 .btn-icon.btn-sm {
-  width: 32px;
+  width: 28px;
 }
 
 .btn-block {
   width: 100%;
 }
 
-/* Vingers zijn groter dan muizen: op aanraakschermen (ook de kiosk) alles iets hoger. */
+/* Vingers zijn groter dan muizen: op aanraakschermen (ook de kiosk) iets hoger, het raakvlak blijft --hit. */
 @media (pointer: coarse) {
   .btn {
-    height: 44px;
+    height: var(--control-touch);
+    padding: 0 14px;
+    font-size: 15px;
   }
   .btn-sm {
     height: 36px;
+    padding: 0 12px;
+    font-size: 14px;
   }
   .btn-lg {
-    height: 52px;
+    height: 44px;
+    padding: 0 18px;
     font-size: 16px;
   }
-  .btn-icon {
-    width: 44px;
+  .btn-icon,
+  .btn-icon:has(> svg:first-child) {
+    width: var(--control-touch);
+    padding: 0;
   }
   .btn-icon.btn-sm {
     width: 36px;
@@ -996,16 +1113,16 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 10px;
+  padding: 14px 16px 8px;
 }
 
 .card-title {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 15.5px;
+  gap: 8px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.012em;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
@@ -1016,7 +1133,7 @@ kbd {
 }
 
 .card-body {
-  padding: 0 18px 18px;
+  padding: 0 16px 16px;
 }
 
 /* Grijze groep: velden van één onderwerp in een formulier, of een instelling. */
@@ -1058,7 +1175,7 @@ kbd {
 }
 
 .footnote {
-  margin: 0 18px;
+  margin: 0 16px;
   padding: 12px 0 14px;
   border-top: 1px solid var(--divider);
   color: var(--muted-foreground);
@@ -1175,7 +1292,7 @@ button.row-link {
   flex: none;
   overflow: hidden;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--radius);
   background: var(--muted);
   color: var(--text-soft);
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.04);
@@ -1442,7 +1559,7 @@ button.row-link {
 
 /* ---------- tabs, filters, zoeken ---------- */
 
-/* Tabs: een grijs spoor met een glazen duim die naar de actieve tab veert. */
+/* Tabs: een grijs spoor met een wit vlak dat naar de actieve tab glijdt. */
 .tabs {
   position: relative;
   display: flex;
@@ -1450,9 +1567,9 @@ button.row-link {
   width: fit-content;
   max-width: 100%;
   margin: 0 0 14px;
-  padding: 3px;
+  padding: 2px;
   overflow-x: auto;
-  border-radius: var(--radius-lg);
+  border-radius: 9px;
   background: var(--muted);
   scrollbar-width: none;
 }
@@ -1468,18 +1585,18 @@ button.row-link {
   align-items: center;
   gap: 7px;
   flex: none;
-  height: 34px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.25s;
+  transition: color var(--dur);
 }
 
 .tab:hover,
@@ -1489,24 +1606,21 @@ button.row-link {
 
 .tabs-indicator {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 2px;
+  bottom: 2px;
   left: 0;
-  border-radius: 11px;
-  background: #fff;
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 3px 10px -3px rgb(16 24 40 / 0.2),
-    0 0 0 0.5px rgb(16 24 40 / 0.08);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
   transition:
-    transform 0.55s var(--spring),
-    width 0.45s var(--ease-out);
+    transform var(--dur-glide) var(--ease-out),
+    width var(--dur-glide) var(--ease-out);
   pointer-events: none;
 }
 
 @media (pointer: coarse) {
   .tab {
-    height: 38px;
+    height: 36px;
   }
 }
 
@@ -1541,7 +1655,7 @@ button.row-link {
   padding-left: 38px;
 }
 
-/* Filterpil: grijs vlak met grijs label en donkere waarde; actief komt ze naar voren als glas. */
+/* Filterpil: grijs vlak met grijs label en donkere waarde; actief wordt ze het witte vlak. */
 .filters {
   display: flex;
   gap: 8px;
@@ -1561,23 +1675,23 @@ button.row-link {
   align-items: center;
   gap: 6px;
   flex: none;
-  height: 34px;
-  padding: 0 11px 0 14px;
+  height: var(--control);
+  padding: 0 10px 0 12px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--muted);
   color: var(--foreground);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 450;
+  font-size: 13px;
+  font-weight: 400;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    border-color 0.25s,
-    box-shadow 0.3s,
-    background-color 0.25s,
-    color 0.25s,
-    transform 0.35s var(--ease-out);
+    border-color var(--dur),
+    box-shadow var(--dur),
+    background-color var(--dur),
+    color var(--dur),
+    transform var(--dur);
 }
 
 @media (hover: hover) {
@@ -1587,11 +1701,11 @@ button.row-link {
 }
 
 .filter:active {
-  transform: scale(0.96);
+  transform: translateY(1px);
 }
 
 .filter:focus-within {
-  box-shadow: 0 0 0 3px rgb(47 134 235 / 0.3);
+  box-shadow: var(--focus-ring);
 }
 
 .filter-label {
@@ -1602,7 +1716,7 @@ button.row-link {
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .filter > svg {
@@ -1611,12 +1725,10 @@ button.row-link {
 
 .filter.active,
 .filter[aria-pressed="true"] {
-  border-color: var(--glass-edge);
-  background: var(--glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  font-weight: 550;
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
+  font-weight: 500;
 }
 
 .filter.active > svg,
@@ -1635,7 +1747,7 @@ button.row-link {
 
 @media (pointer: coarse) {
   .filter {
-    height: 38px;
+    height: 36px;
   }
 }
 
@@ -1655,13 +1767,18 @@ button.row-link {
   max-width: none;
 }
 
-.page.form > :not(.panel-bar, .page-head, .topbar, .crumb) {
+.page.form > :not(.panel-bar, .page-head, .phone-head) {
   width: 100%;
   max-width: 680px;
 }
 
-.page.card-page > :not(.panel-bar, .page-head, .topbar, .crumb) {
+.page.card-page > :not(.panel-bar, .page-head, .phone-head) {
   max-width: 560px;
+}
+
+/* In een formulier telt de rasterafstand al mee onder de kop. */
+.page.form > .phone-head {
+  margin-bottom: 0;
 }
 
 .form-section {
@@ -1786,25 +1903,26 @@ button.row-link {
   }
 }
 
-/* Velden: een grijs vlak zonder rand; bij focus wit met een blauwe ring. */
+/* Velden: wit met een haarlijn en een zweem schaduw; bij focus een grijze rand met een ring. */
 .input,
 input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])),
 select,
 textarea {
   width: 100%;
   min-width: 0;
-  height: 42px;
-  padding: 0 12px;
-  border: 1px solid transparent;
+  height: var(--control-touch);
+  padding: 0 10px;
+  border: 1px solid var(--input);
   border-radius: var(--radius-md);
   background-color: var(--field);
+  box-shadow: var(--shadow-xs);
   color: var(--foreground);
   font: inherit;
   font-size: 16px; /* onder 16px zoomt iOS in bij het typen */
   transition:
-    border-color 0.25s,
-    box-shadow 0.25s,
-    background-color 0.2s;
+    border-color var(--dur),
+    box-shadow var(--dur),
+    background-color var(--dur);
 }
 
 @media (pointer: fine) {
@@ -1812,32 +1930,25 @@ textarea {
   input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])),
   select,
   textarea {
-    font-size: 14.5px;
-  }
-}
-
-@media (pointer: coarse) {
-  .input,
-  input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])),
-  select {
-    height: 44px;
+    height: var(--control);
+    font-size: 14px;
   }
 }
 
 textarea {
   height: auto;
   min-height: 88px;
-  padding: 10px 12px;
+  padding: 7px 10px;
   resize: vertical;
   line-height: 1.5;
 }
 
 select {
   appearance: none;
-  padding-right: 32px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b6b70' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b6b6b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 10px center;
   text-overflow: ellipsis;
 }
 
@@ -1850,14 +1961,6 @@ textarea:focus {
   box-shadow: var(--focus-ring);
 }
 
-@media (hover: hover) {
-  input:where(:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"])):hover:not(:focus),
-  select:hover:not(:focus),
-  textarea:hover:not(:focus) {
-    background-color: var(--field-hover);
-  }
-}
-
 input::placeholder,
 textarea::placeholder {
   color: var(--muted-foreground);
@@ -1866,14 +1969,14 @@ textarea::placeholder {
 
 [aria-invalid="true"] {
   border-color: var(--destructive) !important;
-  box-shadow: 0 0 0 3px rgb(229 72 77 / 0.15) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 20%, transparent) !important;
 }
 
 input[type="date"] {
   display: block;
 }
 
-/* Automatisch ingevuld: even oplichten en daarna zacht blauw tot je het zelf aanpast. */
+/* Automatisch ingevuld: even oplichten en daarna zacht geel tot je het zelf aanpast. */
 .auto {
   border-color: var(--accent-line) !important;
   background-color: var(--accent-soft) !important;
@@ -1882,7 +1985,7 @@ input[type="date"] {
 
 @keyframes auto-flash {
   from {
-    box-shadow: 0 0 0 6px rgb(47 134 235 / 0.22);
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--brand) 75%, transparent);
   }
 }
 
@@ -1892,31 +1995,28 @@ input[type="checkbox"] {
   accent-color: var(--primary);
 }
 
-/* Segmenten: een grijs spoor met een glazen duim die naar de gekozen optie veert. */
+/* Segmenten: een grijs spoor met een wit vlak dat naar de gekozen optie glijdt. */
 .segmented {
   position: relative;
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
-  padding: 3px;
-  border-radius: var(--radius-lg);
+  padding: 2px;
+  border-radius: 9px;
   background: var(--muted);
 }
 
 .segmented-thumb {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc((100% - 6px) / var(--n));
-  border-radius: 11px;
-  background: #fff;
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 3px 10px -3px rgb(16 24 40 / 0.2),
-    0 0 0 0.5px rgb(16 24 40 / 0.08);
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--n));
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
   transform: translateX(calc(var(--i) * 100%));
-  transition: transform 0.55s var(--spring);
+  transition: transform var(--dur-glide) var(--ease-out);
 }
 
 .segment {
@@ -1927,18 +2027,18 @@ input[type="checkbox"] {
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  height: 34px;
+  height: 28px;
   padding: 0 10px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.25s;
+  transition: color var(--dur);
 }
 
 .segment > span {
@@ -1952,7 +2052,7 @@ input[type="checkbox"] {
 
 @media (pointer: coarse) {
   .segment {
-    height: 38px;
+    height: 36px;
   }
 }
 
@@ -1979,9 +2079,9 @@ input[type="checkbox"] {
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgb(118 118 128 / 0.22);
+  background: rgb(0 0 0 / 0.14);
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color var(--dur);
 }
 
 .switch::after {
@@ -1995,8 +2095,8 @@ input[type="checkbox"] {
   background: #fff;
   box-shadow: var(--shadow-sm);
   transition:
-    transform 0.5s var(--spring),
-    width 0.2s;
+    transform var(--dur-glide) var(--ease-out),
+    width var(--dur);
 }
 
 .switch:active::after {
@@ -2157,7 +2257,7 @@ input[type="checkbox"] {
   object-fit: cover;
 }
 
-/* Snel invullen: wat je tekst invulde, live onder het veld (QuickChips), zacht blauw zoals een veld dat de app
+/* Snel invullen: wat je tekst invulde, live onder het veld (QuickChips), zacht geel zoals een veld dat de app
    invulde; een tik om het naar een ander veld te zetten of weg te halen. */
 .tag.is-filled {
   max-width: 100%;
@@ -2508,7 +2608,7 @@ input[type="checkbox"] {
   pointer-events: none;
 }
 
-/* Lege staat: een zacht grijs vlak met een glazen icoontegel. */
+/* Lege staat: een zacht grijs vlak met een wit icoontegeltje. */
 .empty {
   display: grid;
   justify-items: center;
@@ -2527,10 +2627,10 @@ input[type="checkbox"] {
   width: 44px;
   height: 44px;
   margin-bottom: 6px;
-  border: 1px solid var(--glass-edge);
+  border: 0;
   border-radius: var(--radius-lg);
-  background: var(--glass);
-  box-shadow: var(--glass-shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
   color: var(--foreground);
 }
 
@@ -2547,38 +2647,41 @@ input[type="checkbox"] {
 
 /* ---------- onderblad & bevestigen ---------- */
 
-/* Onderblad (gsm): een glazen blad dat los onderaan zweeft en omhoog glijdt; op tablet een venster in het midden. */
+/*
+ * Onderblad (gsm): een wit blad dat 6 px van de randen onderaan hangt en omhoog glijdt (300 ms open, 200 ms dicht,
+ * zonder nawiebelen); op tablet een venster in het midden.
+ */
 dialog.sheet {
   position: fixed;
-  inset: auto 8px calc(8px + env(safe-area-inset-bottom));
+  inset: auto 6px calc(6px + env(safe-area-inset-bottom));
   width: auto;
   max-width: none;
-  max-height: calc(92dvh - env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 64px - env(safe-area-inset-bottom));
   margin: 0;
-  padding: 8px 18px 20px;
+  padding: 8px 16px 20px;
   overflow-y: auto;
-  border: 1px solid rgb(255 255 255 / 0.85);
-  border-radius: 34px;
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
+  border: 0;
+  border-radius: var(--radius-sheet);
+  background: var(--surface);
   color: var(--foreground);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 -20px 60px -20px rgb(16 24 40 / 0.35),
-    0 0 0 0.5px rgb(16 24 40 / 0.1);
+  box-shadow: var(--shadow-sheet);
   opacity: 0;
   transform: translateY(calc(100% + 24px));
   transition:
-    transform 0.6s cubic-bezier(0.32, 1.15, 0.5, 1),
-    opacity 0.3s,
-    overlay 0.6s allow-discrete,
-    display 0.6s allow-discrete;
+    transform var(--dur-sheet-close) var(--ease-close),
+    opacity var(--dur-sheet-close),
+    overlay var(--dur-sheet-close) allow-discrete,
+    display var(--dur-sheet-close) allow-discrete;
 }
 
 dialog.sheet[open] {
   opacity: 1;
   transform: none;
+  transition:
+    transform var(--dur-sheet-open) var(--ease-out),
+    opacity var(--dur),
+    overlay var(--dur-sheet-open) allow-discrete,
+    display var(--dur-sheet-open) allow-discrete;
 }
 
 @starting-style {
@@ -2589,29 +2692,38 @@ dialog.sheet[open] {
 }
 
 dialog.sheet::backdrop {
-  background: rgb(16 24 40 / 0);
+  background: rgb(10 10 10 / 0);
   transition:
-    background-color 0.4s,
-    overlay 0.6s allow-discrete,
-    display 0.6s allow-discrete;
+    background-color var(--dur-sheet-close),
+    overlay var(--dur-sheet-open) allow-discrete,
+    display var(--dur-sheet-open) allow-discrete;
 }
 
 dialog.sheet[open]::backdrop {
-  background: rgb(16 24 40 / 0.22);
+  background: rgb(10 10 10 / 0.2);
 }
 
 @starting-style {
   dialog.sheet[open]::backdrop {
-    background: rgb(16 24 40 / 0);
+    background: rgb(10 10 10 / 0);
   }
 }
 
+/* De greep: veeg het blad naar beneden dicht. Het raakvlak is groter dan het streepje. */
+.sheet-grip {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  margin: -8px -16px 6px;
+  touch-action: none;
+  cursor: grab;
+}
+
 .sheet-handle {
-  width: 38px;
-  height: 5px;
-  margin: 2px auto 16px;
+  width: 36px;
+  height: 4px;
   border-radius: 999px;
-  background: rgb(118 118 128 / 0.35);
+  background: rgb(0 0 0 / 0.16);
 }
 
 .sheet-body {
@@ -2620,9 +2732,9 @@ dialog.sheet[open]::backdrop {
 }
 
 .sheet-body h2 {
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .sheet-body .form {
@@ -2649,7 +2761,7 @@ dialog.sheet[open]::backdrop {
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--float-bottom) + var(--tabbar) + 14px);
+  bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + 12px);
   z-index: 200;
   display: grid;
   justify-items: center;
@@ -2657,32 +2769,27 @@ dialog.sheet[open]::backdrop {
   pointer-events: none;
 }
 
-/* Een glazen pil met een zwart rondje (rood bij een fout) en een vinkje dat zichzelf tekent. */
+/* Een witte melding met een zwart rondje (rood bij een fout) en een vinkje dat zichzelf tekent; komt uit een waas. */
 .toast {
   display: flex;
   align-items: center;
   gap: 10px;
   max-width: 100%;
-  min-height: 46px;
+  min-height: 44px;
   padding: 6px 6px 6px 10px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-pill);
-  background: var(--glass-strong);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--foreground);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 14px 34px -12px rgb(16 24 40 / 0.3),
-    0 0 0 0.5px rgb(16 24 40 / 0.08);
+  box-shadow: var(--shadow-lg);
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 500;
   pointer-events: auto;
-  animation: toast-in 0.55s var(--spring) backwards;
+  animation: toast-in 0.4s var(--ease-out) backwards;
 }
 
 .toast.leaving {
-  animation: toast-out 0.25s ease-in both;
+  animation: toast-out var(--dur-sheet-close) var(--ease-close) both;
 }
 
 .toast-badge {
@@ -2710,13 +2817,13 @@ dialog.sheet[open]::backdrop {
   flex: none;
   height: 32px;
   margin-left: auto;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: 8px;
   background: transparent;
   color: var(--primary);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -2750,14 +2857,16 @@ dialog.sheet[open]::backdrop {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    filter: blur(10px);
+    transform: translateY(12px);
   }
 }
 
 @keyframes toast-out {
   to {
     opacity: 0;
-    transform: translateY(8px) scale(0.97);
+    filter: blur(8px);
+    transform: translateY(6px);
   }
 }
 
@@ -2877,12 +2986,15 @@ dialog.sheet[open]::backdrop {
   font: inherit;
   font-size: 13px;
   font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: text-decoration-color var(--dur);
 }
 
 .link-button:hover {
-  color: var(--accent-strong);
+  text-decoration-color: currentColor;
 }
 
 .split-rows {
@@ -2917,7 +3029,7 @@ dialog.sheet[open]::backdrop {
   color: var(--muted-foreground);
 }
 
-/* Tik op de avatar: doet mee of niet. Een blauw vinkje springt erbij. */
+/* Tik op de avatar: doet mee of niet. Een vinkje springt erbij. */
 .split-toggle {
   position: relative;
   display: grid;
@@ -2954,7 +3066,7 @@ dialog.sheet[open]::backdrop {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--primary);
   color: var(--primary-foreground);
   box-shadow: 0 0 0 2px var(--background);
   transition:
@@ -3296,7 +3408,7 @@ dialog.sheet[open]::backdrop {
 
 /* ---------- zoekpalet (⌘K) ---------- */
 
-/* Zoekpalet: een glazen venster boven een zacht vervaagd scherm. */
+/* Zoekpalet: een wit venster boven een zacht vervaagd scherm. */
 dialog.palette {
   position: fixed;
   inset: 0;
@@ -3307,22 +3419,18 @@ dialog.palette {
   margin: max(12px, 11vh) auto auto;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 0.85);
-  border-radius: var(--radius-2xl);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.78));
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
   color: var(--foreground);
-  box-shadow:
-    inset 0 1px 0 #fff,
-    var(--shadow-lg);
+  box-shadow: var(--shadow-lg);
   opacity: 0;
-  transform: translateY(-10px) scale(0.97);
+  transform: translateY(-6px) scale(0.98);
   transition:
-    opacity 0.25s,
-    transform 0.5s var(--spring),
-    overlay 0.4s allow-discrete,
-    display 0.4s allow-discrete;
+    opacity var(--dur),
+    transform var(--dur-sheet-open) var(--ease-out),
+    overlay var(--dur-sheet-open) allow-discrete,
+    display var(--dur-sheet-open) allow-discrete;
 }
 
 dialog.palette[open] {
@@ -3334,7 +3442,7 @@ dialog.palette[open] {
 @starting-style {
   dialog.palette[open] {
     opacity: 0;
-    transform: translateY(-10px) scale(0.97);
+    transform: translateY(-6px) scale(0.98);
   }
 }
 
@@ -3350,7 +3458,7 @@ dialog.palette::backdrop {
 }
 
 dialog.palette[open]::backdrop {
-  background: rgb(238 240 242 / 0.35);
+  background: rgb(10 10 10 / 0.12);
   -webkit-backdrop-filter: blur(6px) saturate(120%);
   backdrop-filter: blur(6px) saturate(120%);
 }
@@ -3528,9 +3636,7 @@ dialog.palette[open]::backdrop {
   }
 
   .tabbar,
-  .fab,
-  .topbar,
-  .crumb,
+  .phone-head,
   .only-phone {
     display: none;
   }
@@ -3545,9 +3651,7 @@ dialog.palette[open]::backdrop {
     border: 0;
     border-radius: var(--radius-panel);
     background: var(--background);
-    box-shadow:
-      0 0 0 1px rgb(16 24 40 / 0.04),
-      0 1px 2px rgb(16 24 40 / 0.03);
+    box-shadow: 0 0 0 1px var(--line);
     view-transition-name: panel;
   }
 
@@ -3583,26 +3687,23 @@ dialog.palette[open]::backdrop {
   }
 
   /*
-   * Bovenaan het paneel zweeft een glazen balk: kruimelpad links, hoofdactie en wie je bent rechts. De inhoud
-   * scrollt eronder door.
+   * Bovenaan het paneel een witte balk over de hele breedte: kruimelpad links, hoofdactie en wie je bent rechts, een
+   * haarlijn eronder. De inhoud scrollt eronder door.
    */
   .panel-bar {
     position: sticky;
-    top: 10px;
+    top: 0;
     z-index: 20;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    height: 60px;
-    margin: 10px -10px 0;
-    padding: 0 10px 0 18px;
-    border: 1px solid var(--glass-edge);
-    border-radius: var(--radius-panel);
-    background: var(--glass-bar);
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
-    box-shadow: var(--glass-shadow);
+    height: 56px;
+    margin: 0 -20px;
+    padding: 0 12px 0 28px;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    background: var(--background);
+    box-shadow: 0 1px 0 var(--divider);
   }
 
   .breadcrumb {
@@ -3652,38 +3753,36 @@ dialog.palette[open]::backdrop {
     flex: none;
   }
 
-  .panel-actions .btn {
-    height: 40px;
-    padding: 0 16px;
-  }
-
-  .panel-actions .btn:has(> svg:first-child) {
-    padding-left: 12px;
-  }
-
   .panel-sep {
     display: none;
   }
 
-  /* Wie aangemeld is: een glazen rondje met je letter. */
+  /* Wie aangemeld is: een wit rondje met je letter. */
   .panel-avatar {
+    position: relative;
     border-radius: 50%;
-    transition: transform 0.35s var(--ease-out);
+    transition: transform var(--dur);
+  }
+
+  .panel-avatar::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
   }
 
   .panel-avatar .avatar {
-    width: 40px;
-    height: 40px;
-    border: 1px solid var(--glass-edge);
-    background: var(--glass);
-    box-shadow: var(--glass-shadow);
+    width: var(--control);
+    height: var(--control);
+    border: 0;
+    background: var(--surface);
+    box-shadow: var(--shadow-surface);
     color: var(--foreground);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
   }
 
   .panel-avatar:active {
-    transform: scale(0.94);
+    transform: translateY(1px);
   }
 
   /* De paginakop: een grote titel met de uitleg eronder, acties rechts. */
@@ -3693,19 +3792,9 @@ dialog.palette[open]::backdrop {
     padding: 26px 8px 0;
   }
 
-  .page-head h1 {
-    gap: 10px;
-    font-size: 32px;
-    letter-spacing: -0.03em;
-  }
-
   .page-desc {
     margin-top: 6px;
     font-size: 13.5px;
-  }
-
-  .page-actions .btn {
-    height: 40px;
   }
 
   /* In een formulier staat de kop in het raster; de rasterafstand telt al mee. */
@@ -3826,17 +3915,10 @@ dialog.palette[open]::backdrop {
     width: min(460px, 92vw);
     height: fit-content;
     margin: auto;
-    padding: 22px;
-    border-radius: 26px;
-    box-shadow:
-      inset 0 1px 0 #fff,
-      var(--shadow-lg);
-    transform: translateY(12px) scale(0.96);
-    transition:
-      transform 0.5s var(--spring),
-      opacity 0.3s,
-      overlay 0.5s allow-discrete,
-      display 0.5s allow-discrete;
+    padding: 20px;
+    border-radius: var(--radius-sheet);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(8px) scale(0.98);
   }
 
   dialog.sheet[open] {
@@ -3845,17 +3927,15 @@ dialog.palette[open]::backdrop {
 
   @starting-style {
     dialog.sheet[open] {
-      transform: translateY(12px) scale(0.96);
+      transform: translateY(8px) scale(0.98);
     }
   }
 
   dialog.sheet[open]::backdrop {
-    background: rgb(16 24 40 / 0.16);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    background: rgb(10 10 10 / 0.16);
   }
 
-  .sheet-handle {
+  .sheet-grip {
     display: none;
   }
 
@@ -3875,7 +3955,7 @@ dialog.palette[open]::backdrop {
 
   /* Op het grijze canvas: het merk bovenaan, zoeken, het overzicht, de projecten als boom, jij onderaan. */
   .sidebar {
-    --item: 36px;
+    --item: 32px;
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 40;
@@ -3944,26 +4024,27 @@ dialog.palette[open]::backdrop {
     justify-content: center;
     gap: 8px;
     flex: none;
-    height: 38px;
-    padding: 0 8px 0 12px;
+    height: var(--control);
+    padding: 0 8px 0 10px;
     border: 0;
-    border-radius: var(--radius-md);
-    background: var(--muted);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-surface);
     color: var(--muted-foreground);
     font: inherit;
-    font-size: 13.5px;
+    font-size: 14px;
     cursor: pointer;
     transition:
-      background-color 0.2s,
-      transform 0.35s var(--ease-out);
+      box-shadow var(--dur),
+      transform var(--dur);
   }
 
   .sidebar-search:hover {
-    background: var(--muted-strong);
+    box-shadow: var(--shadow-card-hover);
   }
 
   .sidebar-search:active {
-    transform: scale(0.98);
+    transform: translateY(1px);
   }
 
   .sidebar-scroll {
@@ -3985,11 +4066,14 @@ dialog.palette[open]::backdrop {
     display: none;
   }
 
+  /* Een sectiekop in het menu: kleine kapitalen (hoofdletters met spatiëring), stil. */
   .nav-section {
-    padding: 18px 10px 6px;
+    padding: 16px 12px 4px;
     color: var(--muted-foreground);
     font-size: 12px;
-    font-weight: 550;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   .sidebar-nav {
@@ -3999,23 +4083,21 @@ dialog.palette[open]::backdrop {
     margin-top: 12px;
   }
 
-  /* Glazen lens die naar het actieve item veert. */
+  /* Het witte vlak dat naar het actieve item glijdt. */
   .sidebar-indicator {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     height: var(--item);
-    border: 1px solid var(--glass-edge);
+    border: 0;
     border-radius: var(--radius);
-    background: var(--glass);
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
-    box-shadow: var(--glass-shadow);
+    background: var(--surface);
+    box-shadow: var(--shadow-surface);
     transform: translateY(calc(var(--i, 0) * (var(--item) + 1px)));
     transition:
-      transform 0.55s var(--spring),
-      opacity 0.25s;
+      transform var(--dur-glide) var(--ease-out),
+      opacity var(--dur);
     pointer-events: none;
   }
 
@@ -4029,28 +4111,27 @@ dialog.palette[open]::backdrop {
     padding: 0 10px;
     border-radius: var(--radius);
     color: var(--text-soft);
-    font-size: 13.5px;
-    font-weight: 450;
+    font-size: 14px;
+    font-weight: 400;
     transition:
-      color 0.2s,
-      background-color 0.2s,
-      font-weight 0.2s;
+      color var(--dur),
+      background-color var(--dur);
   }
 
   .sidebar-nav a svg {
     color: var(--muted-foreground);
     transition:
-      transform 0.35s var(--spring),
-      color 0.2s;
+      transform var(--dur) var(--spring),
+      color var(--dur);
   }
 
   .sidebar-nav a:hover:not(.active) {
-    background: rgb(0 0 0 / 0.035);
+    background: var(--hover);
   }
 
   .sidebar-nav a.active {
     color: var(--foreground);
-    font-weight: 600;
+    font-weight: 500;
   }
 
   .sidebar-nav a.active svg {
@@ -4061,164 +4142,166 @@ dialog.palette[open]::backdrop {
     transform: scale(0.86);
   }
 
-  .place-link[aria-current="page"] {
-    background: var(--glass);
-    box-shadow: var(--glass-shadow);
-  }
+}
 
-  /* De plaatsen in huis, als een boom met een hulplijn. */
-  .place-tree {
-    list-style: none;
-    display: grid;
-    gap: 1px;
-    margin: 0;
-    padding: 0;
-  }
+/* De lijsten per tag (zijbalk op tablet, menublad op gsm). */
+.place-link[aria-current="page"] {
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
+}
 
-  .place-row {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
+/* De plaatsen in huis, als een boom met een hulplijn. */
+.place-tree {
+  list-style: none;
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+}
 
-  .place-link,
-  .place-add {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 34px;
-    padding: 0 10px;
-    border-radius: var(--radius);
-    color: var(--text-soft);
-    font-size: 13.5px;
-    font-weight: 450;
-    transition:
-      background-color 0.2s,
-      color 0.2s;
-  }
+.place-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 
-  .place-link:hover:not([aria-current="page"]) {
-    background: rgb(0 0 0 / 0.035);
-  }
+.place-link,
+.place-add {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 400;
+  transition:
+    background-color var(--dur),
+    color var(--dur);
+}
 
-  .place-link[aria-current="page"] {
-    color: var(--foreground);
-    font-weight: 600;
-  }
+.place-link:hover:not([aria-current="page"]) {
+  background: var(--hover);
+}
 
-  .place-row .place-link {
-    padding-right: 32px;
-  }
+.place-link[aria-current="page"] {
+  color: var(--foreground);
+  font-weight: 500;
+}
 
-  .place-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.place-row .place-link {
+  padding-right: 32px;
+}
 
-  .place-icon {
-    display: grid;
-    color: var(--tone);
-  }
+.place-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .place-toggle {
-    position: absolute;
-    right: 4px;
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--faint);
-    cursor: pointer;
-    transition:
-      background-color 0.2s,
-      color 0.2s;
-  }
+.place-icon {
+  display: grid;
+  color: var(--tone);
+}
 
-  .place-toggle:hover {
-    background: rgb(0 0 0 / 0.05);
-    color: var(--text-soft);
-  }
+.place-toggle {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
 
-  .place-toggle svg {
-    transition: transform 0.4s var(--ease-out);
-  }
+.place-toggle:hover {
+  background: rgb(0 0 0 / 0.05);
+  color: var(--text-soft);
+}
 
-  .place-toggle[aria-expanded="true"] svg {
-    transform: rotate(180deg);
-  }
+.place-toggle svg {
+  transition: transform 0.4s var(--ease-out);
+}
 
-  /* Openklappen zonder hoogte te meten: de rij groeit van 0fr naar 1fr. */
-  .place-children {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transition:
-      grid-template-rows 0.4s var(--ease-out),
-      opacity 0.25s;
-  }
+.place-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
 
-  .place-children[data-open="true"] {
-    grid-template-rows: 1fr;
-    opacity: 1;
-  }
+/* Openklappen zonder hoogte te meten: de rij groeit van 0fr naar 1fr. */
+.place-children {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.4s var(--ease-out),
+    opacity 0.25s;
+}
 
-  .place-children > ul {
-    position: relative;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    list-style: none;
-  }
+.place-children[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
 
-  .place-children > ul::before {
-    content: "";
-    position: absolute;
-    top: 4px;
-    bottom: 4px;
-    left: 17px;
-    width: 1px;
-    background: var(--border-strong);
-  }
+.place-children > ul {
+  position: relative;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
 
-  .place-children li {
-    display: flex;
-    margin-top: 1px;
-  }
+.place-children > ul::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 17px;
+  width: 1px;
+  background: var(--border-strong);
+}
 
-  .place-children[data-open="true"] li {
-    animation: slide-down 0.35s var(--ease-out) backwards;
-    animation-delay: calc(var(--k, 0) * 30ms);
-  }
+.place-children li {
+  display: flex;
+  margin-top: 1px;
+}
 
-  .place-link.child {
-    margin-left: 26px;
-    padding-left: calc(12px + var(--depth, 0) * 12px);
-  }
+.place-children[data-open="true"] li {
+  animation: slide-down 0.35s var(--ease-out) backwards;
+  animation-delay: calc(var(--k, 0) * 30ms);
+}
 
-  .place-add {
-    color: var(--muted-foreground);
-  }
+.place-link.child {
+  margin-left: 26px;
+  padding-left: calc(12px + var(--depth, 0) * 12px);
+}
 
-  .place-add:hover {
-    color: var(--foreground);
-  }
+.place-add {
+  color: var(--muted-foreground);
+}
 
-  .place-add svg {
-    margin: 0 1px;
-    transition: transform 0.35s var(--spring);
-  }
+.place-add:hover {
+  color: var(--foreground);
+}
 
-  .place-add:hover svg {
-    transform: rotate(90deg);
-  }
+.place-add svg {
+  margin: 0 1px;
+  transition: transform 0.35s var(--spring);
+}
+
+.place-add:hover svg {
+  transform: rotate(90deg);
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
@@ -4228,7 +4311,7 @@ dialog.palette[open]::backdrop {
 
   /* Smalle zijbalk: enkel iconen, het zoekveld wordt een vierkantje. */
   .sidebar-search {
-    width: 48px;
+    width: 40px;
     padding: 0;
   }
 }
@@ -4236,11 +4319,11 @@ dialog.palette[open]::backdrop {
 /* Breed genoeg: de zijbalk krijgt tekst, zoeken, secties, tellers en de plaatsen. */
 @media (min-width: 1100px) {
   :root {
-    --sidebar: 248px;
+    --sidebar: 224px;
   }
 
   .sidebar {
-    --item: 34px;
+    --item: 32px;
     padding: max(12px, env(safe-area-inset-top)) 12px 12px 14px;
   }
 
@@ -4327,7 +4410,7 @@ dialog.palette[open]::backdrop {
 
 /* ---------- sjablonen, eigen velden, importeren ---------- */
 
-/* Een sjabloon kiezen: niet gekozen een zacht grijs vlak, gekozen komt het naar voren als glas met een zwart tegeltje. */
+/* Een sjabloon kiezen: niet gekozen een zacht grijs vlak, gekozen wordt het het witte vlak met een zwart tegeltje. */
 .template-picker {
   display: grid;
   gap: 8px;
@@ -4363,9 +4446,9 @@ dialog.palette[open]::backdrop {
 }
 
 .template-option[aria-checked="true"] {
-  border-color: var(--glass-edge);
-  background: var(--glass-strong);
-  box-shadow: var(--glass-shadow);
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
 }
 
 .template-option[aria-checked="true"] .icon-tile,
@@ -4409,10 +4492,10 @@ dialog.palette[open]::backdrop {
   justify-content: space-between;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--glass-edge);
+  border: 0;
   border-radius: var(--radius-xl);
-  background: var(--glass-strong);
-  box-shadow: var(--glass-shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-surface);
 }
 
 .template-file .template-text {
@@ -4527,9 +4610,7 @@ dialog.palette[open]::backdrop {
 
 @media (hover: hover) {
   .fields-editor-row:hover {
-    box-shadow:
-      var(--shadow-inset),
-      0 6px 18px -10px rgb(16 24 40 / 0.18);
+    box-shadow: var(--shadow-card-hover);
   }
 }
 
@@ -4959,7 +5040,7 @@ dialog.palette[open]::backdrop {
   }
 }
 
-/* Foto van een item, bovenaan de fiche. Nog geen foto: een zacht vlak met een glazen knop erop. */
+/* Foto van een item, bovenaan de fiche. Nog geen foto: een zacht vlak met een witte knop erop. */
 .item-photo {
   display: grid;
   gap: 10px;
@@ -5086,7 +5167,6 @@ dialog.palette[open]::backdrop {
 }
 
 .icon-option[aria-checked="true"] {
-  box-shadow: var(--shadow-primary);
 }
 
 /* Projectboom op het overzicht: subprojecten springen in. */
@@ -5251,8 +5331,8 @@ dialog.palette[open]::backdrop {
   min-height: 60px;
   margin: 6px 6px 0;
   padding: 10px 12px;
-  border-radius: 15px;
-  transition: background-color 0.2s;
+  border-radius: var(--radius);
+  transition: background-color var(--dur);
 }
 
 @media (hover: hover) {
@@ -5693,7 +5773,7 @@ dialog.palette[open]::backdrop {
 
 .calendar-day[aria-selected="true"] {
   background: var(--background);
-  box-shadow: var(--shadow-inset), 0 6px 18px -10px rgb(16 24 40 / 0.22);
+  box-shadow: var(--shadow-surface);
 }
 
 .calendar-date {
@@ -5816,179 +5896,8 @@ dialog.palette[open]::backdrop {
 }
 
 
-/* ---------- verbanden: de kaart (LinkMap.tsx) ----------
- * Kolommen in de toon van het project, lijnen in de toon van de soort verband (--tone-ink: genoeg contrast op wit en
- * op het zachte vlak). Past de kaart niet, dan verkleint ze tot 72%; nog breder schuift ze binnen haar eigen vlak (de
- * pagina zelf schuift nooit opzij).
- */
-.linkmap {
-  overflow-x: auto;
-  margin: 4px 0 16px;
-  overscroll-behavior-x: contain;
-}
-
-.linkmap svg {
-  display: block;
-}
-
-.lm-column > rect {
-  fill: var(--tone-soft);
-}
-
-.lm-outside > rect {
-  fill: var(--subtle);
-}
-
-.lm-column-name {
-  font-size: 12.5px;
-  font-weight: 650;
-  fill: var(--tone-ink);
-  text-anchor: middle;
-}
-
-.lm-outside .lm-column-name {
-  fill: var(--muted-foreground);
-}
-
-.lm-column-link {
-  cursor: pointer;
-}
-
-.lm-column-link:hover,
-.lm-column-link:focus-visible {
-  text-decoration: underline;
-  outline: none;
-}
-
-.lm-line {
-  fill: none;
-  stroke: var(--tone-ink);
-  stroke-width: 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: opacity 0.25s var(--ease-out);
-}
-
-.lm-line.lm-grey,
-.lm-line.lm-tab {
-  stroke: var(--faint);
-  stroke-width: 3;
-}
-
-.lm-line.lm-tab {
-  stroke-dasharray: 1 7;
-}
-
-/* Een verband dat voor iemand niet werkt (zie LinkProblems). */
-.lm-line.lm-problem {
-  stroke: var(--danger);
-  stroke-dasharray: 10 8;
-}
-
-.lm-problems {
-  margin-bottom: 16px;
-}
-
-.lm-problem-icon {
-  color: var(--danger);
-  background: var(--danger-bg);
-}
-
-.lm-station {
-  fill: var(--background);
-  stroke: var(--tone-ink);
-}
-
-.lm-station.lm-grey,
-.lm-station.lm-tab {
-  stroke: var(--muted-foreground);
-}
-
-.lm-station.lm-mixed {
-  stroke: var(--foreground);
-}
-
-.lm-node {
-  cursor: pointer;
-  outline: none;
-  transition: opacity 0.25s var(--ease-out);
-}
-
-.lm-halo {
-  fill: var(--accent-soft);
-  stroke: var(--accent);
-  stroke-width: 2;
-  opacity: 0;
-  transition: opacity 0.2s var(--ease-out);
-}
-
-.lm-halo.on,
-.lm-node:focus-visible .lm-halo {
-  opacity: 1;
-}
-
-.lm-name {
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--foreground);
-}
-
-.lm-meta {
-  font-size: 12px;
-  fill: var(--muted-foreground);
-}
-
-.lm-dim {
-  opacity: 0.22;
-}
-
-/* Het streepje in de kleur van een soort verband (filters, rijen). */
-.lm-swatch {
-  display: inline-block;
-  flex: none;
-  width: 16px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--tone-ink);
-}
-
-.lm-swatch.lm-grey {
-  background: var(--faint);
-}
-
-.lm-swatch.lm-tab {
-  height: 0;
-  border-radius: 0;
-  background: none;
-  border-top: 3px dotted var(--faint);
-}
-
-.lm-back {
-  align-self: flex-start;
-  margin-bottom: 8px;
-}
-
-.lm-more {
-  margin: 12px 0 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-.lm-more p {
-  margin: 4px 0;
-}
-
-/* Meer soorten tussen dezelfde twee lijsten: de streepjes onder elkaar. */
-.lm-swatches {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: 3px;
-  width: 16px;
-}
-
 /* ---------- een item kiezen (ItemPicker.tsx) ----------
- * Een gewoon veld waarin je typt; de keuzes zweven eronder als glas (zoals het zoekpalet).
+ * Een gewoon veld waarin je typt; de keuzes liggen eronder op een wit vlak (zoals het zoekpalet).
  */
 .picker-row {
   position: relative;
@@ -6028,9 +5937,7 @@ dialog.palette[open]::backdrop {
   padding: 6px;
   list-style: none;
   border-radius: var(--radius-md);
-  background: var(--glass-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--surface);
   box-shadow: var(--shadow-md);
 }
 
@@ -6146,13 +6053,11 @@ dialog.palette[open]::backdrop {
 @media print {
   .sidebar,
   .tabbar,
-  .fab,
+  .phone-head,
   .toaster,
   .nav-progress,
   .offline-note,
   .page-head,
-  .crumb,
-  .topbar,
   .panel-bar {
     display: none !important;
   }
@@ -6313,10 +6218,8 @@ dialog.palette[open]::backdrop {
   max-width: 220px;
   padding: 8px 10px;
   border-radius: var(--radius);
-  background: var(--glass-strong);
+  background: var(--surface);
   box-shadow: var(--shadow-md);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   font-size: 12.5px;
   pointer-events: none;
   animation: fade-in 0.15s;

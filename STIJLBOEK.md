@@ -3,25 +3,25 @@
 Dit stijlboek is de afspraak voor hoe Thuis eruitziet en aanvoelt. **Raadpleeg het voor je een scherm,
 onderdeel of tekst toevoegt of verandert**, en werk het bij als je iets nieuws introduceert.
 
-De stijl heet **Glas**: héél minimalistisch en strak, met een subtiel "liquid glass" voor wat zweeft. Een koel
-lichtgrijs canvas met de zijbalk erop, één wit paneel zonder rand, grote rustige titels, grijze vlakken in plaats
-van lijnen, zwart voor de actie en glas enkel waar iets boven de inhoud ligt (de balken, de gekozen tab, een
-onderblad). Het mooie zit niet in kleur of versiering, maar in **ritme, uitlijning, zachte vlakken en verende
-micro-animaties**. Het ontwerp van elk scherm (gsm en desktop) staat op het canvas "Glas: alle schermen".
+De stijl volgt de designtaal van Biohoeve (beheer en mijn): **een warme grijze schil met de pagina op één wit
+paneel**, links het menu, rechts het werk. Strak en stil: dekkende haarlijnen van 1 px, kaarten met een ring in
+plaats van een schaduw, een wit vlak dat naar je keuze glijdt, en één accent: **geel (#f7ff8b) als vlak met zwarte
+tekst** voor de hoofdactie. Op de gsm een kop bovenaan en een onderbalk onderaan, allebei op de schil. Wat iets
+onderscheidt, is zijn plaats, zijn lijn en zijn beweging, niet versiering.
 
 De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 
 | Wat | Waar |
 | --- | --- |
-| Kleuren, maten, schaduwen, curves | `src/styles.css`, bovenaan in `:root` |
-| Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`) |
+| Kleuren, maten, schaduwen, curves, duren | `src/styles.css`, bovenaan in `:root` |
+| Componenten | `src/components/` (vooral `Controls.tsx`, `Page.tsx`, `Motion.tsx`, `Sidebar.tsx`, `MenuSheet.tsx`, `Sheet.tsx`) |
+| De schil (zijbalk, onderbalk, menublad, de +) | `src/App.tsx`, `src/shell.ts` (`useAddAction`, `PhoneAdd`) |
 | Lijsten, velden en dingen | `src/components/Fields.tsx`, `ThingsView.tsx` en `shared/fields.ts` |
 | Berekeningen | `src/components/CalcEditor.tsx` en `shared/calc.ts` |
-| Sjablonen (ingebouwd en gedeeld) | `shared/templates.ts`, `shared/template-file.ts` en `src/components/TemplateShare.tsx` |
-| Rechten | `shared/access.ts` (wat een rol mag, per lijst en per veld) |
+| Sjabloon delen | `shared/template-file.ts` |
+| Rechten | `shared/rights.ts` (wat een rol mag) |
 | Navigatie met overgangen | `src/router.tsx` (`Link`, `NavLink`, `useNavigate`) en `src/routes.tsx` |
 | Iconen | `src/components/Icon.tsx` |
-| Verbanden tussen lijsten (kaart) | `src/components/LinkMap.tsx` en `shared/links.ts` |
 | Opmaak van bedragen, datums, hoeveelheden | `src/format.ts` |
 | Toestel: kiosk, online, app installeren, aanraken | `src/device.ts` (`isKiosk`, `useOnline`, `useInstall`, `isTouch`) |
 
@@ -30,23 +30,24 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
 ## 1. Principes
 
 1. **Rustig.** Wit en grijs dragen het scherm. Kleur is een signaal, geen decoratie.
-2. **Eén accent.** Blauw (`--accent`) enkel voor focus, info, automatisch ingevuld en stille tekstknoppen. Nergens
-   een tweede accentkleur.
-3. **Zwart is de actie.** De hoofdknop is zwart (`btn-primary`), net als de + knop, het merktegeltje, een
-   aangezette schakelaar en een gekozen icoon.
-4. **Glas enkel voor wat zweeft.** De paneelbalk, de onderbalk, de terugknop op gsm, de gekozen tab of segment,
-   de secundaire knop, een toast, een onderblad en het zoekpalet. Nooit voor een vlak waar gewoon inhoud op staat.
-5. **Grijs is een vlak, geen rand.** Velden, pillen, sporen van tabs en groepen in een formulier zijn doorschijnende
-   grijze vlakken zonder rand. Lijnen zijn haarfijn en enkel tussen rijen en secties.
-6. **Groot en zacht.** Grote titels (32px op tablet), ruime afrondingen (12–24px, knoppen zijn pillen), tekst van
-   13–15px.
-7. **Alles lijnt uit.** Eén raster van 4px; de tekst van een sectie staat onder de paginatitel; kolommen in tabellen
-   staan onder hun kop.
-8. **Alles beweegt, en veert.** Een nieuw scherm vloeit in, een keuze veert naar haar plaats, een knop veert bij
-   indrukken. Elke animatie heeft een reden, duurt 0,2–0,6 s en gebruikt de vaste curves. Nooit beweging om de
-   beweging.
+2. **Eén accent: geel als vlak.** `--brand` (#f7ff8b) enkel als vlak met zwarte tekst: de hoofdknop, de + in de
+   onderbalk, het merktegeltje, een zachte tint voor wat de app invulde. **Nooit als tekst, icoon of dunne lijn**
+   (op wit haalt geel geen contrast). Nergens een tweede accentkleur.
+3. **Zwart voor de kleine bediening.** Een aangezette schakelaar, een vinkje, vandaag in de kalender, een gekozen
+   icoon en de reeks van nu in een grafiek zijn zwart (`--primary`).
+4. **Alles hangt ergens aan.** Een menu, een blad of een melding komt uit een rand (de onderbalk, de onderrand van
+   het scherm), niet als los ding dat ergens zweeft. Er is geen zwevende knop: de + zit in de onderbalk.
+5. **Lijnen lopen door.** Eén dekkende haarlijn (`--line`) rond het paneel, boven de onderbalk en rond een blad.
+   Een rand is een ring van 1 px als schaduw (`--shadow-card`, `--shadow-surface`), geen `border`, behalve bij een
+   veld en een knop met rand. Geen schaduw rond het paneel; echte schaduw enkel voor wat erover ligt.
+6. **Kiezen is een wit vlak.** Waar je kiest (tabs, segmenten, het menu, de onderbalk, een filter), verhuist een wit
+   vlak met een ring (`--surface` + `--shadow-surface`) naar je keuze; er kleurt geen andere knop in.
+7. **Strak en klein.** Paginatitel 24px vet, knoppen en velden 32px (40px op een aanraakscherm), afrondingen uit één
+   schaal (10, 14, 18, 20). Elk raakvlak is minstens 44px (`--hit`), ook als de knop kleiner is.
+8. **Beweging speelt één keer, kort.** Kleur en hover in 150 ms, een vlak glijdt in 320 ms, een blad komt in 300 ms
+   en gaat in 200 ms, zonder nawiebelen. Nooit beweging bij het scrollen, nooit om de beweging.
 9. **Mobiel eerst, kiosk mee.** Elk scherm werkt op een gsm met de duim én op de keukentablet met een natte
-   vinger (aanraakvlakken van 44px).
+   vinger.
 10. **Nederlands zoals we het zeggen.** Kort, vriendelijk, "je". Zie [Tekst](#9-tekst).
 11. **Geen uitleg in de interface.** Geen ondertitel die herhaalt wat het kruimelpad of de titel al zegt, geen
     uitlegzin onder een veld of kaart, geen "· optioneel", geen tellers of rollen als bijlabel. Snapt iemand een
@@ -54,37 +55,42 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
     betere plaats, of laat het weg. Grijze tekst onder een titel is enkel voor **gegevens** (de beschrijving van
     een lijst, je e-mailadres, "2 van 3 klaar", "Deze maand") of een **toestand** (een fout, "enkel zien").
     Uitleg op vraag kan enkel bij een berekening (`Tip`) of als titel van een keuze in een `select`.
+12. **Elk gegeven staat één keer op het scherm.** Wat in de zijkolom staat, staat niet nog eens in de kaarten.
 
 ---
 
 ## 2. Tokens
 
-Gebruik altijd de variabele, nooit de kleurcode zelf.
+Gebruik altijd de variabele, nooit de kleurcode zelf. De waarden komen uit de maten van Biohoeve.
 
 ### Kleur
 
-De grijzen zijn doorschijnend (`rgb(118 118 128 / …)`): zo werkt hetzelfde vlak op wit én op een grijze groep.
+De grijzen in het paneel zijn doorschijnend zwart (`rgb(0 0 0 / …)`): zo werkt hetzelfde vlak op wit én op een
+grijze groep. Lijnen zijn dekkend.
 
 | Variabele | Waarde | Gebruik |
 | --- | --- | --- |
-| `--canvas` | #eef0f2 | Koel grijs achter het paneel, waarop de zijbalk staat (enkel tablet) |
-| `--background` | #ffffff | Paneel, kaarten, wit kaartje in een groep |
-| `--group` | grijs 4,5% | Een groep velden in een formulier, een instelling |
-| `--subtle` | grijs 6% | Zacht vlak: lege staat, bestanden, lange tekst, melding |
-| `--field` (+ `-hover`) | grijs 8% (12%) | Invoervelden (worden wit bij focus) |
-| `--muted` (+ `-strong`) | grijs 10% (16%) | Pillen, zachte knoppen, filters, tags, sporen van tabs en segmenten (hover) |
-| `--hover`, `--press` | zwart 2,5% / 5,5% | Hover van een rij; ingedrukt, gekozen zoekresultaat, actieve tab onderaan |
-| `--glass`, `--glass-bar`, `--glass-strong` | wit 82→60%, 90→76%, 94→84% | Glas: knoppen en gekozen dingen; balken boven scrollende inhoud; toast, onderblad, kleine pillen |
-| `--glass-blur`, `--glass-edge`, `--glass-shadow` | | Hoort altijd bij glas: vervaging, witte rand, glanslijn en zachte schaduw |
-| `--foreground` | #1d1d1f | Hoofdtekst, titels |
-| `--text-soft` | #3a3a3c | Tekst in menu en zachte knoppen |
-| `--muted-foreground` | #6b6b70 | Uitleg, metadata, kolomkoppen, placeholders (haalt 4,5:1) |
-| `--faint` | #a1a1a6 | Enkel iconen en bijzaken (greep, ster uit), nooit tekst |
-| `--divider` | zwart 5% | Haarlijn tussen rijen en secties (raakt de rand niet) |
-| `--border` (+ `-strong`) | | Zeldzaam: een stippellijn (berekening, "+ tag"), de hulplijn in de boom |
-| `--primary` | #1d1d1f | Hoofdknop, + knop, merktegeltje, schakelaar aan, gekozen icoon of sjabloon |
-| `--accent` (+ `-soft`, `-line`, `-ink`) | #2f86eb | Blauw: focusring, info, automatisch ingevulde velden, stille tekstknoppen |
-| `--destructive` | #c62a2f | Verwijderen, foutmeldingen (haalt 4,5:1) |
+| `--canvas` | #f2f2ef | De schil: achter het paneel, de zijbalk, op gsm de kop, de onderbalk en het menublad |
+| `--background` | #ffffff | Het paneel, de pagina op gsm, kaarten |
+| `--surface` (+ `--shadow-surface`) | #ffffff | Het witte vlak: wat gekozen is (tab, segment, menu-item, filter), wat erover ligt (blad, palet, melding, keuzelijst) |
+| `--group` | zwart 2,5% | Een groep velden in een formulier, een instelling |
+| `--subtle` | zwart 3% | Zacht vlak: lege staat, bestanden, lange tekst |
+| `--muted` (+ `-strong`, `-solid`) | zwart 4,5% (7,5%; dekkend #f5f5f5) | Zachte knoppen, filters, tags, sporen van tabs en segmenten |
+| `--field` | #ffffff | Invoervelden: wit met een rand (`--input`) |
+| `--hover`, `--press` | zwart 4% / 5,5% | Hover van een rij of menu-item; ingedrukt |
+| `--bar`, `--bar-blur`, `--bar-line` | schil 95%, waas 8px, zwart 6% | Enkel de kop en de onderbalk op gsm (boven scrollende inhoud) |
+| `--foreground` | #0a0a0a | Hoofdtekst, titels |
+| `--text-soft` | #404040 | Tekst in menu en zachte knoppen |
+| `--muted-foreground` | #6b6b6b | Gegevens, kolomkoppen, placeholders (haalt 4,5:1 op wit én op de schil) |
+| `--faint` | #a3a3a3 | Enkel iconen en bijzaken (greep, ster uit), nooit tekst |
+| `--line` | #e3e3e1 | De dekkende haarlijn: rond het paneel, boven de onderbalk |
+| `--border` (+ `-strong`), `--input` | #e5e5e5 (#d4d4d4) | Velden, een knop met rand, de onderlijn van een tekstlink, stippellijnen |
+| `--divider` | zwart 6% | Haarlijn tussen rijen en secties in een kaart (raakt de rand niet) |
+| `--brand` (+ `-hover`, `-press`, `-edge`, `-foreground`) | #f7ff8b | De hoofdknop, de +, het merktegeltje; altijd met zwarte tekst en een randje (`--brand-edge`) |
+| `--accent-soft`, `--accent-line` | geel, zacht | Wat de app invulde (`auto`, `.tag.is-filled`), tekstselectie |
+| `--primary` | #0a0a0a | Schakelaar aan, vinkje, vandaag, gekozen icoon of sjabloon, de reeks van nu |
+| `--destructive` (+ `-soft`) | #c10007 | Verwijderen (rode tekst op een rode tint van 10%), foutmeldingen |
+| `--ring`, `--focus-ring`, `--focus-outline` | #a1a1a1 | Focus: een grijze rand met een ring van 3px op knoppen en velden, elders een omlijning |
 | `--success*`, `--warning*`, `--danger*` | | Status: loopt / bijna voorbij / voorbij |
 
 **Grafiekkleuren** (`--chart-1` … `--chart-8`, `--chart-other`, `--chart-muted`, `--chart-grid`, `--chart-axis`)
@@ -99,33 +105,41 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 
 ### Typografie
 
-- Lettertype: **Inter** (variabel, met optische grootte), letterspatiëring licht negatief (−0,006em, titels
-  −0,012 tot −0,025em). Cijfers in kaartnummers en barcodes: Geist Mono (`.mono`).
-- Bedragen en aantallen altijd met `font-variant-numeric: tabular-nums` (klassen `.num`, `.row-end`, `.amount-big`).
+- Lettertype: **Geist** (variabel), ook voor titels. Cijfers in kaartnummers en barcodes: Geist Mono (`.mono`).
+- Bedragen en aantallen altijd met `font-variant-numeric: tabular-nums` (klassen `.num`, `.row-end`, `.total-value`).
+- Een sectiekop in het menu staat in **kleine kapitalen**: hoofdletters, 12px, 600, spatiëring 0,05em, stil.
 
 | Rol | Grootte | Gewicht |
 | --- | --- | --- |
-| Paginatitel | 32px (tablet), 30px (gsm) | 650, −0,03em |
+| Paginatitel | 24px | 700, −0,02em |
 | Groot bedrag | 30–38px | 600, −0,03em |
-| Titel van een kaart of sectie | 15,5px | 600 |
-| Titel in een onderblad | 20px | 650 |
+| Titel van een kaart of sectie | 15px | 600 |
+| Titel in een blad | 18px | 600 |
 | Gewone tekst | 14px (muis), 15px (aanraking) | 400 |
-| Menu in de zijbalk | 13,5px | 450, actief 600 |
-| Rijtitel, knop, label | 13,5–14,5px | 550 |
-| Kolomkop, metadata, uitleg | 12,5–13,5px | 400–550 |
+| Menu in de zijbalk | 14px | 400, gekozen 500 |
+| Knop | 14px (sm 13px) | 500 |
+| Tab, segment, filter | 13px | 500 |
+| Kolomkop, metadata | 12,5–13,5px | 400–500 |
+| Label in de onderbalk | 11px | 500 |
 | Badges, tellers | 11,5–12px | 500 |
 
 ### Maten
 
-- Raster van **4px**. Gebruikelijke afstanden: 4, 8, 12, 16, 20, 24, 32.
-- Afronding: `--radius-sm` 8 (badges) · `--radius` 10 (menu-items, tegels) · `--radius-md` 12 (velden, zoekveld) ·
-  `--radius-lg` 14 (rijen, spoor van tabs en segmenten, wit kaartje in een groep) · `--radius-xl` 20 (kaarten, lege
-  staat) · `--radius-2xl` 24 (groepen in een formulier, zoekpalet) · `--radius-panel` 18 (paneel, paneelbalk) ·
-  `--radius-pill` (knoppen, filters, tags, onderbalk, toast).
-- Schaduw: zacht en ver. `--shadow-card` voor een kaart (een haarfijne rand van schaduw), `--shadow-inset` voor een
-  wit kaartje in een grijze groep, `--shadow-primary` onder zwart, `--glass-shadow` onder glas en `--shadow-lg` enkel
-  voor wat zweeft (zoekpalet, venster, de gesleepte rij).
-- Hoogtes: knop 38px · klein 32px · groot 48px · in de balken 40px · veld 42px. Op aanraakschermen 44/36/52px.
+- Raster van **4px**. Gebruikelijke afstanden: 4, 8, 12, 16, 20, 24, 32. Een kaart: 12–16px binnenin.
+- Afronding (één schaal): `--radius-sm` 6 (badges) · `--radius`, `--radius-md`, `--radius-lg` 10 (knoppen, velden,
+  menu-items, rijen; een kleine knop 8) · `--radius-xl` 14 (kaarten, lege staat, zoekpalet, het vlak in de
+  onderbalk) · `--radius-2xl` 18 (groepen in een formulier) · `--radius-panel` 18 (paneel) · `--radius-sheet` 20
+  (blad, venster) · `--radius-pill` (filters, tags, badges, schakelaar). Een spoor is zo rond als het vlak erin plus
+  de ruimte ertussen (spoor 9, vlak 7).
+- Randen en schaduwen: `--shadow-card` (ring van 7% met een zweem) voor een kaart, `--shadow-surface` voor het witte
+  vlak, `--shadow-inset` voor een wit kaartje in een grijze groep, `--shadow-xs` onder een veld of knop met rand,
+  `--shadow-lg` enkel voor wat erover ligt (zoekpalet, venster, melding, de gesleepte rij), `--shadow-sheet` voor
+  een blad van onder.
+- Hoogtes: `--control` 32px (knop en veld; klein 28, groot 36) · op aanraakschermen `--control-touch` 40px (klein
+  36, groot 44) · `--hit` 44px raakvlak (een `::after` dat uitsteekt) · kop op gsm 48px · onderbalk `--tabbar` 56px ·
+  menu-item 32px (in het menublad 44px).
+- Duren: `--dur` 150ms (kleur, rand, hover) · `--dur-page` 260ms (een nieuw scherm) · `--dur-glide` 320ms (een vlak
+  dat glijdt) · `--dur-sheet-open` 300ms en `--dur-sheet-close` 200ms (blad, venster, palet).
 
 ---
 
@@ -133,58 +147,73 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 
 ### Gsm (smaller dan 768px)
 
-- Witte achtergrond, inhoud met 16px marge, een grote titel (30px).
-- **Onderbalk**: een zwevende glazen pil (20px van de randen) met drie tabs: **Overzicht**, **Agenda** en
-  **Zoeken** (opent het [zoekpalet](#zoekpalet-commandpalette)). Een grijs vlak veert naar de actieve tab. Een
-  lijst en een ding horen bij Overzicht.
-- **Jouw gegevens** (`/ik`): je letter rechts naast de titel van een hoofdscherm (een scherm zonder terug, zoals het
-  overzicht). Geen tab: je hebt het zelden nodig.
-- **Zwevende + knop** (zwart, 56px) rechts boven de onderbalk voor de hoofdactie van het scherm.
-- **Terug** is een glazen pil die linksboven zweeft. Zodra de grote titel uit beeld scrollt, krimpt ze tot een
-  rondje en verschijnt de titel in een glazen pilletje in het midden (zit in `PageHead`).
+```
+┌ kop (schil, 48px, plakt) ──────────────┐
+│ ‹            Wijnen           ⌕   (J)  │  ← terug of ▣ Thuis · titel zodra je scrolt · zoeken · jij
+├────────────────────────────────────────┤
+│ Wijnen                          (⋯)    │  ← titel 24px
+│ [ Wijnen · Logboek ]                   │
+│ …                                      │
+├ onderbalk (schil, 56px, van rand tot rand) ┤
+│ ◖Overzicht◗  Agenda  [ + ]  Geld  Menu │
+└────────────────────────────────────────┘
+```
+
+- Witte pagina, inhoud met 16px marge, een titel van 24px.
+- **De kop** (`.phone-head`, in `PageHead`): 48px op de schil met een waas, plakt bovenaan, een haarlijn eronder.
+  Links **terug** (een icoonknop van 36px) of het merk (▣ Thuis, naar het overzicht); rechts **zoeken** (opent het
+  [zoekpalet](#zoekpalet-commandpalette)) en **jouw letter** (naar `/ik`). Zodra de grote titel onder de kop
+  schuift, verschijnt hij klein in het midden.
+- **De onderbalk** (`.tabbar`): vast onderaan, van rand tot rand, op de schil met een waas en een dekkende lijn
+  erboven. Vijf tabs: **Overzicht**, **Agenda**, de gele **+**, **Geld** en **Menu**. Het witte vlak glijdt naar
+  waar je bent; Menu licht op voor wat enkel in het menublad staat (een lijst, Voorraad, Eten, …) en zolang dat
+  open is.
+- **De +** doet wat het scherm vraagt (`useAddAction` of `<PhoneAdd>` uit `src/shell.ts`: een lijst voegt een ding
+  toe of logt), anders opent hij het palet om toe te voegen. Er is geen zwevende knop.
+- **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), de vaste plekken,
+  je lijsten per tag en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
 
 ### Tablet en kiosk (vanaf 768px)
 
 ```
-┌ canvas #eef0f2 ────────────────────────────────────────────────────────────┐
-│ ▣ Thuis          ┌ paneel (wit, geen rand, 18px) ─────────────────────────┐ │
-│ [⌕ Zoeken  ⌘K]   │ ╭ glas ────────────────────────────────────────────╮ │ │
-│ ◖Overzicht◗      │ │ Overzicht › Wijnen               (+ Wijn toevoegen) J│ │ │  ← paneelbalk 60px, zweeft
-│ Lijsten          │ ╰──────────────────────────────────────────────────╯ │ │
-│ ⌄ Huis           │ Wijnen                                          (⋯)    │ │  ← titel 32px
-│ │ Voorraad       │                                                        │ │
-│ │ Wijnen         │ [ Wijnen · Logboek ]                                   │ │  ← tabs
-│ › Jaan           │ zijkolom (320px)        zoeken, filters                │ │
-│ › Wijnkelder     │ Wie                     Wijn          Wijnhuis   Fles  │ │
-│ + Lijst          │ ───────────             ─────────────────────────────  │ │
-│                  │ Tags                    rijen …                        │ │
-│ ◉ Jaan           └────────────────────────────────────────────────────────┘ │
+┌ schil #f2f2ef ─────────────────────────────────────────────────────────────┐
+│ ▣ Thuis          ┌ paneel (wit, haarlijn, 18px) ──────────────────────────┐ │
+│ [⌕ Zoeken…]      │ Overzicht › Wijnen               [+ Wijn toevoegen]  (J)│ │  ← paneelbalk 56px
+│ ◖Overzicht◗      ├────────────────────────────────────────────────────────┤ │
+│ Agenda …         │ Wijnen                                          (⋯)    │ │  ← titel 24px
+│ LIJSTEN          │ [ Wijnen · Logboek ]                                   │ │  ← tabs
+│ ⌄ Huis           │ zijkolom (320px)        zoeken, filters                │ │
+│ │ Voorraad       │ Wie                     Wijn          Wijnhuis   Fles  │ │
+│ │ Wijnen         │ ───────────             ─────────────────────────────  │ │
+│ › Wijnkelder     │ Tags                    rijen …                        │ │
+│ + Lijst          └────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Canvas** met links de **zijbalk** (248px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
-  **paneel** (10px marge, geen rand, afronding 18px). Het paneel scrollt zelf; de zijbalk blijft staan.
-- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het zwarte merktegeltje met "Thuis" (naar het overzicht), het
-  zoekveld als grijs vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), Overzicht, Agenda, Verbanden en de
-  [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het actieve item ligt onder een **glazen lens** die meeveert.
-- **Paneelbalk** (60px, een glazen balk die 10px van de randen zweeft en blijft staan; de inhoud scrollt eronder
-  door): kruimelpad met `›` links ("Slachterijstraat 1 › Wijnkelder"), rechts de hoofdactie (zwarte pil, 40px) en
-  jouw letter in een glazen rondje (naar `/ik`, de enige weg ernaartoe op tablet).
-- **Kop**: een grote titel (32px) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
-  item rechts (`btn-outline btn-sm`, glas). Geen lijn eronder.
+- **Schil** met links de **zijbalk** (224px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
+  **paneel** (10px marge, een dekkende haarlijn `--line`, afronding 18px, geen schaduw). Het paneel scrollt zelf; de
+  zijbalk blijft staan.
+- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje met "Thuis" (naar het overzicht), het
+  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), de vaste plekken en de
+  [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen item ligt op het **witte vlak** dat meeglijdt.
+- **Paneelbalk** (56px, wit, plakt bovenaan het paneel met een haarlijn eronder; de inhoud scrollt eronder door):
+  kruimelpad met `›` links ("Overzicht › Wijnen"), rechts de hoofdactie (gele knop) en jouw letter in een wit
+  rondje (naar `/ik`).
+- **Kop**: een titel (24px, vet) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
+  item rechts (`btn-outline btn-sm`). Geen lijn eronder.
 - Inhoud daaronder met 20px marge. Een lijst en een ding gebruiken de [zijkolom](#zijkolom-split).
-- Geen + knop: de hoofdactie staat in de paneelbalk.
+- Geen + in de inhoud: de hoofdactie staat in de paneelbalk.
 
 ### Opbouw van elk scherm
 
 ```
-PageHead                 paneelbalk (kruimelpad, primary, avatar) + kop (titel, badge, actions)
-Tabs                     als er weergaves zijn (Wijnen · Wijnhuizen · …)
+PageHead                 kop (gsm) + paneelbalk (tablet: kruimelpad, primary, avatar) + titel, badge, actions
+Tabs                     als er weergaves zijn (Wijnen · Logboek · …)
 toolbar                  zoeken (+ iconknoppen: importeren, exporteren als CSV)
 filters                  filterpillen
 card / card table        de inhoud — of .split met zijkolom en secties
-fab                      + knop (enkel gsm, zelfde actie als primary)
+PhoneAdd                 wat de + in de onderbalk doet (gsm, zelfde actie als primary)
 ```
 
 ---
@@ -193,8 +222,8 @@ fab                      + knop (enkel gsm, zelfde actie als primary)
 
 ### Paginakop: `PageHead` (`Page.tsx`)
 
-Elk scherm begint ermee. Hij maakt de glazen paneelbalk en de kop met de grote titel (tablet), en de grote titel
-met de zwevende terugknop en het titelpilletje (gsm).
+Elk scherm begint ermee. Hij maakt de kop (gsm: terug of het merk, zoeken, jij, en de titel zodra je scrolt), de
+paneelbalk (tablet: kruimelpad, hoofdactie, jij) en de titel met badge en acties.
 
 ```tsx
 <PageHead
@@ -207,11 +236,12 @@ met de zwevende terugknop en het titelpilletje (gsm).
 />
 ```
 
-- Een overzichtsscherm (een lijst) heeft `primary` (en een `.fab` met dezelfde actie). Een fiche heeft `back` en `actions`.
+- Een overzichtsscherm (een lijst) heeft `primary`, en zet met `<PhoneAdd label=… to=… />` dezelfde actie op de +
+  in de onderbalk. Een fiche heeft `back` en `actions`.
 - Formulieren: `back={{ to: -1, label: … }}` (gewoon terug), geen `primary`.
 - `description` is enkel voor gegevens van de gebruiker (je e-mailadres). Nooit een
   zin die het scherm uitlegt, en nooit wat het kruimelpad al zegt (de naam van de lijst).
-- Op gsm toont een hoofdscherm (zonder `back`) vanzelf jouw letter rechts naast de titel.
+- Op gsm staat in de kop links terug (met `back`) of het merk (zonder), rechts altijd zoeken en jouw letter.
 - Meer acties dan plaats (op gsm: Opnieuw + Bewerken)? Dan springen de acties onder de titel; de titel breekt nooit
   midden in een woord.
 
@@ -241,21 +271,23 @@ Voor een ding en een lijst: links de kern, rechts de lijst of de rest.
 
 ### Knoppen
 
-Alle knoppen zijn **pillen**. Indrukken veert terug (schaal 0,96).
+Knoppen zijn rond met `--radius` (10px; klein 8px), 32px hoog (op een aanraakscherm 40px), tekst 14px medium.
+Ingedrukt zakt een knop 1px; uitgeschakeld halve dekking; focus een grijze rand met een ring van 3px. Het raakvlak
+is altijd minstens 44px: een onzichtbare `::after` steekt uit zonder dat de opmaak verschuift.
 
 | Klasse | Wanneer |
 | --- | --- |
-| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuwe lijst): zwart met een glanslijn |
-| `btn btn-outline` | Gewone acties naast de hoofdactie (Bewerken, Instellen, Notitie): **glas**, komt 1px omhoog bij aanwijzen |
+| `btn btn-primary` | De ene hoofdactie per scherm of formulier (Opslaan, Nieuwe lijst): **geel met zwarte tekst** en een randje |
+| `btn btn-outline` | Gewone acties naast de hoofdactie (Bewerken, Instellen, Notitie): wit met een rand, grijs bij aanwijzen |
 | `btn btn-ghost` | Stille acties in een rij (archiveren, sluiten) |
-| `btn` | Een zachte grijze pil (zelden; liever een van de andere) |
-| `btn btn-danger` | Enkel als bevestiging in het venster "verwijderen?" |
+| `btn` | Een zachte grijze knop (zelden; liever een van de andere) |
+| `btn btn-danger` | Enkel als bevestiging in het venster "verwijderen?": rode tekst op een rode tint, nooit een rood vlak |
 | `btn btn-danger-ghost` | De knop die naar dat venster leidt ("Verwijderen") |
-| `btn-sm`, `btn-lg`, `btn-icon`, `btn-block` | Grootte en vorm (een iconknop is rond) |
+| `btn-sm`, `btn-lg`, `btn-icon`, `btn-block` | Grootte en vorm (een iconknop is vierkant) |
 
 - Icoon links van de tekst, 15–16px, in de kleur van de tekst. In een ghostknop is het icoon grijs.
-- Knop die iets bewaart: `SubmitButton` (draait een spinner tijdens het bewaren). Onderaan een formulier is die op
-  tablet een pil, op gsm over de hele breedte.
+- Knop die iets bewaart: `SubmitButton` (draait een spinner tijdens het bewaren). Onderaan een formulier staat die
+  op tablet links met zijn eigen breedte, op gsm over de hele breedte.
 - Een knop met enkel een icoon krijgt altijd een `aria-label`.
 
 ### Kaart, groep en sectie: `card` + `CardHead`
@@ -276,7 +308,7 @@ Hetzelfde `card` ziet er anders uit naargelang waar het staat; je kiest dat niet
 | In een `.split` (lijst, ding) | **Sectie**: geen vlak, een haarlijn tussen secties |
 
 - `CardHead`: titel 15,5px, gewicht 600, eventueel gegevens eronder in grijs ("2 van 3 klaar", "Deze maand"),
-  eventueel een actie rechts (glazen knop). Geen icoon, geen uitleg.
+  eventueel een actie rechts (knop met rand). Geen icoon, geen uitleg.
 - Inhoud zonder rijen in `card-body`. Een voetnoot (bv. "Bewaard door Jaan") in `.footnote` (ingezette lijn erboven).
 - Een lijstje witte kaartjes in een groep (velden van een lijst, kolommen bij importeren, per veld bij een rol):
   wit, afronding 14–20px, `--shadow-inset`.
@@ -348,7 +380,7 @@ Dezelfde rijen worden op tablet een tabel; de kolomkoppen staan erboven als **st
   tabs={types.map((t) => ({ value: t.id, label: t.plural }))} />
 ```
 
-Een grijs spoor met een glazen witte duim die naar de actieve tab **veert**. Geen tellers: het aantal staat bij de lijst zelf. Voor
+Een grijs spoor (rond 9px) met een **wit vlak** (rond 7px, `--shadow-surface`) dat naar de actieve tab glijdt; tabs zijn 28px hoog (36px op een aanraakscherm), 13px medium. Geen tellers: het aantal staat bij de lijst zelf. Voor
 verschillende **weergaves binnen één scherm** (dingen en logboek van een lijst, de onderwerpen bij Instellen). Niet voor
 navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?tab=`), zodat je ernaar kan linken.
 
@@ -361,7 +393,7 @@ navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?t
 </div>
 ```
 
-Een grijze pil zonder rand: grijs label, donkere waarde. Een actieve filter komt naar voren als **glas**. Filters
+Een grijze pil zonder rand (32px): grijs label, donkere waarde. Een actieve filter wordt het **witte vlak**. Filters
 staan onder het zoekveld.
 In `ThingsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
 wordt een schakelaar "Label: nu"), plus Archief. Toon een filter pas als er iets te kiezen valt.
@@ -369,13 +401,13 @@ wordt een schakelaar "Label: nu"), plus Archief. Toon een filter pas als er iets
 ### Segmenten: `Segmented`
 
 Keuze tussen 2–4 opties in een formulier (Niet zien · Zien · Wijzigen, Gelijk · Procent). Zoals tabs: een grijs spoor
-met een glazen duim die meeveert. Meer dan 4 opties: gebruik een `select`.
+met een wit vlak dat meeglijdt. Meer dan 4 opties: gebruik een `select`.
 
 ### Zoekpalet: `CommandPalette`
 
-Eén veld voor zoeken én toevoegen. Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk of Zoeken in de onderbalk
-(modus zoeken), of met de + op het overzicht (modus toevoegen; `usePalette()("add", tekst)` vanuit een scherm): een
-glazen venster boven een zacht vervaagd scherm. Zoekt zonder op hoofdletters of accenten te letten in acties, je
+Eén veld voor zoeken én toevoegen. Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk, de loep in de kop of
+Zoeken in het menublad (modus zoeken), of met de + (modus toevoegen; `usePalette()("add", tekst)` vanuit een scherm):
+een wit venster (rond 14px, `--shadow-lg`) boven een licht verduisterd scherm. Zoekt zonder op hoofdletters of accenten te letten in acties, je
 lijsten en tags, en (via `/insights/search`) de dingen en gebeurtenissen die je ziet, en biedt aan waar je kan loggen
 of toevoegen (`GET /me/targets`, `matchTargets`): noemen de eerste woorden een soort of lijst ("gegeten pasta"), dan
 staat **Toevoegen** ("Gegeten: pasta", de rest gaat als `?tekst=` naar het formulier) bovenaan, anders wat je zoekt. Met de + staan de
@@ -389,7 +421,8 @@ Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen)
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
-Onderaan "+ Lijst". Op gsm en tablet tot 1100px staan je lijsten per tag onder het overzicht (`.home-projects`).
+Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); op gsm en tablet tot 1100px staan je
+lijsten per tag ook onder het overzicht (`.home-projects`). Een sectiekop ("Lijsten") staat in kleine kapitalen.
 
 ### Formulier
 
@@ -413,8 +446,8 @@ Onderaan "+ Lijst". Op gsm en tablet tot 1100px staan je lijsten per tag onder h
 
 - De balken lopen over de volle breedte; de inhoud blijft 680px breed (dat regelt `.page.form`).
 - Groepeer velden per onderwerp in `card form-section`: in een formulier wordt dat vanzelf een **grijze groep**.
-- Velden: 42px hoog, een grijs vlak (`--field`) zonder rand, afronding 12px; bij aanwijzen iets donkerder, bij focus
-  wit met een blauwe ring.
+- Velden: 32px hoog (40px op een aanraakscherm, tekst 16px zodat iOS niet inzoomt), wit met een rand (`--input`) en
+  een zweem schaduw, afronding 10px; bij focus een grijze rand met een ring van 3px. Op een grijze groep blijven ze wit.
 - Schakelaars onder elkaar krijgen vanzelf een haarlijn ertussen.
 - Label boven het veld. Een veld is vanzelf optioneel (verplicht: `required`); geen "· optioneel" en geen uitleg
   eronder. Een voorbeeld hoort in de placeholder ("bv. Rood, Wit"). `.hint` onder een veld enkel voor wat de app
@@ -423,7 +456,7 @@ Onderaan "+ Lijst". Op gsm en tablet tot 1100px staan je lijsten per tag onder h
 - Verplichte velden krijgen `required`, geen sterretje.
 - **Een lijst heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
   lange tekst als eigen kaart.
-- Automatisch ingevulde velden krijgen klasse `auto` (zacht blauw) tot de gebruiker ze aanpast.
+- Automatisch ingevulde velden krijgen klasse `auto` (zacht geel) tot de gebruiker ze aanpast.
 - Toetsenbord in een formulier (`ItemForm`): ↓ en ↑ gaan naar het volgende en vorige veld vanuit een tekst- of
   getalveld, een schakelaar of een keuzeveld zonder open keuzes (in een datum, uur, keuzelijst of lange tekst doen ze
   wat ze daar al doen); Ctrl/⌘ + Enter bewaart.
@@ -452,7 +485,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | Component of hulpje | Wat |
 | --- | --- |
 | `AmountsPicker` (`ItemPicker.tsx`) | Hoeveelheden (de ingrediënten van een recept): per regel een `ItemPicker` (met vrije tekst, "zout"), hoeveel en de eenheid (`.amount-row-line`), onderaan een lege regel om toe te voegen. Op de fiche een `.amount-list`: de hoeveelheid grijs voor de naam. Overgenomen uit een recept rekent het mee met de porties (`per`). |
-| `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes zweven eronder als glas (`.picker-list`), met de lijst erbij als ze uit meer lijsten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
+| `ItemPicker`, `ItemsPicker` (`ItemPicker.tsx`) | Een verwijzing kiezen: een gewoon veld waarin je typt, de keuzes liggen eronder op een wit vlak (`.picker-list`), met de lijst erbij als ze uit meer lijsten komen. Pijltjes, Enter, Escape. Met `free` blijft wat je typt als vrije tekst staan; × maakt het leeg. Nooit een gewone `select` voor items: die kan je niet doorzoeken. |
 | `FieldsEditor` (`fieldsDraft` → `buildFields`) | De velden van een lijst, elk een wit kaartje in de groep: naam en soort veld (gegroepeerd) op één regel, onder ⋯ de uitleg bij die soort, keuzes, eenheid, verwijzing, codeformaat, wat een berekening uitrekent, uit productinfo, kolom, filter, verplicht, uitleg, en wat het veld zelf invult (Begint met vandaag, Begint met jou, Leeg = verdelen met de gewone verdeling, **Onthouden** (`select`: Niet · Je laatste waarde · Een vaste waarde) en **Per** (Voor alles · Naam · een keuzeveld van de lijst): een nieuw item begint met wat jij de vorige keer (bij die keuze) invulde, of met de vaste waarde, zacht blauw) |
 | `FieldInputs` (`attributesDraft` → `buildAttributes`) | De velden invullen; korte velden per twee (`.attr-fields`). Een veld dat je niet mag wijzigen, staat er alleen-lezen. Een berekening staat er als `.calc-output` (stippellijn) en rekent mee terwijl je typt |
 | `AttributeRows` | De ingevulde velden als regels in de `dl` van een fiche; verwijzingen linken naar het item, een webadres toont enkel het domein als link, e-mail en telefoon openen mail of telefoon, een adres een kaart (op een kiosk als tekst). Bij een berekening een `Tip` met wat ze uitrekent |
@@ -480,7 +513,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   vandaag in het formulier (wat je at, een uitgave). Je ziet ze staan en past ze aan; enkel een verplichte datum die
   leeg blijft (Start in een timerblok) krijgt van de API vandaag.
   Een verwijzing kan **Neemt waarden over** (`copy`, schakelaar): kies je een item, dan krijgen de lege velden hier
-  de waarden van de velden met dezelfde sleutel daar (zacht blauw, `auto`; en de naam als die leeg is). En **Past het
+  de waarden van de velden met dezelfde sleutel daar (zacht geel, `auto`; en de naam als die leeg is). En **Past het
   gekozen item aan** (`adjust`, keuzelijst "Trekt af van Aantal" / "Telt bij Aantal", met "Met": 1 per item of een
   getal of berekening van deze lijst; enkel als de lijst waarnaar het wijst een getal heeft).
   Een ja/nee kan **Aan: ook een item in** (`spawn`, lijsten kiezen onder ⋯): een nieuw item met dat vinkje aan maakt
@@ -494,7 +527,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
   lijst toont het nieuwste eerst.
 - Een nieuwe lijst begint met een **sjabloon** (`TEMPLATES` in `shared/catalog.ts`, `.template-picker`): velden,
-  voorraad en eigen soorten. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen komt het naar voren als glas
+  voorraad en eigen soorten. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen wordt het het witte vlak
   met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
   uit de bouwstenen (velden, formule, totalen): **Voeding** is Eten (kcal en macro's per 100 g × Hoeveel als
   formule, of de kcal van een Gerecht met `of(…)`), Gerechten (de kcal uit hun Ingrediënten), Gewicht en Water, met
@@ -506,7 +539,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
   item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
   (`datalist`); kies je er een, dan vult de app de rest in zoals de vorige keer. Een datum die met vandaag begint,
-  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht blauw (`auto`). **Vaak** staat in het lege
+  wordt vandaag; een persoon die met jou begint, wordt jij. Alles zacht geel (`auto`). **Vaak** staat in het lege
   invulveld: tik je in "Typ wat je weet" voor je iets typt, dan tonen de keuzes wat je minstens twee keer toevoegde,
   het vaakst eerst, hooguit zes (rechts "Vaak"); één tik vult in zoals de vorige keer. Namen die de app zelf gaf
   ("Weging 30/10/2026") tellen niet mee.
@@ -708,7 +741,7 @@ toevoegen en loggen), **gast** (kijken). Toevoegen en loggen enkel met `canEdit`
 | Klasse of component | Gebruik |
 | --- | --- |
 | `.link-quiet` | Link in een `dl` of tekst: geen kleur, een zacht lijntje eronder |
-| `.link-button` | Stille blauwe tekstknop naast een label ("Per veld", "Wissen") |
+| `.link-button` | Stille tekstknop met een onderlijn naast een label ("Per veld", "Wissen") |
 | `.tips-block` | Een lange tekst op de fiche, met de regels zoals getypt |
 | `.timeline` + `.timeline-date` | Logboek: datum links, notitie rechts |
 | `.member-actions` | Rol (een `select`), bewerken en weghalen naast iemand in een lijst |
@@ -734,11 +767,11 @@ Badges zijn kort: 1–3 woorden.
 
 | Situatie | Component |
 | --- | --- |
-| Iets is bewaard, verwijderd, verplaatst | `useToast()("Wijn bewaard")`: een glazen pil met een zwart rondje (rood bij `"alert"`), rechtsonder (tablet) of boven de onderbalk |
+| Iets is bewaard, verwijderd, verplaatst | `useToast()("Wijn bewaard")`: een witte melding (rond 10px) met een zwart rondje (rood bij `"alert"`), rechtsonder (tablet) of boven de onderbalk; meer meldingen stapelen met 8px ertussen |
 | Iets gebeurt of lukte half binnen een formulier | `<Alert tone="busy" \| "ok" \| "partial" \| "none">`: een zacht vlak zonder rand, gelukt met een vinkje. Kwam het van de AI, dan `ai` (✨ in plaats van het vinkje) en zegt de tekst het: "Gelezen met AI. …" |
 | Iets kan niet ongedaan gemaakt worden | `useConfirm()({ title, body, confirmLabel, danger: true })` |
-| Een korte invoer (notitie in het logboek, iemand toevoegen, een tag) | `<Sheet>`: een glazen onderblad dat los onderaan zweeft (gsm), een glazen venster in het midden (tablet) |
-| Lijst is leeg | `<EmptyState icon title action>`: een zacht vlak met een glazen icoontegel, de titel en hooguit één knop (`btn-outline btn-sm`), zonder uitleg |
+| Een korte invoer (notitie in het logboek, iemand toevoegen, een tag) | `<Sheet>`: een wit blad dat 6px van de randen onderaan hangt (gsm, rond 20px, met een greep om dicht te vegen), een wit venster in het midden (tablet) |
+| Lijst is leeg | `<EmptyState icon title action>`: een zacht vlak met een wit icoontegeltje, de titel en hooguit één knop (`btn-outline btn-sm`), zonder uitleg |
 | Lijst laadt | `<SkeletonRows rows={5} />` (verschijnt pas na 0,18 s) |
 
 Toasts zijn de bevestiging na een actie. Elke bewaar- of verwijderactie geeft er één, behalve −/+ in een lijst en
@@ -793,7 +826,7 @@ maakt).
   grijs, een doelbalk (`.chart-meter`, rood boven de grens) en een kleine grijze lijn per periode.
 - **Kleur volgt de keuze**, niet haar plaats: een persoon, keuze of tag houdt zijn kleur (de volgorde van de keuzes,
   de leden, de namen), wat ook de rangorde is.
-- **Tooltip** (`.chart-tip`, glas): per periode één tooltip met alle reeksen, de waarde vooraan en vet; het raakvlak
+- **Tooltip** (`.chart-tip`, wit vlak): per periode één tooltip met alle reeksen, de waarde vooraan en vet; het raakvlak
   is de hele periode (groter dan het staafje). Met het toetsenbord: focus op de grafiek en ← →. Alles staat ook in
   de tabel (`.chart-table`): de tooltip is nooit de enige weg naar een getal.
 - **Samenstellen** (`ChartBuilder` in een `Sheet`): Als (Staafjes · Lijn · Getal · Per keuze · Verdeling), Wat en
@@ -808,9 +841,11 @@ maakt).
 
 ## 5. Beweging
 
-Curves (in `:root`): `--ease-out` voor bijna alles · `--spring` voor iets dat naar zijn plaats **veert** (de glazen
-duim van tabs en segmenten, de lens in de zijbalk, het vlak in de onderbalk, de schakelaar, iconen) ·
-`--ease-in-out` voor heen-en-weer (scanlijn).
+Curves (in `:root`): `--ease-out` voor bijna alles, ook een vlak dat glijdt en een blad dat opent · `--ease-close`
+voor wat weggaat (een blad dat sluit, een melding) · `--spring` enkel voor een klein wipje van een icoon, nooit voor iets
+dat aan een rand hangt · `--ease-in-out` voor heen-en-weer (scanlijn). Duren: `--dur` 150ms (kleur, hover),
+`--dur-page` 260ms, `--dur-glide` 320ms, `--dur-sheet-open` 300ms en `--dur-sheet-close` 200ms. Een beweging speelt één
+keer, bij het openen of kiezen; nooit bij het scrollen (behalve de titel die in de kop verschijnt).
 
 ### Schermwissels (View Transitions)
 
@@ -820,40 +855,40 @@ in `main.tsx`, routes in `routes.tsx`) en eigen `Link`, `NavLink` en `useNavigat
 
 - **Importeer `Link`, `NavLink` en `useNavigate` altijd uit `src/router.tsx`**, nooit uit `react-router`.
   (`useParams`, `useSearchParams`, `useLocation` mogen wel rechtstreeks.)
-- Op tablet vloeit **enkel het paneel** over (`view-transition-name: panel`); de zijbalk blijft live, zodat de
-  grijze pil naar het nieuwe item glijdt. Op gsm vloeit het scherm over en blijft de onderbalk staan.
+- Op tablet vloeit **enkel het paneel** over (`view-transition-name: panel`); de zijbalk blijft live, zodat het
+  witte vlak naar het nieuwe item glijdt. Op gsm vloeit het scherm over en blijft de onderbalk staan.
 - De inhoud van het nieuwe scherm schuift daarbij 5px omhoog (automatisch via `.page`; in een `.split` komen
   zijkolom en kaarten na elkaar).
 - Filters in het adres (`setSearchParams`) wisselen **zonder** overgang: dat is geen nieuw scherm.
 - Grote code laad je pas als ze nodig is, met `lazy`: de barcodecode (±1 MB, `Barcode` in `Fields.tsx`) en pdf.js
   (`PdfPages` in `FileViewer`). Een groot scherm kan een `lazy` route in `routes.tsx` zijn: de router wacht tot het
-  geladen is, zodat de overgang vloeiend blijft, en toont zolang een blauw laadstreepje.
+  geladen is, zodat de overgang vloeiend blijft, en toont zolang een zwart laadstreepje.
 
 ### Micro-animaties
 
 | Moment | Animatie | Duur |
 | --- | --- | --- |
-| Nieuw scherm | paneel vloeit over, inhoud schuift 5px omhoog | 0,26 / 0,45 s |
-| Lijst verschijnt | rij na rij (`stagger` + `stagger(i)`), 28 ms tussen rijen, max 14 | 0,45 s |
-| Tab, segment, menu wisselt | de glazen duim of lens veert naar de nieuwe keuze (`--spring`) | 0,55 s |
+| Nieuw scherm | paneel vloeit over, inhoud schuift 5px omhoog | 0,26 s |
+| Lijst verschijnt | rij na rij (`stagger` + `stagger(i)`), 28 ms tussen rijen, max 14 | 0,3 s |
+| Tab, segment, menu, onderbalk wisselt | het witte vlak glijdt naar de nieuwe keuze (`--ease-out`, zonder nawiebelen) | 0,32 s |
 | Zoekresultaat wisselt | grijs vlak glijdt mee | 0,3 s |
-| Terug (gsm) bij scrollen | pil krimpt tot rondje, titelpilletje veert in | 0,45 s |
+| Titel in de kop (gsm) bij scrollen | verschijnt klein in het midden van de kop | 0,15 / 0,32 s |
 | Boom klapt open | rij groeit (`grid-template-rows`), kinderen schuiven één voor één in, pijltje draait | 0,4 s |
 | Getal verandert | rolt in de richting van de verandering (`Num`) | 0,38 s |
 | Totaal verschijnt | telt op (`useCountUp`) | 0,9 s |
 | Balk of meter | groeit vanaf links / van onder (`.total-bar`, `.total-history`, `LevelMeter`) | 0,5–1 s |
-| Onderblad, venster, zoekpalet | glijdt (onderblad) of veert (venster, palet) in en uit (`@starting-style`) | 0,4–0,6 s |
-| Toast | veert omhoog, glijdt weg (met een knop zoals Ongedaan maken: `.toast-action`, 7 s in beeld) | 0,55 / 0,25 s |
+| Onderblad, venster, zoekpalet | glijdt in (`@starting-style`, `--ease-out`) en uit (`--ease-close`); een onderblad veeg je aan de greep dicht (verder dan 120px of snel: dicht, anders terug) | 0,3 / 0,2 s |
+| Melding | komt op uit een waas en gaat erin weg (met een knop zoals Ongedaan maken: `.toast-action`, 7 s in beeld) | 0,4 / 0,2 s |
 | Vinkje | tekent zichzelf (`draw`) | 0,4 s |
 | Rij verslepen | de rij volgt de vinger, de andere schuiven opzij (`useSortable`) | 0,25 s |
-| Indrukken | knop, filter en tag schalen naar 0,96 en veren terug, icoon in menu naar 0,86 | 0,35 s |
-| Ingevuld door de app | veld (`auto`) of chip (`.tag.is-filled`) krijgt een lichtblauwe ring die vervaagt (`auto-flash`, enkel `box-shadow`) | 0,9 s |
-| Hover | vlak wordt iets donkerder, glazen knop en kaart op het overzicht komen 1–2px omhoog, pijltje schuift 3px, + draait 90° | 0,2–0,45 s |
+| Indrukken | knop en filter zakken 1px, een icoon in menu of onderbalk krimpt even | 0,15 s |
+| Ingevuld door de app | veld (`auto`) of chip (`.tag.is-filled`) krijgt een gele ring die vervaagt (`auto-flash`, enkel `box-shadow`) | 0,9 s |
+| Hover | vlak wordt iets donkerder, de ring van een kaart iets sterker, pijltje schuift 3px | 0,15 s |
 
 Regels:
 
 - **`backwards`, nooit `both` of `forwards`.** Een animatie die na afloop een transform laat staan, maakt van het
-  element het referentiekader voor vaste elementen (terugknop, titelpilletje, + knop) en breekt die.
+  element het referentiekader voor vaste elementen (de kop, de onderbalk) en breekt die.
 - Animeer `transform` en `opacity`. Uitzonderingen: de tablijn/het tabvlak (breedte) en de boom (`grid-template-rows`).
 - Eerste keer tonen = rustig. Enkel **veranderingen** krijgen een opvallende animatie (`Num` beweegt pas bij een wijziging).
 - Een venster opent met `@starting-style` en sluit met `transition-behavior: allow-discrete` (zie `dialog.sheet`,
@@ -866,7 +901,7 @@ Regels:
 ## 6. Patronen per scherm
 
 **Overzicht** (`/`, `BoardView` in `Board.tsx`): `PageHead` met de naam van het overzicht, `primary` **Toevoegen**
-(en de `fab`), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
+(op gsm de + in de onderbalk), in `actions` enkel ⋯ → een `Sheet` met Aanpassen, Nieuw overzicht, Hernoemen, Verwijderen. Meer
 overzichten: `Tabs` onder de titel (dit toestel onthoudt welk, `?bord=`). Vanzelf: Uitgaven deze maand, Te doen, Bijna
 op en Wie moet wie (geen blok per lijst: die staan in de zijbalk, en op gsm per tag onder het overzicht). Elk blok is
 een `dash-card`; een blok dat als geheel opent, is een `dash-link`; het aantal staat rechts in de kop
@@ -879,7 +914,7 @@ eerst; de rest van je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijs
 
 **Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, QR-sticker, Op je beginscherm) en `primary`
 "<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland) → `split
-split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `fab`.
+split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
 
 **Ding** (`/dingen/:id`): `PageHead` met Loggen en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
 velden (`dl`), rechts de **Tijdlijn** (alles wat ermee gebeurde: wanneer, waar, erbij of eraf, prijs per eenheid;
@@ -923,13 +958,17 @@ gedeelde foto als kasticket ✨ of bij wat je toevoegt).
 
 ## 7. Toegankelijkheid
 
-- Aanraakvlakken minstens 44px op aanraakschermen (de klassen regelen dat; maak niets kleiner met inline stijlen).
-- Focus is altijd zichtbaar: blauwe ring (`--focus-ring`). Nooit `outline: none` zonder vervanging.
+- Elk raakvlak is minstens 44px (`--hit`; de klassen regelen dat met een `::after`; maak niets kleiner met inline
+  stijlen).
+- Focus is altijd zichtbaar: een grijze rand met een ring (`--focus-ring`) op knoppen en velden, elders een
+  omlijning (`--focus-outline`). Nooit `outline: none` zonder vervanging.
+- **Naar de inhoud**: de eerste Tab toont een skiplink die naar `main#inhoud` springt.
 - Iconen zonder tekst: `aria-label`. Decoratieve iconen en tegels: geen label nodig (`aria-hidden` zit in `Icon`).
 - Kleur is nooit de enige drager: een badge heeft tekst, een meter heeft een `title`.
 - Contrast: tekst haalt 4,5:1, ook op een grijs vlak; dus minstens `--muted-foreground` (ook voor placeholders en
   kolomkoppen). `--faint` enkel voor iconen en bijzaken.
-- Glas is nooit de enige drager van tekst: wat erop staat, is donker genoeg, ook als het toestel geen vervaging kan.
+- Geel draagt nooit tekst in geel: op het gele vlak staat zwart (haalt ruim 4,5:1), en geel is nooit een lijn of
+  icoon op wit. De kop en de onderbalk op de waas zijn bijna dekkend, ook als het toestel geen vervaging kan.
 - Het zoekpalet is een `listbox` met `aria-activedescendant`; dichtgeklapte boomtakken zijn `inert`.
 - Keuzes onder een veld (`Combo` in `ItemPicker.tsx`, het zoekpalet) zijn een `combobox` met `listbox` en `aria-activedescendant`.
 
@@ -961,11 +1000,11 @@ gedeelde foto als kasticket ✨ of bij wat je toevoegt).
 ## 10. Niet doen
 
 - Geen nieuwe kleuren, schaduwen of afrondingen buiten de tokens.
-- Geen gekleurde kaarten, geen verlopen behalve het glas.
-- Geen glas op een vlak waar gewoon inhoud op staat (een kaart, een groep, een rij): glas is voor wat zweeft of
-  gekozen is.
-- Geen tweede hoofdknop op één scherm.
-- Geen randen rond grijze vlakken (velden, pillen, groepen): grijs is een vlak.
+- Geen gekleurde kaarten, geen verlopen, geen glans; een waas enkel achter de kop en de onderbalk op gsm.
+- Geen zwevende knoppen of losse pillen: wat iets doet, hangt aan een rand (de onderbalk, de paneelbalk, een blad).
+- Geen tweede hoofdknop op één scherm, en geen geel voor iets anders dan de hoofdactie, de + en het merk.
+- Geen randen rond grijze vlakken (pillen, groepen, sporen): grijs is een vlak. Een veld is wit met een rand.
+- Geen schaduw rond het paneel of een kaart: een ring van 1px.
 - Geen lijnen tussen rijen of secties die tot tegen de rand lopen: ze zijn ingezet.
 - Geen tekst onder 11px (11px enkel voor de onderbalk en eenheden in de stepper).
 - Geen `animation-fill-mode: both/forwards` (zie Beweging).
@@ -986,9 +1025,8 @@ gedeelde foto als kasticket ✨ of bij wat je toevoegt).
 Loop deze lijst af voor je iets oplevert:
 
 - [ ] Gebruikt `PageHead`, en waar het past `Tabs`, `filters`, `card`/`CardHead`, `rows`/`table`, `split`.
-- [ ] Enkel tokens uit `:root`; geen losse kleurcodes, px-schaduwen of lettertypes. Glas enkel voor wat zweeft of
-      gekozen is.
-- [ ] Eén hoofdactie (`btn-primary`), met een `fab` op gsm als het een overzichtsscherm is.
+- [ ] Enkel tokens uit `:root`; geen losse kleurcodes, px-schaduwen, duren of lettertypes. Kiezen is het witte vlak.
+- [ ] Eén hoofdactie (`btn-primary`, geel), met `PhoneAdd` voor de + op gsm als het een overzichtsscherm is.
 - [ ] Navigatie via `src/router.tsx`; een nieuw scherm staat in `routes.tsx` (en in het zoekpalet als je het moet kunnen vinden).
 - [ ] Gevulde iconen voor dingen, lijniconen voor richtingen en handelingen.
 - [ ] Een nieuwe lijst of sjabloon heeft een notitieveld (lange tekst).
@@ -999,7 +1037,7 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Volgt de rechten: knoppen enkel bij `can_create`, `access === "edit"`, `can_delete`, `rights.manage` of
       `rights.members`; velden volgens `field_access`. Getest met een rol die enkel mag zien. Afbeeldingen uit de API
       via `apiUrl`.
-- [ ] Geen horizontale scroll (enkel de kaart van Verbanden schuift binnen haar eigen vlak); lange namen worden netjes afgekapt.
+- [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.
