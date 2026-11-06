@@ -1,184 +1,209 @@
-// Elk kwartier (de cron in wrangler.jsonc): de herinneringen met een uur die in het voorbije kwartier vielen (een
-// afspraak om 18:30, iets dat over twee dagen vervalt). En 's morgens om 7 u eerst de herhalingen (de huur van deze
-// maand), dan de gewone herinneringen (de verwarming over een week, een verjaardag morgen). Een melding gaat enkel naar
-// wie het item en de datum mag zien en meldingen aanzette.
+// Elk kwartier (de cron in wrangler.jsonc): de herinneringen met een uur die in het voorbije kwartier vielen, timers die
+// hun doel haalden, en om 7 u 's morgens eerst de herhalingen (Netflix van deze maand), dan de gewone herinneringen
+// (de garantie over een week, wat vandaag gepland staat). Een melding gaat enkel naar wie het nu mag zien, en niet naar
+// wie de lijst of een tag ervan stilzette. Zo gebeurt alles één keer, zonder bij te houden wat al verstuurd is.
 
-import { fieldAccess, typeAccess, type Rights } from "../shared/access";
-import { computeLocal, fieldDeps } from "../shared/calc";
-import { formatDuration, type Attributes } from "../shared/fields";
-import { remindersDue, repeatsDue, timedRemindersDue, whenText, type Reminder } from "../shared/remind";
-import type { ItemType } from "../shared/types";
-import { accessibleProjects, projectAccess, toItemType, type TypeRow } from "./context";
+import { isMuted } from "../shared/alerts";
+import { cleanAppSettings } from "../shared/apps";
+import { addToDate, computeLocal } from "../shared/calc";
+import { formatDuration } from "../shared/fields";
+import { canEdit, eventTitle, type Role } from "../shared/model";
+import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
+import { lineAllowed } from "../shared/rights";
+import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "./access";
 import { notify } from "./push";
-import { createRepeated } from "./routes/items";
 import { brusselsMoment, brusselsToday } from "./today";
-import { ForbiddenError } from "./validate";
+import type { AppEnv } from "./types";
 
-/** Hoeveel meldingen iemand per ochtend hooguit krijgt; de rest komt samen in één. */
+type Env = AppEnv["Bindings"];
+
+/** Hoeveel meldingen iemand per keer hooguit krijgt; de rest komt samen in één. */
 const MAX_PER_PERSON = 5;
-
-export async function daily(db: D1Database, today = brusselsToday()): Promise<void> {
-  await runRepeats(db, today).catch((err) => console.error("Herhalen lukte niet", err));
-  await sendReminders(db, today).catch((err) => console.error("Herinneren lukte niet", err));
-}
-
-/** Het uur van de ochtend (in België) voor herhalen en de gewone herinneringen. */
 const MORNING = "07:00";
 
-/**
- * Wat de cron elk kwartier doet, voor het kwartier `[at − 15 min, at)`: de herinneringen met een uur, en als 7 u in dat
- * kwartier valt de ochtend. Zo gebeurt alles één keer, zonder bij te houden wat al gebeurde.
- */
-export async function quarter(db: D1Database, at = new Date()): Promise<void> {
+export async function quarter(env: Env, at = new Date()): Promise<void> {
+  const db = env.DB;
   const to = brusselsMoment(at);
   const from = brusselsMoment(new Date(at.getTime() - 15 * 60_000));
   const morning = `${to.slice(0, 10)}T${MORNING}`;
   if (morning >= from && morning < to) await daily(db, to.slice(0, 10));
-  await sendTimedReminders(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
-  await sendTimerGoals(db, new Date(at.getTime() - 15 * 60_000), at).catch((err) => console.error("Timers lukte niet", err));
+  await sendTimed(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
+  await sendTimerGoals(db, from, to).catch((err) => console.error("Timers lukte niet", err));
 }
+
+export async function daily(db: D1Database, today = brusselsToday()): Promise<void> {
+  await runRepeats(db, today).catch((err) => console.error("Herhalen lukte niet", err));
+  await sendMorning(db, today).catch((err) => console.error("Herinneren lukte niet", err));
+}
+
+// ---------- herhalen ----------
 
 /**
- * Een timer met een doel (`timer_goal`, 16 u vasten) die nog loopt en zijn doel in het kwartier `[from, to)` haalde:
- * een melding aan wie hem startte (wie het item maakte), als die de lijst en de timer nog mag zien.
+ * Gebeurtenissen die herhalen (Netflix elke maand): een kopie op elke datum tot vandaag, met de rechten die wie ze
+ * logde nu heeft. Mag die er niet meer loggen (of de voorraad van een lijn niet meer wijzigen), dan stopt het.
  */
-export async function sendTimerGoals(db: D1Database, from: Date, to: Date): Promise<number> {
-  const { results: rows } = await db.prepare(`SELECT * FROM item_types WHERE fields LIKE '%"timer_goal"%'`).all<TypeRow>();
-  let sent = 0;
-  for (const type of rows.map(toItemType)) {
-    for (const f of type.fields.filter((x) => x.type === "timer" && x.timer_goal)) {
-      const path = `$.${f.key}`;
-      const { results } = await db
-        .prepare(
-          `SELECT id, name, project_id, created_by, json_extract(data, ? || '.start') AS start FROM items
-           WHERE type_id = ? AND archived = 0 AND json_extract(data, ? || '.start') IS NOT NULL AND json_extract(data, ? || '.end') IS NULL`,
-        )
-        .bind(path, type.id, path, path)
-        .all<{ id: string; name: string; project_id: string; created_by: string; start: string }>();
-      for (const it of results) {
-        const reached = Date.parse(it.start) + f.timer_goal! * 60_000;
-        if (!(reached >= from.getTime() && reached < to.getTime())) continue;
-        const access = await projectAccess(db, it.created_by, it.project_id);
-        if (!access || typeAccess(access.rights, type.id) === "none" || fieldAccess(access.rights, type.id, f.key) === "none") continue;
-        sent += await notify(db, it.created_by, { title: `${f.label}: ${formatDuration(f.timer_goal!)} bereikt`, body: it.name, url: `/items/${it.id}`, tag: `timer-${it.id}` });
-      }
-    }
-  }
-  return sent;
-}
-
-type RepeatRow = { item_id: string; every_n: number; every_unit: "day" | "week" | "month" | "year"; next_on: string; created_by: string; archived: number };
-
 export async function runRepeats(db: D1Database, today: string): Promise<number> {
   const { results } = await db
-    .prepare("SELECT r.*, i.archived FROM repeats r JOIN items i ON i.id = r.item_id WHERE r.next_on <= ?")
+    .prepare("SELECT * FROM events WHERE repeat IS NOT NULL AND status = 'gebeurd' AND json_extract(repeat, '$.next_on') <= ?")
     .bind(today)
-    .all<RepeatRow>();
+    .all<EventRowDb>();
   let made = 0;
-  for (const r of results) {
-    const { dates, next } = repeatsDue(r.next_on, { n: r.every_n, unit: r.every_unit }, today);
-    try {
-      // Een gearchiveerd item herhaalt niet (maar loopt wel mee, zodat het niet alles inhaalt als je het terugzet).
-      if (!r.archived) for (const day of dates) (await createRepeated(db, r.created_by, r.item_id, day), made++);
-      await db.prepare("UPDATE repeats SET next_on = ? WHERE item_id = ?").bind(next, r.item_id).run();
-    } catch (err) {
-      // Mag wie het instelde hier niets meer toevoegen: dan stopt de herhaling. Anders morgen opnieuw.
-      if (err instanceof ForbiddenError) await db.prepare("DELETE FROM repeats WHERE item_id = ?").bind(r.item_id).run();
-      else console.error("Herhaling mislukt", r.item_id, err);
+  for (const row of results) {
+    const e = toEvent(row);
+    if (!e.repeat) continue;
+    const seen = await seenLists(db, e.created_by);
+    const { results: lines } = await db
+      .prepare("SELECT l.*, t.list_id AS thing_list FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id = ? ORDER BY l.position")
+      .bind(e.id)
+      .all<{ id: string; role: "in" | "uit" | "voor" | "bij"; thing_id: string | null; thing_list: string | null }>();
+    const allowed = canEdit(seen.get(e.list_id)) && lines.every((l) => !l.thing_id || lineAllowed(l.role, l.thing_list ? (seen.get(l.thing_list) ?? null) : null));
+    if (!allowed) {
+      await db.prepare("UPDATE events SET repeat = NULL WHERE id = ?").bind(e.id).run();
+      continue;
     }
+    const { dates, next } = repeatsDue(e.repeat.next_on, e.repeat.every, today);
+    const statements: D1PreparedStatement[] = [];
+    for (const day of dates) {
+      const copy = crypto.randomUUID();
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO events (id, list_id, kind, base, name, status, at, amount, paid_by, split, to_person, data, created_by)
+             SELECT ?, list_id, kind, base, name, 'gebeurd', ?, amount, paid_by, split, to_person, data, created_by FROM events WHERE id = ?`,
+          )
+          .bind(copy, day + e.at.slice(10), e.id),
+        db
+          .prepare(
+            `INSERT INTO lines (id, event_id, position, role, thing_id, text, amount, unit, price, expires, owner)
+             SELECT lower(hex(randomblob(16))), ?, position, role, thing_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
+          )
+          .bind(copy, e.id),
+      );
+      made++;
+    }
+    statements.push(db.prepare("UPDATE events SET repeat = ? WHERE id = ?").bind(JSON.stringify({ every: e.repeat.every, next_on: next }), e.id));
+    await db.batch(statements);
   }
   return made;
 }
 
-type Due = { item: { id: string; name: string }; reminder: Reminder; body: string };
+// ---------- herinneren ----------
 
-/**
- * Per persoon de herinneringen die nu vallen: voor elke lijst met herinneringen (`like`: wat in haar velden moet staan)
- * de items, met `pick` wat er voor één item valt. Enkel wie het item en de datum mag zien (en alles waarvan een
- * berekende datum afhangt).
- */
-async function collect(
-  db: D1Database,
-  like: string,
-  today: string,
-  pick: (fields: ItemType["fields"], data: Attributes) => { reminder: Reminder; body: string }[],
-): Promise<Map<string, Due[]>> {
+type Due = { title: string; body: string; url: string; tag: string };
+
+/** Wie meldingen kan krijgen (een toestel aanzette), met wat die stilzette. */
+async function listeners(db: D1Database): Promise<Map<string, string[]>> {
+  const { results } = await db
+    .prepare("SELECT DISTINCT p.id, p.app_settings FROM push_subscriptions s JOIN people p ON p.id = s.person_id")
+    .all<{ id: string; app_settings: string | null }>();
+  return new Map(results.map((r) => [r.id, cleanAppSettings(parseJson(r.app_settings, null)).muted]));
+}
+
+/** Per persoon wat er valt in de dingen van de lijsten die die ziet (en niet stilzette). */
+async function collectThings(db: D1Database, people: Map<string, string[]>, pick: (fields: ReturnType<typeof toList>["fields"], data: ReturnType<typeof toThing>["data"]) => { key: string; body: string; date: string }[]) {
   const due = new Map<string, Due[]>();
-  const { results: people } = await db.prepare("SELECT DISTINCT person_id FROM push_subscriptions").all<{ person_id: string }>();
-  if (!people.length) return due;
-  const { results: typeRows } = await db.prepare("SELECT * FROM item_types WHERE fields LIKE ?").bind(`%${like}%`).all<TypeRow>();
-  if (!typeRows.length) return due;
-
-  // Per persoon zijn rechten in elk project (zoals in de app).
-  const rights = new Map<string, Map<string, Rights>>();
-  for (const { person_id } of people) rights.set(person_id, new Map((await accessibleProjects(db, person_id)).map((n) => [n.id, n.rights])));
-
-  for (const row of typeRows) {
-    const type = toItemType(row);
-    if (!type.fields.some((f) => f.remind !== undefined)) continue;
-    const { results: items } = await db
-      .prepare("SELECT id, project_id, name, data FROM items WHERE type_id = ? AND archived = 0")
-      .bind(type.id)
-      .all<{ id: string; project_id: string; name: string; data: string }>();
-    for (const item of items) {
-      let data: Attributes;
-      try {
-        data = computeLocal(type.fields, JSON.parse(item.data) as Attributes, today);
-      } catch {
-        continue;
-      }
-      for (const { reminder, body } of pick(type.fields, data)) {
-        const deps = [...fieldDeps(type.fields, reminder.key), ...(type.fields.find((f) => f.key === reminder.key)?.remind_at ? [type.fields.find((f) => f.key === reminder.key)!.remind_at!] : [])];
-        for (const [person, projects] of rights) {
-          const r = projects.get(item.project_id);
-          if (!r || typeAccess(r, type.id) === "none" || deps.some((k) => fieldAccess(r, type.id, k) === "none")) continue;
-          due.set(person, [...(due.get(person) ?? []), { item, reminder, body }]);
-        }
+  const { results: listRows } = await db.prepare(`SELECT * FROM lists WHERE archived = 0 AND fields LIKE '%"remind"%'`).all<ListRow>();
+  for (const list of listRows.map(toList)) {
+    if (!list.fields.some((f) => f.remind !== undefined)) continue;
+    const { index, candidates } = await listRoles(db, list.id);
+    const { results: tags } = await db.prepare("SELECT tag_id FROM list_tag_links WHERE list_id = ?").bind(list.id).all<{ tag_id: string }>();
+    const who = index
+      .people(list.id, candidates)
+      .filter((p) => p.role && people.has(p.person_id) && !isMuted(people.get(p.person_id)!, list.id, tags.map((t) => t.tag_id)))
+      .map((p) => p.person_id);
+    if (!who.length) continue;
+    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
+    for (const thing of results.map(toThing)) {
+      const data = computeLocal(list.fields, thing.data, brusselsToday());
+      for (const hit of pick(list.fields, data)) {
+        for (const person of who)
+          due.set(person, [...(due.get(person) ?? []), { title: thing.name, body: hit.body, url: `/dingen/${thing.id}`, tag: `${thing.id}:${hit.key}:${hit.date}` }]);
       }
     }
   }
   return due;
 }
 
-/** De meldingen sturen: per persoon hooguit `MAX_PER_PERSON`, de rest samen in één. */
+/** Geplande gebeurtenissen die nu vallen: naar wie ze logde en wie erin staat, als die de lijst nog ziet. */
+async function collectPlanned(db: D1Database, people: Map<string, string[]>, due: Map<string, Due[]>, where: string, binds: unknown[]) {
+  const { results } = await db.prepare(`SELECT * FROM events WHERE status = 'gepland' AND ${where}`).bind(...binds).all<EventRowDb>();
+  for (const e of results.map(toEvent)) {
+    const kind = await kindOf(db, e.kind, e.base);
+    const { results: lines } = await db
+      .prepare("SELECT l.*, t.name AS thing FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id = ? ORDER BY l.position")
+      .bind(e.id)
+      .all<{ role: "in"; thing_id: string | null; text: string | null; thing: string | null }>();
+    const names = new Map(lines.flatMap((l) => (l.thing_id && l.thing ? [[l.thing_id, l.thing] as const] : [])));
+    const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
+    const wanted = new Set([e.created_by, e.paid_by, e.to_person, ...(e.split ?? []).map((s) => s.person_id)].filter((x): x is string => Boolean(x)));
+    for (const person of wanted) {
+      if (!people.has(person) || isMuted(people.get(person)!, e.list_id)) continue;
+      const role: Role | undefined = (await seenLists(db, person, e.list_id)).get(e.list_id);
+      if (!role) continue;
+      const time = e.at.length > 10 ? ` om ${e.at.slice(11, 16)}` : "";
+      due.set(person, [...(due.get(person) ?? []), { title, body: `Gepland: vandaag${time}`, url: `/gebeurtenissen/${e.id}`, tag: `plan:${e.id}:${e.at}` }]);
+    }
+  }
+}
+
 async function send(db: D1Database, due: Map<string, Due[]>, tag: string): Promise<number> {
   let sent = 0;
   for (const [person, list] of due) {
     const shown = list.length > MAX_PER_PERSON ? list.slice(0, MAX_PER_PERSON - 1) : list;
-    for (const { item, reminder, body } of shown)
-      sent += await notify(db, person, {
-        title: item.name,
-        body,
-        url: `/items/${item.id}`,
-        tag: `${item.id}:${reminder.key}:${reminder.date}`,
-      });
+    for (const d of shown) sent += await notify(db, person, d);
     if (shown.length < list.length) {
       const rest = list.slice(shown.length);
-      sent += await notify(db, person, {
-        title: `Nog ${rest.length} herinneringen`,
-        body: rest.map((d) => d.item.name).join(", "),
-        url: "/",
-        tag: `meer:${tag}`,
-      });
+      sent += await notify(db, person, { title: `Nog ${rest.length} herinneringen`, body: rest.map((d) => d.title).join(", "), url: "/te-doen", tag: `meer:${tag}` });
     }
   }
   return sent;
 }
 
-export async function sendReminders(db: D1Database, today: string): Promise<number> {
-  const due = await collect(db, '"remind"', today, (fields, data) =>
-    remindersDue(fields, data, today).map((reminder) => ({ reminder, body: `${reminder.label}: ${whenText(reminder.days, reminder.date)}` })),
+/** 's Morgens: datums van dingen (zoveel dagen vooraf) en wat vandaag gepland staat zonder uur. */
+export async function sendMorning(db: D1Database, today: string): Promise<number> {
+  const people = await listeners(db);
+  if (!people.size) return 0;
+  const due = await collectThings(db, people, (fields, data) =>
+    remindersDue(fields, data, today).map((r) => ({ key: r.key, date: r.date, body: `${r.label}: ${whenText(r.days, r.date)}` })),
   );
+  await collectPlanned(db, people, due, "at = ?", [today]);
   return send(db, due, today);
 }
 
-/** De herinneringen met een uur die in `[from, to)` vallen (tijd van België, "YYYY-MM-DDTHH:MM"). */
-export async function sendTimedReminders(db: D1Database, from: string, to: string): Promise<number> {
-  const due = await collect(db, '"remind_at"', from.slice(0, 10), (fields, data) =>
-    timedRemindersDue(fields, data, from, to).map((reminder) => ({
-      reminder,
-      body: `${reminder.label}: ${whenText(reminder.days, reminder.date)}${reminder.days === 0 ? ` om ${reminder.time}` : ""}`,
-    })),
+/** In het voorbije kwartier: datums met een uur, en wat gepland stond op een uur. */
+export async function sendTimed(db: D1Database, from: string, to: string): Promise<number> {
+  const people = await listeners(db);
+  if (!people.size) return 0;
+  const due = await collectThings(db, people, (fields, data) =>
+    timedRemindersDue(fields, data, from, to).map((r) => ({ key: r.key, date: r.date, body: `${r.label}: ${whenText(r.days, r.date)}${r.days === 0 ? ` om ${r.time}` : ""}` })),
   );
+  await collectPlanned(db, people, due, "length(at) > 10 AND at >= ? AND at < ?", [from, to]);
   return send(db, due, from);
 }
+
+/** Een activiteit die loopt en het doel van haar soort haalde (16 u vasten): een melding aan wie ze startte. */
+export async function sendTimerGoals(db: D1Database, from: string, to: string): Promise<number> {
+  const { results } = await db
+    .prepare(
+      `SELECT e.*, k.goal, k.name AS kind_name FROM events e JOIN kinds k ON k.id = e.kind
+       WHERE e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND k.goal IS NOT NULL AND e.status = 'gebeurd'`,
+    )
+    .all<EventRowDb & { goal: number; kind_name: string }>();
+  let sent = 0;
+  for (const r of results) {
+    const reached = addMinutes(r.at, r.goal);
+    if (!(reached >= from && reached < to)) continue;
+    if (!(await seenLists(db, r.created_by, r.list_id)).has(r.list_id)) continue;
+    sent += await notify(db, r.created_by, { title: `${r.kind_name}: ${formatDuration(r.goal)} bereikt`, body: r.name || r.kind_name, url: `/gebeurtenissen/${r.id}`, tag: `timer-${r.id}` });
+  }
+  return sent;
+}
+
+/** Een moment ("2026-11-06T18:30") plus zoveel minuten, in dezelfde vorm. */
+function addMinutes(at: string, minutes: number): string {
+  const d = new Date(`${at}:00Z`);
+  d.setUTCMinutes(d.getUTCMinutes() + minutes);
+  return d.toISOString().slice(0, 16);
+}
+
+export { addToDate, ids };

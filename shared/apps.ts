@@ -1,53 +1,58 @@
 // De app instellen (Jouw gegevens → App): waar ze opent (per toestel), meerdere apps op één toestel (elk een eigen
 // icoon op je beginscherm met een eigen naam, dat naar een eigen pagina gaat), de snelkoppelingen als je lang op het
-// icoon drukt (Android), wat er met een gedeelde foto gebeurt, en of de AI voor jou mag lezen (Jouw gegevens → AI). Alles verwijst met ids; wat je niet (meer) mag zien,
-// valt weg bij het nakijken (`cleanAppSettings`, `keepReachable`) en bij het maken van een manifest.
+// icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, en wat je stilzette.
+// Alles verwijst met ids; wat je niet (meer) kan bereiken, valt weg (`cleanAppSettings`, `keepReachable`).
+
+/** De ingebouwde weergaven over al je lijsten. */
+export const VIEWS = {
+  geld: { label: "Geld", path: "/geld" },
+  voorraad: { label: "Voorraad", path: "/voorraad" },
+  eten: { label: "Eten", path: "/eten" },
+  "te-doen": { label: "Te doen", path: "/te-doen" },
+} as const;
+export type ViewKey = keyof typeof VIEWS;
+export const isViewKey = (v: unknown): v is ViewKey => typeof v === "string" && Object.hasOwn(VIEWS, v);
 
 /** Waar iets naartoe gaat. */
 export type Destination =
   | { kind: "board"; board: string }
   | { kind: "agenda" }
-  | { kind: "project"; project: string }
-  | { kind: "list"; project: string; list: string }
-  | { kind: "form"; project: string; list: string; text?: string };
+  | { kind: "view"; view: ViewKey }
+  | { kind: "list"; list: string }
+  /** Loggen in een lijst (eventueel met een soort en tekst), of met `thing` een ding toevoegen. */
+  | { kind: "form"; list: string; type?: string; thing?: boolean; text?: string };
 
 export type DestinationKind = Destination["kind"];
 
-/** De soorten bestemmingen, in de volgorde van de keuze. */
 export const DESTINATION_KINDS = {
   board: "Overzicht",
   agenda: "Agenda",
-  project: "Project",
+  view: "Weergave",
   list: "Lijst",
   form: "Formulier",
 } as const satisfies Record<DestinationKind, string>;
 
-/** Een eigen app: een icoon op je beginscherm met deze naam, dat meteen naar `to` gaat (zie /app/:id). */
 export type AppDef = { id: string; name: string; to: Destination };
-
-/** Een snelkoppeling op het app-icoon (Android): een naam en waar ze heen gaat. */
 export type Shortcut = { name: string; to: Destination };
 
-/** Een gedeelde foto: telkens vragen, of meteen als kasticket bij een voorraad. */
-export type ShareChoice = { kind: "ask" } | { kind: "receipt"; project: string; list: string };
+/** Een gedeelde foto: telkens vragen, of meteen als kasticket in een lijst. */
+export type ShareChoice = { kind: "ask" } | { kind: "receipt"; list: string };
 
 export type AppSettings = {
   apps: AppDef[];
-  /** null = vanzelf: je meestgebruikte lijsten. */
+  /** null = vanzelf: wat je het meest logt. */
   shortcuts: Shortcut[] | null;
   share: ShareChoice;
   /** Mag de AI voor jou lezen (✨)? Uit: geen ✨-knoppen, en de server weigert elke AI-vraag van jou. */
   ai: boolean;
-  /** Projecten die je stilzette: geen melding bij een nieuw item daar (ook niet in hun subprojecten). */
+  /** Lijsten of tags die je stilzette: geen melding bij iets nieuws daar. */
   muted: string[];
 };
 
 export const MAX_APPS = 12;
 export const MAX_SHORTCUTS = 4;
-export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] };
-
-/** Zoveel projecten kan je hoogstens stilzetten. */
 export const MAX_MUTED = 200;
+export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] };
 
 /** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
 export const aiAllowed = (raw: unknown): boolean => !(raw && typeof raw === "object" && (raw as Record<string, unknown>).ai === false);
@@ -56,7 +61,6 @@ const ID = /^[A-Za-z0-9-]{1,64}$/;
 const id = (v: unknown) => (typeof v === "string" && ID.test(v) ? v : null);
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
 
-/** Een bestemming nagekeken (enkel geldige ids), of null. */
 export function cleanDestination(raw: unknown): Destination | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -65,21 +69,25 @@ export function cleanDestination(raw: unknown): Destination | null {
       return id(o.board) ? { kind: "board", board: o.board as string } : null;
     case "agenda":
       return { kind: "agenda" };
-    case "project":
-      return id(o.project) ? { kind: "project", project: o.project as string } : null;
+    case "view":
+      return isViewKey(o.view) ? { kind: "view", view: o.view } : null;
     case "list":
-      return id(o.project) && id(o.list) ? { kind: "list", project: o.project as string, list: o.list as string } : null;
+      return id(o.list) ? { kind: "list", list: o.list as string } : null;
     case "form": {
-      if (!id(o.project) || !id(o.list)) return null;
+      if (!id(o.list)) return null;
       const t = text(o.text, 120);
-      return { kind: "form", project: o.project as string, list: o.list as string, ...(t ? { text: t } : {}) };
+      return {
+        kind: "form",
+        list: o.list as string,
+        ...(o.thing === true ? { thing: true } : id(o.type) ? { type: o.type as string } : {}),
+        ...(t ? { text: t } : {}),
+      };
     }
     default:
       return null;
   }
 }
 
-/** Alles nagekeken: geldige bestemmingen, namen, hoogstens MAX_APPS apps en MAX_SHORTCUTS snelkoppelingen. */
 export function cleanAppSettings(raw: unknown, newId: () => string = () => crypto.randomUUID().slice(0, 8)): AppSettings {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const seen = new Set<string>();
@@ -107,68 +115,76 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
         .slice(0, MAX_SHORTCUTS)
     : null;
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
-  const share: ShareChoice = s.kind === "receipt" && id(s.project) && id(s.list) ? { kind: "receipt", project: s.project as string, list: s.list as string } : { kind: "ask" };
+  const share: ShareChoice = s.kind === "receipt" && id(s.list) ? { kind: "receipt", list: s.list as string } : { kind: "ask" };
   const muted = Array.isArray(o.muted) ? [...new Set(o.muted.map(id).filter((x): x is string => x !== null))].slice(0, MAX_MUTED) : [];
   return { apps, shortcuts, share, ai: aiAllowed(o), muted };
 }
 
-/** Het pad van een bestemming in de app. */
 export function destinationPath(d: Destination): string {
   switch (d.kind) {
     case "board":
       return `/?bord=${encodeURIComponent(d.board)}`;
     case "agenda":
       return "/agenda";
-    case "project":
-      return `/projecten/${d.project}`;
+    case "view":
+      return VIEWS[d.view].path;
     case "list":
-      return `/projecten/${d.project}?lijst=${d.list}`;
-    case "form":
-      return `/projecten/${d.project}/nieuw?lijst=${d.list}${d.text ? `&tekst=${encodeURIComponent(d.text)}` : ""}`;
+      return `/lijsten/${d.list}`;
+    case "form": {
+      const q = new URLSearchParams();
+      if (d.type) q.set("soort", d.type);
+      if (d.text) q.set("tekst", d.text);
+      const query = q.toString();
+      return `/lijsten/${d.list}/${d.thing ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
+    }
   }
 }
 
-/** Wat je mag bereiken: je projecten, en per project de lijsten die je ziet (en waarin je iets mag toevoegen). */
+/** Wat je kan bereiken: je overzichten, en de lijsten die je ziet (en of je erin mag loggen), met hun soorten. */
 export type Reach = {
   boards: { id: string; name: string }[];
-  projects: Map<string, { name: string; lists: Map<string, { name: string; plural: string; create: boolean }> }>;
+  lists: Map<string, { name: string; one: string | null; edit: boolean; kinds: Map<string, string> }>;
 };
 
-/** Kan je er (nog) heen? Een formulier enkel als je er iets mag toevoegen. */
 export function reachable(d: Destination, reach: Reach): boolean {
   switch (d.kind) {
     case "board":
       return reach.boards.some((b) => b.id === d.board);
     case "agenda":
+    case "view":
       return true;
-    case "project":
-      return reach.projects.has(d.project);
     case "list":
-      return Boolean(reach.projects.get(d.project)?.lists.has(d.list));
-    case "form":
-      return Boolean(reach.projects.get(d.project)?.lists.get(d.list)?.create);
+      return reach.lists.has(d.list);
+    case "form": {
+      const l = reach.lists.get(d.list);
+      if (!l?.edit) return false;
+      if (d.thing) return Boolean(l.one);
+      return !d.type || l.kinds.has(d.type);
+    }
   }
 }
 
-/** Hoe een bestemming heet ("Overzicht Keuken", "Agenda", "Bijvullen", "Bijvulling toevoegen"). */
+/** Hoe een bestemming heet ("Overzicht Keuken", "Geld", "Voorraad", "Gegeten loggen", "Wijn toevoegen"). */
 export function destinationLabel(d: Destination, reach: Reach): string {
   switch (d.kind) {
     case "board":
       return reach.boards.find((b) => b.id === d.board)?.name ?? "Overzicht";
     case "agenda":
       return "Agenda";
-    case "project":
-      return reach.projects.get(d.project)?.name ?? "Project";
+    case "view":
+      return VIEWS[d.view].label;
     case "list":
-      return reach.projects.get(d.project)?.lists.get(d.list)?.plural ?? "Lijst";
-    case "form":
-      return `${reach.projects.get(d.project)?.lists.get(d.list)?.name ?? "Item"} toevoegen`;
+      return reach.lists.get(d.list)?.name ?? "Lijst";
+    case "form": {
+      const l = reach.lists.get(d.list);
+      if (d.thing) return `${l?.one ?? "Ding"} toevoegen`;
+      return `${(d.type && l?.kinds.get(d.type)) || "Iets"} loggen`;
+    }
   }
 }
 
-/** Enkel wat je nog kan bereiken (rechten veranderen: een app of snelkoppeling naar iets dat weg is, valt weg). */
 export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
-  const share = s.share.kind === "receipt" && !reachable({ kind: "form", project: s.share.project, list: s.share.list }, reach) ? ({ kind: "ask" } as const) : s.share;
+  const share = s.share.kind === "receipt" && !reachable({ kind: "form", list: s.share.list }, reach) ? ({ kind: "ask" } as const) : s.share;
   return {
     apps: s.apps.filter((a) => reachable(a.to, reach)),
     shortcuts: s.shortcuts && s.shortcuts.filter((x) => reachable(x.to, reach)),
@@ -178,10 +194,8 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
   };
 }
 
-/** Het pad van een eigen app (en de id in haar manifest). */
 export const appPath = (appId: string) => `/app/${appId}`;
 
-/** Gaan twee bestemmingen naar hetzelfde? (Een lijst die je op je beginscherm zet, hergebruikt haar app.) */
 export function sameDestination(a: Destination, b: Destination): boolean {
   const key = (d: Destination) => JSON.stringify(cleanDestination(d));
   return key(a) === key(b);

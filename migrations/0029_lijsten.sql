@@ -69,6 +69,7 @@ CREATE TABLE kinds (
   name        TEXT NOT NULL,
   icon        TEXT,
   fields      TEXT NOT NULL DEFAULT '[]',
+  goal        INTEGER,                      -- een activiteit: na zoveel minuten een melding (16 u vasten)
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

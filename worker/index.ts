@@ -1,17 +1,17 @@
 import { Hono } from "hono";
 import { requireAccess } from "./auth";
-import { withPerson } from "./context";
-import { files, items, projectItems, search } from "./routes/items";
-import { me } from "./routes/me";
+import { withPerson } from "./person";
 import { quarter } from "./cron";
-import { products, rates } from "./routes/products";
+import { attachments } from "./routes/attachments";
+import { events, listEvents } from "./routes/events";
+import { insights } from "./routes/insights";
+import { kinds, lists } from "./routes/lists";
+import { me } from "./routes/me";
+import { products } from "./routes/products";
 import { push } from "./routes/push";
-import { agenda } from "./routes/agenda";
-import { backup } from "./routes/backup";
-import { allLinks, projectLinks } from "./routes/links";
-import { projectReceipt } from "./routes/receipt";
-import { projectViews, views } from "./routes/views";
-import { people, projects, roles, tags, types } from "./routes/projects";
+import { tags } from "./routes/tags";
+import { listThings, things } from "./routes/things";
+import { views } from "./routes/views";
 import type { AppEnv } from "./types";
 import { SHARE_PATH } from "../shared/manifest";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "./validate";
@@ -20,29 +20,22 @@ const app = new Hono<AppEnv>().basePath("/api");
 
 // 1. Wie ben je? (Cloudflare Access)
 app.use("*", requireAccess);
-// 2. Welke persoon is dat? Elke route controleert daarna zelf wat die persoon in het project mag (zie context.ts).
+// 2. Welke persoon is dat? Elke route kijkt daarna zelf na wat die persoon in de lijst mag (zie access.ts).
 app.use("*", withPerson);
 
 app.route("/me", me);
-app.route("/projects", projects);
-app.route("/projects", projectItems);
-app.route("/projects", projectViews);
-app.route("/projects", projectLinks);
-app.route("/projects", projectReceipt);
-app.route("/views", views);
-app.route("/types", types);
-app.route("/roles", roles);
-app.route("/people", people);
+app.route("/lists", lists);
+app.route("/lists", listThings);
+app.route("/lists", listEvents);
+app.route("/kinds", kinds);
 app.route("/tags", tags);
-app.route("/items", items);
-app.route("/files", files);
-app.route("/search", search);
+app.route("/things", things);
+app.route("/events", events);
+app.route("/attachments", attachments);
+app.route("/views", views);
+app.route("/insights", insights);
 app.route("/products", products);
-app.route("/rates", rates);
 app.route("/push", push);
-app.route("/agenda", agenda);
-app.route("/links", allLinks);
-app.route("/backup", backup);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));
 app.onError((err, c) => {
@@ -66,6 +59,6 @@ export default {
     if (request.method === "POST" && url.pathname === SHARE_PATH) return Response.redirect(new URL(SHARE_PATH, url).toString(), 303);
     return app.fetch(request, env, ctx);
   },
-  // Elk kwartier: herinneringen met een uur, en om 7 u herhalen en herinneren (zie cron.ts en wrangler.jsonc).
-  scheduled: (event, env, ctx) => ctx.waitUntil(quarter(env.DB, new Date(event.scheduledTime))),
+  // Elk kwartier: herinneringen met een uur, timers, en om 7 u herhalen en herinneren (zie cron.ts en wrangler.jsonc).
+  scheduled: (event, env, ctx) => ctx.waitUntil(quarter(env, new Date(event.scheduledTime))),
 } satisfies ExportedHandler<AppEnv["Bindings"]>;

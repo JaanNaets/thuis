@@ -9,7 +9,7 @@
 
 import type { Attributes, FieldDef, Interval, Share } from "./fields.ts";
 import type { IconKey } from "./icons.ts";
-import type { NotifyDef } from "./notify.ts";
+import type { NotifyDef } from "./alerts.ts";
 import type { StockDef } from "./stock.ts";
 import type { Person, Tone } from "./types.ts";
 
@@ -57,20 +57,21 @@ export type Base = keyof typeof BASES;
 export const isBase = (v: unknown): v is Base => typeof v === "string" && Object.hasOwn(BASES, v);
 
 /** Een eigen soort: een basissoort met een naam en eigen velden (Gegeten, Carwash, Proeverij). */
-export type Kind = { id: string; list_id: string; base: Base; name: string; icon: IconKey | null; fields: FieldDef[]; sort_order: number };
+/** `goal`: een activiteit die loopt (een timer), geeft na zoveel minuten een melding (16 u vasten). */
+export type Kind = { id: string; list_id: string; base: Base; name: string; icon: IconKey | null; fields: FieldDef[]; goal: number | null; sort_order: number };
 
 /** Een soort zoals een gebeurtenis ze gebruikt: een basissoort (id = de basissoort) of een eigen soort. */
-export type KindInfo = { id: string; base: Base; name: string; icon: IconKey; fields: FieldDef[]; list_id: string | null };
+export type KindInfo = { id: string; base: Base; name: string; icon: IconKey; fields: FieldDef[]; list_id: string | null; goal: number | null };
 
 /** De basissoort zelf als soort (zonder eigen velden, behalve een meting: een waarde). */
 export function baseKind(base: Base): KindInfo {
   const b = BASES[base];
   const fields: FieldDef[] = base === "meting" ? [{ key: "waarde", label: "Waarde", type: "number" }] : [];
-  return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null };
+  return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null, goal: null };
 }
 
 export function kindInfo(kind: Kind): KindInfo {
-  return { id: kind.id, base: kind.base, name: kind.name, icon: kind.icon ?? BASES[kind.base].icon, fields: kind.fields, list_id: kind.list_id };
+  return { id: kind.id, base: kind.base, name: kind.name, icon: kind.icon ?? BASES[kind.base].icon, fields: kind.fields, list_id: kind.list_id, goal: kind.goal };
 }
 
 // ---------- lijsten ----------

@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { nevoByName, productByCode, productByName } from "../products";
 import { nevoCredit } from "../../shared/nevo";
 import { NEVO_DATA } from "../../shared/nevo-data";
-import { getRates } from "../rates";
 import type { AppEnv } from "../types";
 import { NotFoundError } from "../validate";
 
@@ -45,12 +44,4 @@ products.get("/:code", async (c) => {
     if (err instanceof NotFoundError) throw err;
     return c.json(unreachable, 503);
   }
-});
-
-/** De dagkoersen van de ECB (1 EUR = koers × munt), om een bedrag in een vreemde munt om te rekenen. */
-export const rates = new Hono<AppEnv>();
-
-rates.get("/", async (c) => {
-  const found = await getRates(c.env.DB);
-  return found ? c.json(found) : c.json({ error: "De wisselkoersen zijn even niet bereikbaar. Vul het bedrag in euro in." }, 503);
 });

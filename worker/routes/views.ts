@@ -1,127 +1,109 @@
-// Bewaarde weergaven van een lijst (filters, sortering, kolommen; zie shared/views.ts). Voor jezelf, of voor iedereen
-// in het project (dat mag enkel wie het project instelt). Wat binnenkomt, gaat door `cleanView`.
+// Bewaarde weergaven: filters, sortering, kolommen en groeperen op de dingen of het logboek van een lijst, of over al
+// je lijsten (`list_id` null, het logboek). Een weergave is geen beveiliging: ze filtert enkel wat je al ziet.
+// `shared`: ook voor iedereen bij de lijst (enkel wie in de lijst mag wijzigen).
 
 import { Hono } from "hono";
-import { fieldAccess, typeAccess } from "../../shared/access";
-import type { ItemType } from "../../shared/types";
-import { cleanView, viewFields, type SavedView } from "../../shared/views";
-import { requireProject, typesFor, type ProjectAccess } from "../context";
+import { logFields } from "../../shared/logview";
+import { canEdit, canManage } from "../../shared/model";
+import { cleanView, viewFields, type ViewDef } from "../../shared/views";
+import { kindsFor, parseJson, requireList, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, NotFoundError, requiredString, ValidationError } from "../validate";
 
-export const projectViews = new Hono<AppEnv>();
 export const views = new Hono<AppEnv>();
 
-/** Hoeveel weergaven één persoon hooguit per lijst bewaart. */
-const MAX_VIEWS = 30;
+export type SavedViewRow = { id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; def: ViewDef; shared: boolean; can_edit: boolean };
 
-type ViewRow = { id: string; project_id: string; type_id: string; person_id: string | null; name: string; def: string };
+type Row = { id: string; owner_id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; def: string; shared: number };
 
-/** De velden van de lijst die jij ziet, met de naam, tags en toegevoegd op. */
-export const fieldsForViews = (access: ProjectAccess, type: ItemType) =>
-  viewFields(
-    type.fields.filter((f) => fieldAccess(access.rights, type.id, f.key) !== "none"),
-    type.name_label ?? "Naam",
-  );
-
-function checked(raw: unknown, access: ProjectAccess, type: ItemType) {
-  try {
-    return cleanView(raw, fieldsForViews(access, type));
-  } catch (err) {
-    throw new ValidationError((err as Error).message);
-  }
-}
-
-const toView = (row: ViewRow, me: string, access: ProjectAccess): SavedView => ({
-  id: row.id,
-  type_id: row.type_id,
-  name: row.name,
-  shared: row.person_id === null,
-  def: JSON.parse(row.def),
-  can_edit: row.person_id === me || (row.person_id === null && access.rights.manage),
-});
-
-async function listIn(c: { env: AppEnv["Bindings"]; get: (k: "person") => { id: string } }, projectId: string, typeId: string | undefined) {
+views.get("/", async (c) => {
   const db = c.env.DB;
-  const me = c.get("person").id;
-  const access = await requireProject(db, me, projectId);
-  const type = (await typesFor(db, access.chain)).find((t) => t.id === typeId && typeAccess(access.rights, t.id) !== "none");
-  if (!type) throw new NotFoundError("Die lijst bestaat hier niet.");
-  return { db, me, access, type };
-}
-
-projectViews.get("/:id/views", async (c) => {
-  // Zonder ?type=: de weergaven van alle lijsten die je hier ziet (voor het overzicht: tellen per weergave).
-  if (!c.req.query("type")) {
-    const db = c.env.DB;
-    const me = c.get("person").id;
-    const access = await requireProject(db, me, c.req.param("id"));
-    const seen = new Set((await typesFor(db, access.chain)).filter((t) => typeAccess(access.rights, t.id) !== "none").map((t) => t.id));
-    const { results } = await db
-      .prepare(
-        `SELECT * FROM views WHERE project_id = ? AND (person_id IS NULL OR person_id = ?)
-         ORDER BY person_id IS NOT NULL, sort_order, name COLLATE NOCASE`,
-      )
-      .bind(access.project.id, me)
-      .all<ViewRow>();
-    return c.json(results.filter((r) => seen.has(r.type_id)).map((r) => toView(r, me, access)));
-  }
-  const { db, me, access, type } = await listIn(c, c.req.param("id"), c.req.query("type"));
+  const me = c.get("person");
+  const listId = c.req.query("list") || null;
+  const role = listId ? (await requireList(db, me.id, listId)).role : null;
   const { results } = await db
     .prepare(
-      `SELECT * FROM views WHERE project_id = ? AND type_id = ? AND (person_id IS NULL OR person_id = ?)
-       ORDER BY person_id IS NOT NULL, sort_order, name COLLATE NOCASE`,
+      `SELECT * FROM saved_views WHERE ${listId ? "list_id = ?2 AND (owner_id = ?1 OR shared = 1)" : "list_id IS NULL AND owner_id = ?1"} ORDER BY sort_order, created_at`,
     )
-    .bind(access.project.id, type.id, me)
-    .all<ViewRow>();
-  return c.json(results.map((r) => toView(r, me, access)));
+    .bind(...(listId ? [me.id, listId] : [me.id]))
+    .all<Row>();
+  return c.json(
+    results.map((r): SavedViewRow => ({
+      id: r.id,
+      list_id: r.list_id,
+      target: r.target,
+      name: r.name,
+      def: parseJson(r.def, { match: "all", conditions: [] }),
+      shared: Boolean(r.shared),
+      can_edit: r.owner_id === me.id || (Boolean(r.shared) && canManage(role)),
+    })),
+  );
 });
 
-projectViews.post("/:id/views", async (c) => {
-  const body = asObject(await c.req.json());
-  const { db, me, access, type } = await listIn(c, c.req.param("id"), typeof body.type_id === "string" ? body.type_id : undefined);
-  const shared = body.shared === true;
-  if (shared && !access.rights.manage) throw new ForbiddenError("Enkel wie het project instelt, bewaart een weergave voor iedereen.");
-  const def = checked(body.def, access, type);
-  const count = await db
-    .prepare("SELECT COUNT(*) AS n FROM views WHERE project_id = ? AND type_id = ? AND person_id IS ?")
-    .bind(access.project.id, type.id, shared ? null : me)
-    .first<number>("n");
-  if ((count ?? 0) >= MAX_VIEWS) throw new ValidationError(`Hoogstens ${MAX_VIEWS} weergaven per lijst.`);
-  const id = crypto.randomUUID();
-  const row: ViewRow = { id, project_id: access.project.id, type_id: type.id, person_id: shared ? null : me, name: requiredString(body, "name", 40), def: JSON.stringify(def) };
-  await db
-    .prepare("INSERT INTO views (id, project_id, type_id, person_id, name, def) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(row.id, row.project_id, row.type_id, row.person_id, row.name, row.def)
-    .run();
-  return c.json(toView(row, me, access), 201);
-});
+/** De velden waartegen een weergave nagekeken wordt. */
+async function fieldsFor(db: D1Database, personId: string, listId: string | null, target: "dingen" | "logboek") {
+  const seen = await seenLists(db, personId);
+  if (target === "dingen") {
+    if (!listId) throw new ValidationError("Kies een lijst");
+    const { list } = await requireList(db, personId, listId);
+    return viewFields(list.fields, list.one ?? "Naam");
+  }
+  const { results } = await db.prepare("SELECT name FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...seen.keys()])).all<{ name: string }>();
+  return viewFields(logFields(await kindsFor(db, seen.keys()), results), "Omschrijving");
+}
 
-/** Een weergave die jij mag aanpassen: je eigen, of een gedeelde als je het project instelt. */
-async function editable(c: Parameters<typeof listIn>[0], id: string) {
+function checkedDef(raw: unknown, fields: Parameters<typeof cleanView>[1]): ViewDef {
+  try {
+    return cleanView(raw, fields);
+  } catch (err) {
+    throw new ValidationError(err instanceof Error ? err.message : "Geen geldige weergave");
+  }
+}
+
+views.post("/", async (c) => {
   const db = c.env.DB;
-  const me = c.get("person").id;
-  const row = await db.prepare("SELECT * FROM views WHERE id = ?").bind(id).first<ViewRow>();
-  if (!row || (row.person_id !== null && row.person_id !== me)) throw new NotFoundError("Die weergave bestaat niet (meer).");
-  const { access, type } = await listIn(c, row.project_id, row.type_id);
-  if (row.person_id === null && !access.rights.manage) throw new ForbiddenError("Enkel wie het project instelt, past een gedeelde weergave aan.");
-  return { db, me, row, access, type };
+  const me = c.get("person");
+  const body = asObject(await c.req.json());
+  const listId = typeof body.list_id === "string" ? body.list_id : null;
+  const target = body.target === "dingen" ? "dingen" : "logboek";
+  const shared = body.shared === true;
+  if (listId) {
+    const { role } = await requireList(db, me.id, listId);
+    if (shared && !canEdit(role)) throw new ForbiddenError("Je mag in deze lijst enkel kijken.");
+  }
+  const def = checkedDef(body.def, await fieldsFor(db, me.id, listId, target));
+  const id = crypto.randomUUID();
+  await db
+    .prepare("INSERT INTO saved_views (id, owner_id, list_id, target, name, def, shared) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, me.id, listId, target, requiredString(body, "name", 40), JSON.stringify(def), shared && listId ? 1 : 0)
+    .run();
+  return c.json({ id }, 201);
+});
+
+async function editable(db: D1Database, personId: string, id: string): Promise<Row> {
+  const row = await db.prepare("SELECT * FROM saved_views WHERE id = ?").bind(id).first<Row>();
+  if (!row) throw new NotFoundError("Die weergave bestaat niet (meer).");
+  if (row.owner_id === personId) return row;
+  if (row.shared && row.list_id && canManage((await seenLists(db, personId, row.list_id)).get(row.list_id))) return row;
+  throw new NotFoundError("Die weergave bestaat niet (meer).");
 }
 
 views.put("/:id", async (c) => {
-  const { db, me, row, access, type } = await editable(c, c.req.param("id"));
+  const db = c.env.DB;
+  const me = c.get("person");
+  const row = await editable(db, me.id, c.req.param("id"));
   const body = asObject(await c.req.json());
-  const next: ViewRow = {
-    ...row,
-    name: body.name === undefined ? row.name : requiredString(body, "name", 40),
-    def: body.def === undefined ? row.def : JSON.stringify(checked(body.def, access, type)),
-  };
-  await db.prepare("UPDATE views SET name = ?, def = ? WHERE id = ?").bind(next.name, next.def, row.id).run();
-  return c.json(toView(next, me, access));
+  const def = body.def === undefined ? parseJson<ViewDef>(row.def, { match: "all", conditions: [] }) : checkedDef(body.def, await fieldsFor(db, me.id, row.list_id, row.target));
+  await db
+    .prepare("UPDATE saved_views SET name = ?, def = ?, shared = ? WHERE id = ?")
+    .bind(body.name === undefined ? row.name : requiredString(body, "name", 40), JSON.stringify(def), body.shared === undefined ? row.shared : body.shared === true && row.list_id ? 1 : 0, row.id)
+    .run();
+  return c.json({ ok: true });
 });
 
 views.delete("/:id", async (c) => {
-  const { db, row } = await editable(c, c.req.param("id"));
-  await db.prepare("DELETE FROM views WHERE id = ?").bind(row.id).run();
+  const db = c.env.DB;
+  const row = await editable(db, c.get("person").id, c.req.param("id"));
+  await db.prepare("DELETE FROM saved_views WHERE id = ?").bind(row.id).run();
   return c.body(null, 204);
 });
