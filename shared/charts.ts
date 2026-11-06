@@ -7,8 +7,10 @@
 // Wat de browser krijgt, zijn enkel de uitkomsten per periode en reeks, nooit de items.
 
 import type { Attributes, FieldDef, FieldType } from "./fields";
-import { MINE_TYPES } from "./totals.ts";
 import { cleanAlso } from "./views.ts";
+
+/** Velden met mensen: daarop kan "enkel van jou". */
+const MINE_TYPES: FieldType[] = ["person", "people", "share"];
 
 export type ChartForm = "bars" | "line" | "number" | "ranked" | "parts";
 export type ChartAgg = "count" | "sum" | "avg" | "min" | "max";

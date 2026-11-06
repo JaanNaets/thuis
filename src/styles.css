@@ -3761,6 +3761,11 @@ dialog.palette[open]::backdrop {
     min-height: 60px;
   }
 
+  /* Een rij die een link is met een knop ernaast (de voorraad): de cellen van de link staan in de kolommen. */
+  .table .row > .row-link {
+    display: contents;
+  }
+
   .table .rows > li.table-sum {
     display: grid;
     grid-template-columns: var(--cols);

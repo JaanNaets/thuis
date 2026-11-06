@@ -96,7 +96,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
   const stockKeys = new Set([list.stock?.unit, list.stock?.piece, list.stock?.pack, list.stock?.pack_name, list.stock?.min]);
   const columns = def.columns?.length
     ? def.columns.flatMap((k) => fields.filter((f) => f.key === k))
-    : fields.filter((f) => f.column && !stockKeys.has(f.key)).slice(0, wideScreen ? 4 : 2);
+    : fields.filter((f) => f.column && !stockKeys.has(f.key)).slice(0, (wideScreen ? 3 : 2) - (list.stock ? 1 : 0));
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
   const things = useMemo(() => (data?.things ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [data]);

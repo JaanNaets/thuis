@@ -19,48 +19,26 @@ import {
   sharesText,
   type FieldDef,
 } from "../shared/fields.ts";
-import { LIST_TEMPLATES, PROJECT_TEMPLATES, resolveTemplateLists, typeTemplate, type TypeTemplate } from "../shared/templates.ts";
-import { descendantIds, flattenTree } from "../shared/tree.ts";
 
-/** De lijsten van een sjabloon, met id "id-<sleutel>"; `byName`: lijsten erboven. */
-function resolve(types: readonly TypeTemplate[], byName: Record<string, string> = {}) {
-  const ids = Object.fromEntries(types.map((t) => [t.key, `id-${t.key}`]));
-  return resolveTemplateLists(
-    types.map((list) => ({ id: ids[list.key], list, refs: ids, calcs: ids })),
-    byName,
-  );
-}
-
-const WINE: FieldDef[] = resolve(PROJECT_TEMPLATES.wine.types)["id-wijn"];
+/** De velden van een wijnkelder (zoals de wijnen van het huishouden). */
+const WINE: FieldDef[] = cleanFields([
+  { key: "wijnhuis", label: "Wijnhuis", type: "text", column: true },
+  { key: "jaargang", label: "Jaargang", type: "year", column: true },
+  { key: "kleur", label: "Kleur", type: "select", options: ["Rood", "Wit", "Rosé", "Mousserend", "Zoet", "Versterkt"], filter: true },
+  { key: "druiven", label: "Druiven", type: "multi", filter: true },
+  { key: "land", label: "Land", type: "text", filter: true },
+  { key: "streek", label: "Streek", type: "text", filter: true },
+  { key: "alcohol", label: "Alcohol", type: "number", unit: "%" },
+  { key: "inhoud", label: "Inhoud", type: "select", options: ["37,5 cl", "50 cl", "75 cl", "1,5 l", "3 l"] },
+  { key: "drinken", label: "Drinken", type: "year_range", filter: true },
+  { key: "prijs", label: "Prijs", type: "money" },
+  { key: "aantal", label: "Aantal", type: "number", column: true },
+  { key: "score", label: "Score", type: "score" },
+  { key: "eigenaar", label: "Eigenaar", type: "share" },
+  { key: "proefnotities", label: "Proefnotities", type: "longtext" },
+  { key: "gekocht_in", label: "Gekocht in", type: "year" },
+]);
 const field = (key: string) => WINE.find((f) => f.key === key)!;
-
-test("sjablonen: elke lijst heeft geldige velden, verwijzingen en berekeningen", () => {
-  for (const t of Object.values(PROJECT_TEMPLATES)) {
-    const out = resolve(t.types);
-    for (const ty of t.types) {
-      const fields = out[`id-${ty.key}`];
-      assert.deepEqual(
-        cleanFields(fields),
-        fields.map(({ result: _r, ...f }) => f),
-        `${t.label} › ${ty.name}`,
-      );
-      // Een verwijzing naar een lijst buiten het sjabloon (Eten → de Voorraad van je huishouden) valt hier weg;
-      // hoeveelheden die niets aftrekken blijven als tekst (de ingrediënten van een recept zonder voorraad).
-      const inside = new Set(t.types.map((x) => x.key));
-      const kept = (f: (typeof ty.fields)[number]) => !f.ref || inside.has(f.ref) || (f.type === "amounts" && !f.adjust);
-      assert.equal(fields.length, ty.fields.filter(kept).length, `${t.label} › ${ty.name}: alles gevonden`);
-    }
-  }
-  for (const ty of LIST_TEMPLATES) assert.equal(resolve([ty])[`id-${ty.key}`].length, ty.fields.length, ty.name);
-  // Een wijnkelder onder een huishouden verwijst naar de verkopers erboven; zonder verkopers valt het veld weg.
-  const ref: TypeTemplate = { key: "x", name: "X", plural: "X", icon: "folder", fields: [{ key: "bij", label: "Gekocht bij", type: "item", ref: "verkoper" }] };
-  assert.deepEqual(resolve([ref], { verkoper: "v1" })["id-x"], [{ key: "bij", label: "Gekocht bij", type: "item", ref_type: "v1" }]);
-  assert.deepEqual(resolve([ref])["id-x"], []);
-  // Een verkoper zonder uitgaven: de samenvattingen over uitgaven vallen weg, de rest blijft.
-  const vendor = resolve([typeTemplate("verkoper")!])["id-verkoper"];
-  assert.ok(!vendor.some((f) => f.type === "calc"));
-  assert.ok(vendor.some((f) => f.key === "website"));
-});
 
 test("velden nakijken", () => {
   assert.throws(() => cleanFields([{ key: "a", label: "", type: "text" }]), /naam/);
@@ -222,25 +200,6 @@ test("kolommen raden en rijen omzetten; onbekend en onleesbaar gaat naar de lang
     problems.map((p) => p.column),
     ["Jaargang"],
   );
-});
-
-test("boom: volgorde, alles eronder, lussen breken niets", () => {
-  const nodes = [
-    { id: "h", parent_id: null, name: "Huishouden", sort_order: 0 },
-    { id: "w", parent_id: "h", name: "Wijnkelder", sort_order: 0 },
-    { id: "b", parent_id: "w", name: "Bourgogne", sort_order: 0 },
-    { id: "f", parent_id: "h", name: "Fietsen", sort_order: 0 },
-  ];
-  assert.deepEqual(
-    flattenTree(nodes).map((n) => `${n.depth}:${n.name}`),
-    ["0:Huishouden", "1:Fietsen", "1:Wijnkelder", "2:Bourgogne"],
-  );
-  assert.deepEqual([...descendantIds(nodes, "w")].sort(), ["b", "w"]);
-  const loop = [
-    { id: "a", parent_id: "b", name: "A", sort_order: 0 },
-    { id: "b", parent_id: "a", name: "B", sort_order: 0 },
-  ];
-  assert.equal(flattenTree(loop).length, 0);
 });
 
 test("opnieuw: een vorig item als begin van een nieuw", async () => {

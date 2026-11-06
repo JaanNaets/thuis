@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { FlatNode, TreeNode } from "../../shared/tree";
 import { TONES, type Person, type Tone } from "../../shared/types";
 import { formatNumber, parseQuantity } from "../format";
 import { Icon, type IconName } from "./Icon";
@@ -30,37 +29,6 @@ export function Segmented<T extends string>({
         </button>
       ))}
     </div>
-  );
-}
-
-/** Keuzelijst voor een boom (categorieën, plaatsen); subniveaus springen in. */
-export function TreeSelect({
-  nodes,
-  value,
-  onChange,
-  empty,
-  disabled,
-  className,
-  label,
-}: {
-  nodes: FlatNode<TreeNode>[];
-  value: string | null;
-  onChange: (id: string | null) => void;
-  empty: string;
-  /** Opties die niet gekozen mogen worden (bv. een categorie onder zichzelf hangen). */
-  disabled?: Set<string>;
-  className?: string;
-  label?: string;
-}) {
-  return (
-    <select className={className} aria-label={label} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
-      <option value="">{empty}</option>
-      {nodes.map((n) => (
-        <option key={n.id} value={n.id} disabled={disabled?.has(n.id)}>
-          {"    ".repeat(n.depth) + n.name}
-        </option>
-      ))}
-    </select>
   );
 }
 
