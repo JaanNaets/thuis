@@ -250,6 +250,18 @@ const LINES = {
       <path d="m7 9 5-5 5 5" />
     </>
   ),
+  collapse: (
+    <>
+      <path d="m7 20 5-5 5 5" />
+      <path d="m7 4 5 5 5-5" />
+    </>
+  ),
+  checkbox: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="m8 12 3 3 5-6" />
+    </>
+  ),
   arrow: (
     <>
       <path d="M5 12h14" />

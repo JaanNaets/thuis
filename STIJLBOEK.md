@@ -805,40 +805,69 @@ Een activiteit met een uur en zonder einde loopt nog (werk, vasten): ze staat in
 live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`). Een soort met een doel
 (16 u vasten) geeft een melding als dat doel bereikt is.
 
-### Verbanden: `LinkMapView`, `LinkList`, `LinkDetail`, `LinkProblems` (`LinkMap.tsx`) en `LinksPage`
+### Verbanden: `LinkMapView`, `LinkSchema` (`LinkMap.tsx`), `LinkSearch`, `LinkDetail`, `LinkInline`, `LinkProblems`, `SelectionCard` (`LinkParts.tsx`), `LinkList` (`LinkList.tsx`) en `LinksPage`
 
 Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.ts` (`GET /insights/links`): enkel
 wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
 (doorlopend, de eerste grafiekkleur: gebeurtenissen in de ene lijst met dingen of soorten van de andere),
 **Verwijzingen** (streepjes, de tweede: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes, de derde:
 Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo,
-Kasticket lezen, Overzicht).
+Kasticket lezen, Overzicht). Wat een verband doet, staat er als gewone zin (`lineText`: "Tankbeurt voor een wagen",
+"Gegeten haalt eraf uit de voorraad"); hoe vaak en wanneer laatst staan apart, rechts.
 
-- **Kaart en Lijst** zijn twee tabs (`?weergave=`), enkel op tablet (`useWide`); het begint op Kaart. Op gsm is er
-  enkel de lijst: de kaart is daar te klein om te lezen of aan te tikken. Daaronder per soort een filter die je aan- en
-  uitzet (met een stukje lijn), en **Werkt niet voor iedereen**.
+- **Bovenaan** onder de titel één regel met cijfers (lijsten · verbanden tussen lijsten · wat niet werkt). Dan één rij:
+  **Kaart en Lijst** als tabs (`?weergave=`, enkel op tablet, `useWide`; het begint op Kaart) en het **zoekveld**
+  (`LinkSearch`, "Zoek een lijst, ding, soort of weergave"). Daaronder per soort een filter die je aan- en uitzet (met
+  een stukje lijn), en **Werkt niet voor iedereen** (`LinkProblems`): één regel per persoon ("Rik ziet Winkels en
+  diensten niet") met de knop die het oplost ("Rik toevoegen" als je de ontbrekende lijst beheert, anders Mensen van de
+  andere lijst). Enkel als je een van beide lijsten beheert.
+- **Zoeken** (`searchLinks`): elk woord moet erin staan, zonder hoofdletters of accenten; het zoekt in lijsten,
+  soorten (en waar ze gebruikt worden), de dingen in een verband, wat een verband doet en de weergaven. Rechts in het
+  veld hoeveel treffers en een kruisje. Op de kaart liggen de treffers onder het veld per groep (Lijsten, Soorten,
+  Dingen, Verbanden, Weergaven, hooguit vijf per groep), met de woorden gemarkeerd (`Mark`, zacht geel); pijltjes
+  kiezen, Enter opent, Escape sluit en wist bij een tweede keer. Wat niet overeenkomt, wordt dof; wat overeenkomt, krijgt
+  de gele halo. In de lijst filtert zoeken de lijst zelf, en zegt elke rij waarom ze er staat.
 - **De kaart** is een metrokaart (`layoutLinks`): per tag een zachte grijze kolom (een lijst staat bij haar eerste
   tag), de lijsten als stations, de verbanden tussen lijsten als sporen. Elke lijst waar iets in toekomt, krijgt een
   eigen rij (wie het meest binnenkrijgt bovenaan, een groter station); een spoor loopt eerst verticaal bij de lijst
   waar het vertrekt en dan horizontaal naar zijn doel, op een eigen baan per soort. Twee stations in een kolom
   krijgen elk een eigen plaats als hun verticale sporen elkaar zouden raken. Onder de naam en het aantal dingen
-  staan de weergaven als kleine grijze iconen (met de filter Weergaven). Elke lijst staat op de kaart: een lijst die
-  enkel in weergaven voorkomt, is een grijs station zonder spoor op de eerste vrije rij van haar kolom, een lijst
-  zonder verbanden een gestippeld station. Een verband dat voor iemand niet werkt, is rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen vlak. Tik
-  of Enter op een station kiest het (`?lijst=`): het krijgt een zachte gele halo, de rest vervaagt, en eronder komt
-  zijn kaart.
-- **De lijst**: per tag al je lijsten met hoeveel verbanden (of "Geen verbanden"), dan de weergaven. Een tik toont de kaart van die lijst of
-  weergave, met **Alles** om terug te gaan.
-- **Het schema** (`LinkSchema`, enkel op gsm, bovenaan de kaart van een gekozen lijst): erboven de lijsten waar iets
-  vandaan komt, in het midden de lijst zelf (met een zachte gele halo, haar naam, hoeveel dingen en haar weergaven),
-  eronder waar het naartoe gaat; dezelfde sporen en kleuren als op de kaart. Elk station is een raakvlak van 56px hoog
-  en zo breed als zijn plaats; een tik kiest die lijst. Meer dan vier aan een kant: de drie met het meeste en "+n".
-- **De kaart van een lijst of weergave** (`LinkDetail`): `CardHead` (de naam, hoeveel dingen, Openen), dan **Komt
-  van**, **Gaat naar** en **Weergaven** met één rij per ander eind (zijn icoon, de naam, een stukje lijn per soort, wat
-  het doet in grijs, rechts hoeveel keer; een tik kiest het), **In de lijst zelf** (wat ze met haar eigen dingen doet)
-  en **Wie** (met rol, en via welke tag).
-- **Werkt niet voor iedereen** (enkel als je een van beide lijsten beheert): wie in een lijst kan bewerken maar een
-  lijst niet ziet waar die van afhangt; de rij opent Mensen van de lijst die je beheert.
+  staan de weergaven als één grijze regel tekst met een groen bolletje ervoor ("Geld · Voorraad · +4", `viewsLine`).
+  Elke lijst staat op de kaart: een lijst die enkel in weergaven voorkomt, is een grijs station zonder spoor op de
+  eerste vrije rij van haar kolom, een lijst zonder verbanden een gestippeld station. Een verband dat voor iemand niet
+  werkt, is rood gestreept. Past de kaart niet, dan verkleint ze tot 72%, en nog breder schuift ze binnen haar eigen
+  vlak. Met de muis boven een station: een wit **kaartje** (naam, dingen en laatst, ← en → met hoe vaak, de weergaven);
+  op aanraakschermen niet. Tik of Enter op een station kiest het (`?lijst=`): het krijgt de gele halo, de rest
+  vervaagt, en eronder komt **het paneel**.
+- **Het paneel** (`LinkDetail`): kop met icoon, naam, één regel (tag · dingen · laatst), Openen en een kruisje; dan
+  wat niet werkt voor deze lijst (op een zacht rood vlak) en twee kolommen als er plaats is: links **Komt van**,
+  **Gaat naar** en **In de lijst zelf**, rechts **Weergaven** en **Wie** (letter en naam, geen rol). Elke rij
+  (`LinkEndRow`): een stukje lijn per soort (of het icoon van de weergave), de naam, wat het doet in grijs, de dingen
+  die het vaakst voorkomen als grijze chips ("Colruyt 8"), rechts hoe vaak en de dag van de laatste. Een tik kiest dat
+  eind.
+- **De lijst** (`LinkList`): boven de lijst **Groeperen** (per tag, per soort verband, per weergave: `?groep=`),
+  **Sorteren** (eigen volgorde, naam, meeste verbanden, laatst gebruikt: `?sort=`), **Alles uitklappen**, **Alles
+  inklappen** en **Selecteren** (op gsm enkel iconen: één knop wisselt tussen uit- en inklappen). Een groep klapt
+  open en dicht met haar pijltje; dicht toont ze de namen van haar lijsten, of in rood voor wie iets niet werkt. Een
+  rij klapt open (`LinkInline`, op een zacht grijs vlak): Komt van en Gaat naar met één regel per ander eind (stukje
+  lijn, naam, zin, chips, hoe vaak, laatst) en de weergaven als chips; een tik springt naar dat eind (zijn groep en rij
+  gaan open, de lijst schuift ernaartoe). Rechts staat "laatst …"; met de muis erboven, de focus erin of open worden
+  dat **Op de kaart** en **Openen**, op dezelfde plaats (niets verspringt). Op gsm staat rechts een pijltje naar het
+  scherm van die lijst. Lijsten zonder verbanden staan er zachter bij, zonder pijltje. In de groepering per tag komen
+  de weergaven als laatste groep.
+- **Selecteren**: vinkjes voor elke lijst en elke groep (een groep met een deel gekozen toont een streepje); een
+  gekozen rij wordt zacht geel. Je keuze staat in het adres (`?keuze=a,b`). Ernaast (breed) of erboven (smaller dan
+  1100px) **Tussen je selectie** (`SelectionCard`): de gekozen lijsten als chips met een kruisje, een klein schema
+  (op een rij, de verbanden als lijn of boog met hoe vaak), de verbanden tussen twee ervan, **Samen in** (de weergaven
+  met minstens twee ervan: "beide", "alle drie" of de namen) en wat niet werkt. Onderaan plakt een zwarte balk met
+  hoeveel er gekozen zijn, **Samen op de kaart** (de kaart licht je keuze op), **Enkel deze tonen** (`?enkel=1`, geel
+  als het aanstaat; dan **Alles tonen**) en **Wissen**. Op gsm zweeft de balk boven de onderbalk.
+- **Op gsm** is er enkel de lijst; een gekozen lijst is een eigen scherm (terug is echt terug), met de naam als titel,
+  één regel eronder, en **het schema** (`LinkSchema`): links waar iets vandaan komt, rechts waar het naartoe gaat, in
+  het midden de lijst zelf met de gele halo, op elke lijn een wit pilletje met hoe vaak, en de weergaven als haltes op
+  een groene stippellijn eronder (de namen om en om hoger en lager, aan de rand naar binnen). Een tik op een station
+  kiest die lijst; meer dan vier aan een kant: de drie met het meeste en "+n". Daaronder wat niet werkt, Komt van, Gaat
+  naar, Weergaven, In de lijst zelf en Wie, elk in een eigen kaart, en onderaan Openen.
 - Een nieuwe eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok? Dan weigert TypeScript te bouwen tot
   je in `shared/links.ts` beslist of ze iets verbindt (`FIELD_LINKS` …); wat verbindt, krijgt een voorbeeld in
   `test/links.test.ts`. Zo blijft alles zichtbaar.

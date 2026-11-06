@@ -4,14 +4,22 @@ import type { FieldDef } from "../shared/fields.ts";
 import {
   BLOCK_LINKS,
   betweenLists,
+  betweenSelection,
   buildLinks,
   EVENT_LINKS,
   FIELD_LINKS,
   KIND_LINKS,
   LINE_LINKS,
   LIST_LINKS,
+  groupLinkLists,
   layoutLinks,
+  lineText,
+  linkKey,
   linkProblems,
+  linkSummary,
+  litBy,
+  searchLinks,
+  sortLinkLists,
   viewNode,
   viewsOf,
   type Link,
@@ -20,7 +28,7 @@ import {
   type LogStat,
 } from "../shared/links.ts";
 
-const list = (id: string, extra: Partial<LinkList> = {}): LinkList => ({ id, name: id, fields: [], stock: null, notify: null, role: "beheerder", ...extra });
+const list = (id: string, extra: Partial<LinkList> = {}): LinkList => ({ id, name: id, one: null, fields: [], stock: null, notify: null, role: "beheerder", ...extra });
 const input = (extra: Partial<LinkInput>): LinkInput => ({ lists: [list("A"), list("B")], kinds: [], log: [], lines: [], pairs: [], boards: [], ...extra });
 const stat = (extra: Partial<LogStat>): LogStat => ({ list: "A", kind: "aankoop", base: "aankoop", events: 1, money: 0, shared: 0, planned: 0, repeats: 0, running: 0, food: 0, last: null, ...extra });
 const has = (links: Link[], kind: Link["kind"], from: string, to: string) => links.some((l) => l.kind === kind && l.from === from && l.to === to);
@@ -103,8 +111,193 @@ test("wat je niet ziet, bestaat niet; wat in de lijst zelf blijft, is geen lijn"
     }),
   );
   assert.ok(!links.some((l) => l.to === "VERBORGEN" || l.from === "VERBORGEN"));
-  assert.deepEqual(own.B, ["Gebruik: eraf (gaat af van de voorraad), 3×"]);
-  assert.deepEqual(links.find((l) => l.kind === "log" && l.to === "B")?.texts, ["Gebruik: eraf (gaat af van de voorraad), 1×"]);
+  assert.deepEqual(own.B, ["Gebruik haalt eraf uit de voorraad, 3×"]);
+  assert.deepEqual(links.find((l) => l.kind === "log" && l.to === "B")?.texts, ["Gebruik haalt eraf uit de voorraad"]);
+});
+
+test("een lijn als gewone zin, met hoe één ding heet", () => {
+  assert.equal(lineText("Tankbeurt", "voor", { one: "Wagen", stock: null }), "Tankbeurt voor een wagen");
+  assert.equal(lineText("Aankoop", "bij", { one: "Winkel", stock: null }), "Aankoop bij een winkel");
+  assert.equal(lineText("Aankoop", "in", { one: "Product", stock: { unit: "u" } }), "Aankoop telt erbij in de voorraad");
+  assert.equal(lineText("Gegeten", "uit", { one: null, stock: { unit: "u" } }), "Gegeten haalt eraf uit de voorraad");
+  assert.equal(lineText("Gebruik", "uit", { one: null, stock: null }), "Gebruik haalt een ding eraf");
+});
+
+test("de dingen van een verband: de meeste eerst, enkel bij een verband dat bestaat", () => {
+  const { links } = buildLinks(
+    input({
+      lines: [
+        {
+          list: "A",
+          kind: "gebruik",
+          base: "gebruik",
+          role: "uit",
+          to: "B",
+          events: 8,
+          last: null,
+        },
+      ],
+      pairs: [{ list: "A", to: "B", events: 8, last: "2026-11-05" }],
+      things: [
+        { list: "A", to: "B", thing: "m", name: "Melk", events: 2 },
+        { list: "A", to: "B", thing: "p", name: "Pasta", events: 3 },
+        { list: "A", to: "B", thing: "y", name: "Yoghurt", events: 3 },
+        { list: "A", to: "VERBORGEN", thing: "x", name: "Geheim", events: 9 },
+      ],
+    }),
+  );
+  assert.deepEqual(links.find((l) => l.kind === "log")?.things, [
+    { name: "Pasta", count: 3 },
+    { name: "Yoghurt", count: 3 },
+    { name: "Melk", count: 2 },
+  ]);
+  assert.ok(!JSON.stringify(links).includes("Geheim"));
+});
+
+const sample: Link[] = [
+  {
+    kind: "log",
+    from: "J",
+    to: "V",
+    texts: ["Gegeten haalt eraf uit de voorraad"],
+    count: 8,
+    last: "2026-11-05",
+    things: [{ name: "Pasta", count: 3 }],
+  },
+  {
+    kind: "log",
+    from: "V",
+    to: "W",
+    texts: ["Aankoop bij een winkel"],
+    count: 12,
+    last: "2026-11-04",
+    things: [{ name: "Colruyt", count: 8 }],
+  },
+  {
+    kind: "ref",
+    from: "R",
+    to: "W",
+    texts: ["Plaats verwijst ernaar"],
+    count: null,
+    last: null,
+  },
+  {
+    kind: "view",
+    from: "J",
+    to: viewNode("eten"),
+    texts: ["Gegeten: 8× gegeten"],
+    count: 8,
+    last: null,
+  },
+  {
+    kind: "view",
+    from: "V",
+    to: viewNode("geld"),
+    texts: ["Aankoop: 12× met een bedrag"],
+    count: 12,
+    last: null,
+  },
+  {
+    kind: "view",
+    from: "J",
+    to: viewNode("geld"),
+    texts: ["Gegeten: 2× met een bedrag"],
+    count: 2,
+    last: null,
+  },
+];
+const sampleLists = [
+  { id: "J", name: "Jaan" },
+  { id: "V", name: "Voorraad" },
+  { id: "W", name: "Winkels en diensten" },
+  { id: "R", name: "Restaurants" },
+  { id: "T", name: "Taken" },
+];
+const sampleKinds = [
+  { id: "k1", list: "J", name: "Gegeten" },
+  { id: "k2", list: "ONZICHTBAAR", name: "Gegeten" },
+];
+
+test("zoeken: lijsten, soorten, dingen, verbanden en weergaven; elk woord, zonder accenten", () => {
+  const find = (q: string) => searchLinks(q, { lists: sampleLists, kinds: sampleKinds, links: sample });
+  assert.deepEqual(find("  "), []);
+  assert.deepEqual(
+    find("voorraad").map((h) => [h.group, h.title]),
+    [
+      ["lijsten", "Voorraad"],
+      ["verbanden", "Jaan → Voorraad"],
+    ],
+  );
+  const gegeten = find("GEGETEN");
+  assert.deepEqual(
+    gegeten.map((h) => [h.group, h.title]),
+    [
+      ["soorten", "Gegeten"],
+      ["verbanden", "Jaan → Voorraad"],
+      ["weergaven", "Jaan → Geld"],
+      ["weergaven", "Jaan → Eten"],
+    ],
+  );
+  // De soort van een lijst die je niet ziet, komt niet mee; de soort licht haar lijst en waar ze gebruikt wordt op.
+  const soort = gegeten.find((h) => h.group === "soorten")!;
+  assert.deepEqual(soort.nodes, ["J", "V"]);
+  assert.ok(soort.links.includes(linkKey(sample[0])));
+  assert.equal(soort.detail, "Soort van Jaan");
+  // Een ding in een verband: kiest de lijst van het ding.
+  const pasta = find("pasta");
+  assert.deepEqual(
+    pasta.map((h) => [h.group, h.select, h.detail]),
+    [["dingen", "V", "Jaan → Voorraad · 3×"]],
+  );
+  // Een weergave op naam: met al haar lijsten.
+  const geld = find("geld");
+  assert.deepEqual(geld[0], {
+    group: "weergaven",
+    key: "weergave geld",
+    select: viewNode("geld"),
+    title: "Geld",
+    detail: "Voorraad, Jaan",
+    nodes: [viewNode("geld"), "V", "J"],
+    links: [linkKey(sample[4]), linkKey(sample[5])],
+  });
+  assert.deepEqual(
+    find("winkel colruyt").map((h) => h.group),
+    [],
+  );
+  assert.deepEqual(
+    find("colruyt").map((h) => h.title),
+    ["Colruyt"],
+  );
+  const lit = litBy(find("gegeten"));
+  assert.ok(lit.nodes.has("J") && lit.nodes.has("V") && !lit.nodes.has("W"));
+});
+
+test("de lijst: samenvatten, sorteren, groeperen en wat een selectie verbindt", () => {
+  assert.deepEqual(linkSummary(sample, "V"), { in: 1, out: 1, views: 1 });
+  assert.deepEqual(linkSummary(sample, "W"), { in: 2, out: 0, views: 0 });
+  const last = (id: string) => ({ J: "2026-11-05", V: "2026-11-06" })[id] ?? null;
+  const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+  assert.deepEqual(ids(sortLinkLists(sampleLists, "eigen", sample, last)), ["J", "V", "W", "R", "T"]);
+  assert.deepEqual(ids(sortLinkLists(sampleLists, "naam", sample, last)), ["J", "R", "T", "V", "W"]);
+  assert.deepEqual(ids(sortLinkLists(sampleLists, "verbanden", sample, last)), ["J", "V", "W", "R", "T"]);
+  assert.deepEqual(ids(sortLinkLists(sampleLists, "laatst", sample, last)), ["V", "J", "R", "T", "W"]);
+
+  const all = ids(sampleLists);
+  assert.deepEqual(groupLinkLists(all, sample, "soort"), [
+    { key: "log", name: "Logboek", ids: ["J", "V", "W"] },
+    { key: "ref", name: "Verwijzingen", ids: ["W", "R"] },
+    { key: "geen", name: "Geen verbanden", ids: ["T"] },
+  ]);
+  assert.deepEqual(groupLinkLists(all, sample, "weergave"), [
+    { key: "geld", name: "Geld", ids: ["J", "V"] },
+    { key: "eten", name: "Eten", ids: ["J"] },
+    { key: "geen", name: "In geen weergave", ids: ["W", "R", "T"] },
+  ]);
+
+  const chosen = betweenSelection(sample, ["V", "J", "W"]);
+  assert.deepEqual(chosen.links.map(linkKey), [linkKey(sample[0]), linkKey(sample[1])]);
+  assert.deepEqual(chosen.views, [{ view: "geld", lists: ["V", "J"] }]);
+  assert.deepEqual(betweenSelection(sample, ["J", "R"]).links, []);
 });
 
 test("problemen: wie kan bewerken maar een lijst waar het van afhangt niet ziet, enkel als je een van beide beheert", () => {

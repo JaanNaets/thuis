@@ -9,7 +9,8 @@
 import type { BlockKind } from "./board.ts";
 import { canAgenda } from "./agenda.ts";
 import { refLists, type FieldDef } from "./fields.ts";
-import { BASES, LINE_ROLES, type Base, type Event, type Kind, type Line, type LineRole, type List, type Role } from "./model.ts";
+import { BASES, type Base, type Event, type Kind, type Line, type LineRole, type List, type Role } from "./model.ts";
+import { fold } from "./targets.ts";
 
 // ---------- altijd mee ----------
 // Elke eigenschap van een veld, een lijst, een soort, een gebeurtenis, een lijn en elk soort blok staat hieronder, met
@@ -173,14 +174,21 @@ export const LINK_KINDS = {
 export type LinkKind = keyof typeof LINK_KINDS;
 export const LINK_ORDER = Object.keys(LINK_KINDS) as LinkKind[];
 
+/** Een ding aan de kant van `to` waar het logboek naartoe gaat, en in hoeveel gebeurtenissen. */
+export type LinkThing = { name: string; count: number };
+
 /**
  * Een verband: `from` doet iets met `to` (wijst ernaar, logt met zijn dingen of soorten, komt erin voor). `texts`: wat,
  * één zin per veld, soort of rol. `count`: hoeveel gebeurtenissen (enkel bij wat gelogd is), `last`: de laatste.
+ * `things`: bij wat gelogd is, de dingen van `to` die het vaakst voorkomen (de meeste eerst).
  */
-export type Link = { kind: LinkKind; from: string; to: string; texts: string[]; count: number | null; last: string | null };
+export type Link = { kind: LinkKind; from: string; to: string; texts: string[]; count: number | null; last: string | null; things?: LinkThing[] };
+
+/** Zoveel dingen per verband gaan mee (de rest telt in `count`). */
+export const LINK_THINGS = 12;
 
 /** Een lijst zoals de kaart ze nodig heeft (enkel lijsten die de lezer ziet, niet gearchiveerd). */
-export type LinkList = Pick<List, "id" | "name" | "fields" | "stock" | "notify"> & { role: Role };
+export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & { role: Role };
 /** Een eigen soort (van een lijst die de lezer ziet, of die een gebeurtenis gebruikt die hij ziet). */
 export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal">;
 /** Wat er gelogd is, per lijst en soort: tellingen, enkel van gebeurtenissen in lijsten die de lezer ziet. */
@@ -205,10 +213,12 @@ export type LogStat = {
 export type LineStat = { list: string; kind: string; base: Base; role: LineRole; to: string; events: number; last: string | null };
 /** Hoeveel gebeurtenissen in `list` lijnen hebben naar dingen in `to`, in totaal (een gebeurtenis telt één keer). */
 export type LinePair = { list: string; to: string; events: number; last: string | null };
+/** Hoeveel gebeurtenissen in `list` een lijn hebben naar het ding `thing` (in `to`, beide gezien). */
+export type LineThing = { list: string; to: string; thing: string; name: string; events: number };
 /** Een blok op een van je overzichten dat een lijst toont. */
 export type BoardUse = { board: string; list: string; block: BlockKind };
 
-export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; boards: BoardUse[] };
+export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; things?: LineThing[]; boards: BoardUse[] };
 
 /** Verbanden en wat een lijst met haar eigen dingen doet (dat is geen lijn op de kaart). */
 export type LinkResult = { links: Link[]; own: Record<string, string[]> };
@@ -222,6 +232,17 @@ const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ?
 /** Hoe de lezer een soort noemt: haar eigen naam, of die van de basissoort. */
 function kindName(kinds: Map<string, LinkKindDef>, kind: string, base: Base): string {
   return kinds.get(kind)?.name ?? BASES[base]?.label ?? kind;
+}
+
+/** Wat een lijn van een soort met een ding van `to` doet, als gewone zin ("Tankbeurt voor een wagen"). */
+export function lineText(kind: string, role: LineRole, to: Pick<LinkList, "one" | "stock">): string {
+  const one = to.one?.trim().toLowerCase() || "ding";
+  if (to.stock && role === "in") return `${kind} telt erbij in de voorraad`;
+  if (to.stock && role === "uit") return `${kind} haalt eraf uit de voorraad`;
+  if (role === "in") return `${kind} zet een ${one} erbij`;
+  if (role === "uit") return `${kind} haalt een ${one} eraf`;
+  if (role === "voor") return `${kind} voor een ${one}`;
+  return `${kind} bij een ${one}`;
 }
 
 /** De verbanden die volgen uit wat de lezer ziet. */
@@ -284,7 +305,7 @@ export function buildLinks(input: LinkInput): LinkResult {
     if (!lists.has(s.list)) continue;
     const name = kindName(kinds, s.kind, s.base);
     const owner = kinds.get(s.kind)?.list_id;
-    if (owner && owner !== s.list && lists.has(owner)) add("log", s.list, owner, `Logt met de soort ${name}, ${times(s.events)}`, s.events, s.last);
+    if (owner && owner !== s.list && lists.has(owner)) add("log", s.list, owner, `Logt met de soort ${name}`, s.events, s.last);
     if (s.money) add("view", s.list, viewNode("geld"), `${name}: ${times(s.money)} met een bedrag`, s.money, s.last);
     if (s.shared) add("view", s.list, viewNode("balans"), `${name}: ${times(s.shared)} gedeeld`, s.shared, s.last);
     if (s.food) add("view", s.list, viewNode("eten"), `${name}: ${times(s.food)} gegeten`, s.food, s.last);
@@ -298,11 +319,8 @@ export function buildLinks(input: LinkInput): LinkResult {
   }
   for (const s of input.lines) {
     if (!lists.has(s.list) || !lists.has(s.to)) continue;
-    const to = lists.get(s.to)!;
-    const role = LINE_ROLES[s.role].verb;
-    const stock = to.stock && (s.role === "in" || s.role === "uit") ? (s.role === "in" ? " (telt bij de voorraad)" : " (gaat af van de voorraad)") : "";
-    const text = `${kindName(kinds, s.kind, s.base)}: ${role}${stock}, ${times(s.events)}`;
-    if (s.list === s.to) ownNote(s.list, text);
+    const text = lineText(kindName(kinds, s.kind, s.base), s.role, lists.get(s.to)!);
+    if (s.list === s.to) ownNote(s.list, `${text}, ${times(s.events)}`);
     else add("log", s.list, s.to, text);
   }
   for (const p of input.pairs) {
@@ -313,6 +331,13 @@ export function buildLinks(input: LinkInput): LinkResult {
       link.count = Math.max(link.count ?? 0, p.events);
       link.last = later(link.last, p.last);
     }
+  }
+  for (const t of input.things ?? []) {
+    const link = t.list !== t.to ? byKey.get(`log ${t.list} ${t.to}`) : undefined;
+    if (link) (link.things ??= []).push({ name: t.name, count: t.events });
+  }
+  for (const link of byKey.values()) {
+    if (link.things) link.things = link.things.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "nl")).slice(0, LINK_THINGS);
   }
 
   for (const b of input.boards) {
@@ -464,12 +489,277 @@ export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<
 /** Iemand bij een lijst op de kaart: met zijn rol, en via welke tag als het geen rechtstreekse rol is. */
 export type LinkPersonView = LinkPerson & { via: string | null };
 
+/** Een eigen soort van een lijst die de lezer ziet (om op te zoeken). */
+export type LinkKindName = { id: string; list: string; name: string };
+
 /** Wat GET /insights/links geeft. */
 export type LinksResponse = {
   links: Link[];
   /** Wat een lijst met haar eigen dingen doet (geen lijn op de kaart). */
   own: Record<string, string[]>;
-  counts: Record<string, { things: number; events: number }>;
+  /** Per lijst: hoeveel dingen en gebeurtenissen, en de dag van de laatste die gebeurd is. */
+  counts: Record<string, { things: number; events: number; last: string | null }>;
   people: Record<string, LinkPersonView[]>;
   problems: LinkProblem[];
+  kinds: LinkKindName[];
 };
+
+// ---------- zoeken ----------
+
+export const linkKey = (l: Pick<Link, "kind" | "from" | "to">) => `${l.kind} ${l.from} ${l.to}`;
+
+/** De groepen treffers, in deze volgorde. */
+export const HIT_GROUPS = {
+  lijsten: "Lijsten",
+  soorten: "Soorten",
+  dingen: "Dingen",
+  verbanden: "Verbanden",
+  weergaven: "Weergaven",
+} as const;
+export type HitGroup = keyof typeof HIT_GROUPS;
+
+/**
+ * Eén treffer: wat je kiest als je erop tikt (`select`: een lijst of weergave), hoe hij heet, en wat er op de kaart
+ * oplicht (`nodes`: lijsten en weergaven, `links`: zie `linkKey`).
+ */
+export type LinkHit = {
+  group: HitGroup;
+  key: string;
+  select: string;
+  title: string;
+  detail: string;
+  nodes: string[];
+  links: string[];
+};
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Zoeken in je verbanden: lijsten, soorten (en waar ze gebruikt worden), dingen die in een verband voorkomen, wat een
+ * verband doet, en de weergaven. Elk woord moet erin staan (zonder hoofdletters of accenten). Enkel wat je ziet: `lists`
+ * en `links` komen al uit `seenLists`.
+ */
+export function searchLinks(
+  query: string,
+  data: {
+    lists: { id: string; name: string }[];
+    kinds: LinkKindName[];
+    links: Link[];
+  },
+): LinkHit[] {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const matches = (text: string) => {
+    const t = fold(text);
+    return words.every((w) => t.includes(w));
+  };
+  const names = new Map(data.lists.map((l) => [l.id, l.name]));
+  const nameOf = (id: string) => {
+    const v = viewOf(id);
+    return v ? VIEWS[v].label : (names.get(id) ?? "");
+  };
+  const arrow = (l: Link) => `${nameOf(l.from)} → ${nameOf(l.to)}`;
+  const known = data.links.filter((l) => nameOf(l.from) && nameOf(l.to));
+  const between = betweenLists(known);
+  const out: LinkHit[] = [];
+
+  for (const l of data.lists)
+    if (matches(l.name))
+      out.push({
+        group: "lijsten",
+        key: `lijst ${l.id}`,
+        select: l.id,
+        title: l.name,
+        detail: "",
+        nodes: [l.id],
+        links: [],
+      });
+
+  for (const k of data.kinds) {
+    if (!names.has(k.list) || !matches(k.name)) continue;
+    const word = new RegExp(`(^|[^\\p{L}\\p{N}])${escape(fold(k.name))}($|[^\\p{L}\\p{N}])`, "u");
+    const used = known.filter((l) => (l.from === k.list || l.to === k.list) && l.texts.some((t) => word.test(fold(t))));
+    const ends = betweenLists(used).flatMap((l) => [l.from, l.to]);
+    out.push({
+      group: "soorten",
+      key: `soort ${k.id}`,
+      select: k.list,
+      title: k.name,
+      detail: `Soort van ${names.get(k.list)}`,
+      nodes: [...new Set([k.list, ...ends])],
+      links: used.map(linkKey),
+    });
+  }
+
+  for (const l of known) {
+    for (const t of l.things ?? []) {
+      if (matches(t.name))
+        out.push({
+          group: "dingen",
+          key: `ding ${linkKey(l)} ${t.name}`,
+          select: l.to,
+          title: t.name,
+          detail: `${arrow(l)} · ${t.count}×`,
+          nodes: [l.from, l.to],
+          links: [linkKey(l)],
+        });
+    }
+  }
+
+  for (const l of between) {
+    const text = l.texts.find(matches);
+    if (text)
+      out.push({
+        group: "verbanden",
+        key: `verband ${linkKey(l)}`,
+        select: l.from,
+        title: arrow(l),
+        detail: text,
+        nodes: [l.from, l.to],
+        links: [linkKey(l)],
+      });
+  }
+
+  const views = known.filter((l) => !between.includes(l));
+  for (const v of VIEW_ORDER) {
+    const node = viewNode(v);
+    const ofView = views.filter((l) => l.from === node || l.to === node);
+    if (!ofView.length) continue;
+    const lists = ofView.map((l) => (l.from === node ? l.to : l.from));
+    if (matches(VIEWS[v].label)) {
+      out.push({
+        group: "weergaven",
+        key: `weergave ${v}`,
+        select: node,
+        title: VIEWS[v].label,
+        detail: lists.map(nameOf).join(", "),
+        nodes: [node, ...lists],
+        links: ofView.map(linkKey),
+      });
+      continue;
+    }
+    for (const l of ofView) {
+      const text = l.texts.find(matches);
+      const list = l.from === node ? l.to : l.from;
+      if (text)
+        out.push({
+          group: "weergaven",
+          key: `weergave ${linkKey(l)}`,
+          select: list,
+          title: arrow(l),
+          detail: text,
+          nodes: [list, node],
+          links: [linkKey(l)],
+        });
+    }
+  }
+  return out;
+}
+
+/** Wat oplicht bij een reeks treffers. */
+export function litBy(hits: LinkHit[]): {
+  nodes: Set<string>;
+  links: Set<string>;
+} {
+  return {
+    nodes: new Set(hits.flatMap((h) => h.nodes)),
+    links: new Set(hits.flatMap((h) => h.links)),
+  };
+}
+
+// ---------- de lijst: samenvatten, groeperen, sorteren, selecteren ----------
+
+/** Per lijst: met hoeveel lijsten iets binnenkomt en buitengaat, en in hoeveel weergaven ze staat. */
+export function linkSummary(links: Link[], id: string): { in: number; out: number; views: number } {
+  const between = betweenLists(links);
+  const ends = (pick: (l: Link) => string | null) => new Set(between.map(pick).filter((x) => x !== null)).size;
+  return {
+    in: ends((l) => (l.to === id ? l.from : null)),
+    out: ends((l) => (l.from === id ? l.to : null)),
+    views: viewsOf(links, id).length,
+  };
+}
+
+export const LINK_SORTS = {
+  eigen: "Eigen volgorde",
+  naam: "Naam",
+  verbanden: "Meeste verbanden",
+  laatst: "Laatst gebruikt",
+} as const;
+export type LinkSort = keyof typeof LINK_SORTS;
+
+/** Lijsten gesorteerd (`eigen`: zoals ze binnenkomen). Gelijk: op naam. */
+export function sortLinkLists<T extends { id: string; name: string }>(lists: T[], by: LinkSort, links: Link[], last: (id: string) => string | null): T[] {
+  if (by === "eigen") return lists;
+  const name = (a: T, b: T) => a.name.localeCompare(b.name, "nl");
+  if (by === "naam") return [...lists].sort(name);
+  if (by === "laatst") return [...lists].sort((a, b) => (last(b.id) ?? "").localeCompare(last(a.id) ?? "") || name(a, b));
+  const degree = (id: string) => links.filter((l) => l.from === id || l.to === id).length;
+  return [...lists].sort((a, b) => degree(b.id) - degree(a.id) || name(a, b));
+}
+
+export const LINK_GROUPS = {
+  tag: "Per tag",
+  soort: "Per soort verband",
+  weergave: "Per weergave",
+} as const;
+export type LinkGroupBy = keyof typeof LINK_GROUPS;
+
+/**
+ * Lijsten per soort verband (een lijst kan in meer groepen staan: Logboek en Verwijzingen; zonder een van beide: Enkel in
+ * weergaven, of Geen verbanden) of per weergave (dan In geen weergave). Lege groepen vallen weg.
+ */
+export function groupLinkLists(ids: string[], links: Link[], by: "soort" | "weergave"): { key: string; name: string; ids: string[] }[] {
+  const between = betweenLists(links);
+  const touches = (id: string, kind: LinkKind) => between.some((l) => l.kind === kind && (l.from === id || l.to === id));
+  const groups =
+    by === "soort"
+      ? [
+          {
+            key: "log",
+            name: LINK_KINDS.log.label,
+            ids: ids.filter((id) => touches(id, "log")),
+          },
+          {
+            key: "ref",
+            name: LINK_KINDS.ref.label,
+            ids: ids.filter((id) => touches(id, "ref")),
+          },
+          {
+            key: "weergaven",
+            name: "Enkel in weergaven",
+            ids: ids.filter((id) => !touches(id, "log") && !touches(id, "ref") && viewsOf(links, id).length > 0),
+          },
+          {
+            key: "geen",
+            name: "Geen verbanden",
+            ids: ids.filter((id) => !links.some((l) => l.from === id || l.to === id)),
+          },
+        ]
+      : [
+          ...VIEW_ORDER.map((v) => ({
+            key: v,
+            name: VIEWS[v].label,
+            ids: ids.filter((id) => viewsOf(links, id).includes(v)),
+          })),
+          {
+            key: "geen",
+            name: "In geen weergave",
+            ids: ids.filter((id) => !viewsOf(links, id).length),
+          },
+        ];
+  return groups.filter((g) => g.ids.length);
+}
+
+/** Tussen een selectie lijsten: de verbanden tussen twee ervan, en de weergaven waar er minstens twee in staan. */
+export function betweenSelection(links: Link[], ids: string[]): { links: Link[]; views: { view: ViewKey; lists: string[] }[] } {
+  const set = new Set(ids);
+  const views = new Map(ids.map((id) => [id, viewsOf(links, id)]));
+  return {
+    links: betweenLists(links).filter((l) => set.has(l.from) && set.has(l.to)),
+    views: VIEW_ORDER.map((view) => ({
+      view,
+      lists: ids.filter((id) => views.get(id)!.includes(view)),
+    })).filter((v) => v.lists.length > 1),
+  };
+}

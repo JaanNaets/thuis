@@ -50,6 +50,19 @@ export function formatDate(iso: string): string {
   return shortDate.format(parseLocalDate(iso));
 }
 
+const dayMonth = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short" });
+
+/** Een dag kort en dichtbij: "vandaag", "gisteren", "4 nov." (dit jaar) of "4 nov. 2025". */
+export function formatDay(iso: string): string {
+  const now = today();
+  if (iso.slice(0, 10) === now) return "vandaag";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (iso.slice(0, 10) === toIso(yesterday)) return "gisteren";
+  const date = parseLocalDate(iso.slice(0, 10));
+  return iso.slice(0, 4) === now.slice(0, 4) ? dayMonth.format(date) : shortDate.format(date);
+}
+
 export function today(): string {
   return toIso(new Date());
 }

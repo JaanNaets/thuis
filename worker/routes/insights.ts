@@ -6,7 +6,7 @@ import { computeLocal } from "../../shared/calc";
 import { canAgenda, MAX_AGENDA_DAYS, occurrences, daysApart } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
 import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
-import { buildLinks, linkProblems, type BoardUse, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
+import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
 import { isExpense, netBalance, settleUp, sharesOf, type MoneyEvent } from "../../shared/ledger";
 import { canEdit, dayOf, type EventView, type Role } from "../../shared/model";
 import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
@@ -321,7 +321,7 @@ insights.get("/links", async (c) => {
 
   const done = "MAX(CASE WHEN e.status != 'gepland' THEN substr(e.at, 1, 10) END)";
   const inLists = "(SELECT value FROM json_each(?1))";
-  const [logRows, lineRows, pairRows, thingRows] = (await db.batch([
+  const [logRows, lineRows, pairRows, thingLineRows, thingRows] = (await db.batch([
     db
       .prepare(
         `SELECT e.list_id AS list, e.kind, e.base, COUNT(*) AS events,
@@ -354,8 +354,17 @@ insights.get("/links", async (c) => {
          GROUP BY e.list_id, t.list_id`,
       )
       .bind(listIds),
+    // Welke dingen er in een verband zitten (enkel dingen van lijsten die je ziet).
+    db
+      .prepare(
+        `SELECT e.list_id AS list, t.list_id AS "to", t.id AS thing, t.name, COUNT(DISTINCT e.id) AS events
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
+         GROUP BY e.list_id, t.id`,
+      )
+      .bind(listIds),
     db.prepare(`SELECT list_id, COUNT(*) AS n FROM things WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
-  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<{ list_id: string; n: number }>];
+  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<LineThing>, D1Result<{ list_id: string; n: number }>];
 
   // Je overzichten: welke blokken een lijst tonen (een ding: zijn lijst).
   const boards = await boardsOf(db, me);
@@ -374,7 +383,7 @@ insights.get("/links", async (c) => {
     }),
   );
 
-  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, boards: uses });
+  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, things: thingLineRows.results, boards: uses });
 
   // Wie bij elke lijst is (zonder wie er rechtstreeks niet bij mag), en wat voor wie niet werkt.
   const peopleLists = lists.slice(0, LINK_PEOPLE_LISTS);
@@ -387,9 +396,16 @@ insights.get("/links", async (c) => {
   const problems = linkProblems(links, new Map(Object.entries(people)), managed);
 
   const counts: LinksResponse["counts"] = {};
-  for (const l of lists) counts[l.id] = { things: 0, events: 0 };
+  for (const l of lists) counts[l.id] = { things: 0, events: 0, last: null };
   for (const r of thingRows.results) counts[r.list_id].things = r.n;
-  for (const r of logRows.results) counts[r.list].events += r.events;
-  return c.json({ links, own, counts, people, problems } satisfies LinksResponse);
+  for (const r of logRows.results) {
+    const count = counts[r.list];
+    count.events += r.events;
+    if (r.last && (!count.last || r.last > count.last)) count.last = r.last;
+  }
+  // De eigen soorten van je lijsten (om op te zoeken).
+  const open = new Set(lists.map((l) => l.id));
+  const seenKinds = kinds.filter((k) => open.has(k.list_id)).map((k) => ({ id: k.id, list: k.list_id, name: k.name }));
+  return c.json({ links, own, counts, people, problems, kinds: seenKinds } satisfies LinksResponse);
 });
 

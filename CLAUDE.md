@@ -96,7 +96,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
   (`keepReachable`).
 - **Verbanden** (`shared/links.ts`, `GET /insights/links`, `/verbanden`): hoe je lijsten samenhangen (verwijzingen,
-  wat er gelogd is tussen lijsten, de weergaven), enkel wat de lezer ziet, met wat voor iemand niet werkt. **Een nieuwe
+  wat er gelogd is tussen lijsten, met welke dingen, de weergaven), enkel wat de lezer ziet, met wat voor iemand niet
+  werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
+  (getest); de keuze staat in het adres (`?lijst=`, `?keuze=`, `?groep=`, `?sort=`). **Een nieuwe
   eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok beslis je in de `…_LINKS`-tabellen** (TypeScript
   dwingt het af; wat verbindt, krijgt een voorbeeld in `test/links.test.ts`).
 - **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een

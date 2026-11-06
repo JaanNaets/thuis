@@ -1,16 +1,27 @@
-// De verbanden (zie shared/links.ts): als metrokaart (kolommen = tags, stations = lijsten, sporen = verbanden tussen
-// lijsten, de weergaven als kleine iconen bij elk station), als lijst, en wat één gekozen lijst of weergave binnenkrijgt
-// en doorgeeft. De schikking komt uit `layoutLinks`; hier wordt ze enkel getekend.
+// De verbanden (zie shared/links.ts) als metrokaart (kolommen = tags, stations = lijsten, sporen = verbanden tussen
+// lijsten, de weergaven als een regel tekst bij elk station) en als schema van één lijst (gsm). De schikking komt uit
+// `layoutLinks`; hier wordt ze enkel getekend. De rest (lijst, paneel, zoeken, selectie) staat in LinkParts/LinkList.
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { AGENDA_NOTE, betweenLists, layoutLinks, viewOf, viewsOf, VIEWS, type Link as LinkDef, type LinkKind, type LinkProblem, type LinksResponse, type ViewKey } from "../../shared/links";
-import { ROLES, type ListNode } from "../../shared/model";
+import {
+  betweenLists,
+  layoutLinks,
+  linkKey,
+  viewOf,
+  viewsOf,
+  VIEWS,
+  type Link as LinkDef,
+  type LinkKind,
+  type LinkProblem,
+  type LinksResponse,
+  type ViewKey,
+} from "../../shared/links";
+import type { ListNode } from "../../shared/model";
+import { formatDay } from "../format";
 import { listIcon, listTone } from "../lists";
-import { Link } from "../router";
-import { CardHead } from "./Controls";
-import { Icon, type IconName } from "./Icon";
+import type { IconName } from "./Icon";
 
-/** Het icoon van een weergave (op de kaart en in de lijst). */
+/** Het icoon van een weergave (in de lijst, het paneel en de treffers). */
 export const VIEW_ICONS: Record<ViewKey, IconName> = {
   geld: "wallet",
   balans: "transfer",
@@ -27,7 +38,14 @@ export const VIEW_ICONS: Record<ViewKey, IconName> = {
   overzicht: "project",
 };
 
-export type MapColumn = { key: string; name: string; tone: string | null; lists: ListNode[] };
+export type MapColumn = {
+  key: string;
+  name: string;
+  tone: string | null;
+  lists: ListNode[];
+};
+/** Wat oplicht op de kaart (zoeken, je selectie): punten en sporen (`linkKey`). */
+export type Lit = { nodes: Set<string>; links: Set<string> };
 
 // Maten van de kaart (px, op ware grootte).
 const SLOT = 132;
@@ -37,19 +55,36 @@ const FIRST = 112;
 const FIRST_ALONE = 64;
 const ROW = 112;
 const LANE = 7;
-const ICON = 12;
-const ICON_STEP = 16;
+/** Zoveel tekens passen er in de regel met weergaven onder een station. */
+const VIEW_CHARS = 21;
 /** Kleiner dan dit schaalt de kaart niet: dan schuift ze binnen haar vlak. */
 const MIN_SCALE = 0.72;
+const HOVER_WIDTH = 240;
 
-const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
-const plural = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
+export const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
+export const plural = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
 
 /** Wat er bij een lijst staat: hoeveel dingen (of gebeurtenissen, voor een lijst zonder dingen). */
-export function listMeta(list: ListNode, counts: LinksResponse["counts"]): string {
+export function listMeta(list: Pick<ListNode, "id" | "one">, counts: LinksResponse["counts"]): string {
   const c = counts[list.id];
   if (!c) return "";
   return list.one ? plural(c.things, "ding", "dingen") : plural(c.events, "gebeurtenis", "gebeurtenissen");
+}
+
+/** "laatst gisteren", of niets als er nog niets gebeurd is. */
+export const lastText = (last: string | null | undefined) => (last ? `laatst ${formatDay(last)}` : "");
+
+/** De weergaven als één korte regel: zoveel namen als er passen, dan "+3". */
+export function viewsLine(views: ViewKey[], max = VIEW_CHARS): string {
+  const labels = views.map((v) => VIEWS[v].label);
+  let text = "";
+  for (let i = 0; i < labels.length; i++) {
+    const next = text ? `${text} · ${labels[i]}` : labels[i];
+    const rest = labels.length - i - 1;
+    if (next.length + (rest ? ` · +${rest}`.length : 0) > max) return text ? `${text} · +${labels.length - i}` : `${cut(labels[i], max - 4)} · +${rest}`;
+    text = next;
+  }
+  return text;
 }
 
 /** Een stukje lijn in de kleur en het patroon van een soort verband (filters, rijen). */
@@ -60,6 +95,29 @@ export function LinkSwatch({ kind }: { kind: LinkKind }) {
     </svg>
   );
 }
+
+type End = { id: string; name: string; icon: IconName; tone: string | null };
+
+/** Hoe een lijst of weergave heet en eruitziet in een rij. */
+export function endOf(id: string, byId: Map<string, ListNode>): End | null {
+  const view = viewOf(id);
+  if (view) return { id, name: VIEWS[view].label, icon: VIEW_ICONS[view], tone: null };
+  const list = byId.get(id);
+  return list ? { id, name: list.name, icon: listIcon(list), tone: listTone(list) } : null;
+}
+
+/** Verbanden per ander eind (een lijst of weergave), in de volgorde waarin ze voorkomen. */
+export function byOther(links: LinkDef[], id: string): [string, LinkDef[]][] {
+  const out = new Map<string, LinkDef[]>();
+  for (const l of links) {
+    const other = l.from === id ? l.to : l.from;
+    out.set(other, [...(out.get(other) ?? []), l]);
+  }
+  return [...out];
+}
+
+/** Hoeveel gebeurtenissen een reeks verbanden samen telt. */
+export const total = (ls: LinkDef[]) => ls.reduce((a, l) => a + (l.count ?? 0), 0);
 
 /** De breedte van het vlak waar de kaart in staat (om ze passend te schalen). */
 function useWidth() {
@@ -79,7 +137,9 @@ function useWidth() {
 /**
  * De metrokaart. Elke lijst waar een verband in toekomt, krijgt een eigen rij; een lijn loopt verticaal bij de lijst
  * waar ze vertrekt en dan horizontaal naar haar doel, op een eigen baan per soort. Een verband dat voor iemand niet
- * werkt, is rood gestreept. Onder elke lijst de weergaven waar ze in voorkomt (als `views` aanstaat).
+ * werkt, is rood gestreept. Onder elke lijst de weergaven waar ze in voorkomt (als `views` aanstaat). Een gekozen lijst,
+ * of anders wat `lit` aanwijst (zoeken, je selectie), licht op; de rest wordt dof. Met de muis boven een station: een
+ * kaartje met wat erin toekomt en waar het naartoe gaat.
  */
 export function LinkMapView({
   columns,
@@ -88,6 +148,7 @@ export function LinkMapView({
   counts,
   problems,
   selected,
+  lit,
   onSelect,
 }: {
   columns: MapColumn[];
@@ -98,11 +159,14 @@ export function LinkMapView({
   counts: LinksResponse["counts"];
   problems: LinkProblem[];
   selected: string | null;
+  lit: Lit | null;
   onSelect: (id: string | null) => void;
 }) {
   const [ref, available] = useWidth();
+  const [hover, setHover] = useState<string | null>(null);
   const columnIds = columns.map((c) => c.key);
   const nodes = columns.flatMap((c) => c.lists.map((l) => ({ id: l.id, column: c.key, list: l })));
+  const named = new Map(nodes.map((n) => [n.id, n.list]));
   const between = betweenLists(active);
   // Elke lijst staat op de kaart: zonder spoor op de eerste vrije rij van haar kolom (met haar weergaven, of leeg).
   const layout = layoutLinks(
@@ -136,14 +200,19 @@ export function LinkMapView({
 
   const at = (id: string) => {
     const p = layout.places.get(id)!;
-    return { x: colX[p.col] + PAD + p.slot * SLOT + SLOT / 2, y: rowY[p.row], row: p.row };
+    return {
+      x: colX[p.col] + PAD + p.slot * SLOT + SLOT / 2,
+      y: rowY[p.row],
+      row: p.row,
+    };
   };
   const laneOf = (l: LinkDef) => {
     const row = layout.places.get(l.to)!.row;
     return rowY[row] + Math.max(0, layout.rows[row].kinds.indexOf(l.kind)) * LANE;
   };
-  const lit = selected ? new Set([selected, ...links.filter((l) => l.from === selected || l.to === selected).flatMap((l) => [l.from, l.to])]) : null;
-  const isLit = (l: LinkDef) => !selected || l.from === selected || l.to === selected;
+  // Wat oplicht: de gekozen lijst en haar buren, of anders wat zoeken of je selectie aanwijst.
+  const litNodes = selected ? new Set([selected, ...links.filter((l) => l.from === selected || l.to === selected).flatMap((l) => [l.from, l.to])]) : (lit?.nodes ?? null);
+  const isLit = (l: LinkDef) => (selected ? l.from === selected || l.to === selected : lit ? lit.links.has(linkKey(l)) : true);
 
   const path = (l: LinkDef) => {
     const a = at(l.from);
@@ -166,287 +235,204 @@ export function LinkMapView({
 
   return (
     <div className="linkmap" ref={ref}>
-      <svg
-        width={width * scale}
-        height={height * scale}
-        viewBox={`0 0 ${width} ${height}`}
-        role="group"
-        aria-label="Kaart van je verbanden"
-        onClick={(e) => e.target === e.currentTarget && onSelect(null)}
-      >
-        {used.map((cid) => {
-          const i = columnIds.indexOf(cid);
-          const column = columns[i];
-          return (
-            <g key={cid} className={`lm-column${column.tone ? ` tone-${column.tone}` : ""}`}>
-              <rect x={colX[i]} y={0} width={widths[i]} height={height} rx={14} />
-              <circle cx={colX[i] + 18} cy={24} r={4} className="lm-column-dot" />
-              <text x={colX[i] + 28} y={28} className="lm-column-name">
-                {cut(column.name.toUpperCase(), Math.floor((widths[i] - 34) / 8))}
-              </text>
-            </g>
-          );
-        })}
-
-        {links.map((l) => (
-          <path
-            key={`${l.kind}-${l.from}-${l.to}`}
-            d={path(l)}
-            className={`lm-line lm-track lm-${l.kind}${broken.has(`${l.from}|${l.to}`) ? " lm-problem" : ""}${isLit(l) ? "" : " lm-dim"}`}
-          />
-        ))}
-
-        {shown.map((n) => {
-          const { x, y, row } = at(n.id);
-          const lanes = lanesOf(row);
-          const hub = links.some((l) => l.to === n.id);
-          const s = hub ? 22 : 16;
-          const kinds = kindsAt(n.id);
-          const ring =
-            kinds.size === 1 ? `lm-station lm-${[...kinds][0]}` : kinds.size > 1 ? "lm-station lm-mixed" : active.some((l) => l.from === n.id || l.to === n.id) ? "lm-station lm-alone" : "lm-station lm-empty";
-          const bottom = y + s / 2 + (lanes - 1) * LANE;
-          const rows = links.filter((l) => l.from === n.id).map((l) => layout.places.get(l.to)!.row);
-          const down = rows.some((r) => r > row);
-          const up = rows.some((r) => r < row);
-          const meta = cut(listMeta(n.list, counts), 18);
-          const icons = views ? viewsOf(active, n.id) : [];
-          // De naam staat onder het punt, boven als er een lijn naar beneden vertrekt, en opzij als er lijnen naar
-          // boven én beneden gaan (aan de kant waar geen lijn op deze rij loopt).
-          const sideways = (dir: 1 | -1) =>
-            links.some(
-              (l) =>
-                // Wat hier toekomt, rijdt op deze rij; wat vertrekt, enkel als het doel op dezelfde rij staat.
-                (l.to === n.id && Math.sign(at(l.from).x - x) === dir) ||
-                (l.from === n.id && at(l.to).row === row && Math.sign(at(l.to).x - x) === dir),
+      <div className="lm-canvas" style={{ width: width * scale, height: height * scale }}>
+        <svg
+          width={width * scale}
+          height={height * scale}
+          viewBox={`0 0 ${width} ${height}`}
+          role="group"
+          aria-label="Kaart van je verbanden"
+          onClick={(e) => e.target === e.currentTarget && onSelect(null)}
+        >
+          {used.map((cid) => {
+            const i = columnIds.indexOf(cid);
+            const column = columns[i];
+            return (
+              <g key={cid} className={`lm-column${column.tone ? ` tone-${column.tone}` : ""}`}>
+                <rect x={colX[i]} y={0} width={widths[i]} height={height} rx={14} />
+                <circle cx={colX[i] + 18} cy={24} r={4} className="lm-column-dot" />
+                <text x={colX[i] + 28} y={28} className="lm-column-name">
+                  {cut(column.name.toUpperCase(), Math.floor((widths[i] - 34) / 8))}
+                </text>
+              </g>
             );
-          const place = down && up ? (!sideways(1) ? "right" : !sideways(-1) ? "left" : "below") : down ? "above" : "below";
-          const tx = place === "right" ? x + s / 2 + 8 : place === "left" ? x - s / 2 - 8 : x;
-          const ty = place === "right" || place === "left" ? y + 4 : place === "above" ? y - s / 2 - 24 - (icons.length ? 18 : 0) : bottom + 18;
-          const anchor = place === "right" ? "start" : place === "left" ? "end" : "middle";
-          // De weergaven: een rij kleine iconen onder de naam.
-          const shownIcons = icons.slice(0, Math.max(1, Math.floor((SLOT - 8) / ICON_STEP)));
-          const iconsWidth = shownIcons.length * ICON_STEP - (ICON_STEP - ICON);
-          const ix = anchor === "start" ? tx : anchor === "end" ? tx - iconsWidth : tx - iconsWidth / 2;
-          const iy = ty + 22;
-          const on = selected === n.id;
-          return (
-            <g
-              key={n.id}
-              className={`lm-node tone-${listTone(n.list)}${lit && !lit.has(n.id) ? " lm-dim" : ""}`}
-              role="button"
-              tabIndex={0}
-              aria-pressed={on}
-              aria-label={`${n.list.name}${meta ? `, ${meta}` : ""}${icons.length ? `, in ${icons.map((v) => VIEWS[v].label).join(", ")}` : ""}`}
-              onClick={() => onSelect(on ? null : n.id)}
-              onKeyDown={(e) => key(e, n.id)}
-            >
-              <rect className={`lm-halo${on ? " on" : ""}`} x={x - s / 2 - 8} y={y - s / 2 - 8} width={s + 16} height={s + 16 + (lanes - 1) * LANE} rx={(s + 16) / 2} />
-              <rect className={ring} x={x - s / 2} y={y - s / 2} width={s} height={s + (lanes - 1) * LANE} rx={s / 2} strokeWidth={hub ? 5 : 3} />
-              <text x={tx} y={ty} textAnchor={anchor} className="lm-name">
-                {cut(n.list.name, 16)}
-                <title>{n.list.name}</title>
-              </text>
-              <text x={tx} y={ty + 15} textAnchor={anchor} className="lm-meta">
-                {meta}
-              </text>
-              {shownIcons.map((v, i) => (
-                <g key={v} transform={`translate(${ix + i * ICON_STEP} ${iy})`} className="lm-view-icon">
-                  <title>{VIEWS[v].label}</title>
-                  <Icon name={VIEW_ICONS[v]} size={ICON} />
-                </g>
-              ))}
-            </g>
-          );
-        })}
-      </svg>
+          })}
+
+          {links.map((l) => (
+            <path
+              key={linkKey(l)}
+              d={path(l)}
+              className={`lm-line lm-track lm-${l.kind}${broken.has(`${l.from}|${l.to}`) ? " lm-problem" : ""}${isLit(l) ? "" : " lm-dim"}`}
+            />
+          ))}
+
+          {shown.map((n) => {
+            const { x, y, row } = at(n.id);
+            const lanes = lanesOf(row);
+            const hub = links.some((l) => l.to === n.id);
+            const s = hub ? 22 : 16;
+            const kinds = kindsAt(n.id);
+            const ring =
+              kinds.size === 1
+                ? `lm-station lm-${[...kinds][0]}`
+                : kinds.size > 1
+                  ? "lm-station lm-mixed"
+                  : active.some((l) => l.from === n.id || l.to === n.id)
+                    ? "lm-station lm-alone"
+                    : "lm-station lm-empty";
+            const bottom = y + s / 2 + (lanes - 1) * LANE;
+            const rows = links.filter((l) => l.from === n.id).map((l) => layout.places.get(l.to)!.row);
+            const down = rows.some((r) => r > row);
+            const up = rows.some((r) => r < row);
+            const meta = cut(listMeta(n.list, counts), 18);
+            const ofList = views ? viewsOf(active, n.id) : [];
+            // De naam staat onder het punt, boven als er een lijn naar beneden vertrekt, en opzij als er lijnen naar
+            // boven én beneden gaan (aan de kant waar geen lijn op deze rij loopt).
+            const sideways = (dir: 1 | -1) =>
+              links.some(
+                (l) =>
+                  // Wat hier toekomt, rijdt op deze rij; wat vertrekt, enkel als het doel op dezelfde rij staat.
+                  (l.to === n.id && Math.sign(at(l.from).x - x) === dir) || (l.from === n.id && at(l.to).row === row && Math.sign(at(l.to).x - x) === dir),
+              );
+            const place = down && up ? (!sideways(1) ? "right" : !sideways(-1) ? "left" : "below") : down ? "above" : "below";
+            const tx = place === "right" ? x + s / 2 + 8 : place === "left" ? x - s / 2 - 8 : x;
+            const ty = place === "right" || place === "left" ? y + 4 : place === "above" ? y - s / 2 - 24 - (ofList.length ? 18 : 0) : bottom + 18;
+            const anchor = place === "right" ? "start" : place === "left" ? "end" : "middle";
+            const line = viewsLine(ofList);
+            const on = selected === n.id;
+            const hit = !selected && lit?.nodes.has(n.id);
+            return (
+              <g
+                key={n.id}
+                className={`lm-node tone-${listTone(n.list)}${litNodes && !litNodes.has(n.id) ? " lm-dim" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-pressed={on}
+                aria-label={`${n.list.name}${meta ? `, ${meta}` : ""}${ofList.length ? `, in ${ofList.map((v) => VIEWS[v].label).join(", ")}` : ""}`}
+                onClick={() => onSelect(on ? null : n.id)}
+                onKeyDown={(e) => key(e, n.id)}
+                onPointerEnter={(e) => e.pointerType === "mouse" && setHover(n.id)}
+                onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}
+              >
+                <rect
+                  className={`lm-halo${on ? " on" : hit ? " hit" : ""}`}
+                  x={x - s / 2 - 8}
+                  y={y - s / 2 - 8}
+                  width={s + 16}
+                  height={s + 16 + (lanes - 1) * LANE}
+                  rx={(s + 16) / 2}
+                />
+                <rect className={ring} x={x - s / 2} y={y - s / 2} width={s} height={s + (lanes - 1) * LANE} rx={s / 2} strokeWidth={hub ? 5 : 3} />
+                <text x={tx} y={ty} textAnchor={anchor} className="lm-name">
+                  {cut(n.list.name, 16)}
+                </text>
+                <text x={tx} y={ty + 15} textAnchor={anchor} className="lm-meta">
+                  {meta}
+                </text>
+                {line && (
+                  <text x={tx} y={ty + 31} textAnchor={anchor} className="lm-views">
+                    <tspan className="lm-views-dot">●</tspan> {line}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+        {hover && hover !== selected && layout.places.has(hover) && (
+          <HoverCard id={hover} links={active} named={named} counts={counts} x={at(hover).x * scale} y={at(hover).y * scale} width={width * scale} />
+        )}
+      </div>
     </div>
   );
 }
 
-/** Wat een verband doet, in een zin per veld, soort of rol. */
-const linkText = (l: LinkDef) => l.texts.join(" · ");
-
-type End = { id: string; name: string; icon: IconName; tone: string | null };
-
-/** Eén rij per ander eind (een lijst of weergave), met al de verbanden ertussen. */
-function EndRow({ end, links, onSelect }: { end: End; links: LinkDef[]; onSelect: (id: string) => void }) {
-  const count = links.reduce((a, l) => (l.count === null ? a : a + l.count), 0);
-  return (
-    <li>
-      <button type="button" className="row" onClick={() => onSelect(end.id)}>
-        <span className="cell-main">
-          <span className={`row-media${end.tone ? ` tone-${end.tone}` : ""}`}>
-            <Icon name={end.icon} size={16} />
-          </span>
-          <span className="row-main">
-            <span className="row-title lm-row-title">
-              {end.name}
-              <span className="lm-swatches">
-                {[...new Set(links.map((l) => l.kind))].map((k) => (
-                  <LinkSwatch key={k} kind={k} />
-                ))}
-              </span>
-            </span>
-            <span className="row-meta">
-              <span>{links.map(linkText).join(" · ")}</span>
-            </span>
-          </span>
-        </span>
-        {count > 0 && <span className="row-end num">{count}×</span>}
-        <Icon name="next" size={16} className="row-chevron" />
-      </button>
-    </li>
-  );
-}
-
-/** Verbanden per ander eind. */
-function byOther(links: LinkDef[], id: string): [string, LinkDef[]][] {
-  const out = new Map<string, LinkDef[]>();
-  for (const l of links) {
-    const other = l.from === id ? l.to : l.from;
-    out.set(other, [...(out.get(other) ?? []), l]);
-  }
-  return [...out];
-}
-
-/** Hoe een lijst of weergave heet en eruitziet in een rij. */
-export function endOf(id: string, byId: Map<string, ListNode>): End | null {
-  const view = viewOf(id);
-  if (view) return { id, name: VIEWS[view].label, icon: VIEW_ICONS[view], tone: null };
-  const list = byId.get(id);
-  return list ? { id, name: list.name, icon: listIcon(list), tone: listTone(list) } : null;
-}
-
-/**
- * Eén gekozen lijst of weergave: wat erin toekomt en waar ze naartoe gaat (per ander eind één rij), de weergaven, wat
- * ze met haar eigen dingen doet en wie erbij is.
- */
-export function LinkDetail({
+/** Het kaartje bij een station onder de muis: wat erin toekomt, waar het naartoe gaat, de weergaven. */
+function HoverCard({
   id,
-  data,
   links,
-  byId,
-  onSelect,
-  schema = false,
+  named,
+  counts,
+  x,
+  y,
+  width,
 }: {
   id: string;
-  data: LinksResponse;
   links: LinkDef[];
-  byId: Map<string, ListNode>;
-  onSelect: (id: string) => void;
-  /** Bovenaan een klein schema (op gsm, waar de kaart te klein is). */
-  schema?: boolean;
+  named: Map<string, ListNode>;
+  counts: LinksResponse["counts"];
+  x: number;
+  y: number;
+  width: number;
 }) {
-  const view = viewOf(id);
-  const list = byId.get(id);
-  const mine = links.filter((l) => l.from === id || l.to === id);
-  const isView = (l: LinkDef) => viewOf(l.from === id ? l.to : l.from) !== null;
-  const incoming = byOther(
-    mine.filter((l) => l.to === id && !isView(l)),
+  const list = named.get(id);
+  if (!list) return null;
+  const between = betweenLists(links).filter((l) => (l.from === id && named.has(l.to)) || (l.to === id && named.has(l.from)));
+  const ins = byOther(
+    between.filter((l) => l.to === id),
     id,
   );
-  const outgoing = byOther(
-    mine.filter((l) => l.from === id && !isView(l)),
+  const outs = byOther(
+    between.filter((l) => l.from === id),
     id,
   );
-  const views = byOther(mine.filter(isView), id);
-  const own = list ? (data.own[id] ?? []) : [];
-  const people = list ? (data.people[id] ?? []) : [];
-  const to = view ? VIEWS[view].to : list ? `/lijsten/${list.id}` : null;
-
-  const rows = (entries: [string, LinkDef[]][]) =>
-    entries.flatMap(([other, ls]) => {
-      const end = endOf(other, byId);
-      return end ? [<EndRow key={other} end={end} links={ls} onSelect={onSelect} />] : [];
-    });
-  const head = (label: string, n: number) => (
-    <li className="group-row">
-      {label} <span className="group-count">{n}</span>
-    </li>
+  const views = viewsOf(links, id);
+  const meta = [listMeta(list, counts), lastText(counts[id]?.last)].filter(Boolean).join(" · ");
+  const left = x + 28 + HOVER_WIDTH > width ? Math.max(0, x - 28 - HOVER_WIDTH) : x + 28;
+  const row = (arrow: string, [other, ls]: [string, LinkDef[]]) => (
+    <span key={`${arrow}${other}`} className="lm-hover-row">
+      <LinkSwatch kind={ls[0].kind} />
+      <span className="lm-hover-name">
+        {arrow} {named.get(other)?.name}
+      </span>
+      {total(ls) > 0 && <span className="num">{total(ls)}×</span>}
+    </span>
   );
-  const textRow = (icon: IconName, text: string, tone: string | null, title?: string) => (
-    <li>
-      <div className="row">
-        <span className="cell-main">
-          <span className={`row-media${tone ? ` tone-${tone}` : ""}`}>
-            <Icon name={icon} size={16} />
-          </span>
-          <span className="row-main">
-            {title && <span className="row-title">{title}</span>}
-            <span className="row-meta">
-              <span>{text}</span>
-            </span>
-          </span>
-        </span>
-      </div>
-    </li>
-  );
-
   return (
-    <section className="card lm-detail">
-      <CardHead
-        title={view ? VIEWS[view].label : (list?.name ?? "")}
-        description={list ? listMeta(list, data.counts) : undefined}
-        action={
-          to ? (
-            <Link to={to} className="btn btn-outline btn-sm">
-              Openen
-            </Link>
-          ) : undefined
-        }
-      />
-      {schema && (incoming.length > 0 || outgoing.length > 0) && (
-        <LinkSchema id={id} incoming={incoming} outgoing={outgoing} views={viewsOf(links, id)} data={data} byId={byId} onSelect={onSelect} />
+    <div className="lm-hover" style={{ left, top: Math.max(0, y - 24), width: HOVER_WIDTH }} aria-hidden="true">
+      <strong>{list.name}</strong>
+      {meta && <span className="lm-hover-meta">{meta}</span>}
+      {(ins.length > 0 || outs.length > 0) && (
+        <span className="lm-hover-rows">
+          {ins.slice(0, 3).map((e) => row("←", e))}
+          {outs.slice(0, 3).map((e) => row("→", e))}
+        </span>
       )}
-      <ul className="rows">
-        {incoming.length > 0 && head("Komt van", incoming.length)}
-        {rows(incoming)}
-        {outgoing.length > 0 && head("Gaat naar", outgoing.length)}
-        {rows(outgoing)}
-        {views.length > 0 && head("Weergaven", views.length)}
-        {rows(views)}
-        {view === "agenda" && textRow("calendar", AGENDA_NOTE, null, "Al je lijsten")}
-        {own.length > 0 && head("In de lijst zelf", own.length)}
-        {own.length > 0 && textRow("repeat", own.join(" · "), list ? listTone(list) : null)}
-        {people.length > 0 && head("Wie", people.length)}
-        {people.length > 0 &&
-          textRow(
-            "users",
-            people.map((p) => `${p.name}, ${ROLES[p.role].label.toLowerCase()}${p.via ? ` via ${p.via}` : ""}`).join(" · "),
-            null,
-          )}
-        {!mine.length && !own.length && view !== "agenda" && (
-          <li>
-            <div className="row">
-              <span className="cell-main">
-                <span className="row-title muted">Nog geen verbanden</span>
-              </span>
-            </div>
-          </li>
-        )}
-      </ul>
-    </section>
+      {views.length > 0 && <span className="lm-hover-meta">{views.map((v) => VIEWS[v].label).join(" · ")}</span>}
+    </div>
   );
 }
 
 // ---------- het schema van één lijst (gsm) ----------
 
-const W = 320; // breedte (het schema schaalt mee tot de breedte van de kaart)
-const PER_ROW = 4;
-const S_LINE = 10; // afronding van een bocht
+const W = 340; // breedte (het schema schaalt mee tot de breedte van de kaart)
+const SIDE_X = 42;
+const PER_SIDE = 4;
+const STEP = 58;
+const TOP = 34;
+const STOPS = 6;
+
+/** Een lijn die horizontaal vertrekt, in het midden haakt en horizontaal aankomt (met afgeronde bochten). */
+function elbow(x1: number, y1: number, x2: number, y2: number): string {
+  if (Math.abs(y1 - y2) < 1) return `M ${x1} ${y1} H ${x2}`;
+  const mx = (x1 + x2) / 2;
+  const dx = Math.sign(x2 - x1) || 1;
+  const dy = Math.sign(y2 - y1);
+  const r = Math.min(10, Math.abs(y2 - y1) / 2, Math.abs(mx - x1));
+  return `M ${x1} ${y1} H ${mx - dx * r} Q ${mx} ${y1} ${mx} ${y1 + dy * r} V ${y2 - dy * r} Q ${mx} ${y2} ${mx + dx * r} ${y2} H ${x2}`;
+}
 
 /**
- * Het schema van één lijst of weergave (op gsm, waar de kaart te klein is om te lezen of aan te tikken): bovenaan waar
- * iets vandaan komt, in het midden de lijst zelf (met haar weergaven), onderaan waar het naartoe gaat. De sporen zoals
- * op de kaart: eerst verticaal, dan horizontaal, een baan per soort, rood gestreept als het voor iemand niet werkt.
- * Een tik op een station kiest die lijst. Meer dan vier aan een kant: de drie met het meeste, en hoeveel er nog zijn.
+ * Het schema van één lijst of weergave (op gsm, waar de kaart te klein is): links waar iets vandaan komt, rechts waar
+ * het naartoe gaat, in het midden de lijst zelf, met op elke lijn hoe vaak; de weergaven als haltes op een groene
+ * stippellijn eronder. Rood gestreept als het voor iemand niet werkt. Een tik op een station kiest die lijst. Meer dan
+ * vier aan een kant: de drie met het meeste, en hoeveel er nog zijn.
  */
-function LinkSchema({
+export function LinkSchema({
   id,
   incoming,
   outgoing,
   views,
-  data,
+  problems,
   byId,
   onSelect,
 }: {
@@ -454,240 +440,150 @@ function LinkSchema({
   incoming: [string, LinkDef[]][];
   outgoing: [string, LinkDef[]][];
   views: ViewKey[];
-  data: LinksResponse;
+  problems: LinkProblem[];
   byId: Map<string, ListNode>;
   onSelect: (id: string) => void;
 }) {
-  const total = (ls: LinkDef[]) => ls.reduce((a, l) => a + (l.count ?? 0), 0);
   const side = (entries: [string, LinkDef[]][]) => {
     const sorted = [...entries].sort((a, b) => total(b[1]) - total(a[1]));
-    return sorted.length > PER_ROW ? { shown: sorted.slice(0, PER_ROW - 1), more: sorted.length - (PER_ROW - 1) } : { shown: sorted, more: 0 };
+    return sorted.length > PER_SIDE
+      ? {
+          shown: sorted.slice(0, PER_SIDE - 1),
+          more: sorted.length - (PER_SIDE - 1),
+        }
+      : { shown: sorted, more: 0 };
   };
-  const top = side(incoming);
-  const bottom = side(outgoing);
-  const broken = new Set(data.problems.map((p) => `${p.list}|${p.to}`));
+  const left = side(incoming);
+  const right = side(outgoing);
+  const broken = new Set(problems.map((p) => `${p.list}|${p.to}`));
+  const brokenEnd = new Set(problems.flatMap((p) => (p.list === id ? [p.to] : p.to === id ? [p.list] : [])));
+  const rowsOf = (s: typeof left) => s.shown.length + (s.more ? 1 : 0);
+  const rows = Math.max(1, rowsOf(left), rowsOf(right));
+  const cx = W / 2;
+  const cy = TOP + ((rows - 1) * STEP) / 2;
+  const yOf = (i: number, n: number) => cy + (i - (n - 1) / 2) * STEP;
   const kinds = [...new Set([...incoming, ...outgoing].flatMap(([, ls]) => ls.map((l) => l.kind)))].sort((a, b) => (a === b ? 0 : a === "ref" ? -1 : 1));
-  const lane = (k: LinkKind) => Math.max(0, kinds.indexOf(k)) * LANE;
-  const trunk = (k: LinkKind) => W / 2 + (kinds.indexOf(k) - (kinds.length - 1) / 2) * LANE;
-
-  const hasTop = top.shown.length > 0;
-  const hasBottom = bottom.shown.length > 0;
-  const topStation = 50;
-  const topBus = 80;
-  const center = hasTop ? 116 : 24;
-  const bottomBus = center + 52;
-  const bottomStation = bottomBus + 30;
-  const height = hasBottom ? bottomStation + 46 : center + (views.length ? 52 : 36);
-  const xs = (n: number) => Array.from({ length: n }, (_, i) => (W * (i + 0.5)) / n);
-  const slots = (shown: number, more: number) => xs(shown + (more ? 1 : 0));
-
-  const down = (x1: number, y1: number, bus: number, x2: number, y2: number) => {
-    if (Math.abs(x1 - x2) < 1) return `M ${x1} ${y1} V ${y2}`;
-    const dir = Math.sign(x2 - x1);
-    const r = Math.min(S_LINE, Math.abs(x2 - x1) / 2);
-    return `M ${x1} ${y1} V ${bus - r} Q ${x1} ${bus} ${x1 + dir * r} ${bus} H ${x2 - dir * r} Q ${x2} ${bus} ${x2} ${bus + r} V ${y2}`;
+  const lane = (k: LinkKind) => (Math.max(0, kinds.indexOf(k)) - (kinds.length - 1) / 2) * LANE;
+  const half = 11 + ((kinds.length || 1) - 1) * (LANE / 2);
+  const lowest = TOP + (rows - 1) * STEP + 34;
+  const shownViews = views.length > STOPS ? views.slice(0, STOPS - 1) : views;
+  const moreViews = views.length - shownViews.length;
+  const stops = shownViews.length + (moreViews ? 1 : 0);
+  const bus = lowest + 22;
+  const height = stops ? bus + 46 : lowest + 6;
+  const stopX = (i: number) => 16 + ((W - 32) * (i + 0.5)) / stops;
+  // Een naam aan de rand schuift naar binnen in plaats van eraf te vallen.
+  const stopLabel = (i: number, text: string) => {
+    const x = stopX(i);
+    const w = text.length * 6.2;
+    return x - w / 2 < 2 ? { x: x - 6, anchor: "start" as const } : x + w / 2 > W - 2 ? { x: x + 6, anchor: "end" as const } : { x, anchor: "middle" as const };
   };
+  const centerEnd = endOf(id, byId);
 
-  const station = (other: string, ls: LinkDef[], x: number, y: number, labelAbove: boolean) => {
+  const lines = (entries: typeof left, fromSide: boolean) =>
+    entries.shown.flatMap(([other, ls], i) => {
+      const y = yOf(i, rowsOf(entries));
+      const x = fromSide ? SIDE_X : W - SIDE_X;
+      return ls.map((l) => {
+        const o = lane(l.kind);
+        const d = fromSide ? elbow(x + 8, y + o, cx - 11, cy + o) : elbow(cx + 11, cy + o, x - 8, y + o);
+        return <path key={`${other}${l.kind}`} d={d} className={`lm-line lm-track lm-${l.kind}${broken.has(`${l.from}|${l.to}`) ? " lm-problem" : ""}`} />;
+      });
+    });
+  const counts = (entries: typeof left, fromSide: boolean) =>
+    entries.shown.map(([other, ls], i) => {
+      const n = total(ls);
+      if (!n) return null;
+      const y = yOf(i, rowsOf(entries)) + lane(ls[0].kind);
+      const x = fromSide ? (SIDE_X + (SIDE_X + cx) / 2) / 2 + 4 : (W - SIDE_X + (W - SIDE_X + cx) / 2) / 2 - 4;
+      const label = `${n}×`;
+      const w = label.length * 7 + 10;
+      return (
+        <g key={`n${other}`} className="lm-count">
+          <rect x={x - w / 2} y={y - 9} width={w} height={18} rx={9} />
+          <text x={x} y={y + 4} textAnchor="middle">
+            {label}
+          </text>
+        </g>
+      );
+    });
+  const station = (other: string, ls: LinkDef[], x: number, y: number) => {
     const end = endOf(other, byId);
     if (!end) return null;
-    const count = total(ls);
-    const ring = new Set(ls.map((l) => l.kind)).size === 1 ? `lm-station lm-${ls[0].kind}` : "lm-station lm-mixed";
-    const nameY = labelAbove ? y - 30 : y + 24;
+    const n = total(ls);
+    const ring = brokenEnd.has(other) ? "lm-station lm-problem-ring" : new Set(ls.map((l) => l.kind)).size === 1 ? `lm-station lm-${ls[0].kind}` : "lm-station lm-mixed";
     return (
       <g
         key={other}
         className={`lm-node${end.tone ? ` tone-${end.tone}` : ""}`}
         role="button"
         tabIndex={0}
-        aria-label={`${end.name}${count ? `, ${count}×` : ""}`}
+        aria-label={`${end.name}${n ? `, ${n}×` : ""}`}
         onClick={() => onSelect(other)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onSelect(other))}
       >
-        <rect className="lm-hit" x={x - W / PER_ROW / 2} y={labelAbove ? y - 44 : y - 12} width={W / PER_ROW} height={56} />
+        <rect className="lm-hit" x={x - 40} y={y - 14} width={80} height={48} />
         <rect className={ring} x={x - 8} y={y - 8} width={16} height={16} rx={8} strokeWidth={3} />
-        <text x={x} y={nameY} textAnchor="middle" className="lm-name">
+        <text x={x} y={y + 26} textAnchor="middle" className="lm-name">
           {cut(end.name, 11)}
-          <title>{end.name}</title>
         </text>
-        {count > 0 && (
-          <text x={x} y={nameY + 14} textAnchor="middle" className="lm-meta">
-            {count}×
-          </text>
-        )}
       </g>
     );
   };
-  const moreText = (x: number, y: number, n: number) => (
-    <text key="meer" x={x} y={y + 4} textAnchor="middle" className="lm-meta">
+  const more = (x: number, y: number, n: number) => (
+    <text key={`meer${x}`} x={x} y={y + 4} textAnchor="middle" className="lm-meta">
       +{n}
     </text>
   );
 
-  const topX = slots(top.shown.length, top.more);
-  const bottomX = slots(bottom.shown.length, bottom.more);
-  const centerEnd = endOf(id, byId);
-  const list = byId.get(id);
-  const meta = list ? listMeta(list, data.counts) : "";
-  const shownIcons = views.slice(0, 8);
-
   return (
     <div className="lm-schema">
       <svg viewBox={`0 0 ${W} ${height}`} width="100%" role="group" aria-label={`Schema van ${centerEnd?.name ?? ""}`}>
-        {top.shown.flatMap(([other, ls], i) =>
-          ls.map((l) => (
-            <path
-              key={`${other}${l.kind}`}
-              d={down(topX[i], topStation + 8, topBus + lane(l.kind), trunk(l.kind), center - 11)}
-              className={`lm-line lm-track lm-${l.kind}${broken.has(`${l.from}|${l.to}`) ? " lm-problem" : ""}`}
-            />
-          )),
+        {stops > 0 && (
+          <>
+            <path d={`M ${cx} ${cy + half} V ${bus}`} className="lm-line lm-view" />
+            {stops > 1 && <path d={`M ${stopX(0)} ${bus} H ${stopX(stops - 1)}`} className="lm-line lm-view" />}
+          </>
         )}
-        {bottom.shown.flatMap(([other, ls], i) =>
-          ls.map((l) => (
-            <path
-              key={`${other}${l.kind}`}
-              d={down(trunk(l.kind), center + 11, bottomBus + lane(l.kind), bottomX[i], bottomStation - 8)}
-              className={`lm-line lm-track lm-${l.kind}${broken.has(`${l.from}|${l.to}`) ? " lm-problem" : ""}`}
-            />
-          )),
-        )}
-        {top.shown.map(([other, ls], i) => station(other, ls, topX[i], topStation, true))}
-        {top.more > 0 && moreText(topX[topX.length - 1], topStation, top.more)}
-        {bottom.shown.map(([other, ls], i) => station(other, ls, bottomX[i], bottomStation, false))}
-        {bottom.more > 0 && moreText(bottomX[bottomX.length - 1], bottomStation, bottom.more)}
+        {lines(left, true)}
+        {lines(right, false)}
+        {counts(left, true)}
+        {counts(right, false)}
+        {left.shown.map(([other, ls], i) => station(other, ls, SIDE_X, yOf(i, rowsOf(left))))}
+        {left.more > 0 && more(SIDE_X, yOf(rowsOf(left) - 1, rowsOf(left)), left.more)}
+        {right.shown.map(([other, ls], i) => station(other, ls, W - SIDE_X, yOf(i, rowsOf(right))))}
+        {right.more > 0 && more(W - SIDE_X, yOf(rowsOf(right) - 1, rowsOf(right)), right.more)}
 
         <g className={`lm-node lm-center${centerEnd?.tone ? ` tone-${centerEnd.tone}` : ""}`}>
-          <rect className="lm-halo on" x={W / 2 - 19} y={center - 19} width={38} height={38} rx={19} />
-          <rect className={`lm-station ${kinds.length === 1 ? `lm-${kinds[0]}` : "lm-mixed"}`} x={W / 2 - 11} y={center - 11} width={22} height={22} rx={11} strokeWidth={5} />
-          <text x={W / 2 + 26} y={center + (meta ? -2 : 4)} className="lm-name">
-            {cut(centerEnd?.name ?? "", 16)}
+          <rect className="lm-halo on" x={cx - 19} y={cy - half - 8} width={38} height={2 * half + 16} rx={19} />
+          <rect
+            className={`lm-station ${kinds.length === 1 ? `lm-${kinds[0]}` : "lm-mixed"}`}
+            x={cx - 11}
+            y={cy - half}
+            width={22}
+            height={2 * half}
+            rx={11}
+            strokeWidth={5}
+          />
+          <text x={cx} y={cy - half - 14} textAnchor="middle" className="lm-name">
+            {cut(centerEnd?.name ?? "", 18)}
           </text>
-          {meta && (
-            <text x={W / 2 + 26} y={center + 12} className="lm-meta">
-              {meta}
-            </text>
-          )}
-          {shownIcons.map((v, i) => (
-            <g key={v} transform={`translate(${W / 2 + 26 + i * ICON_STEP} ${center + 20})`} className="lm-view-icon">
-              <title>{VIEWS[v].label}</title>
-              <Icon name={VIEW_ICONS[v]} size={ICON} />
-            </g>
-          ))}
         </g>
+
+        {shownViews.map((v, i) => (
+          <g key={v} className="lm-stop">
+            <circle cx={stopX(i)} cy={bus} r={5} />
+            <text x={stopLabel(i, cut(VIEWS[v].label, 13)).x} y={bus + (i % 2 ? 36 : 22)} textAnchor={stopLabel(i, cut(VIEWS[v].label, 13)).anchor} className="lm-meta">
+              {cut(VIEWS[v].label, 13)}
+            </text>
+          </g>
+        ))}
+        {moreViews > 0 && (
+          <text x={stopX(stops - 1)} y={bus + 4} textAnchor="middle" className="lm-meta">
+            +{moreViews}
+          </text>
+        )}
       </svg>
     </div>
-  );
-}
-
-/** Dezelfde verbanden als lijst: per tag al je lijsten met hoeveel verbanden elk heeft, dan de weergaven. Op gsm de enige. */
-export function LinkList({
-  columns,
-  links,
-  counts,
-  onSelect,
-}: {
-  columns: MapColumn[];
-  links: LinkDef[];
-  counts: LinksResponse["counts"];
-  onSelect: (id: string) => void;
-}) {
-  const degree = new Map<string, number>();
-  for (const l of links) for (const x of [l.from, l.to]) degree.set(x, (degree.get(x) ?? 0) + 1);
-  const groups = columns.filter((g) => g.lists.length);
-  const views = (Object.keys(VIEWS) as ViewKey[]).filter((v) => degree.has(`view:${v}`));
-  const verbanden = (n: number) => plural(n, "verband", "verbanden");
-  return (
-    <section className="card">
-      <ul className="rows">
-        {groups.map((g) => [
-          <li key={g.key} className="group-row">
-            <span className={`dot${g.tone ? ` tone-${g.tone}` : ""}`} /> {g.name} <span className="group-count">{g.lists.length}</span>
-          </li>,
-          ...g.lists.map((l) => (
-            <li key={l.id}>
-              <button type="button" className="row" onClick={() => onSelect(l.id)}>
-                <span className="cell-main">
-                  <span className={`row-media tone-${listTone(l)}`}>
-                    <Icon name={listIcon(l)} size={16} />
-                  </span>
-                  <span className="row-main">
-                    <span className="row-title">{l.name}</span>
-                    <span className="row-meta">
-                      <span>{degree.has(l.id) ? verbanden(degree.get(l.id)!) : "Geen verbanden"}</span>
-                      <span>{listMeta(l, counts)}</span>
-                    </span>
-                  </span>
-                </span>
-                <Icon name="next" size={16} className="row-chevron" />
-              </button>
-            </li>
-          )),
-        ])}
-        {views.length > 0 && (
-          <li className="group-row">
-            Weergaven <span className="group-count">{views.length}</span>
-          </li>
-        )}
-        {views.map((v) => (
-          <li key={v}>
-            <button type="button" className="row" onClick={() => onSelect(`view:${v}`)}>
-              <span className="cell-main">
-                <span className="row-media">
-                  <Icon name={VIEW_ICONS[v]} size={16} />
-                </span>
-                <span className="row-main">
-                  <span className="row-title">{VIEWS[v].label}</span>
-                  <span className="row-meta">
-                    <span>{verbanden(degree.get(`view:${v}`)!)}</span>
-                  </span>
-                </span>
-              </span>
-              <Icon name="next" size={16} className="row-chevron" />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/**
- * Verbanden die voor iemand niet werken: wie in een lijst kan bewerken maar een lijst niet ziet waar die van afhangt,
- * met een link naar de mensen van de lijst die je beheert.
- */
-export function LinkProblems({ problems, byId }: { problems: LinkProblem[]; byId: Map<string, ListNode> }) {
-  if (!problems.length) return null;
-  const name = (id: string) => byId.get(id)?.name ?? "";
-  const fix = (p: LinkProblem) => `/lijsten/${byId.get(p.to)?.role === "beheerder" ? p.to : p.list}/instellingen?tab=mensen`;
-  return (
-    <section className="card lm-problems">
-      <CardHead title="Werkt niet voor iedereen" />
-      <ul className="rows">
-        {problems.map((p) => (
-          <li key={`${p.list}|${p.to}|${p.person}`}>
-            <Link to={fix(p)} className="row">
-              <span className="cell-main">
-                <span className="row-media lm-problem-icon">
-                  <Icon name="alert" size={16} />
-                </span>
-                <span className="row-main">
-                  <span className="row-title">
-                    {p.name} ziet {name(p.to)} niet
-                  </span>
-                  <span className="row-meta">
-                    <span>
-                      {name(p.list)} → {name(p.to)}
-                    </span>
-                    <span>kan in {name(p.list)} bewerken</span>
-                  </span>
-                </span>
-              </span>
-              <Icon name="next" size={16} className="row-chevron" />
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
