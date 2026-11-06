@@ -248,7 +248,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
             <StockStepper
               amount={counts[t.id] ?? t.stock.amount}
               unit={t.stock.unit}
-              low={(counts[t.id] ?? t.stock.amount) <= 0 || t.stock.low}
+              low={t.stock.low || (counts[t.id] ?? t.stock.amount) < 0}
               label={t.name}
               edit={edit}
               onStep={(d) => step(t, d)}
