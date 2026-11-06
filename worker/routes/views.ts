@@ -4,15 +4,14 @@
 
 import { Hono } from "hono";
 import { logFields } from "../../shared/logview";
-import { canEdit, canManage } from "../../shared/model";
-import { cleanView, viewFields, type ViewDef } from "../../shared/views";
+import { canEdit, canManage, type Role } from "../../shared/model";
+import { cleanView, viewFields, type SavedView, type ViewDef } from "../../shared/views";
 import { kindsFor, parseJson, requireList, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, NotFoundError, requiredString, ValidationError } from "../validate";
 
 export const views = new Hono<AppEnv>();
 
-export type SavedViewRow = { id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; def: ViewDef; shared: boolean; can_edit: boolean };
 
 type Row = { id: string; owner_id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; def: string; shared: number };
 
@@ -27,18 +26,24 @@ views.get("/", async (c) => {
     )
     .bind(...(listId ? [me.id, listId] : [me.id]))
     .all<Row>();
-  return c.json(
-    results.map((r): SavedViewRow => ({
-      id: r.id,
-      list_id: r.list_id,
-      target: r.target,
-      name: r.name,
-      def: parseJson(r.def, { match: "all", conditions: [] }),
-      shared: Boolean(r.shared),
-      can_edit: r.owner_id === me.id || (Boolean(r.shared) && canManage(role)),
-    })),
-  );
+  return c.json(results.map((r) => toView(r, me.id, role)));
 });
+
+const toView = (r: Row, me: string, role: Role | null | undefined): SavedView => ({
+  id: r.id,
+  list_id: r.list_id,
+  target: r.target,
+  name: r.name,
+  def: parseJson(r.def, { match: "all", conditions: [] }),
+  shared: Boolean(r.shared),
+  can_edit: r.owner_id === me || (Boolean(r.shared) && canManage(role)),
+});
+
+async function viewById(db: D1Database, id: string, me: string): Promise<SavedView> {
+  const row = await db.prepare("SELECT * FROM saved_views WHERE id = ?").bind(id).first<Row>();
+  const role = row?.list_id ? (await seenLists(db, me, row.list_id)).get(row.list_id) : null;
+  return toView(row!, me, role);
+}
 
 /** De velden waartegen een weergave nagekeken wordt. */
 async function fieldsFor(db: D1Database, personId: string, listId: string | null, target: "dingen" | "logboek") {
@@ -77,7 +82,7 @@ views.post("/", async (c) => {
     .prepare("INSERT INTO saved_views (id, owner_id, list_id, target, name, def, shared) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(id, me.id, listId, target, requiredString(body, "name", 40), JSON.stringify(def), shared && listId ? 1 : 0)
     .run();
-  return c.json({ id }, 201);
+  return c.json(await viewById(db, id, me.id), 201);
 });
 
 async function editable(db: D1Database, personId: string, id: string): Promise<Row> {
@@ -98,7 +103,7 @@ views.put("/:id", async (c) => {
     .prepare("UPDATE saved_views SET name = ?, def = ?, shared = ? WHERE id = ?")
     .bind(body.name === undefined ? row.name : requiredString(body, "name", 40), JSON.stringify(def), body.shared === undefined ? row.shared : body.shared === true && row.list_id ? 1 : 0, row.id)
     .run();
-  return c.json({ ok: true });
+  return c.json(await viewById(db, row.id, me.id));
 });
 
 views.delete("/:id", async (c) => {

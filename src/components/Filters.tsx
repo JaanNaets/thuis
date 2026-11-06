@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import type { FieldDef, Names } from "../../shared/fields";
-import type { Tag } from "../../shared/types";
 import {
   canGroup,
   conditionText,
@@ -34,7 +33,7 @@ export type Choices = (def: FieldDef) => { value: string; label: string }[];
 export function ViewChips({ views, active, onPick }: { views: SavedView[]; active: string | null; onPick: (view: SavedView | null) => void }) {
   if (!views.length) return null;
   return (
-    <div className="filters view-chips" role="group" aria-label="Weergaven">
+    <div className="filters" role="group" aria-label="Weergaven">
       <button type="button" className="filter" aria-pressed={!active} onClick={() => onPick(null)}>
         Alles
       </button>
@@ -58,7 +57,7 @@ export function ConditionPills({
   def: ViewDef;
   fields: FieldDef[];
   names: Names;
-  tags: Tag[];
+  tags: { id: string; name: string }[];
   onRemove: (index: number) => void;
 }) {
   const byKey = new Map(fields.map((f) => [f.key, f]));
@@ -262,8 +261,8 @@ export function ViewEditor({
   active,
   choices,
   canShare,
-  projectId,
-  typeId,
+  listId,
+  target,
   onApply,
   onSaved,
   onDeleted,
@@ -276,8 +275,9 @@ export function ViewEditor({
   active: SavedView | null;
   choices: Choices;
   canShare: boolean;
-  projectId: string;
-  typeId: string;
+  /** De lijst (null: het logboek over al je lijsten) en of het over de dingen of het logboek gaat. */
+  listId: string | null;
+  target: "dingen" | "logboek";
   onApply: (def: ViewDef) => void;
   onSaved: (view: SavedView) => void;
   onDeleted: () => void;
@@ -300,7 +300,7 @@ export function ViewEditor({
       const view =
         active && !asNew
           ? await api.put<SavedView>(`/views/${active.id}`, { name, def: completed(def) })
-          : await api.post<SavedView>(`/projects/${projectId}/views`, { type_id: typeId, name, shared, def: completed(def) });
+          : await api.post<SavedView>("/views", { list_id: listId, target, name, shared, def: completed(def) });
       toast(active && !asNew ? "Weergave bijgewerkt" : "Weergave bewaard");
       onSaved(view);
     } catch (err) {

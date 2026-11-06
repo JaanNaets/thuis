@@ -84,3 +84,17 @@ test("prijs per eenheid van het ding", () => {
   assert.equal(unitPrice(299, 750, "g", { unit: "kg" }), 399);
   assert.equal(unitPrice(null, 2, null, { unit: "kg" }), null);
 });
+
+test("op zonder minimum: enkel in een lijst met een minimum en als er ooit iets was", () => {
+  assert.equal(stockLevel(DEF, { eenheid: "stuk" }, []).low, false);
+  assert.equal(stockLevel(DEF, { eenheid: "stuk" }, [line("2026-11-01", "aankoop", "in", 1), line("2026-11-02", "gebruik", "uit", 1)]).low, true);
+  const cellar = { default_unit: "fles" };
+  assert.equal(stockLevel(cellar, {}, [line("2026-11-01", "aankoop", "in", 1), line("2026-11-02", "gebruik", "uit", 1)]).low, false);
+});
+
+test("een verpakking zonder naam: een zak is die verpakking", () => {
+  const def = { unit: "eenheid", pack: "verpakking", min: "minimum", default_unit: "kg" };
+  const pellets = { eenheid: "kg", verpakking: 15 };
+  const level = stockLevel(def, pellets, [line("2026-11-01", "meting", "voor", 45), line("2026-11-02", "gebruik", "uit", 1, "zak"), line("2026-11-03", "gebruik", "uit", 1, "zak")]);
+  assert.equal(level.amount, 15);
+});

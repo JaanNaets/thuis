@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { useParams, useSearchParams } from "react-router";
+import { useParams } from "react-router";
 import { formatFieldValue, guessMapping, importRows, parseSheet, type ColumnTarget, type Sheet } from "../../shared/fields";
-import type { ImportResult, ItemTypeView, ProjectDetail } from "../../shared/types";
+import type { List, ListDetail } from "../../shared/model";
+
+type ImportResult = { created: number; skipped: { row: number; error: string }[] };
 import { api, useApi } from "../api";
 import { Alert, SubmitButton } from "../components/Controls";
 import { Icon } from "../components/Icon";
@@ -10,17 +12,14 @@ import { useToast } from "../components/Toast";
 import { formatNumber } from "../format";
 import { useNavigate } from "../router";
 
-/** Een tabel (Google Sheet als CSV, Excel, geplakte cellen) als items in een lijst. */
+/** Een tabel (Google Sheet als CSV, Excel, geplakte cellen) als dingen in een lijst. */
 export function ImportPage() {
   const { id } = useParams();
-  const [params] = useSearchParams();
-  const { data: p, error } = useApi<ProjectDetail>(`/projects/${id}`);
+  const { data: detail, error } = useApi<ListDetail>(`/lists/${id}`);
   if (error) return <p className="error page">{error}</p>;
-  if (!p) return null;
-  const creatable = p.types.filter((t) => t.can_create);
-  const type = creatable.find((t) => t.id === params.get("lijst")) ?? creatable[0];
-  if (!type) return <p className="error page">Je kan hier niets toevoegen.</p>;
-  return <ImportForm key={type.id} project={p} type={type} creatable={creatable} />;
+  if (!detail) return null;
+  if (!detail.list.one || (detail.role !== "lid" && detail.role !== "beheerder")) return <p className="error page">Je kan hier niets toevoegen.</p>;
+  return <ImportForm key={detail.list.id} list={detail.list} />;
 }
 
 /** De kolommen die je koos, per lijst bewaard (in dit toestel): een volgende tabel uit dezelfde sheet gaat vanzelf. */
@@ -41,14 +40,13 @@ async function readText(file: File): Promise<string> {
   return utf8.includes("�") ? new TextDecoder("windows-1252").decode(buffer) : utf8;
 }
 
-function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; type: ItemTypeView; creatable: ItemTypeView[] }) {
+function ImportForm({ list }: { list: List }) {
   const navigate = useNavigate();
-  const [, setParams] = useSearchParams();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   // Personen, verwijzingen en berekeningen komen niet uit een tabel (daar zijn id's voor nodig, of de app rekent ze
   // uit); enkel velden die je mag wijzigen.
-  const fields = type.fields.filter((f) => !["person", "people", "item", "items", "share", "calc"].includes(f.type) && type.field_access[f.key] === "edit");
+  const fields = list.fields.filter((f) => !["person", "people", "item", "items", "share", "calc", "amounts"].includes(f.type));
   const [pasted, setPasted] = useState("");
   const [sheet, setSheet] = useState<Sheet>();
   const [fileName, setFileName] = useState<string>();
@@ -59,8 +57,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
 
   const targets: { value: ColumnTarget; label: string }[] = [
     { value: "", label: "Niet gebruiken" },
-    { value: "name", label: type.name_label ?? "Naam" },
-    { value: "tags", label: "Tags" },
+    { value: "name", label: list.one ?? "Naam" },
     ...fields.map((f) => ({ value: `field:${f.key}` as ColumnTarget, label: f.label })),
   ];
 
@@ -70,7 +67,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
       setError("Er staan geen rijen in. De eerste rij moet de namen van de kolommen bevatten.");
       return;
     }
-    const remembered = rememberedMapping(type.id);
+    const remembered = rememberedMapping(list.id);
     const guessed = guessMapping(parsed.headers, fields);
     setMapping(
       parsed.headers.map((h, i) => {
@@ -96,14 +93,14 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
     setError(undefined);
     try {
       try {
-        localStorage.setItem(mappingKey(type.id), JSON.stringify(Object.fromEntries(sheet.headers.map((h, i) => [h.toLowerCase(), mapping[i]]))));
+        localStorage.setItem(mappingKey(list.id), JSON.stringify(Object.fromEntries(sheet.headers.map((h, i) => [h.toLowerCase(), mapping[i]]))));
       } catch {
         // Niet bewaard (privévenster): volgende keer gewoon opnieuw raden.
       }
-      const res = await api.post<ImportResult>(`/projects/${p.project.id}/items/import`, { type_id: type.id, rows: converted.rows });
-      toast(`${formatNumber(res.created)} ${res.created === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()} toegevoegd`);
+      const res = await api.post<ImportResult>(`/lists/${list.id}/things/import`, { rows: converted.rows });
+      toast(`${formatNumber(res.created)} toegevoegd aan ${list.name}`);
       if (res.skipped.length === 0) {
-        navigate(`/projecten/${p.project.id}?lijst=${type.id}`, { replace: true });
+        navigate(`/lijsten/${list.id}`, { replace: true });
         return;
       }
       setResult(res);
@@ -116,21 +113,9 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
 
   return (
     <form className="form page" onSubmit={onSubmit}>
-      <PageHead title="Importeren" back={{ to: -1, label: p.project.name }} />
+      <PageHead title="Importeren" back={{ to: -1, label: list.name }} />
 
       <section className="card form-section">
-        {creatable.length > 1 && (
-          <label className="field">
-            <span className="label">In de lijst</span>
-            <select value={type.id} onChange={(e) => setParams({ lijst: e.target.value }, { replace: true })}>
-              {creatable.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.plural}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <div className="field">
           <span className="label">Je tabel</span>
         </div>
@@ -217,7 +202,7 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
                 <span className="label">Zo komt het erin</span>
                 <span className="hint">
                   {[
-                    `${formatNumber(named.length)} ${named.length === 1 ? type.name.toLowerCase() : type.plural.toLowerCase()}`,
+                    `${formatNumber(named.length)} ${named.length === 1 ? (list.one ?? "ding").toLowerCase() : "dingen"}`,
                     named.length < converted.rows.length && `${converted.rows.length - named.length} rijen zonder naam slaan we over`,
                     converted.problems.length > 0 && `${converted.problems.length} cellen niet te lezen`,
                   ]
@@ -234,7 +219,6 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
                         ...fields
                           .filter((f) => r.data[f.key] !== undefined && f.type !== "longtext")
                           .map((f) => `${f.label}: ${formatFieldValue(f, r.data[f.key])}`),
-                        ...r.tags,
                       ].join(" · ")}
                     </span>
                   </li>
@@ -264,8 +248,8 @@ function ImportForm({ project: p, type, creatable }: { project: ProjectDetail; t
         </SubmitButton>
       )}
       {result && (
-        <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`/projecten/${p.project.id}?lijst=${type.id}`, { replace: true })}>
-          Naar {p.project.name}
+        <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`/lijsten/${list.id}`, { replace: true })}>
+          Naar {list.name}
         </button>
       )}
     </form>

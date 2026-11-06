@@ -1,12 +1,11 @@
 // Meldingen op dit toestel (web push): aan of uit, en een testmelding. Wat je krijgt, staat bij de velden zelf
-// (Herinneren bij een datum, de app stuurt ze 's morgens, zie worker/cron.ts) en bij een lijst (Melden bij een nieuw
-// item). Stil: projecten waarvan je geen melding bij een nieuw item wil (ook niet in hun subprojecten).
+// (Herinneren bij een datum, de app stuurt ze 's morgens, zie worker/cron.ts), bij wat gepland staat, en bij een
+// lijst (Melding bij iets nieuws). Stil: lijsten of tags waarvan je geen melding bij iets nieuws wil.
 
 import { useEffect, useState } from "react";
 import type { AppSettings } from "../../shared/apps";
 import { b64url } from "../../shared/webpush";
 import { api, useApi } from "../api";
-import { projectTree } from "../projects";
 import { useSession } from "../session";
 import { Icon } from "./Icon";
 import { Alert, CardHead, Switch } from "./Controls";
@@ -162,20 +161,19 @@ export function NotificationsCard() {
   );
 }
 
-/** Stil: per project geen melding bij een nieuw item (ook niet in de subprojecten). */
+/** Stil: geen melding bij iets nieuws in een lijst, of in alle lijsten met een tag. */
 function MutedProjects() {
-  const { projects } = useSession();
+  const { lists, tags } = useSession();
   const toast = useToast();
   const { data: settings, mutate } = useApi<AppSettings>("/me/app");
   if (!settings) return null;
   const muted = settings.muted ?? [];
-  const nodes = projectTree(projects).filter((p) => !p.archived);
-  async function set(project: string, on: boolean) {
+  const nameOf = (id: string) => tags.find((t) => t.id === id)?.name ?? lists.find((l) => l.id === id)?.name ?? "Verborgen";
+  async function set(id: string, on: boolean) {
     try {
-      const res = await api.put<{ muted: string[] }>("/me/muted", { project, muted: on });
+      const res = await api.put<{ muted: string[] }>("/me/muted", { id, muted: on });
       mutate({ ...settings!, muted: res.muted });
-      const name = projects.find((p) => p.id === project)?.name ?? "Project";
-      toast(on ? `${name} staat stil` : `${name} meldt weer`);
+      toast(on ? `${nameOf(id)} staat stil` : `${nameOf(id)} meldt weer`);
     } catch (err) {
       toast((err as Error).message, "alert");
     }
@@ -184,28 +182,41 @@ function MutedProjects() {
     <div className="field">
       <span className="label">Stil</span>
       {muted.length > 0 && (
-        <ul className="rows muted-rows">
+        <ul className="rows">
           {muted.map((id) => (
             <li key={id} className="row">
               <span className="cell-main">
-                <span className="row-title">{projects.find((p) => p.id === id)?.name ?? "Verborgen"}</span>
+                <span className="row-title">{nameOf(id)}</span>
               </span>
-              <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${projects.find((p) => p.id === id)?.name ?? "Project"} weer laten melden`} onClick={() => set(id, false)}>
+              <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${nameOf(id)} weer laten melden`} onClick={() => set(id, false)}>
                 <Icon name="close" size={15} />
               </button>
             </li>
           ))}
         </ul>
       )}
-      <select aria-label="Project stilzetten" value="" onChange={(e) => e.target.value && set(e.target.value, true)}>
-        <option value="">Project stilzetten…</option>
-        {nodes
-          .filter((p) => !muted.includes(p.id))
-          .map((p) => (
-            <option key={p.id} value={p.id}>
-              {"\u00a0\u00a0\u00a0\u00a0".repeat(p.depth) + p.name}
-            </option>
-          ))}
+      <select aria-label="Stilzetten" value="" onChange={(e) => e.target.value && set(e.target.value, true)}>
+        <option value="">Stilzetten…</option>
+        {tags.filter((t) => !muted.includes(t.id)).length > 0 && (
+          <optgroup label="Tags">
+            {tags
+              .filter((t) => !muted.includes(t.id))
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+          </optgroup>
+        )}
+        <optgroup label="Lijsten">
+          {lists
+            .filter((l) => !l.archived && !muted.includes(l.id))
+            .map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+        </optgroup>
       </select>
     </div>
   );

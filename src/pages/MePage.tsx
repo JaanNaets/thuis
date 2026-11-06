@@ -1,26 +1,23 @@
 import { useState, type FormEvent } from "react";
 import { formatIban, isValidIban } from "../../shared/payment";
-import type { Person, Tone } from "../../shared/types";
-import { api } from "../api";
-import { BackupCard } from "../components/Backup";
-import { CardHead, SubmitButton, ToneSwatches } from "../components/Controls";
+import type { AiState, Person, Tone } from "../../shared/types";
+import { api, useApi } from "../api";
+import { CardHead, SubmitButton, Switch, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
-import { AiCard, AppCard } from "../components/AppSettings";
 import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
-import { ProjectOrder } from "../components/ProjectOrder";
+import { useSortable } from "../components/Sortable";
 import { useToast } from "../components/Toast";
 import { isKiosk, useInstall } from "../device";
-import { childrenOf } from "../projects";
+import { listIcon, listTone } from "../lists";
 import { useSession } from "../session";
 
 /**
- * Jouw naam, kleur en rekeningnummer (voor de betaal-QR, enkel te zien voor wie met jou een project deelt), je
- * meldingen, de volgorde van je projecten op het overzicht en een back-up. Je e-mailadres komt van je aanmelding. Biedt
- * de browser het aan, dan staat bovenaan een knop om de app te installeren.
+ * Jouw naam, kleur en rekeningnummer (voor de betaal-QR bij Wie moet wie), je meldingen, de AI, de app, de volgorde
+ * van je lijsten en een back-up. Je e-mailadres komt van je aanmelding.
  */
 export function MePage() {
-  const { person, projects, reloadMe } = useSession();
+  const { person, lists, reloadMe } = useSession();
   const toast = useToast();
   const { canInstall, install } = useInstall();
   const [name, setName] = useState(person.name);
@@ -28,10 +25,6 @@ export function MePage() {
   const [iban, setIban] = useState(person.iban ? formatIban(person.iban) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const tops = childrenOf(
-    projects.filter((p) => !p.archived),
-    null,
-  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -90,19 +83,83 @@ export function MePage() {
       </SubmitButton>
 
       <NotificationsCard />
-
       <AiCard />
-
-      <AppCard />
-
-      {tops.length > 1 && (
-        <section className="card">
-          <CardHead title="Volgorde op je overzicht" />
-          <ProjectOrder nodes={tops} />
-        </section>
-      )}
-
-      <BackupCard />
+      {lists.filter((l) => !l.archived).length > 1 && <ListOrder />}
     </form>
+  );
+}
+
+/** Lezen met AI: aan of uit voor jou, en hoe vaak vandaag. */
+export function AiCard() {
+  const { reloadMe } = useSession();
+  const toast = useToast();
+  const { data, mutate } = useApi<AiState>("/me/ai");
+  async function set(on: boolean) {
+    if (!data) return;
+    mutate({ ...data, on });
+    try {
+      mutate(await api.put<AiState>("/me/ai", { on }));
+      reloadMe();
+      toast(on ? "Lezen met AI staat aan" : "Lezen met AI staat uit");
+    } catch (err) {
+      mutate(data);
+      toast((err as Error).message, "alert");
+    }
+  }
+  return (
+    <section className="card">
+      <CardHead title="AI" description={data?.on ? `Vandaag ${data.used} van ${data.limit} keer` : undefined} />
+      <div className="card-body form">
+        <Switch label="Lezen met AI" checked={data?.on ?? false} onChange={set} />
+      </div>
+    </section>
+  );
+}
+
+/** Jouw volgorde van de lijsten (in de zijbalk en op het overzicht). */
+function ListOrder() {
+  const { lists, reloadMe } = useSession();
+  const toast = useToast();
+  const live = lists.filter((l) => !l.archived);
+  const [order, setOrder] = useState(live.map((l) => l.id));
+  const sortable = useSortable(
+    order,
+    async (ids) => {
+      setOrder(ids);
+      try {
+        await api.put("/me/order", { ids });
+        reloadMe();
+      } catch (err) {
+        toast((err as Error).message, "alert");
+      }
+    },
+    (id) => lists.find((l) => l.id === id)?.name ?? "Lijst",
+  );
+  return (
+    <section className="card">
+      <CardHead title="Volgorde van je lijsten" />
+      <ul className="rows sort-list">
+        {order.map((id) => {
+          const l = lists.find((x) => x.id === id);
+          if (!l) return null;
+          return (
+            <li key={id} {...sortable.itemProps(id)}>
+              <div className="row">
+                <button {...sortable.handleProps(id)}>
+                  <Icon name="grip" size={16} />
+                </button>
+                <span className="cell-main">
+                  <span className={`row-media tone-${listTone(l)}`}>
+                    <Icon name={listIcon(l)} size={16} />
+                  </span>
+                  <span className="row-title">{l.name}</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {sortable.status}
+    </section>
   );
 }

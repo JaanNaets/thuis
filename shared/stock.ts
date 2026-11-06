@@ -104,11 +104,14 @@ export function stockLevel(def: StockDef, data: Attributes, lines: StockLine[]):
   const amount = round3(batches.reduce((s, b) => s + b.left, 0));
   const minKey = def.min;
   const min = minKey && typeof data[minKey] === "number" ? (data[minKey] as number) : null;
+  // Bijna op: onder het minimum. Zonder minimum enkel als het op is, en enkel in een lijst met een minimum (een
+  // voorraadkast; een wijnkelder waarin een fles op is, is gewoon op) en als er ooit iets van was.
+  const low = min !== null ? amount <= min : Boolean(minKey) && sorted.length > 0 && amount <= 0;
   const expiries = batches.filter((b) => b.left > 0 && b.expires).map((b) => b.expires!) as string[];
   return {
     amount,
     unit: measure.unit,
-    low: min !== null ? amount <= min : amount <= 0,
+    low,
     expires: expiries.length ? expiries.sort()[0] : null,
   };
 }

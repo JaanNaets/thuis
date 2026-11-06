@@ -5,11 +5,11 @@ import { Hono } from "hono";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, MAX_AGENDA_DAYS, occurrences, daysApart } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
-import { foodPerPerson, type FoodEvent, type Nutrition } from "../../shared/food";
+import { foodPerPerson, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { isExpense, netBalance, settleUp, sharesOf, type MoneyEvent } from "../../shared/ledger";
 import { canEdit, dayOf, type EventView, type Role } from "../../shared/model";
 import { ids, kindsFor, parseJson, seenLists, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "../access";
-import { viewEvents } from "../events-view";
+import { logbookRows, viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
@@ -166,6 +166,7 @@ insights.get("/food", async (c) => {
   const things = new Map(tRows.map((t) => [t.id, { fields: parseJson<FieldDef[]>(t.fields, []), data: parseJson(t.data, {}), stock: parseJson(t.stock, null) }]));
   const kinds = new Map(page.kinds.map((k) => [k.id, k]));
   const byDay = new Map<string, FoodEvent[]>();
+  const food = new Set<string>();
   for (const e of page.events) {
     const fe: FoodEvent = {
       base: e.base,
@@ -176,6 +177,8 @@ insights.get("/food", async (c) => {
       data: e.data,
       lines: e.lines.map((l) => ({ role: l.role, amount: l.amount, unit: l.unit, thing: l.thing_id ? (things.get(l.thing_id) ?? null) : null })),
     };
+    if (!isFood(fe)) continue;
+    food.add(e.id);
     const day = dayOf(e.at);
     byDay.set(day, [...(byDay.get(day) ?? []), fe]);
   }
@@ -186,7 +189,7 @@ insights.get("/food", async (c) => {
     for (const id of per.keys()) who.add(id);
     days.push({ day, people: Object.fromEntries(per) });
   }
-  return c.json({ from, to, days, eaters: await peopleByIds(db, who), ...page });
+  return c.json({ from, to, days, eaters: await peopleByIds(db, who), ...page, events: page.events.filter((e) => food.has(e.id)) });
 });
 
 const addDays = (day: string, n: number) => {
@@ -194,6 +197,27 @@ const addDays = (day: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+
+// ---------- logboek over een periode (grafieken) ----------
+
+/**
+ * Wat gebeurde in een lijst (`list`, met wat elders met haar dingen gebeurde) of over al je lijsten, in `from`–`to`:
+ * voor een grafiek over het logboek. Hoogstens 2000.
+ */
+insights.get("/log", async (c) => {
+  const db = c.env.DB;
+  const seen = await seenLists(db, c.get("person").id);
+  const today = brusselsToday();
+  const [from, to] = range(c.req.query("from") ?? "1900-01-01", c.req.query("to"), today);
+  const list = c.req.query("list");
+  if (list) {
+    if (!seen.has(list)) throw new ValidationError("Die lijst ken je niet");
+    const rows = await logbookRows(db, list, { from, to, limit: 2000 });
+    return c.json(await viewEvents(db, seen, rows));
+  }
+  const rows = await fullRows(db, seen, "e.at >= ?2 AND e.at < ?3", [from, `${to}~`], "e.at DESC", 2000);
+  return c.json(await viewEvents(db, seen, rows));
+});
 
 // ---------- te doen, agenda, timers ----------
 

@@ -7,7 +7,7 @@ import { events, listEvents } from "./routes/events";
 import { insights } from "./routes/insights";
 import { kinds, lists } from "./routes/lists";
 import { me } from "./routes/me";
-import { products } from "./routes/products";
+import { products, rates } from "./routes/products";
 import { push } from "./routes/push";
 import { tags } from "./routes/tags";
 import { listThings, things } from "./routes/things";
@@ -35,6 +35,7 @@ app.route("/attachments", attachments);
 app.route("/views", views);
 app.route("/insights", insights);
 app.route("/products", products);
+app.route("/rates", rates);
 app.route("/push", push);
 
 app.notFound((c) => c.json({ error: "Niet gevonden" }, 404));

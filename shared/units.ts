@@ -56,6 +56,8 @@ export function convert(amount: number, from: string | null | undefined, to: Mea
   if (pack && (source === "verpakking" || source === normalizeUnit(to.pack_name))) return amount * pack;
   const a = baseOf(source);
   const b = baseOf(target);
+  // Een verpakking zonder naam (pellets per 15 kg): een zak, doos of pak is dan die verpakking.
+  if (pack && !to.pack_name && a === null && source !== "stuk" && b !== null) return amount * pack;
   // Gewicht of inhoud naar gewicht of inhoud.
   if (a !== null && b !== null) return (amount * a) / b;
   const piece = to.piece && to.piece > 0 ? to.piece : null;
@@ -75,6 +77,7 @@ export function converts(from: string | null | undefined, to: Measure): boolean 
   const source = normalizeUnit(from);
   const target = normalizeUnit(to.unit);
   if (!source || !target || source === target) return true;
+  if (to.pack && to.pack > 0 && (source === "verpakking" || source === normalizeUnit(to.pack_name) || (!to.pack_name && source !== "stuk"))) return true;
   return !(baseOf(source) === null && baseOf(target) !== null && !(to.piece && to.piece > 0));
 }
 

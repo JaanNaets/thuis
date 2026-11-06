@@ -1,18 +1,22 @@
 import type { RouteObject } from "react-router";
 import { App } from "./App";
 import { AgendaPage } from "./pages/AgendaPage";
+import { EventFormPage } from "./pages/EventForm";
+import { EventPage } from "./pages/EventPage";
+import { FoodPage } from "./pages/FoodPage";
 import { Home } from "./pages/Home";
 import { ImportPage } from "./pages/ImportPage";
-import { ItemFormPage } from "./pages/ItemForm";
-import { ItemPage } from "./pages/ItemPage";
-import { LinksPage } from "./pages/LinksPage";
+import { ListNew } from "./pages/ListNew";
+import { ListPage } from "./pages/ListPage";
+import { ListSettings } from "./pages/ListSettings";
 import { MePage } from "./pages/MePage";
-import { ProjectNew } from "./pages/ProjectNew";
-import { ProjectPage } from "./pages/ProjectPage";
-import { ProjectSettings } from "./pages/ProjectSettings";
-import { AppPage, QuickLinkPage, SharedPage, StickerPage } from "./pages/QuickLinks";
-import { RoleFormPage } from "./pages/RoleForm";
-import { TypeFormPage } from "./pages/TypeForm";
+import { MoneyPage } from "./pages/MoneyPage";
+import { AppPage, SharedPage, StickerPage } from "./pages/QuickLinks";
+import { StockPage } from "./pages/StockPage";
+import { TagPage } from "./pages/TagPage";
+import { ThingFormPage } from "./pages/ThingForm";
+import { ThingPage } from "./pages/ThingPage";
+import { TodoPage } from "./pages/TodoPage";
 
 export const routes: RouteObject[] = [
   {
@@ -21,24 +25,25 @@ export const routes: RouteObject[] = [
     HydrateFallback: () => null,
     children: [
       { index: true, element: <Home /> },
-      { path: "projecten/nieuw", element: <ProjectNew /> },
-      { path: "projecten/:id", element: <ProjectPage /> },
-      { path: "projecten/:id/instellingen", element: <ProjectSettings /> },
-      { path: "projecten/:id/lijsten/nieuw", element: <TypeFormPage /> },
-      { path: "projecten/:id/lijsten/:typeId", element: <TypeFormPage /> },
-      { path: "projecten/:id/rollen/nieuw", element: <RoleFormPage /> },
-      { path: "projecten/:id/rollen/:roleId", element: <RoleFormPage /> },
-      { path: "projecten/:id/nieuw", element: <ItemFormPage /> },
-      { path: "projecten/:id/importeren", element: <ImportPage /> },
-      { path: "projecten/:id/verbanden", element: <LinksPage /> },
-      { path: "projecten/:id/sticker", element: <StickerPage /> },
-      { path: "snel/:id/:typeId", element: <QuickLinkPage /> },
+      { path: "lijsten/nieuw", element: <ListNew /> },
+      { path: "lijsten/:id", element: <ListPage /> },
+      { path: "lijsten/:id/instellingen", element: <ListSettings /> },
+      { path: "lijsten/:id/nieuw", element: <ThingFormPage /> },
+      { path: "lijsten/:id/loggen", element: <EventFormPage /> },
+      { path: "lijsten/:id/importeren", element: <ImportPage /> },
+      { path: "lijsten/:id/sticker", element: <StickerPage /> },
+      { path: "dingen/:thingId", element: <ThingPage /> },
+      { path: "dingen/:thingId/bewerken", element: <ThingFormPage /> },
+      { path: "gebeurtenissen/:eventId", element: <EventPage /> },
+      { path: "gebeurtenissen/:eventId/bewerken", element: <EventFormPage /> },
+      { path: "tags/:tagId", element: <TagPage /> },
+      { path: "geld", element: <MoneyPage /> },
+      { path: "voorraad", element: <StockPage /> },
+      { path: "eten", element: <FoodPage /> },
+      { path: "te-doen", element: <TodoPage /> },
+      { path: "agenda", element: <AgendaPage /> },
       { path: "delen", element: <SharedPage /> },
       { path: "app/:appId", element: <AppPage /> },
-      { path: "items/:itemId", element: <ItemPage /> },
-      { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
-      { path: "agenda", element: <AgendaPage /> },
-      { path: "verbanden", element: <LinksPage /> },
       { path: "ik", element: <MePage /> },
       { path: "*", element: <p className="page muted">Deze pagina bestaat niet.</p> },
     ],

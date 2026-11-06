@@ -29,7 +29,7 @@ export function logFields(kinds: Pick<KindInfo, "name">[], lists: { name: string
 }
 
 /** Een gebeurtenis als rij voor een weergave of grafiek. */
-export function logItem(e: EventView, ctx: { kind: string; list: string; me: string; title: string }): ViewItem {
+export function logItem(e: EventView, ctx: { kind: string; list: string; me: string; title: string }): ViewItem & { created_at: string } {
   const data: ViewItem["data"] = { at: e.at.slice(0, 10), kind: ctx.kind, status: STATUSES[e.status].label, list: ctx.list };
   if (e.amount !== null) {
     data.amount = e.amount;

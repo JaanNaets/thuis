@@ -1,21 +1,20 @@
-// Snel naar het juiste formulier van buiten de app: een eigen icoon per lijst op je beginscherm (/snel/:id/:typeId), een
-// eigen app met een eigen naam en bestemming (/app/:id, zie shared/apps.ts), een
-// QR-sticker om af te drukken (/projecten/:id/sticker), en een foto of tekst die je vanuit een andere app deelt met
-// Thuis (/delen, Android). Zie shared/manifest.ts en STIJLBOEK.md → Snel naar een formulier.
+// Snel naar het juiste formulier van buiten de app: een eigen app met een eigen naam en bestemming (/app/:id, zie
+// shared/apps.ts), een QR-sticker om af te drukken (/lijsten/:id/sticker), en een foto of tekst die je vanuit een
+// andere app deelt met Thuis (/delen, Android). Zie shared/manifest.ts en STIJLBOEK.md → Snel naar een formulier.
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { destinationPath, type AppSettings } from "../../shared/apps";
-import { addPath, boughtVia, matchTargets, type AddTarget } from "../../shared/quickadd";
-import type { ProjectDetail } from "../../shared/types";
+import type { ListDetail } from "../../shared/model";
+import { buildTargets, matchTargets, targetPath, type Targets } from "../../shared/targets";
 import { useApi } from "../api";
 import { Barcode } from "../components/Barcode";
+import { AiMark } from "../components/Fields";
 import { Icon, type IconName } from "../components/Icon";
 import { EmptyState, PageHead } from "../components/Page";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 import { sharedFile } from "../shared-file";
-import { ItemFormFor } from "./ItemForm";
 
 const standalone = () => window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
 
@@ -23,21 +22,23 @@ const standalone = () => window.matchMedia?.("(display-mode: standalone)").match
 function useOwnManifest(href: string, name: string | undefined) {
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    const title = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
-    const before = { link: link?.getAttribute("href"), title: title?.content };
+    const before = link?.getAttribute("href");
     link?.setAttribute("href", href);
     return () => {
-      if (link && before.link) link.setAttribute("href", before.link);
-      if (title && before.title) title.content = before.title;
+      if (link && before) link.setAttribute("href", before);
     };
   }, [href]);
   useEffect(() => {
     const title = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+    const before = title?.content;
     if (title && name) title.content = name;
+    return () => {
+      if (title && before) title.content = before;
+    };
   }, [name]);
 }
 
-/** In de browser: hoe je deze pagina als eigen icoon op je beginscherm zet (als app niet nodig). */
+/** In de browser: hoe je deze pagina als eigen icoon op je beginscherm zet. */
 export function HomeScreenHint() {
   return (
     <section className="card home-hint">
@@ -68,21 +69,8 @@ export function HomeScreenHint() {
 }
 
 /**
- * Een lijst als eigen icoon op je beginscherm, zoals het vroeger ging (nieuwe iconen zijn apps, zie AppPage): deze
- * pagina blijft voor iconen die er al zijn, met haar eigen manifest (naam en start = dit formulier).
- */
-export function QuickLinkPage() {
-  const { id, typeId } = useParams();
-  const { data: project } = useApi<ProjectDetail>(`/projects/${id}`);
-  const type = project?.types.find((t) => t.id === typeId);
-  const [inBrowser] = useState(() => !standalone());
-  useOwnManifest(`/api/projects/${id}/manifest/${typeId}`, type?.name);
-  return <ItemFormFor projectId={id!} typeId={typeId!} notice={inBrowser && type ? <HomeScreenHint /> : undefined} />;
-}
-
-/**
  * Een eigen app (Jouw gegevens → App): als app op je beginscherm gaat ze meteen naar haar bestemming; in de browser
- * toont ze haar naam, hoe je ze op je beginscherm zet, en Openen. Met haar eigen manifest (naam en start = deze pagina).
+ * toont ze haar naam, hoe je ze op je beginscherm zet, en Openen.
  */
 export function AppPage() {
   const { appId } = useParams();
@@ -126,31 +114,36 @@ export function AppPage() {
   );
 }
 
-/** Een QR-sticker voor een lijst: scannen opent het formulier (met eventueel tekst, bv. "pellets"). */
+/** Een QR-sticker voor een lijst: scannen opent het formulier (loggen, met een soort en tekst, of een ding toevoegen). */
 export function StickerPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const typeId = params.get("lijst") ?? "";
+  const thing = params.get("ding") === "1";
+  const kind = params.get("soort");
   const text = params.get("tekst") ?? "";
-  const { data: project } = useApi<ProjectDetail>(`/projects/${id}`);
-  const type = project?.types.find((t) => t.id === typeId);
-  const url = `${window.location.origin}${addPath({ project_id: id!, type_id: typeId }, text)}`;
+  const { data: detail } = useApi<ListDetail>(`/lists/${id}`);
+  const q = new URLSearchParams();
+  if (kind) q.set("soort", kind);
+  if (text) q.set("tekst", text);
+  const url = `${window.location.origin}/lijsten/${id}/${thing ? "nieuw" : "loggen"}${q.toString() ? `?${q}` : ""}`;
+  const kindName = detail?.kinds.find((k) => k.id === kind)?.name;
+  const title = thing ? `${detail?.list.one ?? "Ding"} toevoegen` : kindName ? `${kindName}` : "Loggen";
   return (
     <div className="page">
       <PageHead
         title="QR-sticker"
-        back={{ to: -1, label: type?.plural ?? "Terug" }}
+        back={{ to: -1, label: detail?.list.name ?? "Terug" }}
         primary={
           <button type="button" className="btn btn-primary" onClick={() => window.print()}>
             Afdrukken
           </button>
         }
       />
-      {type && project && (
+      {detail && (
         <div className="sticker">
           <Barcode format="qr_code" value={url} />
-          <strong>{type.name} toevoegen</strong>
-          <span>{[project.project.name, text].filter(Boolean).join(" · ")}</span>
+          <strong>{title}</strong>
+          <span>{[detail.list.name, text].filter(Boolean).join(" · ")}</span>
         </div>
       )}
     </div>
@@ -158,37 +151,35 @@ export function StickerPage() {
 }
 
 /**
- * Iets gedeeld vanuit een andere app (Android): een foto wordt een kasticket bij een voorraad, of een foto die een
- * lijst leest; enkel tekst opent Toevoegen met die tekst.
+ * Iets gedeeld vanuit een andere app (Android): een foto wordt een kasticket (✨, enkel met de AI aan, en pas na een
+ * tik) of de foto van wat je logt of toevoegt; enkel tekst opent Toevoegen met die tekst.
  */
 export function SharedPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const text = params.get("tekst") ?? "";
   const [file, setFile] = useState<File | null>();
-  const { data: targets } = useApi<AddTarget[]>("/me/lists");
+  const { data: raw } = useApi<Targets>("/me/targets");
   const { data: settings } = useApi<AppSettings>("/me/app");
   const { ai } = useSession();
-  // Een kasticket leest de AI: enkel als ze voor jou aan staat (en ook dan pas na een tik op ✨ Kasticket lezen).
   const receipt = ai && settings?.share.kind === "receipt" ? settings.share : null;
   const preview = useMemo(() => (file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null), [file]);
+  const targets = useMemo(() => (raw ? buildTargets(raw) : []), [raw]);
 
   useEffect(() => {
     sharedFile().then(setFile);
   }, []);
   useEffect(() => {
     if (file === null) navigate(`/?toevoegen=1${text ? `&tekst=${encodeURIComponent(text)}` : ""}`, { replace: true });
-    // Gekozen in Jouw gegevens → App: een foto gaat meteen als kasticket naar die voorraad.
-    if (file && receipt) navigate(`/projecten/${receipt.project}?lijst=${receipt.list}&kasticket=gedeeld`, { replace: true });
+    if (file && receipt) navigate(`/lijsten/${receipt.list}/loggen?kasticket=gedeeld`, { replace: true });
   }, [file, receipt]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
-  if (!file || !settings || receipt) return null;
-  const lines = ai ? (targets ?? []).filter((t) => t.receipt) : [];
-  // Een voorraad waarbij een aankoop al bijtelt, krijgt het ticket via die aankopen (niet twee keer).
-  const counters = ai ? (targets ?? []).filter((t) => t.counter && !t.receipt && !boughtVia(targets ?? [], t.type_id)) : [];
-  const read = matchTargets(text, targets ?? []).slice(0, 8);
-  const row = (key: string, to: string, icon: IconName, title: string, meta: string) => (
+  if (!file || !raw || !settings || receipt) return null;
+  // Een kasticket: in een lijst die voorraad telt of waar je aankopen logt.
+  const buyLists = ai ? raw.lists.filter((l) => l.stock || raw.used.some((u) => u.list_id === l.id && u.kind === "aankoop")) : [];
+  const read = matchTargets(text, targets).slice(0, 8);
+  const row = (key: string, to: string, icon: IconName, title: string, meta: string | null, aiMark = false) => (
     <li key={key}>
       <Link to={to} className="row">
         <span className="cell-main">
@@ -196,10 +187,14 @@ export function SharedPage() {
             <Icon name={icon} size={16} />
           </span>
           <span className="row-main">
-            <span className="row-title">{title}</span>
-            <span className="row-meta">
-              <span>{meta}</span>
+            <span className="row-title">
+              {title} {aiMark && <AiMark />}
             </span>
+            {meta && (
+              <span className="row-meta">
+                <span>{meta}</span>
+              </span>
+            )}
           </span>
         </span>
         <Icon name="next" size={16} className="row-chevron" />
@@ -210,33 +205,17 @@ export function SharedPage() {
     <div className="page">
       <PageHead title="Gedeeld" back={{ to: "/", label: "Overzicht" }} />
       {preview && <img className="shared-photo" src={preview} alt="" />}
-      {lines.length > 0 && (
+      {buyLists.length > 0 && (
         <>
           <h2 className="section-title">Kasticket lezen</h2>
           <section className="card">
-            <ul className="rows">
-              {lines.map((t) => row(`r${t.project_id}${t.type_id}`, `/projecten/${t.project_id}?lijst=${t.type_id}&kasticket=gedeeld`, "receipt", t.plural, t.project_name))}
-            </ul>
-          </section>
-        </>
-      )}
-      {counters.length > 0 && (
-        <>
-          <h2 className="section-title">Kasticket bijtellen</h2>
-          <section className="card">
-            <ul className="rows">
-              {counters.map((t) => row(`k${t.project_id}${t.type_id}`, `/projecten/${t.project_id}?lijst=${t.type_id}&kasticket=gedeeld`, "receipt", t.plural, t.project_name))}
-            </ul>
+            <ul className="rows">{buyLists.map((l) => row(`r${l.id}`, `/lijsten/${l.id}/loggen?kasticket=gedeeld`, "receipt", l.name, null, true))}</ul>
           </section>
         </>
       )}
       <h2 className="section-title">Toevoegen in</h2>
       <section className="card">
-        <ul className="rows">
-          {read.map(({ target: t, rest }) =>
-            row(`l${t.project_id}${t.type_id}`, `${addPath(t, rest)}&foto=gedeeld`, (t.icon ?? "camera") as IconName, t.name, t.project_name),
-          )}
-        </ul>
+        <ul className="rows">{read.map(({ target: t, rest }) => row(t.key, `${targetPath(t, rest)}${targetPath(t, rest).includes("?") ? "&" : "?"}foto=gedeeld`, (t.icon ?? "camera") as IconName, t.label, t.hint))}</ul>
       </section>
     </div>
   );

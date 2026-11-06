@@ -120,6 +120,32 @@ async function checkPartOf(db: D1Database, seen: Map<string, Role>, partOf: stri
   return row && seen.has(row.list_id) ? row.id : null;
 }
 
+/** Dingen uit een tabel (zie src/pages/ImportPage.tsx): elke rij zoals een gewoon nieuw ding; wat niet lukt, slaat over. */
+listThings.post("/:id/things/import", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { list, role } = await requireList(db, me.id, c.req.param("id"));
+  needEdit(role);
+  if (!list.one) throw new ValidationError("Deze lijst heeft geen dingen, enkel een logboek.");
+  const rows = asObject(await c.req.json()).rows;
+  if (!Array.isArray(rows) || rows.length > 2000) throw new ValidationError("Hoogstens 2000 rijen tegelijk");
+  const seen = await seenLists(db, me.id);
+  const statements: D1PreparedStatement[] = [];
+  const skipped: { row: number; error: string }[] = [];
+  for (const [i, raw] of rows.entries()) {
+    try {
+      const r = asObject(raw);
+      const name = requiredString(r, "name", 200);
+      const data = await prepareData(db, me.id, seen, list.fields, r.data);
+      statements.push(db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, name, JSON.stringify(data), me.id));
+    } catch (err) {
+      skipped.push({ row: i + 2, error: err instanceof Error ? err.message : "Ongeldig" });
+    }
+  }
+  for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));
+  return c.json({ created: statements.length, skipped });
+});
+
 // ---------- zoeken en kiezen ----------
 
 /**
@@ -186,13 +212,14 @@ things.get("/:id", async (c) => {
   const [lines, parts] = (await db.batch([
     db
       .prepare(
-        `SELECT l.role, l.amount, l.unit, l.price, l.expires, e.id AS event_id, e.kind, e.base, e.status, e.at, e.list_id, e.name, e.created_by, ls.name AS list
+        `SELECT l.role, l.amount, l.unit, l.price, l.expires, e.id AS event_id, e.kind, e.base, e.status, e.at, e.list_id, e.name, e.created_by, ls.name AS list,
+                e.amount AS event_amount, (SELECT COUNT(*) FROM lines x WHERE x.event_id = e.id AND x.role != 'bij') AS main_lines
          FROM lines l JOIN events e ON e.id = l.event_id JOIN lists ls ON ls.id = e.list_id
          WHERE l.thing_id = ? ORDER BY e.at DESC, e.created_at DESC LIMIT 300`,
       )
       .bind(thing.id),
     db.prepare("SELECT id, name, list_id FROM things WHERE part_of = ?").bind(thing.id),
-  ])) as [D1Result<Omit<TimelineEntry, "partial" | "store" | "unit_price" | "kind_name">>, D1Result<{ id: string; name: string; list_id: string }>];
+  ])) as [D1Result<Omit<TimelineEntry, "partial" | "store" | "unit_price" | "kind_name"> & { event_amount: number | null; main_lines: number }>, D1Result<{ id: string; name: string; list_id: string }>];
   const visible = lines.results.filter((l) => seen.has(l.list_id) || l.role !== "bij");
   const full = visible.filter((l) => seen.has(l.list_id)).map((l) => l.event_id);
   const { results: stores } = await db
@@ -206,10 +233,12 @@ things.get("/:id", async (c) => {
   const measure = list.stock ? measureFor(list.stock, thing.data) : { unit: null };
   const kindNames = new Map<string, string>();
   for (const l of visible) if (!kindNames.has(l.kind)) kindNames.set(l.kind, (await kindOf(db, l.kind, l.base as never)).name);
-  const timeline: TimelineEntry[] = visible.map((l) => {
+  const timeline: TimelineEntry[] = visible.map(({ event_amount, main_lines, ...l }) => {
     const partial = !seen.has(l.list_id);
     return {
       ...l,
+      // Gaat de gebeurtenis enkel over dit ding (een tankbeurt voor de wagen), dan is haar bedrag het zijne.
+      price: l.price ?? (!partial && main_lines === 1 ? event_amount : null),
       kind_name: kindNames.get(l.kind) ?? l.kind,
       partial,
       name: partial ? "" : l.name,

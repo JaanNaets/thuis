@@ -209,8 +209,11 @@ export type ViewDef = {
   /** Groeperen op een veld (zie `groupItems`), met per groep het aantal en de som. */
   group?: string;
 };
-/** Een bewaarde weergave; `shared`: voor iedereen in het project; `can_edit`: jij mag ze aanpassen. */
-export type SavedView = { id: string; type_id: string; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
+/**
+ * Een bewaarde weergave van de dingen of het logboek van een lijst (`list_id` null: het logboek over al je lijsten);
+ * `shared`: voor iedereen bij de lijst; `can_edit`: jij mag ze aanpassen.
+ */
+export type SavedView = { id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
 
 export const EMPTY_VIEW: ViewDef = { match: "all", conditions: [] };
 export const MAX_CONDITIONS = 20;

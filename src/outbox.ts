@@ -1,14 +1,14 @@
-// Offline toevoegen: een nieuw item dat je zonder internet bewaart, wacht op dit toestel (IndexedDB) en gaat mee zodra
-// er weer internet is. Enkel nieuwe items (met hun foto); wijzigen en verwijderen vragen internet. De server kijkt
-// alles na zoals altijd: mag het niet (meer), dan valt het weg en zegt de app dat.
+// Offline loggen: een nieuwe gebeurtenis of een nieuw ding dat je zonder internet bewaart, wacht op dit toestel
+// (IndexedDB) en gaat mee zodra er weer internet is. Enkel iets nieuws (met de foto); wijzigen en verwijderen vragen
+// internet. De server kijkt alles na zoals altijd: mag het niet (meer), dan valt het weg en zegt de app dat.
 
 import { useEffect, useState } from "react";
-import type { ItemDetail, ItemInput } from "../shared/types";
 import { api, ApiError } from "./api";
 import { useToast } from "./components/Toast";
 import { REFRESH_EVENT } from "./device";
 
-export type Waiting = { id: string; project_id: string; input: ItemInput; photo?: Blob; created_at: string };
+/** Wat wacht: een gebeurtenis (`event`) of een ding (`thing`) in een lijst, met wat het formulier zou sturen. */
+export type Waiting = { id: string; what: "event" | "thing"; list_id: string; label: string; input: unknown; photo?: Blob; created_at: string };
 
 const DB_NAME = "thuis";
 const STORE = "outbox";
@@ -39,8 +39,8 @@ async function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) =>
 /** Is een fout "geen internet" (dan wachten), of zegt de server nee (dan niet)? */
 export const isOffline = (err: unknown) => err instanceof ApiError && err.status === 0 && !navigator.onLine;
 
-export async function enqueue(projectId: string, input: ItemInput, photo?: Blob | null): Promise<void> {
-  const entry: Waiting = { id: crypto.randomUUID(), project_id: projectId, input, ...(photo ? { photo } : {}), created_at: new Date().toISOString() };
+export async function enqueue(what: Waiting["what"], listId: string, label: string, input: unknown, photo?: Blob | null): Promise<void> {
+  const entry: Waiting = { id: crypto.randomUUID(), what, list_id: listId, label, input, ...(photo ? { photo } : {}), created_at: new Date().toISOString() };
   await run("readwrite", (s) => s.put(entry));
   window.dispatchEvent(new Event(CHANGED));
 }
@@ -63,17 +63,18 @@ export function flush(): Promise<{ sent: number; refused: string[] }> {
     const refused: string[] = [];
     for (const entry of await waiting()) {
       try {
-        const saved = await api.post<ItemDetail>(`/projects/${entry.project_id}/items`, entry.input);
+        const path = entry.what === "event" ? "events" : "things";
+        const saved = await api.post<{ id: string }>(`/lists/${entry.list_id}/${path}`, entry.input);
         if (entry.photo) {
           const body = new FormData();
           body.set("file", entry.photo);
-          await api.put(`/items/${saved.id}/photo`, body).catch(() => {});
+          await api.put(`/${path}/${saved.id}/photo`, body).catch(() => {});
         }
         sent++;
       } catch (err) {
         if (!(err instanceof ApiError) || err.status === 0) break;
         // De server zegt nee (bv. je mag daar niets meer toevoegen): niet blijven proberen.
-        refused.push(`${entry.input.name || "Een item"}: ${err.message}`);
+        refused.push(`${entry.label}: ${err.message}`);
       }
       await run("readwrite", (s) => s.delete(entry.id));
     }
@@ -97,7 +98,7 @@ export function useOutbox(online: boolean): number {
     if (!online || !count) return;
     flush().then(({ sent, refused }) => {
       if (sent) {
-        toast(sent === 1 ? "1 item van offline verstuurd" : `${sent} items van offline verstuurd`);
+        toast(sent === 1 ? "1 ding van offline verstuurd" : `${sent} dingen van offline verstuurd`);
         window.dispatchEvent(new Event(REFRESH_EVENT));
       }
       for (const message of refused) toast(message, "alert");

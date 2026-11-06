@@ -36,7 +36,6 @@ export const BLOCK_KINDS = {
 export const BLOCK_ITEMS = 5;
 export const MAX_BLOCKS = 40;
 /** Vanzelf: zoveel lijsten hoogstens (de rest via de zijbalk). */
-export const DEFAULT_LISTS = 8;
 
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const id = (v: unknown) => (typeof v === "string" && ID.test(v) ? v : null);
@@ -114,7 +113,9 @@ export function defaultBlocks(lists: { id: string; archived: 0 | 1 }[], has: { m
   if (has.money) out.push({ kind: "money" });
   out.push({ kind: "todo" });
   if (has.stock) out.push({ kind: "stock" });
-  for (const l of lists.filter((x) => !x.archived).slice(0, DEFAULT_LISTS)) out.push({ kind: "list", list: l.id, show: "count" });
+  if (has.money) out.push({ kind: "balance" });
+  // Zonder lijsten als blok: die staan in de zijbalk (of op een gsm per tag onder het overzicht).
+  if (!lists.some((x) => !x.archived)) return [];
   return out;
 }
 

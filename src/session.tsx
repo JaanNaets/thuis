@@ -1,13 +1,15 @@
 import { createContext, useContext } from "react";
-import type { Person, ProjectNode } from "../shared/types";
+import type { ListNode, Tag } from "../shared/model";
+import type { Person } from "../shared/types";
 
 /**
- * Wie aangemeld is en al zijn projecten (met zijn rol in elk). Eén keer opgehaald in App, overal leesbaar.
- * Na het aanmaken, hernoemen of verwijderen van een project: `reloadMe()`.
+ * Wie aangemeld is, al je lijsten (met je rol, tags en volgorde) en de tags die je ziet. Eén keer opgehaald in App,
+ * overal leesbaar. Na het maken, hernoemen of verwijderen van een lijst of tag: `reloadMe()`.
  */
 export type Session = {
   person: Person;
-  projects: ProjectNode[];
+  lists: ListNode[];
+  tags: Tag[];
   /** Mag de AI voor jou lezen (Jouw gegevens → AI)? Uit: geen ✨-knoppen (de server weigert dan ook). */
   ai: boolean;
   reloadMe: () => void;
@@ -16,7 +18,8 @@ export type Session = {
 
 export const SessionContext = createContext<Session>({
   person: { id: "", name: "", email: null, color: null },
-  projects: [],
+  lists: [],
+  tags: [],
   ai: false,
   reloadMe: () => {},
   openSearch: () => {},
@@ -25,3 +28,6 @@ export const SessionContext = createContext<Session>({
 export function useSession(): Session {
   return useContext(SessionContext);
 }
+
+/** Het antwoord van GET /me. */
+export type Me = { person: Person; lists: ListNode[]; tags: Tag[]; ai: boolean };

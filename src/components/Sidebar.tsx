@@ -1,9 +1,7 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useLocation } from "react-router";
-import { descendantIds } from "../../shared/tree";
-import type { ProjectNode, Tone } from "../../shared/types";
 import { isKiosk } from "../device";
-import { childrenOf, projectTree } from "../projects";
+import { groupByTag, listIcon, listTone } from "../lists";
 import { Link, NavLink } from "../router";
 import { useSession } from "../session";
 import { Icon, type IconName } from "./Icon";
@@ -11,28 +9,28 @@ import { Icon, type IconName } from "./Icon";
 /** ⌘K op een Mac, Ctrl K elders. */
 export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
 
-/** Een project zonder eigen kleur krijgt er een, in een vaste volgorde die mooi afwisselt. */
-const TONES: Tone[] = ["peach", "sky", "sage", "lilac", "butter", "rose", "mint"];
+/** De vaste plekken bovenaan: het overzicht, de agenda en de weergaven over al je lijsten. */
+export const PLACES: { to: string; label: string; icon: IconName }[] = [
+  { to: "/", label: "Overzicht", icon: "project" },
+  { to: "/agenda", label: "Agenda", icon: "calendar" },
+  { to: "/geld", label: "Geld", icon: "wallet" },
+  { to: "/voorraad", label: "Voorraad", icon: "package" },
+  { to: "/eten", label: "Eten", icon: "food" },
+  { to: "/te-doen", label: "Te doen", icon: "check" },
+];
 
-export function projectIcon(p: Pick<ProjectNode, "icon">): IconName {
-  return (p.icon ?? "project") as IconName;
-}
-
-/** Het project dat je nu bekijkt (uit het adres). */
-function currentProject(pathname: string): string | null {
-  return pathname.match(/^\/projecten\/([0-9a-f-]{36})/)?.[1] ?? null;
-}
+/** De lijst die je nu bekijkt (uit het adres). */
+const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
 
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken en al je projecten als boom (een project
- * klapt open en toont zijn subprojecten). Jouw gegevens: je letter rechtsboven in de paneelbalk.
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, de vaste plekken en je lijsten per tag
+ * (een tag klapt open). Jouw gegevens: je letter rechtsboven in de paneelbalk.
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
-  const { projects } = useSession();
+  const { lists, tags } = useSession();
   const { pathname } = useLocation();
-  const current = currentProject(pathname);
-  // Waar de glazen lens ligt: Overzicht, Agenda of Verbanden (anders onzichtbaar).
-  const navIndex = pathname === "/" ? 0 : pathname.startsWith("/agenda") ? 1 : pathname === "/verbanden" ? 2 : -1;
+  const current = currentList(pathname);
+  const navIndex = PLACES.findIndex((p) => (p.to === "/" ? pathname === "/" : pathname.startsWith(p.to)));
 
   return (
     <aside className="sidebar" aria-label="Hoofdmenu">
@@ -51,97 +49,83 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 
       <div className="sidebar-scroll">
         <nav className="sidebar-nav">
-          <span
-            className="sidebar-indicator"
-            style={{ "--i": navIndex, opacity: navIndex >= 0 ? 1 : 0 } as CSSProperties}
-          />
-          <NavLink to="/" end title="Overzicht">
-            <Icon name="project" size={17} />
-            <span className="nav-text">Overzicht</span>
-          </NavLink>
-          <NavLink to="/agenda" title="Agenda">
-            <Icon name="calendar" size={17} />
-            <span className="nav-text">Agenda</span>
-          </NavLink>
-          <NavLink to="/verbanden" title="Verbanden">
-            <Icon name="links" size={17} />
-            <span className="nav-text">Verbanden</span>
-          </NavLink>
+          <span className="sidebar-indicator" style={{ "--i": navIndex, opacity: navIndex >= 0 ? 1 : 0 } as CSSProperties} />
+          {PLACES.map((p) => (
+            <NavLink key={p.to} to={p.to} end={p.to === "/"} title={p.label}>
+              <Icon name={p.icon} size={17} />
+              <span className="nav-text">{p.label}</span>
+            </NavLink>
+          ))}
         </nav>
 
-        <ProjectTree projects={projects} current={current} />
+        <TagTree lists={lists} tags={tags} current={current} />
       </div>
     </aside>
   );
 }
 
-/** De projecten bovenaan, elk met een gekleurd icoon; een project met subprojecten klapt open. */
-function ProjectTree({ projects, current }: { projects: ProjectNode[]; current: string | null }) {
+/** Je lijsten per tag: elke tag klapt open (open als je er een lijst van bekijkt); wat zonder tag is, onderaan. */
+function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  // Een tak komt pas in de pagina als hij (ooit) open was: met 1000 projecten blijft de zijbalk zo licht.
-  const [seen, setSeen] = useState<Set<string>>(() => new Set());
-  const live = projects.filter((p) => !p.archived);
-  const flat = projectTree(live);
-  const roots = childrenOf(live, null).map((root) => {
-    const below = descendantIds(live, root.id);
-    // Open als je erop klikte, of als je nu dit project (of iets erin) bekijkt.
-    return { root, below, open: toggled[root.id] ?? (current !== null && below.has(current)) };
-  });
-  const openIds = roots.filter((r) => r.open).map((r) => r.root.id);
-  const openKey = openIds.join(",");
-  useEffect(() => {
-    // Wat open was, blijft in de pagina (zodat dichtklappen nog beweegt).
-    setSeen((s) => (openIds.every((id) => s.has(id)) ? s : new Set([...s, ...openIds])));
-  }, [openKey]);
-
+  const groups = groupByTag(lists, tags);
   return (
     <div className="sidebar-places">
-      <p className="nav-section">Projecten</p>
+      <p className="nav-section">Lijsten</p>
       <ul className="place-tree">
-        {roots.map(({ root, below, open }, index) => {
-          const rootDepth = flat.find((p) => p.id === root.id)?.depth ?? 0;
-          const children = open || seen.has(root.id) ? flat.filter((p) => p.id !== root.id && below.has(p.id)) : [];
+        {groups.map((g) => {
+          const key = g.tag?.id ?? "zonder";
+          const open = toggled[key] ?? (groups.length <= 2 || (current !== null && g.lists.some((l) => l.id === current)));
+          const name = g.tag?.name ?? "Zonder tag";
           return (
-            <li key={root.id}>
+            <li key={key}>
               <div className="place-row">
-                <Link to={`/projecten/${root.id}`} className="place-link root" aria-current={current === root.id ? "page" : undefined}>
-                  <span className={`place-icon tone-${root.color ?? TONES[index % TONES.length]}`}>
-                    <Icon name={projectIcon(root)} size={15} />
+                {g.tag ? (
+                  <Link to={`/tags/${g.tag.id}`} className="place-link root">
+                    <span className={`place-icon tone-${g.tag.color ?? "sky"}`}>
+                      <Icon name="tag" size={15} />
+                    </span>
+                    <span className="place-name">{name}</span>
+                  </Link>
+                ) : (
+                  <span className="place-link root">
+                    <span className="place-icon tone-sage">
+                      <Icon name="folder" size={15} />
+                    </span>
+                    <span className="place-name">{name}</span>
                   </span>
-                  <span className="place-name">{root.name}</span>
-                </Link>
-                {below.size > 1 && (
-                  <button
-                    type="button"
-                    className="place-toggle"
-                    aria-expanded={open}
-                    aria-label={`${root.name} ${open ? "dichtklappen" : "openklappen"}`}
-                    onClick={() => setToggled((t) => ({ ...t, [root.id]: !open }))}
-                  >
-                    <Icon name="down" size={14} />
-                  </button>
                 )}
+                <button
+                  type="button"
+                  className="place-toggle"
+                  aria-expanded={open}
+                  aria-label={`${name} ${open ? "dichtklappen" : "openklappen"}`}
+                  onClick={() => setToggled((t) => ({ ...t, [key]: !open }))}
+                >
+                  <Icon name="down" size={14} />
+                </button>
               </div>
-              {below.size > 1 && (
-                <div className="place-children" data-open={open} inert={!open}>
-                  <ul>
-                    {children.map((child, k) => (
-                      <li key={child.id} style={{ "--depth": child.depth - rootDepth - 1, "--k": k } as CSSProperties}>
-                        <Link to={`/projecten/${child.id}`} className="place-link child" aria-current={current === child.id ? "page" : undefined}>
-                          <span className="place-name">{child.name}</span>
+              <div className="place-children" data-open={open} inert={!open}>
+                <ul>
+                  {open &&
+                    g.lists.map((l, k) => (
+                      <li key={l.id} style={{ "--depth": 0, "--k": k } as CSSProperties}>
+                        <Link to={`/lijsten/${l.id}`} className="place-link child" aria-current={current === l.id ? "page" : undefined}>
+                          <span className={`place-dot tone-${listTone(l)}`} aria-hidden="true">
+                            <Icon name={listIcon(l)} size={12} />
+                          </span>
+                          <span className="place-name">{l.name}</span>
                         </Link>
                       </li>
                     ))}
-                  </ul>
-                </div>
-              )}
+                </ul>
+              </div>
             </li>
           );
         })}
         <li>
-          <Link to="/projecten/nieuw" className="place-add">
+          <Link to="/lijsten/nieuw" className="place-add">
             <Icon name="plus" size={14} />
-            <span>Project</span>
+            <span>Lijst</span>
           </Link>
         </li>
       </ul>

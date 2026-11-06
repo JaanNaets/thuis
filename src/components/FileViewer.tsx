@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
-import type { ItemFile } from "../../shared/types";
+/** Een bestand bij een ding of gebeurtenis (zie worker/media.ts). */
+export type Attachment = { id: string; filename: string; content_type: string; size_bytes: number; created_at: string };
 import { apiUrl } from "../api";
 import { Icon } from "./Icon";
 
@@ -12,8 +13,8 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
  * Toont een bewijsstuk binnen de app. Geen nieuw tabblad: op een kiosk-tablet
  * kan je daar vaak niet meer uit terugkeren.
  */
-export function FileViewer({ file, onClose }: { file: ItemFile; onClose: () => void }) {
-  const url = apiUrl(`/files/${file.id}`);
+export function FileViewer({ file, onClose }: { file: Attachment; onClose: () => void }) {
+  const url = apiUrl(`/attachments/${file.id}`);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

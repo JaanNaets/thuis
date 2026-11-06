@@ -6696,3 +6696,120 @@ dialog.palette[open]::backdrop {
     display: none;
   }
 }
+
+/* ---------- Lijsten, logboek en lijnen (het model van lijsten en gebeurtenissen) ---------- */
+
+/* Een lijst in de zijbalk: een klein tegeltje in de toon van de lijst, onder haar tag. */
+.place-dot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--tone-soft);
+  color: var(--tone-ink);
+}
+
+/* Afgevinkt (een boodschap die gekocht is): doorstreept en stil. */
+.log-row.is-done .row-title {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+/* De voorraad rechts in een rij: rood als het op of bijna op is (de tekst blijft leesbaar). */
+.row-stepper-value.is-low {
+  color: var(--destructive);
+}
+
+/* Een getal dat op of bijna op is (de voorraad in een fiche). */
+.dl dd.is-low {
+  color: var(--destructive);
+}
+
+/* Een kaart die als geheel een link is (Uitgaven deze maand, Wie moet wie): geen onderlijning, de tekst in zijn kleur. */
+.dash-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Het aantal naast de titel van een blok (Te doen 3). */
+.dash-count {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Een bedrag groot, met jouw deel eronder. */
+.money-total {
+  display: grid;
+  gap: 2px;
+}
+
+.total-value.is-low {
+  color: var(--destructive);
+}
+
+/* Snel loggen in een blok: het zoekveld van de zijbalk, over de hele breedte. */
+.quick-open {
+  width: 100%;
+}
+
+/* Lijnen van een gebeurtenis (LinesEditor): per lijn een wit kaartje in de groep, bovenaan wat er gebeurt en met wat,
+   eronder hoeveel, prijs en de rest. */
+.line-rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line-row {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: var(--shadow-inset);
+}
+
+.line-main {
+  display: grid;
+  grid-template-columns: minmax(96px, 128px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.line-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.line-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.line-new select {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .line-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .line-main > .picker {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

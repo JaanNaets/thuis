@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { foodPerPerson, gramsOf, nutritionOf, type FoodEvent, type FoodThing } from "../shared/food.ts";
+import { foodPerPerson, gramsOf, isFood, nutritionOf, type FoodEvent, type FoodThing } from "../shared/food.ts";
 import type { FieldDef } from "../shared/fields.ts";
 
 const PRODUCT: FieldDef[] = [
@@ -46,4 +46,14 @@ test("per persoon: wie at, volgens de verdeling", () => {
   const per = foodPerPerson([meal, eaten({ data: { kcal: 200 } })]);
   assert.deepEqual(per.get("jaan"), { kcal: 525, protein: 18 });
   assert.deepEqual(per.get("jana"), { kcal: 725, protein: 18 });
+});
+
+test("eten is een gebruik met kcal (in de soort of in het ding), geen pellets", () => {
+  const kcal: FieldDef = { key: "kcal", label: "Kcal", type: "number", product: "kcal" };
+  const pellets = { fields: [], data: {}, stock: null };
+  const pasta = { fields: [kcal], data: { kcal: 350 }, stock: null };
+  assert.equal(isFood({ base: "gebruik", fields: [], lines: [{ role: "uit", amount: 1, unit: "zak", thing: pellets }] }), false);
+  assert.equal(isFood({ base: "gebruik", fields: [], lines: [{ role: "uit", amount: 300, unit: "g", thing: pasta }] }), true);
+  assert.equal(isFood({ base: "gebruik", fields: [kcal], lines: [] }), true);
+  assert.equal(isFood({ base: "aankoop", fields: [kcal], lines: [] }), false);
 });

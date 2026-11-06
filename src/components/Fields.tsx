@@ -1,5 +1,4 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { Access } from "../../shared/access";
+import { Fragment, lazy, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
 import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
   cleanValue,
@@ -13,9 +12,7 @@ import {
   INTERVAL_UNITS,
   isCodeFormat,
   normalizeShares,
-  parseDuration,
   parseFieldText,
-  REMEMBER_BY,
   type TimerValue,
   type Attributes,
   type AmountEntry,
@@ -32,30 +29,29 @@ import {
   type Names,
   type Share,
 } from "../../shared/fields";
-import { isProductCode, PRODUCT_KEYS, productFits, productLabel, type ProductInfo, type ProductKey } from "../../shared/product";
-import type { Suggestion } from "../../shared/quickfill";
+import { PRODUCT_KEYS, productFits, type ProductInfo, type ProductKey } from "../../shared/product";
 import { REMIND_DAYS } from "../../shared/remind";
-import { MAX_SPAWN } from "../../shared/spawn";
-import { splitCents } from "../../shared/totals";
-import { formatAmount, measureOf, UNITS } from "../../shared/units";
+import { splitCents } from "../../shared/ledger";
+import { formatAmount, measureOf } from "../../shared/units";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
-import type { ItemRef, ItemType, LabelScan, Person } from "../../shared/types";
+import type { ThingRef } from "../../shared/model";
+import type { Person } from "../../shared/types";
 import { api, ApiError, apiUrl } from "../api";
-import { detectInImage, type ScanResult } from "../barcode-detect";
-import { isKiosk, isTouch } from "../device";
+import type { ScanResult } from "../barcode-detect";
+import { isKiosk } from "../device";
 import { centsToInput, formatCents, formatDate, formatTotal, parseEuro } from "../format";
-import { prepareForReading, prepareUpload } from "../image";
+import { prepareUpload } from "../image";
 import { Link } from "../router";
-import { useSession } from "../session";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
-import { Alert, Avatar, Segmented, Switch } from "./Controls";
+import { Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
-import { TimerInput } from "./Timer";
-import { QuickChips, QuickInput, type QuickChip, type QuickSource } from "./QuickInput";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
+
+/** Wat je met een veld mag: niet zien, zien of wijzigen. */
+export type Access = "none" | "view" | "edit";
 
 // De barcodecode is groot (±1 MB); enkel laden wanneer er een code getoond wordt.
 const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode })));
@@ -63,7 +59,7 @@ const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode
 // ---------- namen bij id's ----------
 
 /** Namen van personen en items om waarden te tonen. Wat je niet mag zien, heet "verborgen". */
-export function namesFrom(people: Person[], refs: ItemRef[]): Names {
+export function namesFrom(people: Person[], refs: ThingRef[]): Names {
   const p = new Map(people.map((x) => [x.id, x.name]));
   const r = new Map(refs.map((x) => [x.id, x.name]));
   return { person: (id) => p.get(id) ?? "Onbekend", item: (id) => r.get(id) ?? "Verborgen" };
@@ -476,12 +472,8 @@ export function FieldInputs({
             );
           }
           case "timer":
-            return (
-              <div key={def.key} className="field wide">
-                {label}
-                <TimerInput def={def} value={(raw as TimerValue | null) ?? null} disabled={disabled} onChange={(v) => set(def.key, v)} />
-              </div>
-            );
+            // Een timer is nu een activiteit in het logboek (met een begin en een einde).
+            return null;
           case "date_range": {
             const [from, to] = Array.isArray(raw) ? (raw as [string, string]) : ["", ""];
             return (
@@ -1063,7 +1055,7 @@ const OWN_CARD: FieldType[] = ["longtext", "code", "checklist"];
  * e-mail, telefoon of adres opent de site, een mail, de telefoon of een kaart. `lists`: de andere lijsten (voor de
  * uitleg bij een berekening).
  */
-export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ItemRef[]; lists?: CalcList[] }) {
+export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ThingRef[]; lists?: CalcList[] }) {
   return (
     <>
       {defs
@@ -1088,11 +1080,11 @@ export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldD
   );
 }
 
-function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; value: FieldValue; names: Names; refs: ItemRef[] }) {
+function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; value: FieldValue; names: Names; refs: ThingRef[] }) {
   const refLink = (id: string) => {
     const ref = refs.find((r) => r.id === id);
     return ref ? (
-      <Link key={id} to={`/items/${ref.id}`} className="link-quiet">
+      <Link key={id} to={`/dingen/${ref.id}`} className="link-quiet">
         {ref.name}
       </Link>
     ) : (
@@ -1106,7 +1098,7 @@ function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; valu
   if (d.type === "item" && typeof v === "string") return refLink(v);
   if (d.type === "items" && Array.isArray(v))
     return (
-      <span className="ref-list">
+      <span>
         {(v as string[]).map((id, i) => (
           <span key={id}>
             {i > 0 && ", "}
@@ -1325,132 +1317,10 @@ export function buildFields(drafts: FieldDraft[], selfId = "self"): { fields: Fi
  * verwijzing, formaat, wat een berekening uitrekent, uitleg, kolom, filter en verplicht. `types`: de lijsten waarnaar
  * een verwijzing kan wijzen; `lists`: de lijsten waarmee een berekening kan werken (ook eronder).
  */
-/**
- * Een verwijzing die telt (zie shared/effects.ts): bij bewaren een getal van het gekozen item aanpassen, erbij of eraf,
- * met 1 of een getal of berekening van deze lijst. Enkel als de lijst waarnaar het wijst een getal heeft.
- */
-function AdjustEditor({ field, fields, lists, onChange }: { field: FieldDraft; fields: FieldDraft[]; lists: CalcList[]; onChange: (adjust: FieldDef["adjust"]) => void }) {
-  const target = lists.find((l) => l.id === field.ref_type);
-  const numbers = target?.fields.filter((x) => x.type === "number") ?? [];
-  if (!target || !numbers.length) return null;
-  const own = fields.filter((x) => x !== field && ["number", "money", "duration", "calc"].includes(x.type) && x.label.trim());
-  const adjust = field.adjust;
-  return (
-    <>
-      <label className="field">
-        <span className="label">
-          Past het gekozen item aan
-        </span>
-        <select
-          value={adjust ? `${adjust.sign}:${adjust.field}` : ""}
-          onChange={(e) => {
-            const [sign, key] = e.target.value.split(":");
-            onChange(key ? { field: key, sign: Number(sign) as 1 | -1, ...(adjust?.by ? { by: adjust.by } : {}) } : undefined);
-          }}
-        >
-          <option value="">Niets</option>
-          {numbers.map((n) => (
-            <option key={`-${n.key}`} value={`-1:${n.key}`}>
-              Trekt af van {n.label}
-            </option>
-          ))}
-          {numbers.map((n) => (
-            <option key={`+${n.key}`} value={`1:${n.key}`}>
-              Telt bij {n.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {adjust && field.type === "item" && (
-        <label className="field">
-          <span className="label">Met</span>
-          <select
-            value={adjust.by ?? ""}
-            onChange={(e) => onChange({ field: adjust.field, sign: adjust.sign, ...(e.target.value ? { by: e.target.value, ...(adjust.unit ? { unit: adjust.unit } : {}) } : {}) })}
-          >
-            <option value="">1 per item</option>
-            {own.map((x) => (
-              <option key={x.key} value={x.key}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {adjust?.by && field.type === "item" && (
-        <label className="field">
-          <span className="label">In</span>
-          <select
-            aria-label="In"
-            value={adjust.unit_by ? `veld:${adjust.unit_by}` : (adjust.unit ?? "")}
-            onChange={(e) => {
-              const v = e.target.value;
-              const { unit: _u, unit_by: _b, ...rest } = adjust;
-              onChange(v.startsWith("veld:") ? { ...rest, unit_by: v.slice(5) } : { ...rest, ...(v ? { unit: v } : {}) });
-            }}
-          >
-            <option value="">Zoals het gekozen item telt</option>
-            {fields
-              .filter((x) => x !== field && (x.type === "select" || x.type === "text") && x.label.trim())
-              .map((x) => (
-                <option key={x.key} value={`veld:${x.key}`}>
-                  Volgens {x.label}
-                </option>
-              ))}
-            <option value="verpakking">verpakking</option>
-            {UNITS.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </>
-  );
-}
-
-/**
- * Hoe een voorraad telt (zie shared/units.ts): welk veld de eenheid zegt, de inhoud per stuk en wat er in een
- * verpakking zit. Velden van deze lijst; leeg = niet.
- */
-function MeasureEditor({ field, fields, onChange }: { field: FieldDraft; fields: FieldDraft[]; onChange: (measure: FieldDef["measure"]) => void }) {
-  const texts = fields.filter((x) => x !== field && (x.type === "select" || x.type === "text") && x.label.trim());
-  const numbers = fields.filter((x) => x !== field && x.type === "number" && x.label.trim());
-  const m = field.measure ?? {};
-  const set = (k: keyof NonNullable<FieldDef["measure"]>, v: string) => {
-    const next = { ...m, [k]: v || undefined };
-    onChange(Object.values(next).some(Boolean) ? next : undefined);
-  };
-  const pick = (k: keyof NonNullable<FieldDef["measure"]>, label: string, from: FieldDraft[]) =>
-    from.length > 0 && (
-      <label className="field" key={k}>
-        <span className="label">{label}</span>
-        <select aria-label={label} value={m[k] ?? ""} onChange={(e) => set(k, e.target.value)}>
-          <option value="">Geen</option>
-          {from.map((x) => (
-            <option key={x.key} value={x.key}>
-              {x.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  return (
-    <>
-      {pick("unit", "Eenheid", texts)}
-      {pick("piece", "Inhoud per stuk", numbers)}
-      {pick("pack", "Per verpakking", numbers)}
-      {pick("pack_name", "Verpakking", texts)}
-    </>
-  );
-}
-
 export function FieldsEditor({
   value,
   onChange,
-  types,
-  lists = types,
+  lists,
   selfLabel,
   selfId,
   people,
@@ -1458,8 +1328,8 @@ export function FieldsEditor({
 }: {
   value: FieldDraft[];
   onChange: (v: FieldDraft[]) => void;
-  types: ItemType[];
-  lists?: CalcList[];
+  /** De lijsten waarnaar een verwijzing kan wijzen (die je ziet). */
+  lists: { id: string; name: string }[];
   selfLabel: string;
   /** De lijst zelf (bij bewerken); bij een nieuwe lijst verwijst "self" naar zichzelf. */
   selfId?: string;
@@ -1474,19 +1344,12 @@ export function FieldsEditor({
     () =>
       previewCalcs(
         value.map((d) => ({ ...d, label: d.label.trim() || "Naamloos veld" })),
-        lists.filter((l) => l.id !== self),
+        [],
         self,
       ),
-    [value, lists, self],
+    [value, self],
   );
   const update = (i: number, patch: Partial<FieldDraft>) => onChange(value.map((f, k) => (k === i ? { ...f, ...patch } : f)));
-  // Twee lijsten met dezelfde naam (de voorraad van twee huizen): met het project erbij.
-  const { projects } = useSession();
-  const listLabel = (t: ItemType) => {
-    const twin = types.some((x) => x.id !== t.id && x.plural === t.plural);
-    const where = projects.find((p) => p.id === t.project_id)?.name;
-    return twin && where ? `${t.plural} · ${where}` : t.plural;
-  };
   const sortable = useSortable(
     value.map((f) => f.key),
     (keys) => onChange(keys.map((k) => value.find((f) => f.key === k)!)),
@@ -1548,7 +1411,7 @@ export function FieldsEditor({
                     <CalcEditor
                       field={preview.fields[i]}
                       fields={preview.fields}
-                      lists={lists.filter((l) => l.id !== self)}
+                      lists={[]}
                       selfId={self}
                       error={preview.errors[f.key]}
                       onChange={(calc) => update(i, { calc })}
@@ -1593,11 +1456,13 @@ export function FieldsEditor({
                           >
                             <option value="">Kies een lijst</option>
                             <option value={selfId ?? "self"}>{selfLabel} (deze lijst)</option>
-                            {types.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {listLabel(t)}
-                              </option>
-                            ))}
+                            {lists
+                              .filter((t) => t.id !== selfId)
+                              .map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
                           </select>
                           {k > 0 && (
                             <button
@@ -1655,44 +1520,6 @@ export function FieldsEditor({
                     <input value={f.hint ?? ""} maxLength={160} placeholder="Wat hier hoort" onChange={(e) => update(i, { hint: e.target.value })} />
                   </label>
                   {f.type !== "calc" && <Switch checked={Boolean(f.required)} onChange={(on) => update(i, { required: on })} label="Verplicht" />}
-                  {f.type !== "calc" && (
-                    <div className="field-row">
-                      <label className="field">
-                        <span className="label">Onthouden</span>
-                        <select
-                          value={f.remember ? (f.remember_fixed ? "fixed" : "last") : ""}
-                          onChange={(e) =>
-                            update(
-                              i,
-                              e.target.value
-                                ? { remember: true, remember_fixed: e.target.value === "fixed" || undefined }
-                                : { remember: undefined, remember_fixed: undefined, remember_by: undefined },
-                            )
-                          }
-                        >
-                          <option value="">Niet</option>
-                          <option value="last">Je laatste waarde</option>
-                          <option value="fixed">Een vaste waarde</option>
-                        </select>
-                      </label>
-                      {f.remember && (
-                        <label className="field">
-                          <span className="label">Per</span>
-                          <select value={f.remember_by ?? ""} onChange={(e) => update(i, { remember_by: e.target.value || undefined })}>
-                            <option value="">Voor alles</option>
-                            <option value="name">Naam</option>
-                            {value
-                              .filter((x) => x.key !== f.key && (REMEMBER_BY as readonly string[]).includes(x.type))
-                              .map((x) => (
-                                <option key={x.key} value={x.key}>
-                                  {x.label.trim() || "Naamloos veld"}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                  )}
                   {f.type === "date" && (
                     <Switch
                       checked={Boolean(f.today)}
@@ -1714,34 +1541,6 @@ export function FieldsEditor({
                           ))}
                       </select>
                     </label>
-                  )}
-                  {f.type === "timer" && (
-                    <div className="field-row">
-                      <label className="field">
-                        <span className="label">Doel</span>
-                        <input
-                          defaultValue={f.timer_goal ? formatDuration(f.timer_goal) : ""}
-                          placeholder="bv. 16 u"
-                          onBlur={(e) => {
-                            const n = e.target.value.trim() ? parseDuration(e.target.value) : 0;
-                            update(i, { timer_goal: n > 0 ? n : undefined });
-                          }}
-                        />
-                      </label>
-                      <label className="field">
-                        <span className="label">Duur in</span>
-                        <select value={f.timer_into ?? ""} onChange={(e) => update(i, { timer_into: e.target.value || undefined })}>
-                          <option value="">Geen veld</option>
-                          {value
-                            .filter((x) => x.type === "duration")
-                            .map((x) => (
-                              <option key={x.key} value={x.key}>
-                                {x.label.trim() || "Naamloos veld"}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    </div>
                   )}
                   {(f.type === "date" || (f.type === "calc" && (f.result === "date" || f.calc?.kind === "date_add"))) && (
                     <label className="field">
@@ -1794,50 +1593,6 @@ export function FieldsEditor({
                       label="Lege velden overnemen van het gekozen item"
                     />
                   )}
-                  {(f.type === "item" || f.type === "amounts") && f.ref_type && (
-                    <AdjustEditor field={f} fields={value} lists={lists} onChange={(adjust) => update(i, { adjust })} />
-                  )}
-                  {/* Meteen ook: aan bij een nieuw item = ook een item in de eerste van deze lijsten waarin je mag toevoegen. */}
-                  {f.type === "bool" && types.length > 0 && (
-                    <div className="field">
-                      <span className="label">Aan: ook een item in</span>
-                      {[...(f.spawn ?? []), ...((f.spawn?.length ?? 0) === 0 ? [""] : [])].map((id, k) => (
-                        <div key={k} className="picker-row">
-                          <select
-                            value={id}
-                            aria-label={k === 0 ? "Aan: ook een item in" : "Of anders in"}
-                            onChange={(e) => {
-                              const next = [...(f.spawn ?? [])];
-                              next[k] = e.target.value;
-                              update(i, { spawn: next.filter(Boolean) });
-                            }}
-                          >
-                            <option value="">{k === 0 ? "Niets" : "Kies een lijst"}</option>
-                            {types.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {listLabel(t)}
-                              </option>
-                            ))}
-                          </select>
-                          {k > 0 && (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-icon btn-sm"
-                              aria-label="Deze lijst weghalen"
-                              onClick={() => update(i, { spawn: (f.spawn ?? []).filter((_, j) => j !== k) })}
-                            >
-                              <Icon name="close" size={15} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {(f.spawn?.length ?? 0) > 0 && (f.spawn?.length ?? 0) < MAX_SPAWN && !(f.spawn ?? []).includes("") && (
-                        <button type="button" className="link-button" style={{ justifySelf: "start" }} onClick={() => update(i, { spawn: [...(f.spawn ?? []), ""] })}>
-                          Nog een lijst
-                        </button>
-                      )}
-                    </div>
-                  )}
                   {f.type === "amounts" && (
                     <label className="field">
                       <span className="label">Hoeveelheden voor</span>
@@ -1853,14 +1608,6 @@ export function FieldsEditor({
                       </select>
                     </label>
                   )}
-                  {f.type === "number" && (
-                    <Switch
-                      checked={Boolean(f.counter)}
-                      onChange={(on) => update(i, { counter: on })}
-                      label="Met − en + in de lijst"
-                    />
-                  )}
-                  {f.type === "number" && f.counter && <MeasureEditor field={f} fields={value} onChange={(measure) => update(i, { measure })} />}
                   {f.type === "text" && (
                     <Switch checked={Boolean(f.aliases)} onChange={(on) => update(i, { aliases: on })} label="Namen op een kasticket" />
                   )}
@@ -1914,335 +1661,6 @@ export function FieldsEditor({
 
 // ---------- foto's ----------
 
-/**
- * Wat de AI deed, in één zin: herkend en uit de databank (met de bron), geschat (geen gekend product), of gelezen.
- * `from`: waarop een schatting steunt ("op basis van de foto").
- */
-function aiStatus(source: LabelScan["source"], from?: string): { tone: "ok" | "partial"; ai: true; text: string } {
-  if (source?.kind === "database")
-    return { tone: "ok", ai: true, text: `Herkend met AI als ${source.label}; de gegevens komen uit ${source.db === "nevo" ? (source.credit ?? "NEVO") : "Open Food Facts"}. Kijk de hoeveelheid na.` };
-  if (source?.kind === "estimate") return { tone: "partial", ai: true, text: `Geschat met AI${from ? ` ${from}` : ""} (geen gekend product gevonden). Kijk de blauwe velden na.` };
-  return { tone: "ok", ai: true, text: "Gelezen met AI. Kijk de blauwe velden even na." };
-}
-
-/**
- * Foto van een etiket (of typeplaatje): de app leest naam en velden van de lijst.
- * `onResult` krijgt ook de foto, om bij het item te bewaren.
- */
-export function LabelScanner({
-  projectId,
-  typeId,
-  products,
-  onResult,
-  onProduct,
-  onCreate,
-  onAi,
-  onFlush,
-  idle,
-  quick,
-  onPick,
-  note,
-  onNote,
-  moves,
-  onTab,
-  chips,
-  onMove,
-  onRemove,
-  inputRef,
-  initial,
-}: {
-  projectId: string;
-  typeId: string;
-  /** De lijst heeft velden uit productinfo: barcode zoeken en opzoeken in Open Food Facts. */
-  products?: boolean;
-  /** `original`: een PDF die gelezen werd (de eerste pagina als `photo`); die hoort als bestand bij het item. */
-  onResult: (scan: LabelScan, photo: File, original: File | null) => void;
-  onProduct?: (info: ProductInfo, code: string | null, photo: File | null) => void;
-  /** Een verwijzing die nog niet bestaat (bv. een nieuwe winkel) toevoegen; true als het lukte. */
-  onCreate?: (suggestion: NonNullable<LabelScan["create"]>[number]) => Promise<boolean>;
-  /** Getypte tekst in de velden zetten; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  /** ✨ Lezen met AI: de hele tekst door de AI; geeft eventueel een melding en voorstellen om iets toe te voegen. */
-  onAi?: (text: string) => Promise<{ message?: string; create?: LabelScan["create"]; source?: LabelScan["source"] }>;
-  /** Enter: meteen invullen met code (zonder AI). */
-  onFlush?: () => void;
-  /** In het lege invulveld: je meestgebruikte items (Vaak). */
-  idle?: Suggestion[];
-  /** Keuzes terwijl je typt (zie QuickInput): uit deze velden, en wat je kiest, vult dat veld meteen in. */
-  quick?: QuickSource;
-  onPick?: (suggestion: Suggestion) => void;
-  /** Wat je typt (ook de uitleg bij een foto); het formulier vult er live mee in. */
-  note: string;
-  onNote: (text: string) => void;
-  moves?: (word: string) => Suggestion[];
-  onTab?: (caret: number, back: boolean) => boolean;
-  /** Wat je tekst invulde (het rijtje onder het veld). */
-  chips?: QuickChip[];
-  onMove?: (key: string, to: string) => void;
-  onRemove?: (key: string) => void;
-  inputRef?: RefObject<HTMLInputElement | null>;
-  /** Een foto die al klaarligt (gedeeld vanuit een andere app): die wacht tot je ze laat lezen (✨ Foto lezen). */
-  initial?: File | null;
-}) {
-  const { ai } = useSession();
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [scanning, setScanning] = useState(false);
-  // Een PDF (factuur) enkel op een computer: op een gsm of tablet opent een knop met enkel foto's de fotokiezer (met
-  // Google Foto's); een PDF komt daar via Delen → Thuis. Productlijsten lezen nooit een PDF.
-  const pdfs = useMemo(() => !products && !isTouch(), [products]);
-  // Productlijsten: één camera voor een barcode (live, zonder AI) en een foto (✨). Codes die niet in Open Food Facts
-  // staan, meldt de camera niet opnieuw; dan trek je een foto.
-  const [scanHint, setScanHint] = useState<string>();
-  const tried = useRef(new Set<string>());
-  // `ai`: de melding komt van de AI (✨); zonder: van de code of uit Open Food Facts.
-  const [status, setStatus] = useState<{ tone: "busy" | "ok" | "partial" | "none"; text: string; ai?: boolean }>();
-  const [suggestions, setSuggestions] = useState<NonNullable<LabelScan["create"]>>([]);
-  // Uitleg voor de AI bij deze foto ("ik at de helft"); pas je ze achteraf aan, dan kan je opnieuw laten lezen.
-  const [last, setLast] = useState<{ file: File; note: string }>();
-  const found = (info: ProductInfo) => setStatus({ tone: "ok", text: `Gevonden in Open Food Facts: ${productLabel(info)}. Kijk de blauwe velden even na.` });
-
-  // Een gedeelde foto: nooit vanzelf naar de AI, enkel als je op ✨ Foto lezen tikt.
-  const [pending, setPending] = useState<File | null>(null);
-  const pendingUrl = useMemo(() => (pending?.type.startsWith("image/") ? URL.createObjectURL(pending) : null), [pending]);
-  useEffect(() => () => void (pendingUrl && URL.revokeObjectURL(pendingUrl)), [pendingUrl]);
-  useEffect(() => setPending(initial ?? null), [initial]);
-
-  async function read(chosen: File | undefined) {
-    if (!chosen) return;
-    setSuggestions([]);
-    setStatus({ tone: "busy", text: products ? "Barcode zoeken" : "Lezen met AI" });
-    try {
-      // Een PDF (bv. een factuur): de eerste pagina lezen als foto, en de PDF zelf bewaren bij het item.
-      const pdf = chosen.type === "application/pdf" ? chosen : null;
-      const file = pdf ? await (await import("../pdf")).pdfFirstPage(pdf) : chosen;
-      const [small, photo] = await Promise.all([prepareForReading(file), prepareUpload(file)]);
-      // Eerst een barcode op de foto zelf: gratis, zonder AI, en exact. Met uitleg ("ik at de helft") leest de AI
-      // toch de rest, met die barcode erbij.
-      let code: string | undefined;
-      if (products && onProduct) {
-        const read = (await detectInImage(file).catch(() => null))?.rawValue;
-        code = read && isProductCode(read) ? read : undefined;
-        // Met uitleg leest de AI de rest (met die barcode erbij); zonder AI telt enkel de barcode. Een code die de camera
-        // al opzocht en niet vond, niet nog eens; lukt opzoeken niet, dan leest de AI gewoon de foto.
-        const look = code && (!note.trim() || !ai) && !tried.current.has(code);
-        const info = look ? await findProduct(code!).catch((err) => (ai ? null : Promise.reject(err))) : null;
-        if (info) {
-          onProduct(info, code!, photo);
-          return found(info);
-        }
-      }
-      if (!ai)
-        return setStatus({
-          tone: "none",
-          text: code ? "Dit product staat (nog) niet in Open Food Facts. Vul het zelf in." : products ? "Geen barcode gevonden op deze foto." : "Lezen met AI staat voor jou uit.",
-        });
-      const body = new FormData();
-      body.set("image", small);
-      body.set("type_id", typeId);
-      if (note.trim()) body.set("note", note.trim());
-      if (code) body.set("code", code);
-      setLast({ file: chosen, note: note.trim() });
-      setStatus({ tone: "busy", text: "Lezen met AI" });
-      const scan = await api.post<LabelScan>(`/projects/${projectId}/items/scan`, body);
-      onResult(scan, photo, pdf);
-      setSuggestions(onCreate ? (scan.create ?? []) : []);
-      setStatus(scan.message ? { tone: "none", text: scan.message } : aiStatus(scan.source, "op basis van de foto"));
-    } catch (err) {
-      setStatus({ tone: "none", text: (err as Error).message });
-    }
-  }
-
-  /** Een barcode in de camera van een productlijst: gevonden = invullen (zonder AI), anders blijft de camera open. */
-  async function liveCode(code: string) {
-    tried.current.add(code);
-    setScanHint("Product opzoeken");
-    const info = isProductCode(code) ? await findProduct(code).catch(() => null) : null;
-    if (!info) return setScanHint("Niet in Open Food Facts. Trek een foto.");
-    setScanning(false);
-    setScanHint(undefined);
-    onProduct?.(info, code, null);
-    found(info);
-  }
-
-  async function scanned(code: string) {
-    setScanning(false);
-    setStatus({ tone: "busy", text: "Product opzoeken" });
-    try {
-      const info = isProductCode(code) ? await findProduct(code) : null;
-      if (!info) return setStatus({ tone: "none", text: `Dit product staat (nog) niet in Open Food Facts. Vul het zelf in${ai ? ", of trek een foto" : ""}.` });
-      onProduct?.(info, code, null);
-      found(info);
-    } catch (err) {
-      setStatus({ tone: "none", text: (err as Error).message });
-    }
-  }
-
-  /** ✨ Lezen met AI (zie ItemForm en shared/quickfill.ts): wat de code al invulde, blijft. */
-  async function fill() {
-    if (!onAi || !note.trim()) return;
-    setSuggestions([]);
-    setStatus({ tone: "busy", text: "Lezen met AI" });
-    try {
-      const done = await onAi(note.trim());
-      setSuggestions(done.create ?? []);
-      setStatus(done.message ? { tone: "none", text: done.message } : aiStatus(done.source));
-    } catch (err) {
-      setStatus({ tone: "none", text: (err as Error).message });
-    }
-  }
-
-  async function create(s: NonNullable<LabelScan["create"]>[number]) {
-    if (await onCreate!(s)) setSuggestions((list) => list.filter((x) => x !== s));
-  }
-
-  const input = (ref: typeof cameraRef, camera: boolean) => (
-    <input
-      ref={ref}
-      type="file"
-      accept={camera || !pdfs ? "image/*" : "image/*,application/pdf"}
-      capture={camera ? "environment" : undefined}
-      hidden
-      onChange={(e) => {
-        read(e.target.files?.[0]);
-        e.target.value = "";
-      }}
-    />
-  );
-
-  return (
-    <div className="scan-buttons">
-      {/* Een gedeelde foto eerst: ze komt bij het item, en de AI leest ze pas als je op ✨ Foto lezen tikt. */}
-      {pending && (
-        <div className="shared-pending">
-          {pendingUrl ? <img src={pendingUrl} alt="Gedeelde foto" /> : <Icon name="file" size={20} />}
-          {(ai || products) && (
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled={status?.tone === "busy"}
-              onClick={() => {
-                setPending(null);
-                read(pending);
-              }}
-            >
-              {ai ? (
-                <>
-                  <Icon name="sparkles" /> Foto lezen
-                </>
-              ) : (
-                <>
-                  <Icon name="scan" /> Barcode zoeken
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-      {/* Typen: vult live in met code; ✨ laat de AI meelezen. Wat je typt, is ook de uitleg bij een foto. */}
-      <div className="picker-row">
-        <QuickInput
-          value={note}
-          label="Typ wat je weet"
-          placeholder={products ? "Typ wat je weet, bv. 21-10 komkommer 200 g" : "Typ wat je weet, bv. 21-10 colruyt 23,40 euro"}
-          onChange={onNote}
-          onEnter={() => onFlush?.()}
-          source={quick}
-          onPick={(s) => onPick?.(s)}
-          moves={moves}
-          onTab={onTab}
-          idle={idle}
-          inputRef={inputRef}
-        />
-        {onAi && ai && (
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon ai-button"
-            aria-label="Lezen met AI"
-            title="Lezen met AI"
-            disabled={!note.trim() || status?.tone === "busy"}
-            onClick={fill}
-          >
-            <Icon name="sparkles" size={17} />
-          </button>
-        )}
-      </div>
-      {chips && onMove && onRemove && <QuickChips chips={chips} onMove={onMove} onRemove={onRemove} />}
-      {/* Een foto lezen gaat (buiten een barcode) naar de AI: daarom een kleine ✨ op de knop. In een productlijst is
-          Foto één camera: een barcode leest ze live (zonder AI), de ontspanknop trekt een foto voor de AI. AI uit: in
-          een productlijst Barcode en Uit foto (enkel de barcode op de foto), elders geen fotoknoppen. */}
-      <div className="btn-row">
-        {products && ai && (
-          <button
-            type="button"
-            className="btn btn-outline"
-            title="Barcode, of een foto lezen met AI"
-            disabled={status?.tone === "busy"}
-            onClick={() => {
-              setScanHint(undefined);
-              setScanning(true);
-            }}
-          >
-            <Icon name="camera" /> Foto <AiMark />
-          </button>
-        )}
-        {products && !ai && (
-          <button type="button" className="btn btn-outline" disabled={status?.tone === "busy"} onClick={() => setScanning(true)}>
-            <Icon name="scan" /> Barcode
-          </button>
-        )}
-        {!products && ai && (
-          <button type="button" className="btn btn-outline" title="Lezen met AI" disabled={status?.tone === "busy"} onClick={() => cameraRef.current?.click()}>
-            <Icon name="camera" /> Foto <AiMark />
-          </button>
-        )}
-        {(ai || products) && (
-          <button type="button" className="btn btn-outline" title={ai ? "Lezen met AI" : undefined} disabled={status?.tone === "busy"} onClick={() => fileRef.current?.click()}>
-            <Icon name="image" /> {pdfs ? "Uit bestand" : "Uit foto"} {ai && <AiMark />}
-          </button>
-        )}
-      </div>
-      {input(cameraRef, true)}
-      {input(fileRef, false)}
-      {scanning &&
-        (products && ai ? (
-          <BarcodeScanner
-            continuous
-            hint={scanHint ?? "Hou de barcode in beeld, of trek een foto"}
-            skip={(code) => tried.current.has(code)}
-            onClose={() => setScanning(false)}
-            onResult={(r) => liveCode(r.rawValue)}
-            onPhoto={(file) => {
-              setScanning(false);
-              read(file);
-            }}
-          />
-        ) : (
-          <BarcodeScanner hint="Scan de barcode op de verpakking" onClose={() => setScanning(false)} onResult={(r) => scanned(r.rawValue)} />
-        ))}
-      {status && (
-        <Alert tone={status.tone} ai={status.ai}>
-          {status.text}
-        </Alert>
-      )}
-      {ai && last && status?.tone !== "busy" && note.trim() !== last.note && (
-        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => read(last.file)}>
-          <Icon name="repeat" size={15} /> Opnieuw lezen met deze uitleg <AiMark />
-        </button>
-      )}
-      {suggestions.map((s) => (
-        <div key={s.key} className="scan-suggestion">
-          <span className="hint">
-            "{s.name}" staat nog niet bij {s.plural}.
-          </span>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => create(s)}>
-            <Icon name="plus" size={15} /> Toevoegen
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** De kleine grijze ✨ op een knop die de AI laat lezen (een foto, een kasticket): je ziet vooraf dat de AI meeleest. */
 export function AiMark() {
   return <Icon name="sparkles" size={13} className="ai-mark" />;
@@ -2261,10 +1679,13 @@ export async function findProduct(code: string): Promise<ProductInfo | null> {
 /** De foto van een item bovenaan de fiche: tonen, toevoegen, vervangen of weghalen. */
 export function ItemPhoto({
   item,
+  base = "things",
   canEdit,
   onChange,
 }: {
   item: { id: string; name: string; photo_version: number | null };
+  /** Van een ding of van een gebeurtenis (een kasticket). */
+  base?: "things" | "events";
   canEdit: boolean;
   onChange: (version: number | null, message: string) => void;
 }) {
@@ -2279,7 +1700,7 @@ export function ItemPhoto({
     try {
       const body = new FormData();
       body.set("file", await prepareUpload(file));
-      const { photo_version } = await api.put<{ photo_version: number }>(`/items/${item.id}/photo`, body);
+      const { photo_version } = await api.put<{ photo_version: number }>(`/${base}/${item.id}/photo`, body);
       onChange(photo_version, "Foto bewaard");
     } catch (err) {
       setError((err as Error).message);
@@ -2291,7 +1712,7 @@ export function ItemPhoto({
   async function remove() {
     setBusy(true);
     try {
-      await api.delete(`/items/${item.id}/photo`);
+      await api.delete(`/${base}/${item.id}/photo`);
       onChange(null, "Foto weggehaald");
     } finally {
       setBusy(false);
@@ -2302,7 +1723,7 @@ export function ItemPhoto({
   return (
     // Zonder foto: enkel de knop (geen leeg vlak).
     <div className="item-photo">
-      {item.photo_version ? <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt={`Foto van ${item.name}`} /> : null}
+      {item.photo_version ? <img src={apiUrl(`/${base}/${item.id}/photo?v=${item.photo_version}`)} alt={`Foto van ${item.name}`} /> : null}
       {canEdit && (
         <div className="btn-row">
           <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>

@@ -46,6 +46,12 @@ export function gramsOf(amount: number | null, unit: string | null, thing: FoodT
   return inOwn !== null ? convert(inOwn, m.unit, target) : convert(n, from, target);
 }
 
+const hasKcal = (fields: FieldDef[]) => fields.some((f) => f.product === "kcal" && f.type === "number");
+
+/** Is dit eten? Een gebruik met een veld voor kcal, of dat iets gebruikte uit een lijst met kcal (geen pellets). */
+export const isFood = (e: Pick<FoodEvent, "base" | "fields" | "lines">) =>
+  e.base === "gebruik" && (hasKcal(e.fields) || e.lines.some((l) => l.role === "uit" && l.thing !== null && hasKcal(l.thing.fields)));
+
 /** De voedingswaarden van één gebeurtenis, in totaal; null als ze niet als eten telt. */
 export function nutritionOf(e: FoodEvent): Nutrition | null {
   if (e.base !== "gebruik" || e.status !== "gebeurd") return null;

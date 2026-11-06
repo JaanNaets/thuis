@@ -1,4 +1,4 @@
-import { ICONS, type IconKey } from "../../shared/templates";
+import { ICONS, type IconKey } from "../../shared/icons";
 import { Icon, type IconName } from "./Icon";
 
 /** Een icoon kiezen voor een project of lijst: een raster van knoppen (radio's). */
