@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { computeLocal, isLinkCalc } from "../../shared/calc";
 import { referencedItems, referencedPeople, type Attributes } from "../../shared/fields";
-import { canEdit, type List, type Role, type StockLevel, type ThingRef, type ThingRow } from "../../shared/model";
+import { canEdit, type LineRole, type List, type Role, type StockLevel, type ThingRef, type ThingRow } from "../../shared/model";
 import { measureFor, stockLevel, unitPrice, type StockLine } from "../../shared/stock";
 import type { Person } from "../../shared/types";
 import { brusselsToday } from "../today";
@@ -163,20 +163,69 @@ things.get("/", async (c) => {
   const text = c.req.query("in")?.trim().toLowerCase() ?? "";
   const chosen = (c.req.query("ids") ?? "").split(",").filter(Boolean).slice(0, 100);
   if (chosen.length) return c.json({ things: await thingRefs(db, seen, chosen), more: false });
-  const where = text ? "instr(?2, lower(t.name)) > 0 AND length(t.name) >= 2" : "t.name LIKE ?2";
-  const { results } = await db
+  // In een tekst: de hele naam, of een woord van minstens 4 letters uit de naam ("sprinter" → Mercedes Sprinter).
+  const words = text ? [...new Set(text.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !/^\d+$/.test(w)))].slice(0, 8) : [];
+  const where = text
+    ? `(instr(?2, lower(t.name)) > 0 AND length(t.name) >= 2)${words.map((_, i) => ` OR lower(t.name) LIKE ?${i + 3}`).join("")}`
+    : "t.name LIKE ?2";
+  const { results: rows } = await db
     .prepare(
       `SELECT t.id, t.name, t.list_id, t.data, l.name AS list, l.stock FROM things t JOIN lists l ON l.id = t.list_id
-       WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND t.archived = 0 AND ${where}
-       ORDER BY ${text ? "length(t.name) DESC" : "t.name COLLATE NOCASE"} LIMIT ${limit + 1}`,
+       WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND t.archived = 0 AND (${where})
+       ORDER BY ${text ? "length(t.name) DESC" : "t.name COLLATE NOCASE"} LIMIT ${text ? 200 : limit + 1}`,
     )
-    .bind(ids(scope), text ? text : `%${q}%`)
+    .bind(ids(scope), text ? text : `%${q}%`, ...words.map((w) => `%${w}%`))
     .all<{ id: string; name: string; list_id: string; list: string; data: string; stock: string | null }>();
+  // Een woord moet een heel woord van de naam zijn (geen "pasta" in "pastasaus"); de hele naam eerst.
+  const whole = (name: string) => text.includes(name.toLowerCase());
+  const results = text
+    ? rows
+        .filter((r) => whole(r.name) || r.name.toLowerCase().split(/[^\p{L}\p{N}]+/u).some((w) => words.includes(w)))
+        .sort((a, b) => Number(whole(b.name)) - Number(whole(a.name)) || b.name.length - a.name.length)
+    : rows;
+  const found = results.slice(0, limit);
+  const usual = text ? await usualRoles(db, seen, found) : new Map<string, LineRole>();
   return c.json({
-    things: results.slice(0, limit).map((r) => ({ id: r.id, name: r.name, list_id: r.list_id, list: r.list, unit: unitOf(r) }) satisfies ThingRef),
+    things: found.map(
+      (r) =>
+        ({
+          id: r.id,
+          name: r.name,
+          list_id: r.list_id,
+          list: r.list,
+          unit: unitOf(r),
+          ...(text ? { usual: usual.get(r.id) ?? null, stock: Boolean(r.stock) } : {}),
+        }) satisfies ThingRef,
+    ),
     more: results.length > limit,
   });
 });
+
+/**
+ * Welke rol een ding meestal heeft (Colruyt: bij, de wagen: voor), uit de lijnen in wat de lezer ziet; zonder
+ * geschiedenis die van de andere dingen in zijn lijst (een nieuwe winkel in Winkels: bij).
+ */
+async function usualRoles(db: D1Database, seen: Map<string, Role>, found: { id: string; list_id: string }[]): Promise<Map<string, LineRole>> {
+  if (!found.length) return new Map();
+  const { results } = await db
+    .prepare(
+      `SELECT t.id AS thing_id, t.list_id, l.role, COUNT(*) AS n FROM lines l JOIN things t ON t.id = l.thing_id JOIN events e ON e.id = l.event_id
+       WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND e.list_id IN (SELECT value FROM json_each(?2)) GROUP BY t.id, l.role`,
+    )
+    .bind(ids(new Set(found.map((f) => f.list_id))), ids(seen.keys()))
+    .all<{ thing_id: string; list_id: string; role: LineRole; n: number }>();
+  const top = (rows: typeof results) => {
+    const sums = new Map<LineRole, number>();
+    for (const r of rows) sums.set(r.role, (sums.get(r.role) ?? 0) + r.n);
+    return [...sums].sort((a, b) => b[1] - a[1])[0]?.[0];
+  };
+  const out = new Map<string, LineRole>();
+  for (const f of found) {
+    const role = top(results.filter((r) => r.thing_id === f.id)) ?? top(results.filter((r) => r.list_id === f.list_id));
+    if (role) out.set(f.id, role);
+  }
+  return out;
+}
 
 // ---------- één ding ----------
 

@@ -145,7 +145,16 @@ export type StockLevel = {
 };
 
 /** Een ding om naar te verwijzen of te kiezen (zoeken, een lijn). */
-export type ThingRef = { id: string; name: string; list_id: string; list: string; unit?: string | null };
+export type ThingRef = {
+  id: string;
+  name: string;
+  list_id: string;
+  list: string;
+  unit?: string | null;
+  /** Bij zoeken in een tekst: de rol die het meestal heeft in wat je ziet (Colruyt: bij), en of zijn lijst voorraad telt. */
+  usual?: LineRole | null;
+  stock?: boolean;
+};
 
 // ---------- gebeurtenissen ----------
 

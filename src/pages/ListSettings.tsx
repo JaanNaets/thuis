@@ -1,34 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
-import {
-  BASES,
-  canManage,
-  isBase,
-  ROLES,
-  type Base,
-  type DirectRole,
-  type KindInfo,
-  type ListDetail,
-  type ListPerson,
-} from "../../shared/model";
+import { BASES, canManage, isBase, ROLES, type Base, type DirectRole, type KindInfo, type ListDetail, type ListPerson } from "../../shared/model";
 import type { StockDef } from "../../shared/stock";
 import type { IconKey } from "../../shared/icons";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
-import {
-  Avatar,
-  CardHead,
-  Switch,
-  Tabs,
-  ToneSwatches,
-} from "../components/Controls";
-import {
-  buildFields,
-  FieldsEditor,
-  fieldsDraft,
-  type FieldDraft,
-} from "../components/Fields";
+import { Avatar, CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
+import { buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon, type IconName } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
@@ -48,12 +27,7 @@ export function ListSettings() {
   const [params, setParams] = useSearchParams();
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
-  if (!canManage(detail.role))
-    return (
-      <p className="page muted">
-        Enkel een beheerder kan deze lijst instellen.
-      </p>
-    );
+  if (!canManage(detail.role)) return <p className="page muted">Enkel een beheerder kan deze lijst instellen.</p>;
   const tabs: { value: Tab; label: string }[] = [
     { value: "algemeen", label: "Algemeen" },
     ...(detail.list.one
@@ -69,16 +43,8 @@ export function ListSettings() {
   const tab = asked && tabs.some((t) => t.value === asked) ? asked : "algemeen";
   return (
     <div className="page form">
-      <PageHead
-        title="Instellen"
-        back={{ to: `/lijsten/${detail.list.id}`, label: detail.list.name }}
-      />
-      <Tabs
-        label="Onderwerp"
-        value={tab}
-        onChange={(t) => setParams({ tab: t }, { replace: true })}
-        tabs={tabs}
-      />
+      <PageHead title="Instellen" back={{ to: `/lijsten/${detail.list.id}`, label: detail.list.name }} />
+      <Tabs label="Onderwerp" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />
       {tab === "algemeen" && <General detail={detail} onSaved={reload} />}
       {tab === "velden" && <Fields detail={detail} onSaved={reload} />}
       {tab === "voorraad" && <Stock detail={detail} onSaved={reload} />}
@@ -88,13 +54,7 @@ export function ListSettings() {
   );
 }
 
-function General({
-  detail,
-  onSaved,
-}: {
-  detail: ListDetail;
-  onSaved: () => void;
-}) {
+function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const { list } = detail;
   const { tags, reloadMe } = useSession();
   const toast = useToast();
@@ -106,9 +66,7 @@ function General({
   const [color, setColor] = useState<Tone | null>(list.color);
   const [tagIds, setTagIds] = useState(detail.tags.map((t) => t.id));
   const [fresh, setFresh] = useState<string[]>([]);
-  const [notify, setNotify] = useState<keyof typeof NOTIFY_CHOICES>(
-    list.notify?.to ?? "none",
-  );
+  const [notify, setNotify] = useState<keyof typeof NOTIFY_CHOICES>(list.notify?.to ?? "none");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -137,11 +95,7 @@ function General({
   }
   async function archive() {
     await api.put(`/lists/${list.id}/archived`, { archived: !list.archived });
-    toast(
-      list.archived
-        ? `${list.name} terug uit het archief`
-        : `${list.name} gearchiveerd`,
-    );
+    toast(list.archived ? `${list.name} terug uit het archief` : `${list.name} gearchiveerd`);
     onSaved();
     reloadMe();
   }
@@ -164,21 +118,11 @@ function General({
       <section className="card form-section">
         <label className="field">
           <span className="label">Naam</span>
-          <input
-            value={name}
-            maxLength={60}
-            required
-            onChange={(e) => setName(e.target.value)}
-          />
+          <input value={name} maxLength={60} required onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
           <span className="label">Eén ding heet</span>
-          <input
-            value={one}
-            maxLength={40}
-            placeholder="bv. Wijn"
-            onChange={(e) => setOne(e.target.value)}
-          />
+          <input value={one} maxLength={40} placeholder="bv. Wijn" onChange={(e) => setOne(e.target.value)} />
         </label>
         <div className="field">
           <span className="label">Icoon</span>
@@ -190,21 +134,10 @@ function General({
         </div>
       </section>
       <section className="card form-section">
-        <TagChooser
-          tags={tags}
-          value={tagIds}
-          onChange={setTagIds}
-          fresh={fresh}
-          onFresh={setFresh}
-        />
+        <TagChooser tags={tags} value={tagIds} onChange={setTagIds} fresh={fresh} onFresh={setFresh} />
         <label className="field">
           <span className="label">Melding bij iets nieuws</span>
-          <select
-            value={notify}
-            onChange={(e) =>
-              setNotify(e.target.value as keyof typeof NOTIFY_CHOICES)
-            }
-          >
+          <select value={notify} onChange={(e) => setNotify(e.target.value as keyof typeof NOTIFY_CHOICES)}>
             {Object.entries(NOTIFY_CHOICES).map(([k, label]) => (
               <option key={k} value={k}>
                 {label}
@@ -213,18 +146,12 @@ function General({
           </select>
         </label>
       </section>
-      <button
-        type="button"
-        className="btn btn-primary btn-lg"
-        disabled={busy || !name.trim()}
-        onClick={save}
-      >
+      <button type="button" className="btn btn-primary btn-lg" disabled={busy || !name.trim()} onClick={save}>
         Opslaan
       </button>
       <div className="btn-row" style={{ justifySelf: "start" }}>
         <button type="button" className="btn btn-ghost" onClick={archive}>
-          <Icon name="archive" size={15} />{" "}
-          {list.archived ? "Uit het archief" : "Archiveren"}
+          <Icon name="archive" size={15} /> {list.archived ? "Uit het archief" : "Archiveren"}
         </button>
         <button type="button" className="btn btn-danger-ghost" onClick={remove}>
           <Icon name="trash" size={15} /> Verwijderen
@@ -234,20 +161,12 @@ function General({
   );
 }
 
-function Fields({
-  detail,
-  onSaved,
-}: {
-  detail: ListDetail;
-  onSaved: () => void;
-}) {
+function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const { list } = detail;
   const { person, lists } = useSession();
   const { data: people } = useApi<Person[]>("/me/people");
   const toast = useToast();
-  const [drafts, setDrafts] = useState<FieldDraft[]>(() =>
-    fieldsDraft(list.fields),
-  );
+  const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(list.fields));
   const [busy, setBusy] = useState(false);
   async function save() {
     const built = buildFields(drafts, list.id);
@@ -266,22 +185,9 @@ function Fields({
   return (
     <>
       <section className="card form-section">
-        <FieldsEditor
-          value={drafts}
-          onChange={setDrafts}
-          lists={lists}
-          selfLabel={list.name}
-          selfId={list.id}
-          people={people ?? []}
-          meId={person.id}
-        />
+        <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={list.name} selfId={list.id} people={people ?? []} meId={person.id} />
       </section>
-      <button
-        type="button"
-        className="btn btn-primary btn-lg"
-        disabled={busy}
-        onClick={save}
-      >
+      <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={save}>
         Opslaan
       </button>
     </>
@@ -300,19 +206,11 @@ const STOCK_PARTS: { key: keyof StockDef; label: string; types: string[] }[] = [
   { key: "min", label: "Bijna op onder uit", types: ["number"] },
 ];
 
-function Stock({
-  detail,
-  onSaved,
-}: {
-  detail: ListDetail;
-  onSaved: () => void;
-}) {
+function Stock({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const { list } = detail;
   const toast = useToast();
   const [on, setOn] = useState(Boolean(list.stock));
-  const [def, setDef] = useState<StockDef>(
-    list.stock ?? { default_unit: "stuk" },
-  );
+  const [def, setDef] = useState<StockDef>(list.stock ?? { default_unit: "stuk" });
   async function save() {
     try {
       await api.put(`/lists/${list.id}`, { stock: on ? def : null });
@@ -330,24 +228,12 @@ function Stock({
           <>
             <label className="field">
               <span className="label">Eenheid als er geen is</span>
-              <input
-                value={def.default_unit ?? ""}
-                maxLength={20}
-                placeholder="bv. stuk, kg, fles"
-                onChange={(e) =>
-                  setDef({ ...def, default_unit: e.target.value })
-                }
-              />
+              <input value={def.default_unit ?? ""} maxLength={20} placeholder="bv. stuk, kg, fles" onChange={(e) => setDef({ ...def, default_unit: e.target.value })} />
             </label>
             {STOCK_PARTS.map((p) => (
               <label key={p.key} className="field">
                 <span className="label">{p.label}</span>
-                <select
-                  value={def[p.key] ?? ""}
-                  onChange={(e) =>
-                    setDef({ ...def, [p.key]: e.target.value || undefined })
-                  }
-                >
+                <select value={def[p.key] ?? ""} onChange={(e) => setDef({ ...def, [p.key]: e.target.value || undefined })}>
                   <option value="">Geen veld</option>
                   {list.fields
                     .filter((f) => p.types.includes(f.type))
@@ -369,13 +255,7 @@ function Stock({
   );
 }
 
-function Kinds({
-  detail,
-  onSaved,
-}: {
-  detail: ListDetail;
-  onSaved: () => void;
-}) {
+function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const own = detail.kinds.filter((k) => k.list_id === detail.list.id);
   const [editing, setEditing] = useState<KindInfo | "new" | null>(null);
   return (
@@ -384,11 +264,7 @@ function Kinds({
         <CardHead
           title="Eigen soorten"
           action={
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setEditing("new")}
-            >
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
               <Icon name="plus" size={15} /> Soort
             </button>
           }
@@ -399,11 +275,7 @@ function Kinds({
           <ul className="rows">
             {own.map((k) => (
               <li key={k.id}>
-                <button
-                  type="button"
-                  className="row"
-                  onClick={() => setEditing(k)}
-                >
+                <button type="button" className="row" onClick={() => setEditing(k)}>
                   <span className="cell-main">
                     <span className="row-media">
                       <Icon name={k.icon as IconName} size={16} />
@@ -413,9 +285,7 @@ function Kinds({
                       <span className="row-meta">
                         <span>
                           {BASES[k.base].label}
-                          {k.fields.length
-                            ? ` · ${k.fields.map((f) => f.label).join(", ")}`
-                            : ""}
+                          {k.fields.length ? ` · ${k.fields.map((f) => f.label).join(", ")}` : ""}
                         </span>
                       </span>
                     </span>
@@ -426,11 +296,7 @@ function Kinds({
           </ul>
         )}
       </section>
-      <Sheet
-        open={editing !== null}
-        title={editing === "new" ? "Nieuwe soort" : (editing?.name ?? "")}
-        onClose={() => setEditing(null)}
-      >
+      <Sheet open={editing !== null} title={editing === "new" ? "Nieuwe soort" : (editing?.name ?? "")} onClose={() => setEditing(null)}>
         {editing !== null && (
           <KindForm
             listId={detail.list.id}
@@ -446,29 +312,15 @@ function Kinds({
   );
 }
 
-function KindForm({
-  listId,
-  kind,
-  onDone,
-}: {
-  listId: string;
-  kind: KindInfo | null;
-  onDone: () => void;
-}) {
+function KindForm({ listId, kind, onDone }: { listId: string; kind: KindInfo | null; onDone: () => void }) {
   const { person, lists } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
   const [base, setBase] = useState<Base>(kind?.base ?? "gebruik");
   const [name, setName] = useState(kind?.name ?? "");
-  const [icon, setIcon] = useState<IconKey | null>(
-    (kind?.icon as IconKey) ?? null,
-  );
-  const [goal, setGoal] = useState(
-    kind?.goal ? String(Math.round(kind.goal / 60)) : "",
-  );
-  const [drafts, setDrafts] = useState<FieldDraft[]>(() =>
-    fieldsDraft(kind?.fields ?? []),
-  );
+  const [icon, setIcon] = useState<IconKey | null>((kind?.icon as IconKey) ?? null);
+  const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
+  const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
   async function save() {
     const built = buildFields(drafts, "self");
     if ("error" in built) return toast(built.error, "alert");
@@ -477,10 +329,7 @@ function KindForm({
       name,
       icon,
       fields: built.fields,
-      goal:
-        base === "activiteit" && goal.trim()
-          ? Math.round(Number(goal.replace(",", ".")) * 60)
-          : null,
+      goal: base === "activiteit" && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
     };
     try {
       if (kind) await api.put(`/kinds/${kind.id}`, body);
@@ -511,10 +360,7 @@ function KindForm({
       {!kind && (
         <label className="field">
           <span className="label">Basissoort</span>
-          <select
-            value={base}
-            onChange={(e) => isBase(e.target.value) && setBase(e.target.value)}
-          >
+          <select value={base} onChange={(e) => isBase(e.target.value) && setBase(e.target.value)}>
             {Object.entries(BASES).map(([k, b]) => (
               <option key={k} value={k} title={b.hint}>
                 {b.label}
@@ -525,13 +371,7 @@ function KindForm({
       )}
       <label className="field">
         <span className="label">Naam</span>
-        <input
-          value={name}
-          maxLength={40}
-          required
-          placeholder="bv. Gegeten, Carwash"
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input value={name} maxLength={40} required placeholder="bv. Gegeten, Carwash" onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="field">
         <span className="label">Icoon</span>
@@ -540,37 +380,16 @@ function KindForm({
       {base === "activiteit" && (
         <label className="field">
           <span className="label">Melding na (uren)</span>
-          <input
-            inputMode="decimal"
-            value={goal}
-            placeholder="bv. 16"
-            onChange={(e) => setGoal(e.target.value)}
-          />
+          <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
         </label>
       )}
-      <FieldsEditor
-        value={drafts}
-        onChange={setDrafts}
-        lists={lists}
-        selfLabel={name || "Deze soort"}
-        people={[]}
-        meId={person.id}
-      />
+      <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Deze soort"} people={[]} meId={person.id} />
       <div className="btn-row">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!name.trim()}
-          onClick={save}
-        >
+        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>
           Opslaan
         </button>
         {kind && (
-          <button
-            type="button"
-            className="btn btn-danger-ghost"
-            onClick={remove}
-          >
+          <button type="button" className="btn btn-danger-ghost" onClick={remove}>
             Weghalen
           </button>
         )}
@@ -579,13 +398,7 @@ function KindForm({
   );
 }
 
-function People({
-  detail,
-  onSaved,
-}: {
-  detail: ListDetail;
-  onSaved: () => void;
-}) {
+function People({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const { list } = detail;
   const { person: me } = useSession();
   const toast = useToast();
@@ -593,11 +406,7 @@ function People({
   async function setRole(p: ListPerson, role: DirectRole | null) {
     try {
       await api.put(`/lists/${list.id}/people/${p.person.id}`, { role });
-      toast(
-        role === null
-          ? `${p.person.name} weggehaald`
-          : `${p.person.name}: ${role === "geen" ? "geen toegang" : ROLES[role].label.toLowerCase()}`,
-      );
+      toast(role === null ? `${p.person.name} weggehaald` : `${p.person.name}: ${role === "geen" ? "geen toegang" : ROLES[role].label.toLowerCase()}`);
       onSaved();
     } catch (err) {
       toast((err as Error).message, "alert");
@@ -609,11 +418,7 @@ function People({
         <CardHead
           title="Wie"
           action={
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setAdding(true)}
-            >
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setAdding(true)}>
               <Icon name="plus" size={15} /> Iemand
             </button>
           }
@@ -625,31 +430,14 @@ function People({
                 <span className="cell-main">
                   <Avatar member={p.person} />
                   <span className="row-main">
-                    <span className="row-title">
-                      {p.person.id === me.id
-                        ? `${p.person.name} (jij)`
-                        : p.person.name}
-                    </span>
+                    <span className="row-title">{p.person.id === me.id ? `${p.person.name} (jij)` : p.person.name}</span>
                     <span className="row-meta">
-                      <span>
-                        {p.direct === "geen"
-                          ? "Geen toegang (uitzondering)"
-                          : p.via
-                            ? `Via ${p.via.tag}`
-                            : ROLES[p.role].label}
-                      </span>
+                      <span>{p.direct === "geen" ? "Geen toegang (uitzondering)" : p.via ? `Via ${p.via.tag}` : ROLES[p.role].label}</span>
                     </span>
                   </span>
                 </span>
                 <span className="member-actions">
-                  <select
-                    className="scope-select"
-                    aria-label={`Rol van ${p.person.name}`}
-                    value={p.direct ?? ""}
-                    onChange={(e) =>
-                      setRole(p, (e.target.value || null) as DirectRole | null)
-                    }
-                  >
+                  <select className="scope-select" aria-label={`Rol van ${p.person.name}`} value={p.direct ?? ""} onChange={(e) => setRole(p, (e.target.value || null) as DirectRole | null)}>
                     {p.via && (
                       <option value="">
                         Via {p.via.tag} ({ROLES[p.role].label.toLowerCase()})
@@ -664,12 +452,7 @@ function People({
                     <option value="geen">Geen toegang</option>
                   </select>
                   {p.direct && !p.via && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-icon btn-sm"
-                      aria-label={`${p.person.name} weghalen`}
-                      onClick={() => setRole(p, null)}
-                    >
+                    <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${p.person.name} weghalen`} onClick={() => setRole(p, null)}>
                       <Icon name="close" size={15} />
                     </button>
                   )}
@@ -679,11 +462,7 @@ function People({
           ))}
         </ul>
       </section>
-      <Sheet
-        open={adding}
-        title="Iemand toevoegen"
-        onClose={() => setAdding(false)}
-      >
+      <Sheet open={adding} title="Iemand toevoegen" onClose={() => setAdding(false)}>
         {adding && (
           <AddPerson
             listId={list.id}
@@ -708,12 +487,7 @@ function AddPerson({ listId, onDone }: { listId: string; onDone: () => void }) {
   useEffect(() => setPersonId(""), [known]);
   async function save() {
     try {
-      await api.post(
-        `/lists/${listId}/people`,
-        personId
-          ? { person_id: personId, role }
-          : { name, email: email || null, role },
-      );
+      await api.post(`/lists/${listId}/people`, personId ? { person_id: personId, role } : { name, email: email || null, role });
       toast("Toegevoegd");
       onDone();
     } catch (err) {
@@ -725,10 +499,7 @@ function AddPerson({ listId, onDone }: { listId: string; onDone: () => void }) {
       {(known ?? []).length > 1 && (
         <label className="field">
           <span className="label">Iemand die je kent</span>
-          <select
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-          >
+          <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
             <option value="">Iemand nieuw</option>
             {(known ?? []).map((p) => (
               <option key={p.id} value={p.id}>
@@ -742,29 +513,17 @@ function AddPerson({ listId, onDone }: { listId: string; onDone: () => void }) {
         <>
           <label className="field">
             <span className="label">Naam</span>
-            <input
-              value={name}
-              maxLength={60}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="field">
             <span className="label">E-mailadres</span>
-            <input
-              type="email"
-              value={email}
-              placeholder="Om zelf aan te melden"
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <input type="email" value={email} placeholder="Om zelf aan te melden" onChange={(e) => setEmail(e.target.value)} />
           </label>
         </>
       )}
       <label className="field">
         <span className="label">Rol</span>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as typeof role)}
-        >
+        <select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
           {Object.entries(ROLES).map(([k, r]) => (
             <option key={k} value={k}>
               {r.label}
@@ -772,12 +531,7 @@ function AddPerson({ listId, onDone }: { listId: string; onDone: () => void }) {
           ))}
         </select>
       </label>
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={!personId && !name.trim()}
-        onClick={save}
-      >
+      <button type="button" className="btn btn-primary" disabled={!personId && !name.trim()} onClick={save}>
         Toevoegen
       </button>
     </div>

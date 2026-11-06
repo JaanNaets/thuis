@@ -1,20 +1,32 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { FieldDef } from "../../shared/fields";
 import { canEdit, type ListDetail, type Thing, type ThingRef } from "../../shared/model";
+import { isProductCode, productData, productLabel } from "../../shared/product";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
 import { SubmitButton } from "../components/Controls";
-import { attributesDraft, buildAttributes, FieldInputs, type Access, type AttributeDraft } from "../components/Fields";
+import { BarcodeScanner } from "../components/BarcodeScanner";
+import { AiMark, attributesDraft, buildAttributes, FieldInputs, findProduct, type Access, type AttributeDraft } from "../components/Fields";
 import { Combo, useThingOptions } from "../components/ItemPicker";
 import { Icon } from "../components/Icon";
 import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
+import { prepareUpload } from "../image";
 import { enqueue, isOffline } from "../outbox";
 import { useNavigate } from "../router";
+import { clearShared, sharedFile } from "../shared-file";
 import { useSession } from "../session";
 
 type ThingDetail = { thing: Thing; list: { id: string } };
+
+/** Wat een foto opleverde (POST /lists/:id/things/read-photo). */
+type PhotoRead = {
+  name: string | null;
+  data: Record<string, unknown>;
+  source?: { kind: "database"; label: string; db: "off" | "nevo"; credit?: string } | { kind: "estimate" };
+  message?: string;
+};
 
 /** Alles mag je wijzigen in een lijst waar je lid bent (er zijn geen rechten per veld). */
 export const allEdit = (fields: FieldDef[]): Record<string, Access> => Object.fromEntries(fields.map((f) => [f.key, "edit" as const]));
@@ -37,7 +49,7 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
   const { list, role } = detail;
   const toast = useToast();
   const navigate = useNavigate();
-  const { person } = useSession();
+  const { person, ai } = useSession();
   const [params] = useSearchParams();
   const { data: people } = useApi<Person[]>("/me/people");
   const [name, setName] = useState(thing?.name ?? params.get("tekst") ?? "");
@@ -52,6 +64,76 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const access = useMemo(() => allEdit(list.fields), [list.fields]);
+  // Barcode (zonder AI, uit Open Food Facts) en Foto (✨): vullen in, en zeggen waar het vandaan komt.
+  const products = list.fields.some((f) => f.product);
+  const [scanning, setScanning] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [source, setSource] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  // Een gedeelde foto: ze komt bij het ding, en de AI leest ze pas na een tik op Foto lezen.
+  const [shared, setShared] = useState(false);
+  useEffect(() => {
+    if (!thing && params.get("foto") === "gedeeld")
+      sharedFile().then((f) => {
+        if (!f) return;
+        setPhoto(f);
+        setShared(true);
+        clearShared();
+      });
+  }, []);
+
+  function fill(nextName: string | null, data: Record<string, unknown>) {
+    if (nextName) setName(nextName);
+    setDraft((cur) => ({
+      ...cur,
+      ...attributesDraft(
+        list.fields.filter((f) => data[f.key] !== undefined && data[f.key] !== null),
+        data as never,
+      ),
+    }));
+  }
+
+  async function byCode(code: string) {
+    setScanning(false);
+    if (!isProductCode(code)) return toast("Dat is geen barcode van een product", "alert");
+    try {
+      const info = await findProduct(code);
+      if (!info) return toast("Niet gevonden in Open Food Facts", "alert");
+      fill(productLabel(info), productData(list.fields, info));
+      setSource(`Uit Open Food Facts: ${productLabel(info)}`);
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+
+  async function byPhoto(file: File) {
+    setReading(true);
+    try {
+      const form = new FormData();
+      form.set("image", await prepareUpload(file));
+      const read = await api.post<PhotoRead>(`/lists/${list.id}/things/read-photo`, form);
+      if (read.message) toast(read.message, "alert");
+      fill(read.name, read.data);
+      setPhoto(file);
+      setShared(false);
+      const src = read.source;
+      setSource(
+        src?.kind === "database"
+          ? `${src.db === "nevo" ? "Uit NEVO" : "Uit Open Food Facts"}: ${src.label}${src.credit ? ` (${src.credit})` : ""}`
+          : src?.kind === "estimate"
+            ? "Geschat met AI"
+            : read.name || Object.keys(read.data).length
+              ? "Gelezen met AI"
+              : null,
+      );
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    } finally {
+      setReading(false);
+    }
+  }
 
   if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
 
@@ -70,8 +152,15 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
         navigate(`/dingen/${thing.id}`, { replace: true });
       } else {
         const { id } = await api.post<{ id: string }>(`/lists/${list.id}/things`, body);
+        if (photo) {
+          const form = new FormData();
+          form.set("file", await prepareUpload(photo));
+          await api.put(`/things/${id}/photo`, form).catch((err: Error) => toast(err.message, "alert"));
+        }
         toast(`${name.trim()} toegevoegd`);
         if (again) {
+          setPhoto(null);
+          setSource(null);
           setName("");
           setDraft(attributesDraft(list.fields, {}));
           setPartOf(null);
@@ -98,11 +187,35 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
           <span className="label">Naam</span>
           <input value={name} required maxLength={200} autoFocus={!thing} onChange={(e) => setName(e.target.value)} />
         </label>
+        {!thing && (products || ai) && (
+          <div className="field">
+            <div className="btn-row">
+              {products && (
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setScanning(true)}>
+                  <Icon name="scan" size={15} /> Barcode
+                </button>
+              )}
+              {ai && (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${shared ? "btn-primary" : "btn-outline"}`}
+                  disabled={reading}
+                  onClick={() => (shared && photo ? byPhoto(photo) : photoRef.current?.click())}
+                >
+                  <Icon name="camera" size={15} /> {reading ? "Lezen…" : shared ? "Foto lezen" : "Foto"} <AiMark />
+                </button>
+              )}
+            </div>
+            {source && <span className="muted">{source}</span>}
+            <input ref={photoRef} type="file" accept="image/*" hidden onChange={(e) => (e.target.files?.[0] && byPhoto(e.target.files[0]), (e.target.value = ""))} />
+          </div>
+        )}
         <FieldInputs defs={list.fields} value={draft} onChange={(next) => setDraft(next)} access={access} people={people ?? []} meId={person.id} />
       </section>
       <section className="card form-section">
         <PartOfPicker value={partOf} onChange={setPartOf} self={thing?.id ?? null} />
       </section>
+      {scanning && <BarcodeScanner onResult={(r) => byCode(r.rawValue)} onClose={() => setScanning(false)} />}
       {problem && <p className="error">{problem}</p>}
       <div className="btn-row">
         <SubmitButton busy={busy} className="btn btn-primary btn-lg">

@@ -7,7 +7,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { refLists, type AmountEntry, type FieldDef, type TextValue } from "../../shared/fields";
 import { UNITS } from "../../shared/units";
-import { nameMatches } from "../../shared/quickfill";
+import { nameMatches } from "../../shared/parse";
 import type { ThingRef } from "../../shared/model";
 import { useApi } from "../api";
 import { Icon } from "./Icon";

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { Interval } from "../../shared/fields";
-import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type ListDetail, type Status, type ThingRef } from "../../shared/model";
+import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
+import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
+import { hasPrice } from "../../shared/targets";
+import { niceName } from "../../shared/receipt";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
 import { SubmitButton, Switch } from "../components/Controls";
 import { attributesDraft, buildAttributes, buildShares, FieldInputs, sharesDraft, SharesField, type AttributeDraft, type SharesDraft } from "../components/Fields";
+import { AiMark } from "../components/Fields";
 import { Icon } from "../components/Icon";
 import { buildLine, emptyLine, lineDraft, LinesEditor, type LineDraft } from "../components/Lines";
 import { PageHead } from "../components/Page";
@@ -14,11 +18,28 @@ import { centsToInput, parseEuro } from "../format";
 import { prepareUpload } from "../image";
 import { enqueue, isOffline } from "../outbox";
 import { useNavigate } from "../router";
+import { clearShared, sharedFile } from "../shared-file";
 import { useSession } from "../session";
 import { allEdit } from "./ThingForm";
 import type { EventPage } from "../components/Log";
 
 type EventDetail = EventPage & { event: EventView; can_edit: boolean };
+
+/** Een gelezen kasticket (POST /lists/:id/events/read-receipt). */
+type ReceiptRead = {
+  store: ThingRef | null;
+  store_text: string | null;
+  date: string | null;
+  total: number | null;
+  lines: {
+    name: string;
+    thing: ThingRef | null;
+    amount: number;
+    unit: string | null;
+    price: number | null;
+  }[];
+  message?: string;
+};
 
 const EVERY: { value: string; label: string; every: Interval | null }[] = [
   { value: "", label: "Niet", every: null },
@@ -50,7 +71,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const event = existing?.event ?? null;
   const toast = useToast();
   const navigate = useNavigate();
-  const { person, lists } = useSession();
+  const { person, lists, ai } = useSession();
   const [params] = useSearchParams();
   const { data: people } = useApi<Person[]>("/me/people");
   const thingParam = params.get("ding");
@@ -64,11 +85,13 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [kindId, setKindId] = useState<string>(
     () => event?.kind ?? (wantedKind && detail.kinds.some((k) => k.id === wantedKind) ? wantedKind : (own[0]?.id ?? (list.stock ? "aankoop" : "activiteit"))),
   );
+  const chosenKind = useRef(Boolean(event || wantedKind));
   const kind: KindInfo = detail.kinds.find((k) => k.id === kindId) ?? existing?.kinds.find((k) => k.id === kindId) ?? bases[0];
   const base = BASES[kind.base];
 
   const now = brusselsNow();
-  const [name, setName] = useState(event?.name ?? params.get("tekst") ?? "");
+  const [typed, setTyped] = useState(() => (event ? "" : (params.get("tekst") ?? "")));
+  const [name, setName] = useState(event?.name ?? "");
   const [day, setDay] = useState((event?.at ?? now).slice(0, 10));
   const [time, setTime] = useState(event ? event.at.slice(11, 16) : kind.base === "activiteit" ? now.slice(11, 16) : "");
   const [endTime, setEndTime] = useState(event?.end_at?.slice(11, 16) ?? "");
@@ -79,13 +102,25 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [shares, setShares] = useState<SharesDraft>(() => sharesDraft(event?.split ?? undefined));
   const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? {}));
   const [lines, setLines] = useState<LineDraft[]>(() =>
-    event ? event.lines.map((l) => lineDraft(l, existing?.things.find((t) => t.id === l.thing_id))) : [emptyLine(base.line)],
+    event
+      ? event.lines.map((l) =>
+          lineDraft(
+            l,
+            existing?.things.find((t) => t.id === l.thing_id),
+          ),
+        )
+      : [emptyLine(base.line)],
   );
   const [repeat, setRepeat] = useState(() => {
     const r = event?.repeat?.every;
     return r ? (EVERY.find((e) => e.every?.n === r.n && e.every.unit === r.unit)?.value ?? "") : "";
   });
   const [photo, setPhoto] = useState<File | null>(null);
+  // Een kasticket: een gedeelde foto wacht op een tik (de AI start nooit vanzelf); per lijn de naam op het ticket.
+  const [pending, setPending] = useState<File | null>(null);
+  const [reading, setReading] = useState(false);
+  const ticketNames = useRef(new Map<string, string>());
+  const receiptRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const access = useMemo(() => allEdit(kind.fields), [kind.fields]);
@@ -96,6 +131,16 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     const t = preset?.things[0];
     if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "" }] : ls));
   }, [preset]);
+  // Een gedeelde foto (Android: delen met Thuis) als kasticket: ze wacht tot je op Kasticket lezen tikt.
+  useEffect(() => {
+    if (!event && params.get("kasticket") === "gedeeld") sharedFile().then((f) => f && setPending(f));
+    // Een gedeelde foto bij wat je logt (niet gelezen).
+    if (!event && params.get("foto") === "gedeeld")
+      sharedFile().then((f) => {
+        if (f) setPhoto(f);
+        clearShared();
+      });
+  }, []);
   // Een andere soort: haar (lege) velden, en lege lijnen krijgen de rol van de soort.
   const firstKind = useRef(kindId);
   useEffect(() => {
@@ -105,10 +150,158 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     setLines((ls) => ls.map((l) => (!l.thing && !l.text ? { ...l, role: base.line } : l)));
   }, [kindId]);
 
+  // Wat je typt ("pasta 300 g", "tankbeurt 84,50 52 liter"), live in de velden (shared/parse.ts). Enkel wat de tekst
+  // er zelf zette, verandert mee; wat je daarna zelf aanpaste, blijft staan (en wissen zet terug wat er stond).
+  const startTime = kind.base === "activiteit" ? now.slice(11, 16) : "";
+  const auto = useRef({
+    name: "",
+    amount: "",
+    day: now.slice(0, 10),
+    time: startTime,
+    data: {} as AttributeDraft,
+    lines: new Map<string, string>(),
+  });
+  useEffect(() => {
+    if (event) return;
+    let text = typed.trim();
+    // Begint de tekst met een soort ("gegeten pasta"), dan die soort.
+    const lead = [...own, ...bases].find((k) => fold(text) === fold(k.name) || fold(text).startsWith(`${fold(k.name)} `));
+    if (lead) {
+      text = text.slice(lead.name.length).trim();
+      if (lead.id !== kindId) {
+        auto.current.data = {};
+        setKindId(lead.id);
+        return;
+      }
+    } else if (!chosenKind.current && !money && hasPrice(text) && detail.kinds.some((k) => k.id === "aankoop")) {
+      // Een prijs zonder gekozen soort: een aankoop.
+      setKindId("aankoop");
+      return;
+    }
+    let stale = false;
+    const timer = window.setTimeout(
+      async () => {
+        const found = text
+          ? (
+              await api
+                .get<{
+                  things: ThingRef[];
+                }>(`/things?in=${encodeURIComponent(text)}&limit=10`)
+                .catch(() => ({ things: [] as ThingRef[] }))
+            ).things
+          : [];
+        if (stale) return;
+        // Uit een voorraad: wat de soort doet (erbij, eraf, een telling); anders wat het ding meestal is (Colruyt: bij).
+        const roleOf = (t: ThingRef): LineRole => (t.stock ? base.line : (t.usual ?? (base.line === "in" || base.line === "uit" ? "voor" : base.line)));
+        const parsed = readEvent(text, {
+          today: now.slice(0, 10),
+          money,
+          fields: kind.fields,
+          things: found.map((t) => ({
+            id: t.id,
+            name: t.name,
+            unit: t.unit,
+            role: roleOf(t),
+          })),
+        });
+        applyTyped(parsed, found);
+      },
+      text ? 250 : 0,
+    );
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [typed, kindId]);
+
+  function applyTyped(p: ParsedEvent, found: ThingRef[]) {
+    const before = auto.current;
+    const empty = attributesDraft(kind.fields, {});
+    const filled = attributesDraft(kind.fields, p.data);
+    const data: AttributeDraft = Object.fromEntries(Object.keys(p.data).map((k) => [k, filled[k]]));
+    const sig = (l: LineDraft) => JSON.stringify({ ...l, key: "" });
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const next = {
+      name: p.name,
+      amount: p.amount !== null ? centsToInput(p.amount) : "",
+      day: p.day ?? now.slice(0, 10),
+      time: p.time ?? startTime,
+    };
+    setName((cur) => (cur === before.name ? next.name : cur));
+    setAmount((cur) => (cur === before.amount ? next.amount : cur));
+    setDay((cur) => (cur === before.day ? next.day : cur));
+    setTime((cur) => (cur === before.time ? next.time : cur));
+    setDraft((cur) => {
+      const out = { ...cur };
+      for (const f of kind.fields) if (same(cur[f.key], before.data[f.key] ?? empty[f.key])) out[f.key] = data[f.key] ?? empty[f.key];
+      return out;
+    });
+    const made = p.lines.map((l) => {
+      const ref = found.find((t) => t.id === l.thing.id)!;
+      return {
+        ...emptyLine(l.thing.role, ref),
+        amount: l.amount !== null ? String(l.amount).replace(".", ",") : "",
+        unit: l.unit ?? ref.unit ?? "",
+        price: l.price !== null ? centsToInput(l.price) : "",
+      };
+    });
+    setLines((cur) => {
+      // Wat de tekst vroeger maakte en niet aangepast is, gaat weg; een lege lijn ook.
+      const kept = cur.filter((l) => (before.lines.has(l.key) ? before.lines.get(l.key) !== sig(l) : Boolean(l.thing || l.text.trim() || l.amount || l.price)));
+      const fresh = made.filter((m) => !kept.some((k) => k.thing?.id === m.thing?.id));
+      const all = [...kept, ...fresh];
+      return all.length ? all : [emptyLine(base.line)];
+    });
+    auto.current = {
+      ...next,
+      data,
+      lines: new Map(made.map((l) => [l.key, sig(l)])),
+    };
+  }
+
   if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
   const shareWith = (people ?? []).filter((p) => shares.people.includes(p.id));
   const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
   const money = base.money;
+
+  async function readReceipt(file: File) {
+    setReading(true);
+    setProblem(undefined);
+    try {
+      const form = new FormData();
+      form.set("image", await prepareUpload(file));
+      const read = await api.post<ReceiptRead>(`/lists/${list.id}/events/read-receipt`, form);
+      if (read.message && !read.lines.length) return toast(read.message, "alert");
+      chosenKind.current = true;
+      if (detail.kinds.some((k) => k.id === "aankoop")) setKindId("aankoop");
+      if (read.date) setDay(read.date);
+      if (read.total !== null) setAmount(centsToInput(read.total));
+      if (!name.trim() && read.store_text && !read.store) setName(read.store_text);
+      ticketNames.current = new Map();
+      const made: LineDraft[] = read.lines.map((l) => {
+        const line = {
+          ...emptyLine("in", l.thing),
+          text: l.thing ? "" : niceName(l.name),
+          newIn: !l.thing && list.stock ? list.id : "",
+          amount: String(l.amount).replace(".", ","),
+          unit: l.unit ?? "",
+          price: l.price !== null ? centsToInput(l.price) : "",
+        };
+        ticketNames.current.set(line.key, l.name);
+        return line;
+      });
+      const store = read.store ? [emptyLine("bij", read.store)] : read.store_text ? [{ ...emptyLine("bij"), text: read.store_text }] : [];
+      setLines((cur) => [...cur.filter((l) => l.thing || l.text.trim()), ...store, ...made]);
+      setPhoto(file);
+      setPending(null);
+      clearShared();
+      toast(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
+    } catch (err) {
+      setProblem((err as Error).message);
+    } finally {
+      setReading(false);
+    }
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -148,10 +341,19 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       let extra = "";
       if (event) await api.put(`/events/${event.id}`, body);
       else {
-        const saved = await api.post<{ id: string; made: { name: string }[]; ticked: { name: string }[] }>(`/lists/${list.id}/events`, body);
+        const saved = await api.post<{
+          id: string;
+          made: { name: string }[];
+          ticked: { name: string }[];
+        }>(`/lists/${list.id}/events`, body);
         id = saved.id;
         if (saved.made.length) extra += `, nieuw: ${saved.made.map((m) => m.name).join(", ")}`;
         if (saved.ticked.length) extra += `, afgevinkt: ${saved.ticked.length === 1 ? "1 boodschap" : `${saved.ticked.length} boodschappen`}`;
+      }
+      // De naam op het ticket bij het gekozen ding onthouden (de volgende keer koppelt het vanzelf).
+      for (const l of lines) {
+        const ticket = ticketNames.current.get(l.key);
+        if (ticket && l.thing && fold(ticket) !== fold(l.thing.name)) api.post(`/things/${l.thing.id}/alias`, { name: ticket }).catch(() => {});
       }
       if (photo && id) {
         const form = new FormData();
@@ -174,7 +376,16 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   }
 
   const pill = (k: KindInfo) => (
-    <button key={k.id} type="button" className="filter" aria-pressed={k.id === kindId} onClick={() => setKindId(k.id)}>
+    <button
+      key={k.id}
+      type="button"
+      className="filter"
+      aria-pressed={k.id === kindId}
+      onClick={() => {
+        chosenKind.current = true;
+        setKindId(k.id);
+      }}
+    >
       {k.name}
     </button>
   );
@@ -183,13 +394,36 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     <form className="form page" onSubmit={save}>
       <PageHead title={event ? `${kind.name} bewerken` : status === "gepland" ? "Plannen" : "Loggen"} back={{ to: -1, label: list.name }} />
       <section className="card form-section">
+        {!event && <input value={typed} maxLength={300} autoFocus={!typed} aria-label="Typ wat je weet" placeholder="Typ wat je weet…" onChange={(e) => setTyped(e.target.value)} />}
+        {!event && ai && (money || list.stock) && (
+          <div className="btn-row">
+            {pending ? (
+              <button type="button" className="btn btn-primary btn-sm" disabled={reading} onClick={() => readReceipt(pending)}>
+                <Icon name="receipt" size={15} /> {reading ? "Lezen…" : "Kasticket lezen"} <AiMark />
+              </button>
+            ) : (
+              <button type="button" className="btn btn-outline btn-sm" disabled={reading} onClick={() => receiptRef.current?.click()}>
+                <Icon name="receipt" size={15} /> {reading ? "Lezen…" : "Kasticket"} <AiMark />
+              </button>
+            )}
+            <input ref={receiptRef} type="file" accept="image/*" hidden onChange={(e) => (e.target.files?.[0] && readReceipt(e.target.files[0]), (e.target.value = ""))} />
+          </div>
+        )}
         <div className="field">
           <span className="label">Soort</span>
           <div className="filters" role="group" aria-label="Soort">
             {[...own, ...bases].map(pill)}
           </div>
           {others.length > 0 && (
-            <select aria-label="Andere soort" value={others.some((k) => k.id === kindId) ? kindId : ""} onChange={(e) => e.target.value && setKindId(e.target.value)}>
+            <select
+              aria-label="Andere soort"
+              value={others.some((k) => k.id === kindId) ? kindId : ""}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                chosenKind.current = true;
+                setKindId(e.target.value);
+              }}
+            >
               <option value="">Andere soort…</option>
               {others.map((k) => (
                 <option key={k.id} value={k.id}>

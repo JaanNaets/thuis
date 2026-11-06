@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { useParams } from "react-router";
-import {
-  ROLES,
-  type ListNode,
-  type Role,
-  type Tag,
-  type TagRule,
-} from "../../shared/model";
+import { ROLES, type ListNode, type Role, type Tag, type TagRule } from "../../shared/model";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { CardHead, ToneSwatches } from "../components/Controls";
@@ -42,8 +36,7 @@ export function TagPage() {
   const [editing, setEditing] = useState<"tag" | "rules" | null>(null);
   if (error && !data) return <p className="error page">{error}</p>;
   if (!data) return <p className="page muted">Laden…</p>;
-  const name = (id: string) =>
-    data.people.find((p) => p.id === id)?.name ?? "Iemand";
+  const name = (id: string) => data.people.find((p) => p.id === id)?.name ?? "Iemand";
 
   async function remove() {
     if (
@@ -67,20 +60,13 @@ export function TagPage() {
         title={data.tag.name}
         actions={
           data.can_edit && (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setEditing("tag")}
-            >
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("tag")}>
               Bewerken
             </button>
           )
         }
         primary={
-          <Link
-            to={`/lijsten/nieuw?tag=${data.tag.id}`}
-            className="btn btn-primary"
-          >
+          <Link to={`/lijsten/nieuw?tag=${data.tag.id}`} className="btn btn-primary">
             <Icon name="plus" size={16} /> Lijst
           </Link>
         }
@@ -92,11 +78,7 @@ export function TagPage() {
               title="Altijd erbij"
               action={
                 data.can_edit && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setEditing("rules")}
-                  >
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("rules")}>
                     Aanpassen
                   </button>
                 )
@@ -115,9 +97,7 @@ export function TagPage() {
                           <span className="row-meta">
                             <span>
                               {ROLES[r.role].label}
-                              {r.created_by !== person.id
-                                ? ` · van ${name(r.created_by)}`
-                                : ""}
+                              {r.created_by !== person.id ? ` · van ${name(r.created_by)}` : ""}
                             </span>
                           </span>
                         </span>
@@ -158,22 +138,14 @@ export function TagPage() {
           )}
           {data.can_edit && data.tag.created_by === person.id && (
             <div className="btn-row" style={{ justifySelf: "start" }}>
-              <button
-                type="button"
-                className="btn btn-danger-ghost btn-sm"
-                onClick={remove}
-              >
+              <button type="button" className="btn btn-danger-ghost btn-sm" onClick={remove}>
                 <Icon name="trash" size={15} /> Tag weghalen
               </button>
             </div>
           )}
         </div>
       </div>
-      <Sheet
-        open={editing === "tag"}
-        title={data.tag.name}
-        onClose={() => setEditing(null)}
-      >
+      <Sheet open={editing === "tag"} title={data.tag.name} onClose={() => setEditing(null)}>
         {editing === "tag" && (
           <TagForm
             tag={data.tag}
@@ -185,11 +157,7 @@ export function TagPage() {
           />
         )}
       </Sheet>
-      <Sheet
-        open={editing === "rules"}
-        title="Altijd erbij"
-        onClose={() => setEditing(null)}
-      >
+      <Sheet open={editing === "rules"} title="Altijd erbij" onClose={() => setEditing(null)}>
         {editing === "rules" && (
           <RulesForm
             tag={data.tag}
@@ -223,22 +191,13 @@ function TagForm({ tag, onDone }: { tag: Tag; onDone: () => void }) {
     <div className="form">
       <label className="field">
         <span className="label">Naam</span>
-        <input
-          value={name}
-          maxLength={40}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="field">
         <span className="label">Kleur</span>
         <ToneSwatches value={color} onChange={setColor} />
       </div>
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={!name.trim()}
-        onClick={save}
-      >
+      <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>
         Opslaan
       </button>
     </div>
@@ -246,24 +205,12 @@ function TagForm({ tag, onDone }: { tag: Tag; onDone: () => void }) {
 }
 
 /** Wie altijd bij de lijsten met deze tag kan, en als wat. */
-function RulesForm({
-  tag,
-  rules,
-  onDone,
-}: {
-  tag: Tag;
-  rules: TagRule[];
-  onDone: () => void;
-}) {
+function RulesForm({ tag, rules, onDone }: { tag: Tag; rules: TagRule[]; onDone: () => void }) {
   const toast = useToast();
   const { person } = useSession();
   const { data: known } = useApi<Person[]>("/me/people");
-  const [rows, setRows] = useState<{ person_id: string; role: Role }[]>(
-    rules.map((r) => ({ person_id: r.person_id, role: r.role })),
-  );
-  const others = (known ?? []).filter(
-    (p) => p.id !== person.id && !rows.some((r) => r.person_id === p.id),
-  );
+  const [rows, setRows] = useState<{ person_id: string; role: Role }[]>(rules.map((r) => ({ person_id: r.person_id, role: r.role })));
+  const others = (known ?? []).filter((p) => p.id !== person.id && !rows.some((r) => r.person_id === p.id));
   async function save() {
     try {
       await api.put(`/tags/${tag.id}/rules`, { rules: rows });
@@ -280,22 +227,14 @@ function RulesForm({
           <li key={r.person_id}>
             <div className="row">
               <span className="cell-main">
-                <span className="row-title">
-                  {known?.find((p) => p.id === r.person_id)?.name ?? "Iemand"}
-                </span>
+                <span className="row-title">{known?.find((p) => p.id === r.person_id)?.name ?? "Iemand"}</span>
               </span>
               <span className="member-actions">
                 <select
                   className="scope-select"
                   aria-label={`Rol van ${known?.find((p) => p.id === r.person_id)?.name ?? "iemand"}`}
                   value={r.role}
-                  onChange={(e) =>
-                    setRows(
-                      rows.map((x, k) =>
-                        k === i ? { ...x, role: e.target.value as Role } : x,
-                      ),
-                    )
-                  }
+                  onChange={(e) => setRows(rows.map((x, k) => (k === i ? { ...x, role: e.target.value as Role } : x)))}
                 >
                   {Object.entries(ROLES).map(([k, role]) => (
                     <option key={k} value={k}>
@@ -303,12 +242,7 @@ function RulesForm({
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-icon btn-sm"
-                  aria-label="Weghalen"
-                  onClick={() => setRows(rows.filter((_, k) => k !== i))}
-                >
+                <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Weghalen" onClick={() => setRows(rows.filter((_, k) => k !== i))}>
                   <Icon name="close" size={15} />
                 </button>
               </span>
@@ -317,14 +251,7 @@ function RulesForm({
         ))}
       </ul>
       {others.length > 0 && (
-        <select
-          aria-label="Iemand toevoegen"
-          value=""
-          onChange={(e) =>
-            e.target.value &&
-            setRows([...rows, { person_id: e.target.value, role: "lid" }])
-          }
-        >
+        <select aria-label="Iemand toevoegen" value="" onChange={(e) => e.target.value && setRows([...rows, { person_id: e.target.value, role: "lid" }])}>
           <option value="">Iemand toevoegen…</option>
           {others.map((p) => (
             <option key={p.id} value={p.id}>

@@ -441,7 +441,7 @@ function TodoBlock() {
     <section className="card dash-card">
       <Link to="/te-doen" className="dash-head">
         <span className="row-title">Te doen</span>
-        <span className="dash-count">{data.events.length}</span>
+        {data.events.length > 0 && <span className="dash-count">{data.events.length}</span>}
       </Link>
       <ul className="rows">
         {data.events.slice(0, BLOCK_ITEMS).map((e) => (
@@ -465,7 +465,7 @@ function StockBlock() {
     <section className="card dash-card">
       <Link to="/voorraad" className="dash-head">
         <span className="row-title">Bijna op</span>
-        <span className="dash-count">{low.length}</span>
+        {low.length > 0 && <span className="dash-count">{low.length}</span>}
       </Link>
       <ul className="rows">
         {low.slice(0, BLOCK_ITEMS + 1).map((t) => (
