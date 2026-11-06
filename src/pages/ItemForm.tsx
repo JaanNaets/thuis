@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { computeLocal } from "../../shared/calc";
-import { applyFieldDefaults, cleanValue, formatFieldValue, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue } from "../../shared/fields";
+import { applyFieldDefaults, cleanValue, formatFieldValue, refLists, repeatData, type AmountEntry, type Attributes, type CodeValue, type FieldDef, type FieldValue } from "../../shared/fields";
 import type { QuickResult, Suggestion } from "../../shared/quickfill";
 import { isProductCode, productData, productLabel, type ProductInfo } from "../../shared/product";
 import { receiptPlan } from "../../shared/receipt";
+import type { AddTarget } from "../../shared/quickadd";
 import type { ItemDetail, ItemInput, ItemList, ItemTypeView, LabelScan, ProjectDetail, Tag } from "../../shared/types";
 import { api, useApi } from "../api";
 import { today } from "../format";
@@ -96,6 +97,16 @@ function ItemForm({
   const editsType = type.access === "edit";
   // Een aankoop (een bedrag en een product dat bijtelt, zie shared/receipt.ts): na bewaren boodschappen afvinken.
   const purchase = useMemo(() => receiptPlan(fields, type.id, () => undefined), [fields, type.id]);
+  // Een nieuw product typen bij een aankoop: het wordt een product in de eerste lijst waarin je mag toevoegen
+  // (Voorraad), zoals bij een kasticket; kiezen kan, ook "enkel tekst".
+  const productDef = purchase && !item ? fields.find((f) => f.key === purchase.product.key && type.field_access[f.key] === "edit") : undefined;
+  const { data: addable } = useApi<AddTarget[]>(productDef ? "/me/lists" : null);
+  const newTargets = useMemo(
+    () => (productDef && addable ? refLists(productDef).flatMap((id) => addable.find((t) => t.type_id === id) ?? []) : []),
+    [productDef, addable],
+  );
+  const [newIn, setNewIn] = useState<string | null | undefined>(undefined);
+
   // Ben je de enige (je eigen project), dan vullen Betaald door, Verdeling en Wie zich vanzelf met jou in: die velden
   // hoeven niet in het formulier. Komt er iemand bij (of staat er al iemand anders in), dan staan ze er weer.
   const alone = people.length <= 1;
@@ -123,6 +134,30 @@ function ItemForm({
 
   const [name, setName] = useState(item?.name ?? "");
   const [attrs, setAttrs] = useState<AttributeDraft>(() => (item ? attributesDraft(fields, item.data) : fresh()));
+  const typedProduct = (() => {
+    const v = productDef ? attrs[productDef.key] : undefined;
+    return v && typeof v === "object" && "text" in v ? String(v.text).trim() : "";
+  })();
+  const newTarget = typedProduct && newTargets.length ? (newIn === undefined ? newTargets[0] : newTargets.find((t) => t.type_id === newIn)) : undefined;
+  const targetName = (t: AddTarget) => (newTargets.filter((x) => x.plural === t.plural).length > 1 ? `${t.plural} · ${t.project_name}` : t.plural);
+  const afterFields =
+    productDef && typedProduct && newTargets.length
+      ? {
+          [productDef.key]: (
+            <label className="field">
+              <span className="label">Nieuw product in</span>
+              <select value={newTarget?.type_id ?? ""} onChange={(e) => setNewIn(e.target.value || null)}>
+                {newTargets.map((t) => (
+                  <option key={t.type_id} value={t.type_id}>
+                    {targetName(t)}
+                  </option>
+                ))}
+                <option value="">Geen, enkel tekst</option>
+              </select>
+            </label>
+          ),
+        }
+      : undefined;
   const [tags, setTags] = useState<Tag[]>(project.tags);
   const [tagIds, setTagIds] = useState<string[]>(item?.tag_ids ?? []);
   const [auto, setAuto] = useState<Set<string>>(new Set());
@@ -744,7 +779,20 @@ function ItemForm({
     setSaving(true);
     setError(undefined);
     try {
-      const saved = item ? await api.put<ItemDetail>(`/items/${item.id}`, input) : await api.post<ItemDetail>(`/projects/${project.project.id}/items`, input);
+      // Een nieuw product bij een aankoop: samen bewaren (eerst het product, dan de aankoop die ernaar verwijst).
+      let created: string | null = null;
+      let saved: ItemDetail;
+      if (item) saved = await api.put<ItemDetail>(`/items/${item.id}`, input);
+      else if (newTarget && productDef) {
+        const unit = purchase?.unit && built.data[purchase.unit] ? { [purchase.unit]: built.data[purchase.unit] } : {};
+        const productName = typedProduct.charAt(0).toUpperCase() + typedProduct.slice(1);
+        const res = await api.post<{ ids: string[]; created: (string | null)[]; spawned: NonNullable<ItemDetail["spawned"]> }>(`/projects/${project.project.id}/items/batch`, {
+          type_id: type.id,
+          items: [{ ...input, new_ref: { field: productDef.key, type_id: newTarget.type_id, name: productName, data: unit } }],
+        });
+        created = res.created[0] ?? null;
+        saved = { ...(await api.get<ItemDetail>(`/items/${res.ids[0]}`)), ...(res.spawned.length ? { spawned: res.spawned } : {}) };
+      } else saved = await api.post<ItemDetail>(`/projects/${project.project.id}/items`, input);
       if (photo) {
         const body = new FormData();
         body.set("file", photo);
@@ -763,7 +811,7 @@ function ItemForm({
       }
       setMore({ items: [], keys: [] });
       // Een nieuwe aankoop (een product dat bijtelt): open boodschappen van dat product afvinken.
-      const product = !item && purchase ? built.data[purchase.product.key] : undefined;
+      const product = !item && purchase ? (created ?? built.data[purchase.product.key]) : undefined;
       const ticked =
         typeof product === "string"
           ? await api
@@ -771,7 +819,8 @@ function ItemForm({
               .then((r) => r.checked)
               .catch(() => [])
           : [];
-      const tickedText = ticked.length ? `, afgevinkt bij ${[...new Set(ticked.map((t) => t.list))].join(" en ")}` : "";
+      const tickedText =
+        (created && newTarget ? `, nieuw in ${newTarget.plural}` : "") + (ticked.length ? `, afgevinkt bij ${[...new Set(ticked.map((t) => t.list))].join(" en ")}` : "");
       // Meteen ook (Gegeten): zeg waar het nog bij kwam, met een knop om het te openen.
       const also = saved.spawned?.[0];
       toast(
@@ -922,6 +971,7 @@ function ItemForm({
             suggestions={fieldSuggestions(fields, siblings?.items ?? [])}
             onChange={changeField}
             pins={pins}
+            after={afterFields}
           />
         )}
       </section>

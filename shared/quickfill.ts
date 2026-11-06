@@ -110,6 +110,20 @@ const unitFits = (unit: string, field: FieldDef) => {
   const b = fold(field.unit ?? "");
   return Boolean(a && b && (a === b || a.startsWith(b) || b.startsWith(a)));
 };
+/**
+ * Het veld dat zegt in welke eenheid dit getal staat: `measure.unit` (Eenheid bij Aantal in de voorraad), of de eenheid
+ * per lijn van een verwijzing die met dit getal telt (`adjust.unit_by`, Eenheid bij Hoeveel in een uitgave).
+ */
+const unitFieldOf = (fields: FieldDef[], number: FieldDef) => {
+  const key = number.measure?.unit ?? fields.find((f) => f.adjust?.by === number.key && f.adjust.unit_by)?.adjust?.unit_by;
+  return key ? fields.find((f) => f.key === key && f.type === "select") : undefined;
+};
+/** De keuze die bij een eenheid na een getal past: "stuks" → stuk, "gram" → g, "zakken" → zak. */
+const optionFor = (field: FieldDef, word: string): string | null => {
+  const w = fold(word);
+  const unit = normalizeUnit(w);
+  return (field.options ?? []).find((o) => fold(o) === unit || fold(o) === w || (w.length > 3 && w.startsWith(fold(o)))) ?? (w === "dozen" ? ((field.options ?? []).find((o) => fold(o) === "doos") ?? null) : null);
+};
 /** Woorden voor een stuk of verpakking na een getal ("2 zakken", "3 stuks"). */
 const PACKS = /^(stuks?|zak(ken)?|doos|dozen|fles(sen)?|pak(ken)?|pot(ten)?|blik(ken)?|bak(ken)?|net(ten)?|verpakkingen?)$/;
 /** Het woord na een getal is het label van het veld ("4 porties", "3 portie"): ook dat veld. */
@@ -245,6 +259,11 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
       put(firstEmpty("money")!.key, Math.round(toNumber(money[1]) * 100), i, w.includes("€") ? 1 : 2);
       continue;
     }
+    // Een bedrag zonder plaats ("6 euro" bij een product): geen aantal en geen naam; het valt weg.
+    if (money && euro) {
+      take(i, w.includes("€") ? 1 : 2);
+      continue;
+    }
 
     // 200 g, 200g, 2 zakken, 4 porties, 3. Een getal dat je typt, gaat nooit vanzelf naar productinfo (kcal per 100 g,
     // een portie): die komt uit de databank, je geheugen, de voorraad of ✨; "pizza 300" is hoeveel, geen kcal.
@@ -271,15 +290,24 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
         put(byUnit.key, toNumber(number), i, withUnit ? 1 : 2);
         continue;
       }
+      const unitWord = Boolean(unit) && (PACKS.test(fold(unit!)) || (UNITS as readonly string[]).includes(normalizeUnit(unit) ?? ""));
       // "2 boterhammen", "3 eieren": een aantal stuks, geen gewicht; dat blijft in de naam (✨ schat er het gewicht van).
       const word = fold(next ?? "");
       const counted =
         /^[a-z]{2,}$/.test(word) && !PACKS.test(word) && !(UNITS as readonly string[]).includes(normalizeUnit(word) ?? "") && !(word in RELATIVE) && !WEEKDAYS.includes(word) && !(word in MONTHS);
       const measured = (f: FieldDef) => ["g", "kg", "mg", "ml", "cl", "l"].includes(fold(f.unit ?? ""));
-      const plain = firstEmpty("number", (f) => !f.product && !(counted && measured(f))) ?? firstEmpty("money");
+      // Een getal met een maat ("120 gram", "6 stuks") is nooit een bedrag.
+      const plain = firstEmpty("number", (f) => !f.product && !(counted && measured(f))) ?? (unitWord ? undefined : firstEmpty("money"));
       if (!withUnit && plain) {
-        // "2 zakken": het woord voor de verpakking hoort bij het getal (en wordt geen naam).
-        put(plain.key, plain.type === "money" ? Math.round(toNumber(number) * 100) : toNumber(number), i, plain.type === "number" && PACKS.test(next) ? 2 : 1);
+        // "2 zakken", "6 stuks", "500 g": het woord voor de verpakking of de eenheid hoort bij het getal (geen naam), en
+        // vult de eenheid van dat getal in als die er is (Eenheid bij Aantal of bij Hoeveel).
+        const unitOf = plain.type === "number" && unitWord ? unitFieldOf(fields, plain) : undefined;
+        const option = unitOf && empty(unitOf) ? optionFor(unitOf, next) : null;
+        put(plain.key, plain.type === "money" ? Math.round(toNumber(number) * 100) : toNumber(number), i, plain.type === "number" && (PACKS.test(next) || option) ? 2 : 1);
+        if (option && unitOf) {
+          data[unitOf.key] = option;
+          (parts[unitOf.key] ??= []).push(words[i + 1]);
+        }
         continue;
       }
       if (/^\d{4}$/.test(w) && firstEmpty("year")) put(firstEmpty("year")!.key, +w, i);
@@ -315,7 +343,8 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
       if ((f.type === "item" || f.type === "items") && refLists(f).length) {
         const it = ctx.items(f.key).find((x) => fold(x.name) === phrase);
         if (it && f.type === "item" && empty(f)) {
-          matchedName ??= it.name;
+          // De naam van het item zelf komt enkel van de eerste verwijzing (het product), nooit van de winkel.
+          if (f === fields.find((x) => x.type === "item" && refLists(x).length)) matchedName ??= it.name;
           return set(f.key, it.id);
         }
         if (it && f.type === "items") return set(f.key, [...new Set([...((data[f.key] as string[]) ?? []), it.id])]);
@@ -332,7 +361,15 @@ export function quickFill(text: string, fields: FieldDef[], ctx: QuickContext): 
     }
   }
 
-  // 3. Wat overblijft: een naam of vrije tekst; een hele zin laat de code aan de AI.
+  // 3. Wat overblijft: een naam of vrije tekst; een hele zin laat de code aan de AI. Een maat zonder plaats ("120 gram",
+  //    "6 stuks" als er geen getal meer vrij is) valt weg, zoals een datum: die hoort niet in de naam.
+  for (let i = 0; i < words.length; i++) {
+    if (used[i]) continue;
+    const w = fold(words[i]);
+    const glued = w.match(/^\d+(?:[.,]\d+)?([a-z]+)$/);
+    if (glued && (UNITS as readonly string[]).includes(normalizeUnit(glued[1]) ?? "")) take(i);
+    else if (NUMBER.test(w) && !used[i + 1] && words[i + 1] && (UNITS as readonly string[]).includes(normalizeUnit(fold(words[i + 1])) ?? "") && fold(words[i + 1]) !== "x") take(i, 2);
+  }
   const left = words.filter((_, i) => !used[i]);
   const rest = left.join(" ");
   const sentence = left.length >= SENTENCE;

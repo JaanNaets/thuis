@@ -979,8 +979,8 @@ items.post("/:id/check", async (c) => {
 });
 
 /**
- * Gekocht (`{ ids }`: de producten van een aankoop): open items die naar een van die producten verwijzen, afvinken —
- * een boodschap "Melk" als je melk kocht. Zoals een tik in de rij (`/items/:id/check`): het eerste ja/nee als kolom
+ * Gekocht (`{ ids }`: de producten van een aankoop): open items die naar een van die producten verwijzen (of die als
+ * tekst dezelfde naam dragen), afvinken — een boodschap "Melk" als je melk kocht. Zoals een tik in de rij (`/items/:id/check`): het eerste ja/nee als kolom
  * dat je daar mag wijzigen, enkel als het nog uit staat, en enkel in lijsten waar die verwijzing zelf niets telt
  * (anders telde het kopen twee keer). Elk item met jouw rechten in zijn eigen project. Geeft wat afgevinkt werd.
  */
@@ -989,7 +989,10 @@ items.post("/bought", async (c) => {
   const me = c.get("person").id;
   const ids = idList(asObject(await c.req.json()), "ids").slice(0, MAX_BATCH);
   if (!ids.length) return c.json({ checked: [] });
-  const { results: products } = await db.prepare("SELECT id, type_id, project_id FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)).all<{ id: string; type_id: string; project_id: string }>();
+  const { results: products } = await db
+    .prepare("SELECT id, name, type_id, project_id FROM items WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(JSON.stringify(ids))
+    .all<{ id: string; name: string; type_id: string; project_id: string }>();
   const nodes = new Map((await accessibleProjects(db, me)).map((n) => [n.id, n]));
   const seen = products.filter((p) => nodes.has(p.project_id) && typeAccess(nodes.get(p.project_id)!.rights, p.type_id) !== "none");
   const kinds = new Set(seen.map((p) => p.type_id));
@@ -1005,9 +1008,11 @@ items.post("/bought", async (c) => {
   for (const { list, via, check } of lists) {
     const { results: rows } = await db
       .prepare(
-        `${ITEM_SELECT} WHERE i.type_id = ?1 AND i.archived = 0 AND json_extract(i.data, ?2) IN (SELECT value FROM json_each(?3)) AND coalesce(json_extract(i.data, ?4), 0) != 1`,
+        `${ITEM_SELECT} WHERE i.type_id = ?1 AND i.archived = 0 AND coalesce(json_extract(i.data, ?4), 0) != 1
+           AND (json_extract(i.data, ?2) IN (SELECT value FROM json_each(?3)) OR lower(json_extract(i.data, ?5)) IN (SELECT value FROM json_each(?6)))`,
       )
-      .bind(list.id, `$.${via.key}`, JSON.stringify(seen.map((p) => p.id)), `$.${check.key}`)
+      // Ook een boodschap die je als tekst typte ("yoghurt"), met dezelfde naam als het product.
+      .bind(list.id, `$.${via.key}`, JSON.stringify(seen.map((p) => p.id)), `$.${check.key}`, `$.${via.key}.text`, JSON.stringify(seen.map((p) => p.name.trim().toLowerCase())))
       .all<ItemRow>();
     for (const row of rows.slice(0, 50)) {
       if (!accessOf.has(row.project_id)) accessOf.set(row.project_id, await projectAccess(db, me, row.project_id));

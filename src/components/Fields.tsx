@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Access } from "../../shared/access";
 import { computeLocal, describeCalc, isLinkCalc, previewCalcs, renameCalc, type CalcList } from "../../shared/calc";
 import {
@@ -321,6 +321,7 @@ export function FieldInputs({
   auto,
   suggestions,
   pins,
+  after,
 }: {
   defs: FieldDef[];
   value: AttributeDraft;
@@ -332,6 +333,8 @@ export function FieldInputs({
   suggestions?: Record<string, string[]>;
   /** Vastzetten (geheugen met een vaste waarde, zie ItemForm): een kleine speld naast het label. */
   pins?: Record<string, FieldPin>;
+  /** Iets onder een veld (per sleutel). */
+  after?: Record<string, ReactNode>;
 }) {
   const set = (key: string, v: DraftValue) => onChange({ ...value, [key]: v }, key);
   // De speld staat naast het veld (niet in het label: een knop in een label neemt het label over).
@@ -347,10 +350,20 @@ export function FieldInputs({
       </div>
     );
   };
+  // Iets dat bij een veld hoort, er meteen onder (Nieuw product in, onder Wat bij een aankoop).
+  const withAfter = (def: FieldDef, el: ReactNode) =>
+    after?.[def.key] ? (
+      <Fragment key={def.key}>
+        {el}
+        {after[def.key]}
+      </Fragment>
+    ) : (
+      el
+    );
   const computed = useMemo(() => (defs.some((d) => d.type === "calc") ? previewData(defs, value) : {}), [defs, value]);
   return (
     <div className="attr-fields">
-      {defs.map((def) => withPin(def, (() => {
+      {defs.map((def) => withAfter(def, withPin(def, (() => {
         const raw = value[def.key];
         const disabled = access[def.key] !== "edit";
         const invalid = draftValue(def, raw) === undefined;
@@ -662,7 +675,7 @@ export function FieldInputs({
             );
           }
         }
-      })()))}
+      })())))}
     </div>
   );
 }

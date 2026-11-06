@@ -51,3 +51,22 @@ test("toevoegen: het pad naar het formulier", () => {
   assert.equal(addPath(lists[0]), "/projecten/p-Pelletkachel/nieuw?lijst=b");
   assert.equal(addPath(lists[0], " 3 zakken "), "/projecten/p-Pelletkachel/nieuw?lijst=b&tekst=3%20zakken");
 });
+
+test("toevoegen: een prijs in de tekst is een aankoop, de lijst met aankopen eerst", () => {
+  const home = [
+    { ...t("bs", "Boodschap", "Boodschappen", "Keuken", 5), project_id: "keuken" },
+    { ...t("v", "Product", "Voorraad", "Keuken", 3), project_id: "keuken" },
+    { ...t("ug", "Uitgave", "Uitgaven", "Geld", 1), project_id: "geld", receipt: true, stocks: ["v", "wijn"] },
+    { ...t("k", "Kasticket", "Kastickets", "Geld"), project_id: "geld" },
+  ];
+  // Begint met het project Keuken: de Uitgave telt bij de Voorraad daar, dus die eerst (met de tekst zonder "keuken").
+  assert.deepEqual(names(matchTargets("keuken yoghurt colruyt 6 stuks 6 euro", home)), [
+    "Uitgave|yoghurt colruyt 6 stuks 6 euro",
+    "Boodschap|yoghurt colruyt 6 stuks 6 euro",
+    "Product|yoghurt colruyt 6 stuks 6 euro",
+  ]);
+  // Zonder lijst of project vooraan: ook de aankopen eerst.
+  assert.equal(matchTargets("yoghurt € 3,56", home)[0].target.type_id, "ug");
+  // Zonder prijs blijft alles zoals het was.
+  assert.equal(matchTargets("keuken yoghurt", home)[0].target.type_id, "bs");
+});

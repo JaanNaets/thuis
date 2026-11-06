@@ -63,7 +63,12 @@ commits en uitleg.
   voedingswaarde en hoeveel (anders één gewone portie; zonder energie of alles 0 telt het niet), en daarna komen de echte
   gegevens uit NEVO of Open Food Facts zoals bij een foto (`source`: databank of geschat); andere getallen raadt ze nooit.
   Een getal dat je typt, gaat nooit vanzelf naar productinfo (kcal per 100 g, portie: "pizza 300" is Hoeveel), en een
-  getal voor een gewoon woord is een aantal, geen gewicht ("2 boterhammen" blijft in de naam). **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
+  getal voor een gewoon woord is een aantal, geen gewicht ("2 boterhammen" blijft in de naam). Een bedrag zonder
+  geldveld en een maat zonder plaats vallen weg (nooit in de naam), een getal met een maat is nooit een bedrag ("120
+  gram"), "6 stuks" vult ook de eenheid van dat getal in (`unitFieldOf`: `measure.unit` of `adjust.unit_by`), en de naam
+  komt enkel van de eerste verwijzing (het product, nooit de winkel). In het palet zet een prijs in de tekst (`hasPrice`)
+  de lijsten met aankopen eerst, ook als je met een project begint dat ze bijvullen. In het formulier van een aankoop
+  wordt een getypt product een nieuw product (Nieuw product in, via `new_ref` op `/items/batch`). **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨
   (`AiMark`), ze start nooit vanzelf (ook een gedeelde foto wacht), de melding zegt "met AI", en per persoon staat ze
   aan of uit (`AppSettings.ai`, `PUT /me/ai`, `useSession().ai`); uit = geen ✨-knoppen en `useAiBudget` weigert. Alles daarna gewoon door het formulier en `prepareData`. De code vult
   **live** in (één motor voor formulier en blok: `useQuickFill`; `ItemForm` zet de lezing in zijn velden met `applyLive`,

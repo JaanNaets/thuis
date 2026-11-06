@@ -291,3 +291,41 @@ test("Een getal met een gewoon woord erachter is een aantal, geen gewicht", () =
   // Water in ml: "water 500" blijft 500 ml.
   assert.deepEqual(quickFill("water 500", [{ key: "ml", label: "Hoeveel", type: "number", unit: "ml" }], none).data, { ml: 500 });
 });
+
+test("een aankoop typen: 'yoghurt Colruyt 6 stuks 120 gram 6 euro' in een boodschap, een product en een uitgave", () => {
+  const text = "yoghurt Colruyt 6 stuks 120 gram 6 euro";
+  const shopCtx = { today: "2026-11-06", people: [], items: (k: string) => (k === "winkel" ? [{ id: "w1", name: "Colruyt" }] : []) };
+  const boodschap: FieldDef[] = [
+    { key: "product", label: "Product", type: "item", ref_type: "voorraad", free: true, copy: true },
+    { key: "hoeveel", label: "Hoeveel", type: "number" },
+    { key: "gekocht", label: "Gekocht", type: "bool" },
+    { key: "winkel", label: "Winkel", type: "item", ref_type: "winkels", free: true },
+  ];
+  // De winkel wordt nooit de naam; de maat en het bedrag (geen plaats) vallen weg.
+  const shop = quickFill(text, boodschap, shopCtx);
+  assert.equal(shop.name, "Yoghurt");
+  assert.deepEqual(shop.data, { hoeveel: 6, winkel: "w1", product: { text: "yoghurt" } });
+  const voorraad: FieldDef[] = [
+    { key: "aantal", label: "Aantal", type: "number", counter: true, measure: { unit: "eenheid", piece: "inhoud", pack: "per_verpakking" } },
+    { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "kg", "g", "zak"] },
+    { key: "per_verpakking", label: "Per verpakking", type: "number" },
+    { key: "inhoud", label: "Inhoud per stuk", type: "number", unit: "g" },
+  ];
+  // "6 stuks" is het aantal in stuks, "120 gram" de inhoud per stuk; "6 euro" nooit een getal of een naam.
+  const product = quickFill(text, voorraad, shopCtx);
+  assert.equal(product.name, "Yoghurt Colruyt");
+  assert.deepEqual(product.data, { aantal: 6, eenheid: "stuk", inhoud: 120 });
+  const uitgave: FieldDef[] = [
+    { key: "bedrag", label: "Bedrag", type: "money" },
+    { key: "wat", label: "Wat", type: "item", ref_type: "voorraad", free: true, adjust: { field: "aantal", by: "hoeveel", sign: 1, unit_by: "eenheid" } },
+    { key: "hoeveel", label: "Hoeveel", type: "number" },
+    { key: "eenheid", label: "Eenheid", type: "select", options: ["stuk", "kg", "g", "zak"] },
+    { key: "winkel", label: "Winkel", type: "item", ref_type: "winkels", free: true },
+  ];
+  // "120 gram" is nooit € 120.
+  const buy = quickFill(text, uitgave, shopCtx);
+  assert.equal(buy.name, "Yoghurt");
+  assert.deepEqual(buy.data, { hoeveel: 6, eenheid: "stuk", bedrag: 600, winkel: "w1", wat: { text: "yoghurt" } });
+  // "2 zakken pellets 13 euro": de eenheid zak, en een kale prijs gaat nog altijd naar het bedrag.
+  assert.deepEqual(quickFill("pellets 2 zakken 13", uitgave, shopCtx).data, { hoeveel: 2, eenheid: "zak", bedrag: 1300, wat: { text: "pellets" } });
+});

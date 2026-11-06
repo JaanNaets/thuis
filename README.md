@@ -426,7 +426,8 @@ leeg, dan krijgt elke lijn die van vorige keer), daaronder elke lijn: vink uit w
 aan, en tik op een lijn om het product, hoeveel of de prijs aan te passen. Een gekend product staat in zijn eigen
 eenheid (een zak van 5 kg aardappelen = 5 kg), zodat de prijs per eenheid eerlijk te vergelijken is; ook in het
 formulier neemt Eenheid die van het product over. Wat je koopt, vinkt de app af op de **Boodschappen**. Fout gelezen?
-**Ongedaan maken** in de melding draait alles terug. In de Voorraad leidt **Kasticket lezen** naar de Uitgaven, zodat
+**Ongedaan maken** in de melding draait alles terug. Eén aankoop typ je ook gewoon: **+** en "yoghurt colruyt 6 stuks 6
+euro" (staat er een prijs in, dan komt **Uitgave** bovenaan). Een product dat nog niet bestaat, komt dan in de Voorraad. In de Voorraad leidt **Kasticket lezen** naar de Uitgaven, zodat
 niets twee keer telt; ook bij Wijnen en Pellets zie je wanneer je het laatst kocht en wat het kostte. **Bewaar** zet alles in
 Uitgaven, met het ticket zelf (en de foto) in **Kastickets**, dat het totaal en het aantal lijnen toont. De
 **Boodschappen** zijn een takenlijst: afvinken telt niets meer bij, dat doet de aankoop.

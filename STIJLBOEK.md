@@ -771,6 +771,9 @@ gedeelde foto wacht met **✨ Kasticket lezen**), daarna van boven naar onder:
   app open boodschappen van dezelfde producten af (`/items/bought`). Toast "12 uitgaven bewaard, 2 nieuwe producten, ook
   bij Eten, 3 afgevinkt bij Boodschappen" met **Ongedaan maken** (enkel met `can_delete`): alles terug, ook de voorraad
   en de boodschappen.
+- In het formulier van een aankoop staat onder Wat, als je een product typt dat nog niet bestaat, **Nieuw product in**
+  (een `select` met de lijsten waarin je mag toevoegen en "Geen, enkel tekst"; `FieldInputs` `after`). Toast
+  "Yoghurt bewaard, nieuw in Voorraad, afgevinkt bij Boodschappen".
 - Een voorraad waarbij een aankoop al bijtelt (`boughtVia`), heeft geen **Kasticket bijtellen**: daar staat
   **Kasticket lezen**, dat het nakijken in die aankopen opent (`?kasticket=lezen`), zodat niets twee keer telt. Ook
   een gedeelde foto gaat dan naar de aankopen.

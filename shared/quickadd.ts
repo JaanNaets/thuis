@@ -54,6 +54,23 @@ const startsWith = (name: string, words: string[]) => {
  * mee. Zonder tekst: alle lijsten.
  */
 export function matchTargets<T extends AddTarget>(text: string, targets: T[]): { target: T; rest: string; strong: boolean }[] {
+  const found = matchByWords(text, targets);
+  if (!hasPrice(text)) return found;
+  // Een prijs in de tekst is een aankoop: de lijst met aankopen eerst ("keuken yoghurt 6 euro" → Uitgave, die bij de
+  // Voorraad in Keuken telt), ook als je met het project of een andere lijst begon.
+  const strong = found.some((f) => f.strong);
+  const rest = found[0]?.rest ?? text.trim();
+  const buyers = rankTargets(targets).filter(
+    (t) => t.receipt && !found.some((f) => f.target === t) && (!strong || t.stocks.some((s) => found.some((f) => f.target.type_id === s))),
+  );
+  const first = found.filter((f) => f.target.receipt);
+  return [...first, ...buyers.map((target) => ({ target, rest, strong: true })), ...found.filter((f) => !f.target.receipt)];
+}
+
+/** Staat er een prijs in de tekst ("6 euro", "€ 4,50", "4,50€")? */
+export const hasPrice = (text: string) => /(^|\s)(€\s*\d|\d+(?:[.,]\d{1,2})?\s*(€|euro|eur)(?=\s|$))/i.test(text);
+
+function matchByWords<T extends AddTarget>(text: string, targets: T[]): { target: T; rest: string; strong: boolean }[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const ranked = rankTargets(targets);
   const all = (rest: string, strong = false) => (list: T[]) => list.map((target) => ({ target, rest, strong }));
