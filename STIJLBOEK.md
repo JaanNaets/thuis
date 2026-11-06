@@ -417,7 +417,7 @@ glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? V
 
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
-Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen), daaronder **Lijsten**: per tag een
+Bovenaan de plekken (`PLACES`: Overzicht, Agenda, Geld, Voorraad, Eten, Te doen, Verbanden), daaronder **Lijsten**: per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
@@ -805,6 +805,33 @@ Een activiteit met een uur en zonder einde loopt nog (werk, vasten): ze staat in
 live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** (`POST /events/:id/stop`). Een soort met een doel
 (16 u vasten) geeft een melding als dat doel bereikt is.
 
+### Verbanden: `LinkMap`, `LinkLegend` (`LinkMap.tsx`) en `LinksPage`
+
+Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.ts` (`GET /insights/links`): enkel
+wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon (de eerste drie grafiekkleuren, zodat kleur nooit
+alleen draagt): **Logboek** (doorlopend: gebeurtenissen in de ene lijst met dingen of soorten van de andere),
+**Verwijzingen** (streepjes: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes: Geld, Wie moet wie,
+Voorraad, Eten, Te doen, Agenda, Loopt nu, Herinneringen, Meldingen, Herhalen, Productinfo, Kasticket lezen,
+Overzicht).
+
+- **De kaart** (`.linkmap`, enkel vanaf 768px): een kolom per tag (een lijst staat bij haar eerste tag), rechts de
+  weergaven. Een lijst is een wit vlakje (148×30, rond 9px) met haar icoon in haar toon, een weergave een grijs. Een
+  verband is een lijn van 2px van de rechterkant van het punt links naar de linkerkant van het punt rechts, met een
+  pijltje aan de kant waar het naartoe gaat (nooit achteruit over de kaart; in dezelfde kolom een boog langs rechts).
+  Zonder keuze zijn de lijnen naar de weergaven stil (35%). Tik of Enter op een punt kiest het (`?lijst=`): enkel zijn
+  lijnen blijven, de rest vervaagt. De legende staat erboven. Past de kaart niet, dan schuift ze binnen haar eigen vlak.
+- **De lijst** (altijd, op gsm enkel dit): per lijst een kaart met `CardHead` (de naam, "12 dingen · 40
+  gebeurtenissen", Openen) en per verband een rij: het icoon van het andere eind, › (ernaartoe) of ‹ (ervandaan), de
+  naam, een stukje lijn van de soort, wat het doet in grijs en rechts hoeveel keer. Een tik kiest het andere eind.
+  Daaronder **In de lijst zelf** (wat ze met haar eigen dingen doet) en **Wie** (met rol, en via welke tag). Een
+  gekozen weergave krijgt haar eigen kaart. Vanaf 1100px twee kaarten naast elkaar.
+- **Werkt niet voor iedereen** bovenaan (enkel als je een van beide lijsten beheert): wie in een lijst kan bewerken
+  maar een lijst niet ziet waar die van afhangt; de rij opent Mensen van de lijst die je beheert.
+- Filters: Lijst (ook een weergave), Soort, en Werkt niet voor iedereen (enkel als er iets is), in het adres.
+- Een nieuwe eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok? Dan weigert TypeScript te bouwen tot
+  je in `shared/links.ts` beslist of ze iets verbindt (`FIELD_LINKS` …); wat verbindt, krijgt een voorbeeld in
+  `test/links.test.ts`. Zo blijft alles zichtbaar.
+
 ### Grafieken
 
 `ChartBlock`, `ChartBuilder`, `TextBlock` (`ChartBlock.tsx`) en `ChartView`, `ChartTable` (`Chart.tsx`), uit
@@ -952,6 +979,9 @@ op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `Destinatio
 Weergave, Lijst of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI**, de
 volgorde van je lijsten en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
 
+**Verbanden** (`/verbanden`, ook via ⋯ → Verbanden van een lijst): `PageHead`, de filters, Werkt niet voor iedereen,
+de kaart (tablet) en per lijst haar verbanden; zie [Verbanden](#verbanden-linkmap-linklegend-linkmaptsx-en-linkspage).
+
 **Snel naar een formulier** (`QuickLinks.tsx`): de **QR-sticker** (`/lijsten/:id/sticker`, Afdrukken), een eigen app
 (`/app/:id`: als app meteen naar haar bestemming, in de browser `HomeScreenHint`) en **Gedeeld** (`/delen`: een
 gedeelde foto als kasticket ✨ of bij wat je toevoegt).
@@ -1037,7 +1067,8 @@ Loop deze lijst af voor je iets oplevert:
 - [ ] Volgt de rechten: knoppen enkel bij `can_create`, `access === "edit"`, `can_delete`, `rights.manage` of
       `rights.members`; velden volgens `field_access`. Getest met een rol die enkel mag zien. Afbeeldingen uit de API
       via `apiUrl`.
-- [ ] Geen horizontale scroll; lange namen worden netjes afgekapt.
+- [ ] Geen horizontale scroll (enkel de kaart van Verbanden schuift binnen haar eigen vlak); lange namen worden netjes afgekapt.
+- [ ] Iets nieuws dat lijsten verbindt (een veld, een weergave, een blok)? Dan staat het op de kaart van Verbanden.
 - [ ] Iconknoppen hebben een `aria-label`; alles werkt met het toetsenbord.
 - [ ] Teksten volgen [Tekst](#9-tekst).
 - [ ] Kan de gebruiker iets zelf ordenen? Dan met `useSortable` (greep + pijltjes), niet met knoppen.

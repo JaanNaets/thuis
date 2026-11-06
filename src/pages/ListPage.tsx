@@ -121,6 +121,7 @@ export function ListPage() {
           {canManage(role) && menuLink("sliders", "Instellen", `/lijsten/${list.id}/instellingen`)}
           {edit && list.one && menuLink("upload", "Importeren", `/lijsten/${list.id}/importeren`)}
           {edit && menuLink("scan", "QR-sticker", `/lijsten/${list.id}/sticker${tab === "dingen" ? "?ding=1" : ""}`)}
+          {menuLink("links", "Verbanden", `/verbanden?lijst=${list.id}`)}
           {edit && (
             <li>
               <button type="button" className="row" onClick={homeScreen}>

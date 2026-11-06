@@ -5,14 +5,17 @@ import { Hono } from "hono";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, MAX_AGENDA_DAYS, occurrences, daysApart } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
-import { foodPerPerson, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
+import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
+import { buildLinks, linkProblems, type BoardUse, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
 import { isExpense, netBalance, settleUp, sharesOf, type MoneyEvent } from "../../shared/ledger";
 import { canEdit, dayOf, type EventView, type Role } from "../../shared/model";
-import { ids, kindsFor, parseJson, seenLists, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "../access";
+import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
 import { logbookRows, viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
+import { listPeople } from "./lists";
+import { boardsOf } from "./me";
 import { peopleByIds, stockOf } from "./things";
 
 export const insights = new Hono<AppEnv>();
@@ -288,3 +291,105 @@ insights.get("/search", async (c) => {
   ])) as [D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string; kind: string }>];
   return c.json({ lists: lists.results, things: things.results, events: events.results, kinds: await kindsFor(db, seen.keys()) });
 });
+
+// ---------- verbanden ----------
+
+/** Zoveel lijsten krijgen hun mensen erbij (de rest van de kaart werkt gewoon). */
+const LINK_PEOPLE_LISTS = 80;
+
+/**
+ * Hoe je lijsten samenhangen (zie shared/links.ts): enkel je lijsten (niet gearchiveerd) en tellingen over
+ * gebeurtenissen in die lijsten met lijnen naar dingen in die lijsten; wie een gebeurtenis in haar lijst ziet, ziet ze
+ * helemaal. De problemen enkel waar je een van beide lijsten beheert.
+ */
+insights.get("/links", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person").id;
+  const seen = await seenLists(db, me);
+  const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(seen.keys())).all<ListRow>();
+  const lists = listRows.map(toList).map((l) => ({ ...l, role: seen.get(l.id)! }));
+  const listIds = ids(lists.map((l) => l.id));
+
+  // De soorten van je lijsten en die je gebeurtenissen gebruiken; wat als eten telt (kcal in de soort of het ding).
+  const [kindRows, kcalRows] = (await db.batch([
+    db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?1)) OR id IN (SELECT DISTINCT kind FROM events WHERE list_id IN (SELECT value FROM json_each(?1)))").bind(listIds),
+    db.prepare(`SELECT id, fields FROM lists WHERE fields LIKE '%"product":"kcal"%'`),
+  ])) as [D1Result<KindRowDb>, D1Result<{ id: string; fields: string }>];
+  const kinds: LinkKindDef[] = kindRows.results.map(toKind);
+  const kcalKinds = kinds.filter((k) => hasKcal(k.fields)).map((k) => k.id);
+  const kcalLists = kcalRows.results.filter((r) => hasKcal(parseJson<FieldDef[]>(r.fields, []))).map((r) => r.id);
+
+  const done = "MAX(CASE WHEN e.status != 'gepland' THEN substr(e.at, 1, 10) END)";
+  const inLists = "(SELECT value FROM json_each(?1))";
+  const [logRows, lineRows, pairRows, thingRows] = (await db.batch([
+    db
+      .prepare(
+        `SELECT e.list_id AS list, e.kind, e.base, COUNT(*) AS events,
+           SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.base != 'overdracht') AS money,
+           SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL
+               AND (e.split IS NOT NULL OR e.base = 'overdracht' OR EXISTS (SELECT 1 FROM lines o WHERE o.event_id = e.id AND o.owner IS NOT NULL))) AS shared,
+           SUM(e.status = 'gepland') AS planned,
+           SUM(e.repeat IS NOT NULL) AS repeats,
+           SUM(e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd') AS running,
+           SUM(e.base = 'gebruik' AND e.status = 'gebeurd' AND (e.kind IN (SELECT value FROM json_each(?2))
+               OR EXISTS (SELECT 1 FROM lines f JOIN things ft ON ft.id = f.thing_id
+                          WHERE f.event_id = e.id AND f.role = 'uit' AND ft.list_id IN (SELECT value FROM json_each(?3))))) AS food,
+           ${done} AS last
+         FROM events e WHERE e.list_id IN ${inLists} GROUP BY e.list_id, e.kind, e.base`,
+      )
+      .bind(listIds, JSON.stringify(kcalKinds), JSON.stringify(kcalLists)),
+    db
+      .prepare(
+        `SELECT e.list_id AS list, e.kind, e.base, l.role, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists}
+         GROUP BY e.list_id, e.kind, e.base, l.role, t.list_id`,
+      )
+      .bind(listIds),
+    db
+      .prepare(
+        `SELECT e.list_id AS list, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
+         GROUP BY e.list_id, t.list_id`,
+      )
+      .bind(listIds),
+    db.prepare(`SELECT list_id, COUNT(*) AS n FROM things WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
+  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<{ list_id: string; n: number }>];
+
+  // Je overzichten: welke blokken een lijst tonen (een ding: zijn lijst).
+  const boards = await boardsOf(db, me);
+  const thingIds = boards.flatMap((b) => (b.blocks ?? []).flatMap((x) => (x.kind === "thing" ? [x.thing] : [])));
+  const thingList = new Map<string, string>();
+  if (thingIds.length) {
+    const { results } = await db.prepare("SELECT id, list_id FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(thingIds)).all<{ id: string; list_id: string }>();
+    for (const r of results) thingList.set(r.id, r.list_id);
+  }
+  const uses: BoardUse[] = boards.flatMap((b) =>
+    (b.blocks ?? []).flatMap((x): BoardUse[] => {
+      if (x.kind === "list" || x.kind === "quick") return [{ board: b.name, list: x.list, block: x.kind }];
+      if (x.kind === "chart" && x.list) return [{ board: b.name, list: x.list, block: "chart" }];
+      const list = x.kind === "thing" ? thingList.get(x.thing) : undefined;
+      return list ? [{ board: b.name, list, block: "thing" }] : [];
+    }),
+  );
+
+  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, boards: uses });
+
+  // Wie bij elke lijst is (zonder wie er rechtstreeks niet bij mag), en wat voor wie niet werkt.
+  const peopleLists = lists.slice(0, LINK_PEOPLE_LISTS);
+  const listed = await Promise.all(peopleLists.map((l) => listPeople(db, l.id)));
+  const people: Record<string, LinkPersonView[]> = {};
+  peopleLists.forEach((l, i) => {
+    people[l.id] = listed[i].filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, name: p.person.name, role: p.role, via: p.direct ? null : (p.via?.tag ?? null) }));
+  });
+  const managed = new Set(lists.filter((l) => l.role === "beheerder").map((l) => l.id));
+  const problems = linkProblems(links, new Map(Object.entries(people)), managed);
+
+  const counts: LinksResponse["counts"] = {};
+  for (const l of lists) counts[l.id] = { things: 0, events: 0 };
+  for (const r of thingRows.results) counts[r.list_id].things = r.n;
+  for (const r of logRows.results) counts[r.list].events += r.events;
+  return c.json({ links, own, counts, people, problems } satisfies LinksResponse);
+});
+

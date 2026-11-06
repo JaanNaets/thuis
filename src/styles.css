@@ -5896,6 +5896,199 @@ dialog.palette[open]::backdrop {
 }
 
 
+/* ---------- verbanden (LinksPage.tsx, LinkMap.tsx) ----------
+ * De kaart (vanaf tablet): een kolom per tag, rechts de weergaven. Lijsten zijn witte vlakjes met hun icoon in hun toon,
+ * weergaven grijze. Een verband is een lijn van 2px met een pijltje, in de kleur en het patroon van zijn soort (de eerste
+ * drie grafiekkleuren: logboek doorlopend, verwijzing in streepjes, weergave in puntjes), zodat kleur nooit alleen
+ * draagt. Past de kaart niet, dan schuift ze binnen haar eigen vlak (de pagina zelf schuift nooit opzij).
+ */
+.only-tablet {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .only-tablet {
+    display: block;
+  }
+}
+
+.linkmap-card {
+  padding: 12px 0 4px;
+}
+
+.link-problems {
+  margin-bottom: 12px;
+}
+
+.lm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0 16px 8px;
+  list-style: none;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.lm-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.linkmap {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 0 8px 8px;
+}
+
+.linkmap svg {
+  display: block;
+}
+
+.lm-column {
+  fill: var(--muted-foreground);
+  font: 600 11px var(--font-sans);
+  letter-spacing: 0.05em;
+}
+
+.lm-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: opacity var(--dur);
+}
+
+.lm-line[data-on="false"] {
+  opacity: 0.08;
+}
+
+.lm-line[data-quiet="true"] {
+  opacity: 0.35;
+}
+
+.lm-log {
+  stroke: var(--chart-1);
+}
+
+.lm-ref {
+  stroke: var(--chart-2);
+  stroke-dasharray: 6 4;
+}
+
+.lm-view {
+  stroke: var(--chart-3);
+  stroke-dasharray: 0.5 5;
+}
+
+.lm-head {
+  stroke: none;
+}
+
+.lm-head.lm-log {
+  fill: var(--chart-1);
+}
+
+.lm-head.lm-ref {
+  fill: var(--chart-2);
+}
+
+.lm-head.lm-view {
+  fill: var(--chart-3);
+}
+
+.lm-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity var(--dur);
+}
+
+.lm-node[data-dim="true"] {
+  opacity: 0.45;
+}
+
+.lm-pill {
+  fill: var(--surface);
+  stroke: rgb(24 24 27 / 0.1);
+  stroke-width: 1;
+  transition: stroke var(--dur);
+}
+
+.lm-viewnode .lm-pill {
+  fill: var(--muted-solid);
+}
+
+@media (hover: hover) {
+  .lm-node:hover .lm-pill {
+    stroke: rgb(24 24 27 / 0.24);
+  }
+}
+
+.lm-node[data-selected="true"] .lm-pill {
+  stroke: var(--foreground);
+  stroke-width: 1.5;
+}
+
+.lm-node:focus-visible .lm-pill {
+  stroke: var(--ring);
+  stroke-width: 3;
+}
+
+.lm-icon {
+  color: var(--tone-ink, var(--muted-foreground));
+}
+
+.lm-viewnode .lm-icon {
+  color: var(--text-soft);
+}
+
+.lm-name {
+  fill: var(--foreground);
+  font: 500 13px var(--font-sans);
+}
+
+.lm-problem-icon {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* Per lijst een kaart met haar verbanden; vanaf 1100px twee naast elkaar. */
+.link-cards {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 1100px) {
+  .link-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.link-row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.link-dir {
+  flex: none;
+  color: var(--muted-foreground);
+}
+
+.link-kind {
+  flex: none;
+  margin-left: 2px;
+}
+
+.link-cards .row-meta,
+.link-cards .row-meta > span {
+  white-space: normal;
+}
+
 /* ---------- een item kiezen (ItemPicker.tsx) ----------
  * Een gewoon veld waarin je typt; de keuzes liggen eronder op een wit vlak (zoals het zoekpalet).
  */

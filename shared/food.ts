@@ -46,7 +46,8 @@ export function gramsOf(amount: number | null, unit: string | null, thing: FoodT
   return inOwn !== null ? convert(inOwn, m.unit, target) : convert(n, from, target);
 }
 
-const hasKcal = (fields: FieldDef[]) => fields.some((f) => f.product === "kcal" && f.type === "number");
+/** Een lijst of soort met kcal (een getal met productinfo kcal). */
+export const hasKcal = (fields: FieldDef[]) => fields.some((f) => f.product === "kcal" && f.type === "number");
 
 /** Is dit eten? Een gebruik met een veld voor kcal, of dat iets gebruikte uit een lijst met kcal (geen pellets). */
 export const isFood = (e: Pick<FoodEvent, "base" | "fields" | "lines">) =>

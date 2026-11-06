@@ -95,6 +95,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   gewone routes. Opstarten blijft licht: geen lijst die alles tegelijk tekent.
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
   (`keepReachable`).
+- **Verbanden** (`shared/links.ts`, `GET /insights/links`, `/verbanden`): hoe je lijsten samenhangen (verwijzingen,
+  wat er gelogd is tussen lijsten, de weergaven), enkel wat de lezer ziet, met wat voor iemand niet werkt. **Een nieuwe
+  eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok beslis je in de `…_LINKS`-tabellen** (TypeScript
+  dwingt het af; wat verbindt, krijgt een voorbeeld in `test/links.test.ts`).
 - **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
   nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
   waarom niet; `test/backup.test.ts` leest de migraties na).

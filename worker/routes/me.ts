@@ -192,7 +192,7 @@ async function reachFor(db: D1Database, personId: string): Promise<Reach> {
 
 // ---------- overzicht ----------
 
-async function boardsOf(db: D1Database, personId: string): Promise<Board[]> {
+export async function boardsOf(db: D1Database, personId: string): Promise<Board[]> {
   const row = await db.prepare("SELECT overview FROM people WHERE id = ?").bind(personId).first<{ overview: string | null }>();
   return cleanBoards(parseJson(row?.overview, null));
 }

@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { App } from "./App";
 import { AgendaPage } from "./pages/AgendaPage";
+import { LinksPage } from "./pages/LinksPage";
 import { EventFormPage } from "./pages/EventForm";
 import { EventPage } from "./pages/EventPage";
 import { FoodPage } from "./pages/FoodPage";
@@ -42,6 +43,7 @@ export const routes: RouteObject[] = [
       { path: "eten", element: <FoodPage /> },
       { path: "te-doen", element: <TodoPage /> },
       { path: "agenda", element: <AgendaPage /> },
+      { path: "verbanden", element: <LinksPage /> },
       { path: "delen", element: <SharedPage /> },
       { path: "app/:appId", element: <AppPage /> },
       { path: "ik", element: <MePage /> },

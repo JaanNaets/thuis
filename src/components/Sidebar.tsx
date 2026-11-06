@@ -9,7 +9,7 @@ import { Icon, type IconName } from "./Icon";
 /** ⌘K op een Mac, Ctrl K elders. */
 export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
 
-/** De vaste plekken bovenaan: het overzicht, de agenda en de weergaven over al je lijsten. */
+/** De vaste plekken bovenaan: het overzicht, de agenda, de weergaven over al je lijsten en hoe ze samenhangen. */
 export const PLACES: { to: string; label: string; icon: IconName }[] = [
   { to: "/", label: "Overzicht", icon: "project" },
   { to: "/agenda", label: "Agenda", icon: "calendar" },
@@ -17,6 +17,7 @@ export const PLACES: { to: string; label: string; icon: IconName }[] = [
   { to: "/voorraad", label: "Voorraad", icon: "package" },
   { to: "/eten", label: "Eten", icon: "food" },
   { to: "/te-doen", label: "Te doen", icon: "check" },
+  { to: "/verbanden", label: "Verbanden", icon: "links" },
 ];
 
 /** De lijst die je nu bekijkt (uit het adres). */
