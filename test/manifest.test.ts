@@ -1,33 +1,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appManifest, listManifest, quickPath, SHARE_PATH, SHORTCUT_LISTS } from "../shared/manifest.ts";
-import type { AddTarget } from "../shared/quickadd.ts";
+import { appManifest, ownAppManifest, SHARE_PATH, SHORTCUT_LISTS } from "../shared/manifest.ts";
 
-const t = (type_id: string, name: string): AddTarget => ({ project_id: "p", project_name: "Thuis", type_id, name, plural: name, icon: null, used: 1, last: null, counter: false, receipt: false, stocks: [] });
-
-test("het manifest van de app: je meestgebruikte lijsten als snelkoppeling, en delen met Thuis", () => {
-  const m = appManifest([t("a", "Bijvulling"), t("b", "Uitgave"), t("c", "Eten"), t("d", "Wijn")]);
-  assert.equal(m.id, "/");
+test("het manifest van de app: je meestgebruikte plekken als snelkoppeling, en delen met Thuis", () => {
+  const often = [
+    { name: "Gegeten", url: "/lijsten/v/loggen?soort=g" },
+    { name: "Bijvulling", url: "/lijsten/p/loggen?soort=b" },
+    { name: "Tankbeurt", url: "/lijsten/w/loggen?soort=t" },
+    { name: "Gewicht", url: "/lijsten/j/loggen?soort=x" },
+  ];
+  const m = appManifest(often);
+  assert.equal(m.start_url, "/");
   assert.deepEqual(
-    m.shortcuts.map((s) => [s.name, s.url]),
-    [
-      ["Bijvulling", "/projecten/p/nieuw?lijst=a"],
-      ["Uitgave", "/projecten/p/nieuw?lijst=b"],
-      ["Eten", "/projecten/p/nieuw?lijst=c"],
-      ["Toevoegen", "/?toevoegen=1"],
-      ["Agenda", "/agenda"],
-    ],
+    m.shortcuts.map((s) => s.name),
+    [...often.slice(0, SHORTCUT_LISTS).map((o) => o.name), "Toevoegen", "Agenda"],
   );
-  assert.equal(SHORTCUT_LISTS, 3);
   assert.equal(m.share_target.action, SHARE_PATH);
-  assert.equal(m.share_target.params.files[0].name, "foto");
+  // Eigen snelkoppelingen winnen.
+  assert.deepEqual(appManifest(often, [{ name: "Keuken", url: "/?bord=k1" }]).shortcuts.map((s) => s.url), ["/?bord=k1"]);
 });
 
-test("een lijst als eigen icoon: eigen id en start, zelfde app", () => {
-  const m = listManifest({ project_id: "p", type_id: "a", name: "Bijvulling" });
-  assert.equal(m.id, quickPath("p", "a"));
-  assert.equal(m.start_url, "/snel/p/a");
-  assert.equal(m.name, "Bijvulling");
-  assert.equal(m.scope, "/");
-  assert.ok(!("share_target" in m));
+test("een eigen app: eigen id en start, haar naam", () => {
+  const m = ownAppManifest({ id: "a1", name: "Pelletkachel bijvullen" });
+  assert.equal(m.id, "/app/a1");
+  assert.equal(m.start_url, "/app/a1");
+  assert.equal(m.short_name, "Pelletkachel");
 });

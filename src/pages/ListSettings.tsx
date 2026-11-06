@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
 import { BASES, canManage, isBase, ROLES, type Base, type DirectRole, type KindInfo, type ListDetail, type ListPerson } from "../../shared/model";
 import type { StockDef } from "../../shared/stock";
+import { templateFile } from "../../shared/template-file";
 import type { IconKey } from "../../shared/icons";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -113,6 +114,18 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
     navigate("/", { replace: true });
   }
 
+  /** De opbouw van de lijst als bestand (zonder dingen, logboek of mensen), om te delen. */
+  function downloadTemplate() {
+    const own = detail.kinds.filter((k) => k.list_id === list.id);
+    const file = templateFile(list, own);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${list.name.replace(/[^\p{L}\p{N} -]+/gu, "").trim() || "lijst"} (sjabloon).json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <>
       <section className="card form-section">
@@ -150,6 +163,9 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
         Opslaan
       </button>
       <div className="btn-row" style={{ justifySelf: "start" }}>
+        <button type="button" className="btn btn-ghost" onClick={downloadTemplate}>
+          <Icon name="download" size={15} /> Als sjabloon
+        </button>
         <button type="button" className="btn btn-ghost" onClick={archive}>
           <Icon name="archive" size={15} /> {list.archived ? "Uit het archief" : "Archiveren"}
         </button>

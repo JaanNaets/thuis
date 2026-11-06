@@ -10,6 +10,7 @@ import { me } from "./routes/me";
 import { products, rates } from "./routes/products";
 import { listReceipt, thingAlias } from "./routes/receipt";
 import { listPhoto } from "./routes/photo";
+import { backup } from "./routes/backup";
 import { push } from "./routes/push";
 import { tags } from "./routes/tags";
 import { listThings, things } from "./routes/things";
@@ -26,6 +27,7 @@ app.use("*", requireAccess);
 app.use("*", withPerson);
 
 app.route("/me", me);
+app.route("/me", backup);
 app.route("/lists", lists);
 app.route("/lists", listThings);
 app.route("/lists", listEvents);

@@ -4,6 +4,8 @@ import type { AiState, Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { CardHead, SubmitButton, Switch, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
+import { AppCard } from "../components/AppSettings";
+import { BackupCard } from "../components/Backup";
 import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
 import { useSortable } from "../components/Sortable";
@@ -83,8 +85,10 @@ export function MePage() {
       </SubmitButton>
 
       <NotificationsCard />
+      <AppCard />
       <AiCard />
       {lists.filter((l) => !l.archived).length > 1 && <ListOrder />}
+      <BackupCard />
     </form>
   );
 }

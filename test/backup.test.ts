@@ -1,204 +1,125 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { BACKUP_KIND, BACKUP_TABLES, BACKUP_VERSION, freshIds, parseBackup, projectTree, remap, topProjects, type Backup } from "../shared/backup.ts";
+import { BACKUP_KIND, BACKUP_TABLES, BACKUP_VERSION, parseBackup, planRestore, remap, type Backup } from "../shared/backup.ts";
 
-const P = "11111111-1111-4111-8111-111111111111";
-const SUB = "22222222-2222-4222-8222-222222222222";
-const V = "33333333-3333-4333-8333-333333333333";
-const E = "44444444-4444-4444-8444-444444444444";
-const PELLETS = "55555555-5555-4555-8555-555555555555";
-const ETEN = "66666666-6666-4666-8666-666666666666";
-const TAG = "77777777-7777-4777-8777-777777777777";
-const ELDERS = "99999999-9999-4999-8999-999999999999"; // een lijst in een project dat niet in de back-up zit
+const VOORRAAD = "11111111-1111-4111-8111-111111111111";
+const GEGETEN = "22222222-2222-4222-8222-222222222222";
+const PASTA = "33333333-3333-4333-8333-333333333333";
+const SAUS = "44444444-4444-4444-8444-444444444444";
+const EVENT = "55555555-5555-4555-8555-555555555555";
+const COLRUYT = "66666666-6666-4666-8666-666666666666"; // in een lijst die niet in de back-up zit
+const WEG = "77777777-7777-4777-8777-777777777777"; // bestaat niet meer
+const TAG = "88888888-8888-4888-8888-888888888888";
 
 const backup: Backup = {
   kind: BACKUP_KIND,
   version: BACKUP_VERSION,
-  created_at: "2026-11-04T12:00:00Z",
-  people: [{ id: "p1", name: "Jaan", email: "jaan@example.be", color: null }],
-  projects: [
+  created_at: "2026-11-06T12:00:00Z",
+  people: [{ id: "jaan", name: "Jaan", email: "jaan@example.be", color: null }],
+  tags: [{ id: TAG, name: "Huis", color: null }],
+  lists: [
     {
-      id: P,
-      parent_id: null,
-      name: "Huis",
-      description: null,
-      icon: null,
+      id: VOORRAAD,
+      name: "Voorraad",
+      one: "Product",
+      icon: "food",
       color: null,
-      sort_order: 0,
-      archived: 0,
-    },
-    {
-      id: SUB,
-      parent_id: P,
-      name: "Kachel",
-      description: null,
-      icon: null,
-      color: null,
-      sort_order: 0,
-      archived: 0,
-    },
-  ],
-  roles: [
-    {
-      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      project_id: P,
-      name: "Kijker",
-      rights: { items: "view", types: { [V]: { access: "none" } } },
-      sort_order: 0,
-    },
-  ],
-  memberships: [],
-  types: [
-    {
-      id: V,
-      project_id: P,
-      name: "Product",
-      plural: "Voorraad",
-      name_label: null,
-      icon: null,
-      fields: [{ key: "aantal", label: "Aantal", type: "number" }],
-      totals: [],
-      sort_order: 0,
-    },
-    {
-      id: E,
-      project_id: SUB,
-      name: "Eten",
-      plural: "Eten",
-      name_label: null,
-      icon: null,
       fields: [
-        {
-          key: "wat",
-          label: "Wat",
-          type: "item",
-          ref_type: V,
-          ref_also: [ELDERS],
-          adjust: { field: "aantal", sign: -1 },
-        },
+        { key: "eenheid", label: "Eenheid", type: "select", options: ["g", "kg"] },
+        { key: "met", label: "Gaat met", type: "item", ref_type: VOORRAAD },
+        { key: "van", label: "Van", type: "person" },
       ],
-      totals: [{ id: "t", agg: "count", period: "all", sources: [ELDERS] }],
-      sort_order: 0,
-    },
-  ],
-  tags: [{ id: TAG, project_id: P, name: "Bio", color: null }],
-  items: [
-    {
-      id: PELLETS,
-      project_id: P,
-      type_id: V,
-      name: "Pellets",
-      data: { aantal: 34 },
+      stock: { unit: "eenheid", default_unit: "stuk" },
+      notify: null,
       archived: 0,
-      created_by: "p1",
-      created_at: "x",
-      updated_at: "x",
-      tags: [TAG],
-      photo: false,
-    },
-    {
-      id: ETEN,
-      project_id: SUB,
-      type_id: E,
-      name: "Ontbijt",
-      data: { wat: PELLETS },
-      archived: 0,
-      created_by: "p1",
-      created_at: "x",
-      updated_at: "x",
-      tags: [],
-      photo: false,
+      tag_ids: [TAG],
     },
   ],
-  log: [],
-  repeats: [],
-  views: [
+  kinds: [{ id: GEGETEN, list_id: VOORRAAD, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, sort_order: 0 }],
+  things: [
+    { id: PASTA, list_id: VOORRAAD, name: "Pasta", data: { eenheid: "g", met: SAUS, van: "vreemde" }, part_of: null, archived: 0, photo: true },
+    { id: SAUS, list_id: VOORRAAD, name: "Saus", data: { eenheid: "kg", met: WEG, van: "jaan" }, part_of: PASTA, archived: 0, photo: false },
+  ],
+  events: [
     {
-      id: "88888888-8888-4888-8888-888888888888",
-      project_id: P,
-      type_id: V,
-      person_id: null,
-      name: "Bio",
-      def: { conditions: [{ field: "tags", op: "any_of", value: [TAG] }] },
-      sort_order: 0,
+      id: EVENT,
+      list_id: VOORRAAD,
+      kind: GEGETEN,
+      base: "gebruik",
+      name: "",
+      status: "gebeurd",
+      at: "2026-11-05T19:00",
+      end_at: null,
+      amount: null,
+      paid_by: "jaan",
+      split: [
+        { person_id: "jaan", share: 50 },
+        { person_id: "vreemde", share: 50 },
+      ],
+      to_person: null,
+      data: {},
+      repeat: null,
+      done_by: null,
+      photo: false,
+      lines: [
+        { role: "uit", thing_id: PASTA, text: null, amount: 300, unit: "g", price: null, expires: null, owner: null },
+        { role: "bij", thing_id: COLRUYT, text: null, amount: null, unit: null, price: null, expires: null, owner: null },
+        { role: "bij", thing_id: WEG, text: null, amount: null, unit: null, price: null, expires: null, owner: "vreemde" },
+      ],
     },
   ],
-  shown: [{ project_id: SUB, type_id: V }],
-  files: [],
+  views: [{ id: "99999999-9999-4999-8999-999999999999", list_id: VOORRAAD, target: "dingen", name: "Kelder", def: { conditions: [] }, shared: 1 }],
+  outside: [{ id: WEG, name: "Oude winkel" }],
 };
 
-test("een back-up herkennen en weigeren wat niet klopt", () => {
-  assert.equal(parseBackup(JSON.parse(JSON.stringify(backup))).projects.length, 2);
+test("een back-up nakijken", () => {
+  assert.equal(parseBackup(JSON.parse(JSON.stringify(backup))).lists.length, 1);
   assert.throws(() => parseBackup({ kind: "iets" }), /geen back-up/);
-  assert.throws(() => parseBackup({ ...backup, version: 2 }), /andere versie/);
-  assert.throws(() => parseBackup({ ...backup, items: undefined }), /onvolledig/);
-  assert.throws(
-    () =>
-      parseBackup({
-        ...backup,
-        items: [{ ...backup.items[0], project_id: ELDERS }],
-      }),
-    /beschadigd/,
-  );
-  assert.throws(() => parseBackup({ ...backup, projects: [] }), /geen projecten/);
+  assert.throws(() => parseBackup({ ...backup, version: 1 }), /andere versie/);
+  assert.throws(() => parseBackup({ ...backup, things: [{ ...backup.things[0], list_id: "elders" }] }), /beschadigd/);
 });
 
-test("terugzetten: overal nieuwe ids, ook diep in velden, waarden, rechten en weergaven", () => {
+test("ids diep vervangen", () => {
+  assert.deepEqual(remap({ a: ["x", { b: "x" }], c: "y" }, new Map([["x", "z"]])), { a: ["z", { b: "z" }], c: "y" });
+});
+
+test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt weg", () => {
   let n = 0;
-  const map = freshIds(backup, () => `nieuw-${++n}`);
-  const types = remap(backup.types, map);
-  const items = remap(backup.items, map);
-  const views = remap(backup.views, map);
-  const shown = remap(backup.shown, map);
-  const roles = remap(backup.roles, map);
-  const eten = types[1] as {
-    fields: { ref_type: string; ref_also: string[] }[];
-    totals: { sources: string[] }[];
-    project_id: string;
-  };
-  // De verwijzing naar de voorraad wijst naar de nieuwe; die naar een lijst elders blijft.
-  assert.equal(eten.fields[0].ref_type, map.get(V));
-  assert.deepEqual(eten.fields[0].ref_also, [ELDERS]);
-  assert.deepEqual(eten.totals[0].sources, [ELDERS]);
-  assert.equal(eten.project_id, map.get(SUB));
-  // Het item verwijst naar de nieuwe Pellets; de rechten per lijst (op sleutel) gelden voor de nieuwe voorraad.
-  assert.deepEqual(items[1].data, { wat: map.get(PELLETS) });
-  assert.deepEqual(roles[0].rights, {
-    items: "view",
-    types: { [map.get(V)!]: { access: "none" } },
-  });
-  assert.deepEqual(items[0].tags, [map.get(TAG)]);
-  assert.deepEqual((views[0].def as { conditions: { value: string[] }[] }).conditions[0].value, [map.get(TAG)]);
-  assert.deepEqual(shown, [{ project_id: map.get(SUB), type_id: map.get(V) }]);
-  // Sleutels van velden en gewone tekst blijven.
-  assert.deepEqual(items[0].data, { aantal: 34 });
-  assert.equal(items[0].name, "Pellets");
+  const plan = planRestore(backup, { newId: () => `n${++n}`, me: "jaan", people: new Set(["jaan"]), seenThings: new Set([COLRUYT]) });
+  const [list] = plan.lists;
+  assert.notEqual(list.id, VOORRAAD);
+  assert.deepEqual(list.tags, ["Huis"]);
+  // De verwijzing in een veld wijst naar de nieuwe lijst.
+  assert.equal(list.fields.find((f) => f.key === "met")?.ref_type, list.id);
+  assert.deepEqual(list.stock, { unit: "eenheid", default_unit: "stuk" });
+  const pasta = plan.things.find((t) => t.old === PASTA)!;
+  const saus = plan.things.find((t) => t.old === SAUS)!;
+  // Pasta: met = de nieuwe saus; een persoon die je niet kent valt weg.
+  assert.deepEqual(pasta.data, { eenheid: "g", met: saus.id });
+  // Saus: wat weg is, valt weg; deel van de nieuwe pasta.
+  assert.deepEqual(saus.data, { eenheid: "kg", van: "jaan" });
+  assert.equal(saus.part_of, pasta.id);
+  assert.equal(pasta.photo, true);
+  const [event] = plan.events;
+  assert.equal(event.kind, plan.kinds[0].id);
+  assert.deepEqual(event.split, [{ person_id: "jaan", share: 50 }]);
+  assert.deepEqual(
+    event.lines.map((l) => [l.role, l.thing_id, l.text, l.owner]),
+    [
+      ["uit", pasta.id, null, null],
+      ["bij", COLRUYT, null, null],
+      ["bij", null, "Oude winkel", null],
+    ],
+  );
+  assert.equal(plan.views[0].list_id, list.id);
 });
 
-test("de projecten bovenaan, van boven naar onder, zonder kringen", () => {
+test("een lijn naar iets dat je niet ziet wordt tekst; zonder naam valt ze weg", () => {
+  const plan = planRestore({ ...backup, outside: [] }, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenThings: new Set() });
   assert.deepEqual(
-    topProjects(backup).map((p) => p.id),
-    [P],
-  );
-  assert.deepEqual(
-    topProjects({ ...backup, projects: [backup.projects[1]] }).map((p) => p.id),
-    [SUB],
-  );
-  const { order, chain } = projectTree(backup);
-  assert.deepEqual(
-    order.map((p) => p.id),
-    [P, SUB],
-  );
-  assert.deepEqual(chain.get(SUB), [SUB, P]);
-  // Twee projecten die elkaars ouder zijn, hangen nergens aan.
-  const loop = {
-    ...backup,
-    projects: [...backup.projects, { ...backup.projects[1], id: "x1", parent_id: "x2" }, { ...backup.projects[1], id: "x2", parent_id: "x1" }],
-  };
-  assert.deepEqual(
-    projectTree(loop).order.map((p) => p.id),
-    [P, SUB],
+    plan.events[0].lines.map((l) => [l.role, l.text]),
+    [["uit", null]],
   );
 });
 

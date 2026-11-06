@@ -1,16 +1,18 @@
 import { useState, type CSSProperties } from "react";
 import { useParams, useSearchParams } from "react-router";
+import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
 import { canEdit, canManage, ROLES, type EventView, type ListDetail } from "../../shared/model";
 import { api, useApi } from "../api";
 import { Avatar, CardHead, Tabs } from "../components/Controls";
-import { Icon } from "../components/Icon";
+import { Icon, type IconName } from "../components/Icon";
 import { LogList, type EventPage } from "../components/Log";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
+import { Sheet } from "../components/Sheet";
 import { ThingsView } from "../components/ThingsView";
 import { useToast } from "../components/Toast";
 import { listIcon } from "../lists";
-import { Link } from "../router";
+import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 
 type Tab = "dingen" | "logboek" | "gepland";
@@ -23,6 +25,9 @@ export function ListPage() {
   const { id } = useParams();
   const { data: detail, error, reload } = useApi<ListDetail>(`/lists/${id}`);
   const [params, setParams] = useSearchParams();
+  const [menu, setMenu] = useState(false);
+  const navigate = useNavigate();
+  const toast = useToast();
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
   const { list, role } = detail;
@@ -46,17 +51,45 @@ export function ListPage() {
       </Link>
     ));
 
+  const menuLink = (icon: IconName, label: string, to: string) => (
+    <li key={label}>
+      <Link to={to} className="row" onClick={() => setMenu(false)}>
+        <span className="cell-main">
+          <span className="row-media">
+            <Icon name={icon} size={16} />
+          </span>
+          <span className="row-title">{label}</span>
+        </span>
+      </Link>
+    </li>
+  );
+
+  /** Een eigen app voor deze lijst (of de app die er al is), en dan naar haar pagina om ze op je beginscherm te zetten. */
+  async function homeScreen() {
+    setMenu(false);
+    try {
+      const to: Destination = { kind: "list", list: list.id };
+      let settings = await api.get<AppSettings>("/me/app");
+      let app = settings.apps.find((a) => sameDestination(a.to, to));
+      if (!app) {
+        settings = await api.put<AppSettings>("/me/app", { settings: { ...settings, apps: [...settings.apps, { name: list.name.slice(0, 30), to }] } });
+        app = settings.apps.find((a) => sameDestination(a.to, to));
+      }
+      if (app) navigate(appPath(app.id));
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+
   return (
     <div className="page">
       <PageHead
         title={list.name}
         badge={list.archived ? <span className="badge badge-muted">Gearchiveerd</span> : undefined}
         actions={
-          canManage(role) && (
-            <Link to={`/lijsten/${list.id}/instellingen`} className="btn btn-outline btn-sm">
-              Instellen
-            </Link>
-          )
+          <button type="button" className="btn btn-outline btn-icon" aria-label="Meer opties" aria-haspopup="dialog" onClick={() => setMenu(true)}>
+            <Icon name="dots" size={16} />
+          </button>
         }
         primary={primary || undefined}
       />
@@ -82,6 +115,25 @@ export function ListPage() {
           {tab !== "dingen" && <ListLog key={`${list.id}-${tab}`} listId={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />}
         </div>
       </div>
+      <Sheet open={menu} title={list.name} onClose={() => setMenu(false)}>
+        <ul className="rows sheet-menu">
+          {canManage(role) && menuLink("sliders", "Instellen", `/lijsten/${list.id}/instellingen`)}
+          {edit && list.one && menuLink("upload", "Importeren", `/lijsten/${list.id}/importeren`)}
+          {edit && menuLink("scan", "QR-sticker", `/lijsten/${list.id}/sticker${tab === "dingen" ? "?ding=1" : ""}`)}
+          {edit && (
+            <li>
+              <button type="button" className="row" onClick={homeScreen}>
+                <span className="cell-main">
+                  <span className="row-media">
+                    <Icon name="home" size={16} />
+                  </span>
+                  <span className="row-title">Op je beginscherm</span>
+                </span>
+              </button>
+            </li>
+          )}
+        </ul>
+      </Sheet>
       {primary && (
         <Link to={tab === "dingen" ? `/lijsten/${list.id}/nieuw` : `/lijsten/${list.id}/loggen`} className="fab" aria-label={tab === "dingen" ? `${list.one} toevoegen` : "Loggen"}>
           <Icon name="plus" size={24} />

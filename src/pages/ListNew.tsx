@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { TEMPLATES, templateByKey, type ListTemplate } from "../../shared/catalog";
+import { parseTemplateFile } from "../../shared/template-file";
 import { api } from "../api";
 import { SubmitButton } from "../components/Controls";
 import { Icon, type IconName } from "../components/Icon";
@@ -25,6 +26,19 @@ export function ListNew() {
   const [newTags, setNewTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
+  // Een sjabloon uit een bestand (Als sjabloon bij een andere lijst).
+  const [fromFile, setFromFile] = useState<ListTemplate | null>(null);
+
+  async function openFile(file: File) {
+    setProblem(undefined);
+    try {
+      const t = parseTemplateFile(JSON.parse(await file.text()));
+      setFromFile(t);
+      setTemplate(t);
+    } catch (err) {
+      setProblem(err instanceof SyntaxError ? "Dit is geen sjabloon van Thuis." : (err as Error).message);
+    }
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -58,7 +72,7 @@ export function ListNew() {
         <div className="field">
           <span className="label">Sjabloon</span>
           <div className="template-picker" role="radiogroup" aria-label="Sjabloon">
-            {TEMPLATES.map((t) => (
+            {[...(fromFile ? [fromFile] : []), ...TEMPLATES].map((t) => (
               <button key={t.key} type="button" role="radio" aria-checked={t.key === template.key} className="template-option" onClick={() => setTemplate(t)}>
                 <span className="icon-tile">
                   <Icon name={t.icon as IconName} size={18} />
@@ -68,6 +82,15 @@ export function ListNew() {
                 </span>
               </button>
             ))}
+            <label className="template-option">
+              <span className="icon-tile">
+                <Icon name="upload" size={18} />
+              </span>
+              <span className="template-text">
+                <span className="template-title">Uit bestand</span>
+              </span>
+              <input type="file" accept=".json,application/json" hidden onChange={(e) => (e.target.files?.[0] && openFile(e.target.files[0]), (e.target.value = ""))} />
+            </label>
           </div>
         </div>
         <label className="field">

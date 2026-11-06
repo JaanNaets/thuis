@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields, cleanListFields } from "../../shared/listdef";
+import { withSelf } from "../../shared/template-file";
 import { isBase, isDirectRole, isRole, ROLES, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Role, type Tag } from "../../shared/model";
 import { cleanNotify } from "../../shared/alerts";
 import { keepsAdmin } from "../../shared/rights";
@@ -73,9 +74,10 @@ lists.post("/", async (c) => {
   const me = c.get("person");
   const body = asObject(await c.req.json());
   const name = requiredString(body, "name", 60);
-  const fields = clean(() => cleanListFields(body.fields));
-  const one = optionalString(body, "one", 40);
   const id = crypto.randomUUID();
+  // Uit een sjabloon: een verwijzing naar de lijst zelf ("self") wordt deze nieuwe lijst.
+  const fields = withSelf(clean(() => cleanListFields(body.fields)), id);
+  const one = optionalString(body, "one", 40);
   const stock = cleanStock(body.stock, fields);
   const statements: D1PreparedStatement[] = [
     db
@@ -102,7 +104,7 @@ lists.post("/", async (c) => {
     statements.push(
       db
         .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(clean(() => cleanKindFields(k.fields))), goalOf(k), i),
+        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(withSelf(clean(() => cleanKindFields(k.fields)), id)), goalOf(k), i),
     );
   });
   await db.batch(statements);

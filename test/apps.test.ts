@@ -1,28 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, type Reach } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, sameDestination, type Reach } from "../shared/apps.ts";
 
 const reach: Reach = {
   boards: [
     { id: "main", name: "Overzicht" },
     { id: "k1", name: "Keuken" },
   ],
-  projects: new Map([
-    ["p1", { name: "Pelletkachel", lists: new Map([["b", { name: "Bijvulling", plural: "Bijvullen", create: true }], ["o", { name: "Onderhoud", plural: "Onderhoud", create: false }]]) }],
+  lists: new Map([
+    ["pel", { name: "Pellets", one: "Voorraad", edit: true, kinds: new Map([["bij", "Bijvulling"]]) }],
+    ["jaan", { name: "Jaan", one: null, edit: true, kinds: new Map([["gew", "Gewicht"]]) }],
+    ["wijn", { name: "Wijnen", one: "Wijn", edit: false, kinds: new Map() }],
   ]),
 };
 
 test("bestemmingen: nagekeken, als pad en met een naam", () => {
   assert.equal(cleanDestination({ kind: "board", board: "../x" }), null);
   assert.equal(cleanDestination({ kind: "raar" }), null);
-  assert.deepEqual(cleanDestination({ kind: "form", project: "p1", list: "b", text: "  3 zakken  pellets " }), { kind: "form", project: "p1", list: "b", text: "3 zakken pellets" });
+  assert.equal(cleanDestination({ kind: "view", view: "raar" }), null);
+  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", type: "bij", text: "  3 zakken  pellets " }), { kind: "form", list: "pel", type: "bij", text: "3 zakken pellets" });
+  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", thing: true, type: "bij" }), { kind: "form", list: "pel", thing: true });
   assert.equal(destinationPath({ kind: "board", board: "k1" }), "/?bord=k1");
-  assert.equal(destinationPath({ kind: "list", project: "p1", list: "b" }), "/projecten/p1?lijst=b");
-  assert.equal(destinationPath({ kind: "form", project: "p1", list: "b", text: "3 zakken" }), "/projecten/p1/nieuw?lijst=b&tekst=3%20zakken");
+  assert.equal(destinationPath({ kind: "list", list: "pel" }), "/lijsten/pel");
+  assert.equal(destinationPath({ kind: "view", view: "geld" }), "/geld");
+  assert.equal(destinationPath({ kind: "form", list: "pel", type: "bij", text: "3 zakken" }), "/lijsten/pel/loggen?soort=bij&tekst=3+zakken");
+  assert.equal(destinationPath({ kind: "form", list: "pel", thing: true }), "/lijsten/pel/nieuw");
   assert.equal(destinationLabel({ kind: "board", board: "k1" }, reach), "Keuken");
-  assert.equal(destinationLabel({ kind: "list", project: "p1", list: "b" }, reach), "Bijvullen");
-  assert.equal(destinationLabel({ kind: "form", project: "p1", list: "b" }, reach), "Bijvulling toevoegen");
+  assert.equal(destinationLabel({ kind: "list", list: "pel" }, reach), "Pellets");
+  assert.equal(destinationLabel({ kind: "form", list: "pel", type: "bij" }, reach), "Bijvulling loggen");
+  assert.equal(destinationLabel({ kind: "form", list: "pel", thing: true }, reach), "Voorraad toevoegen");
   assert.equal(appPath("a1"), "/app/a1");
+  assert.equal(sameDestination({ kind: "form", list: "pel", type: "bij", text: "x " }, { kind: "form", list: "pel", type: "bij", text: "x" }), true);
+  assert.equal(sameDestination({ kind: "list", list: "pel" }, { kind: "list", list: "jaan" }), false);
 });
 
 test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt valt weg", () => {
@@ -30,26 +39,26 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   const s = cleanAppSettings(
     {
       apps: [
-        { id: "a1", name: " Pellets ", to: { kind: "form", project: "p1", list: "b" } },
+        { id: "a1", name: " Pellets ", to: { kind: "form", list: "pel", type: "bij" } },
         { id: "a1", name: "Dubbel", to: { kind: "agenda" } },
         { name: "Geen bestemming" },
-        { name: "Onderhoud", to: { kind: "form", project: "p1", list: "o" } },
-        { name: "Weg", to: { kind: "project", project: "p9" } },
+        { name: "Wijn", to: { kind: "form", list: "wijn", thing: true } },
+        { name: "Weg", to: { kind: "list", list: "weg" } },
       ],
       shortcuts: [{ name: "Keuken", to: { kind: "board", board: "k1" } }, { name: "x", to: { kind: "raar" } }],
-      share: { kind: "receipt", project: "p1", list: "b" },
+      share: { kind: "receipt", list: "pel" },
     },
     () => `n${++n}`,
   );
-  assert.deepEqual(s.apps.map((a) => [a.id, a.name]), [["a1", "Pellets"], ["n1", "Dubbel"], ["n2", "Onderhoud"], ["n3", "Weg"]]);
+  assert.deepEqual(s.apps.map((a) => [a.id, a.name]), [["a1", "Pellets"], ["n1", "Dubbel"], ["n2", "Wijn"], ["n3", "Weg"]]);
   assert.deepEqual(s.shortcuts, [{ name: "Keuken", to: { kind: "board", board: "k1" } }]);
   const kept = keepReachable(s, reach);
-  // Onderhoud: geen recht om toe te voegen; Weg: geen project meer.
+  // Wijn: geen recht om toe te voegen; Weg: geen lijst meer.
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
-  assert.deepEqual(kept.share, { kind: "receipt", project: "p1", list: "b" });
-  assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", project: "p1", list: "o" } }, reach).share, { kind: "ask" });
+  assert.deepEqual(kept.share, { kind: "receipt", list: "pel" });
+  assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", list: "wijn" } }, reach).share, { kind: "ask" });
   assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] });
-  assert.deepEqual(cleanAppSettings({ muted: ["p1", "p1", "../x", 3] }).muted, ["p1"]);
+  assert.deepEqual(cleanAppSettings({ muted: ["pel", "pel", "../x", 3] }).muted, ["pel"]);
 });
 
 test("lezen met AI: staat aan tenzij je ze uitdrukkelijk uitzette, en blijft bij het nakijken", () => {
