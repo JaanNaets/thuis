@@ -35,6 +35,7 @@ export const BACKUP_TABLES = {
   ai_usage: false,
   ai_usage_people: false,
   products: false,
+  nevo_foods: false, // NEVO van het RIVM: dezelfde voor iedereen, geen gegevens van een lijst
   settings: false,
   push_subscriptions: false,
   fixed_values: false,

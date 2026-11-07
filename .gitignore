@@ -5,5 +5,8 @@ dist
 !.dev.vars.example
 *.tsbuildinfo
 
+# Bestanden van anderen die niet publiek mogen (het NEVO-bestand van het RIVM en wat scripts/nevo.mjs ervan maakt)
+data/
+
 # Werkmappen van agents
 .claude/worktrees/

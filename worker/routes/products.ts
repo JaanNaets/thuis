@@ -1,7 +1,6 @@
 import { Hono } from "hono";
-import { nevoByName, productByCode, productByName } from "../products";
+import { nevoByName, nevoData, productByCode, productByName } from "../products";
 import { nevoCredit } from "../../shared/nevo";
-import { NEVO_DATA } from "../../shared/nevo-data";
 import { getRates } from "../rates";
 import type { AppEnv } from "../types";
 import { NotFoundError } from "../validate";
@@ -30,10 +29,10 @@ products.get("/", async (c) => {
  * Een gewoon voedingsmiddel op naam in NEVO (`?naam=appel`), zonder netwerk: voor wat je typt in een lijst met
  * productinfo. Geen match of geen NEVO: 404. Met de bronvermelding die het RIVM vraagt.
  */
-products.get("/nevo", (c) => {
-  const found = nevoByName(c.req.query("naam") ?? "");
+products.get("/nevo", async (c) => {
+  const found = await nevoByName(c.env.DB, c.req.query("naam") ?? "");
   if (!found) throw new NotFoundError("Niet in NEVO.");
-  return c.json({ ...found, credit: nevoCredit(NEVO_DATA.version) });
+  return c.json({ ...found, credit: nevoCredit((await nevoData(c.env.DB)).version) });
 });
 
 products.get("/:code", async (c) => {

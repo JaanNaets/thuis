@@ -91,7 +91,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   kasticket wordt de naam op het ticket onthouden (`POST /things/:id/alias`, een tekstveld met `aliases`). Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
   zonder AI); de app toont altijd of iets uit een databank komt of geschat is.
 - **Productinfo**: Open Food Facts krijgt enkel een barcode of productnaam, nooit iets van de gebruiker; NEVO
-  (`shared/nevo.ts`) zonder netwerk, met `nevoCredit`.
+  (`shared/nevo.ts`, `nevoMatch` op hoofdwoord en synoniemen) zonder netwerk, met `nevoCredit`. NEVO staat in D1
+  (`nevo_foods`), **nooit in git** (het repo is publiek, de gegevens zijn van het RIVM): `node scripts/nevo.mjs
+  data/<bestand>.csv <versie>` maakt `data/nevo.sql` (data/ staat in .gitignore), dat je lokaal en online uitvoert.
 
 ### De rest
 

@@ -6,11 +6,10 @@ import { Hono } from "hono";
 import { cleanAttributes, type FieldDef } from "../../shared/fields";
 import { nevoCredit } from "../../shared/nevo";
 import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
-import { NEVO_DATA } from "../../shared/nevo-data";
 import { isProductCode, PRODUCT_KEYS, productData, productLabel, type ProductInfo } from "../../shared/product";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { needEdit, requireList } from "../access";
-import { nevoByName, productByCode, productByName } from "../products";
+import { nevoByName, nevoData, productByCode, productByName } from "../products";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
 
@@ -130,12 +129,12 @@ ${fields.map(describeField).join("\n")}`;
         parsed.kind === "product" || found
           ? await (isProductCode(code) ? productByCode(db, code) : Promise.resolve(null)).then((p) => p ?? productByName(db, read.name!, brand)).catch(() => null)
           : parsed.kind !== "unknown" && !brand
-            ? nevoByName(read.name)
+            ? await nevoByName(db, read.name)
             : null;
       if (info) {
         read.name = productLabel(info);
         Object.assign(read.data, cleanAttributes(fields, productData(fields, info)));
-        read.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit(NEVO_DATA.version) } : {}) };
+        read.source = { kind: "database", label: productLabel(info), db: info.source ?? "off", ...(info.source === "nevo" ? { credit: nevoCredit((await nevoData(db)).version) } : {}) };
       } else read.source = { kind: "estimate" };
     }
     if (!read.name && Object.keys(read.data).length === 0) read.message = "Niets herkend op deze foto. Vul het zelf in.";
