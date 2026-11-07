@@ -5,6 +5,7 @@
 import { Hono } from "hono";
 import { cleanAttributes, type FieldDef } from "../../shared/fields";
 import { nevoCredit } from "../../shared/nevo";
+import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
 import { NEVO_DATA } from "../../shared/nevo-data";
 import { isProductCode, PRODUCT_KEYS, productData, productLabel, type ProductInfo } from "../../shared/product";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
@@ -24,9 +25,9 @@ export type PhotoRead = {
 };
 
 /** Velden die de AI van een foto kan lezen. */
-const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
+export const READABLE = ["text", "url", "email", "phone", "address", "number", "money", "date", "time", "year", "year_range", "select", "multi", "bool"];
 
-function labelSchema(fields: FieldDef[]) {
+export function labelSchema(fields: FieldDef[]) {
   const properties: Record<string, unknown> = { name: { type: ["string", "null"] } };
   for (const f of fields) {
     if (f.type === "year_range") {
@@ -42,7 +43,7 @@ function labelSchema(fields: FieldDef[]) {
   return { type: "object", properties, required: Object.keys(properties), additionalProperties: false } as { type: string; properties: Record<string, unknown>; required: string[]; additionalProperties: boolean };
 }
 
-function describeField(f: FieldDef): string {
+export function describeField(f: FieldDef): string {
   const extra =
     ({ year_range: ` (${f.key}_from en ${f.key}_to: jaartallen)`, money: " (in euro)", multi: " (lijst)", date: " (YYYY-MM-DD)", time: " (HH:MM)" } as Record<string, string>)[f.type] ??
     (f.unit ? ` (in ${f.unit})` : "");
@@ -54,6 +55,7 @@ listPhoto.post("/:id/things/read-photo", async (c) => {
   const me = c.get("person").id;
   const { list, role } = await requireList(db, me, c.req.param("id"));
   needEdit(role);
+  if (!readsPhoto(list.read_photo, THINGS_FORM, null)) throw new ValidationError("Deze lijst leest geen foto's.");
   const form = await c.req.formData();
   const image = form.get("image");
   // Een barcode die de app zelf al op de foto vond.

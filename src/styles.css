@@ -8489,3 +8489,102 @@ dialog.sheet.builder-sheet {
     grid-row: 2;
   }
 }
+
+/* ---------- fotokiezer, de + en je lijsten ---------- */
+
+/* Fotokiezer (PhotoPicker): onder Camera en Foto's de schakelaar Lezen met AI, met een haarlijn ertussen. */
+.photo-read {
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+}
+
+/* De fotoknop (en Barcode) in een formulier: op hun eigen breedte, zoals bij de foto van een ding. */
+.photo-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.photo-row > .btn {
+  flex: 0 0 auto;
+}
+
+/* De naam van een gekozen foto naast de knop: grijs, afgekapt. */
+.photo-name {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Schakelaars onder elkaar in een kaart (Foto lezen met AI per soort) of onder een menu (Tonen in, ⋯ van een lijst). */
+.switch-list {
+  display: grid;
+  gap: 14px;
+}
+
+.sheet-switches {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+}
+
+/* De + op een lijst: de naam van de lijst als zacht pilletje voor het invulveld. */
+.palette-scope {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-camera {
+  flex: none;
+}
+
+/* De foto bij de +: een smalle rij onder het invulveld. */
+.palette-photo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 6px 14px 6px 20px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text-soft);
+}
+
+.palette-photo .photo-name {
+  flex: 1;
+  max-width: none;
+}
+
+/* Je lijsten (Jouw gegevens): per lijst Menu en Toevoegen als filterpillen. */
+.place-pills {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Een rij in een sorteerlijst vult de breedte; de naam krimpt (afgekapt), de pillen niet. Zonder `contain` zou de
+   volle naam de kaart (en de pagina) breder maken dan een gsm. */
+.sort-list .row {
+  width: 100%;
+  min-width: 0;
+}
+
+.sort-list .row > .cell-main {
+  contain: inline-size;
+}
+
+.place-pills .filter {
+  padding: 0 10px;
+}

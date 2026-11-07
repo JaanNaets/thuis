@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type Reach } from "../../shared/apps";
+import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type ListPlace, type Reach } from "../../shared/apps";
 import { cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/board";
 import { appManifest, ownAppManifest } from "../../shared/manifest";
 import { canEdit, type KindInfo } from "../../shared/model";
@@ -17,8 +17,8 @@ export const me = new Hono<AppEnv>();
 me.get("/", async (c) => {
   const db = c.env.DB;
   const person = c.get("person");
-  const [{ lists, tags }, ai, boards] = await Promise.all([myLists(db, person.id), aiOn(db, person.id), boardsOf(db, person.id)]);
-  return c.json({ person, lists, tags, ai, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
+  const [{ lists, tags }, settings, boards] = await Promise.all([myLists(db, person.id), storedSettings(db, person.id), boardsOf(db, person.id)]);
+  return c.json({ person, lists, tags, ai: settings.ai, hidden: settings.hidden, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
 });
 
 /** Je eigen naam, kleur en rekeningnummer. Je e-mailadres komt van je aanmelding en verandert hier niet. */
@@ -115,12 +115,12 @@ me.get("/manifest", async (c) => {
 
 me.get("/app", async (c) => c.json(await appSettingsOf(c.env.DB, c.get("person").id)));
 
-/** Je app-instellingen bewaren. AI en stilzetten veranderen hier niet (PUT /me/ai en /me/muted). */
+/** Je app-instellingen bewaren. AI, stilzetten en verbergen veranderen hier niet (PUT /me/ai, /me/muted, /me/hidden). */
 me.put("/app", async (c) => {
   const db = c.env.DB;
   const personId = c.get("person").id;
   const stored = await storedSettings(db, personId);
-  const raw = { ...cleanAppSettings(asObject(await c.req.json()).settings), ai: stored.ai, muted: stored.muted };
+  const raw = { ...cleanAppSettings(asObject(await c.req.json()).settings), ai: stored.ai, muted: stored.muted, hidden: stored.hidden };
   const settings = keepReachable(raw, await reachFor(db, personId));
   await saveSettings(db, personId, settings);
   return c.json(settings);
@@ -138,6 +138,23 @@ me.put("/muted", async (c) => {
   const muted = obj.muted === true ? [...new Set([...settings.muted, target])] : settings.muted.filter((x) => x !== target);
   await saveSettings(db, personId, { ...settings, muted });
   return c.json({ muted });
+});
+
+/** Een lijst in je menu of bij de + verbergen (of weer tonen): { id, place: "menu" | "add", hidden }. */
+me.put("/hidden", async (c) => {
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const obj = asObject(await c.req.json());
+  const target = typeof obj.id === "string" ? obj.id : "";
+  if (obj.place !== "menu" && obj.place !== "add") throw new ValidationError("Waar?");
+  const place: ListPlace = obj.place;
+  const { lists } = await myLists(db, personId);
+  if (!lists.some((l) => l.id === target)) throw new NotFoundError("Die lijst ken je niet.");
+  const settings = await storedSettings(db, personId);
+  const now = settings.hidden[place].filter((x) => x !== target);
+  const hidden = { ...settings.hidden, [place]: obj.hidden === true ? [...now, target] : now };
+  await saveSettings(db, personId, { ...settings, hidden });
+  return c.json({ hidden });
 });
 
 me.get("/ai", async (c) => c.json(await aiState(c.env.DB, c.get("person").id)));

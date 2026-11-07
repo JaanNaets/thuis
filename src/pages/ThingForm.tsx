@@ -16,6 +16,8 @@ import { prepareUpload } from "../image";
 import { enqueue, isOffline } from "../outbox";
 import { useNavigate } from "../router";
 import { clearShared, sharedFile } from "../shared-file";
+import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
+import { PhotoButton } from "../components/PhotoPicker";
 import { useSession } from "../session";
 
 type ThingDetail = { thing: Thing; list: { id: string } };
@@ -70,17 +72,24 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
   const [reading, setReading] = useState(false);
   const [source, setSource] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
-  const photoRef = useRef<HTMLInputElement>(null);
+  // Leest deze lijst een foto (Instellen), en staat de AI voor jou aan?
+  const reads = Boolean(ai && readsPhoto(list.read_photo, THINGS_FORM, null));
 
-  // Een gedeelde foto: ze komt bij het ding, en de AI leest ze pas na een tik op Foto lezen.
+  // Een gedeelde foto (of de foto bij de +): ze komt bij het ding. Met `lezen=1` koos je al om ze te laten lezen;
+  // anders leest de AI ze pas na een tik op Foto lezen.
   const [shared, setShared] = useState(false);
+  const sharedTaken = useRef(false);
   useEffect(() => {
+    // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
+    if (sharedTaken.current) return;
+    sharedTaken.current = true;
     if (!thing && params.get("foto") === "gedeeld")
       sharedFile().then((f) => {
         if (!f) return;
         setPhoto(f);
-        setShared(true);
         clearShared();
+        if (params.get("lezen") === "1" && reads) byPhoto(f);
+        else setShared(reads);
       });
   }, []);
 
@@ -187,27 +196,48 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
           <span className="label">Naam</span>
           <input value={name} required maxLength={200} autoFocus={!thing} onChange={(e) => setName(e.target.value)} />
         </label>
-        {!thing && (products || ai) && (
+        {!thing && (
           <div className="field">
-            <div className="btn-row">
+            <div className="btn-row photo-row">
               {products && (
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => setScanning(true)}>
                   <Icon name="scan" size={15} /> Barcode
                 </button>
               )}
-              {ai && (
-                <button
-                  type="button"
-                  className={`btn btn-sm ${shared ? "btn-primary" : "btn-outline"}`}
-                  disabled={reading}
-                  onClick={() => (shared && photo ? byPhoto(photo) : photoRef.current?.click())}
-                >
-                  <Icon name="camera" size={15} /> {reading ? "Lezen…" : shared ? "Foto lezen" : "Foto"} <AiMark />
+              {shared && photo ? (
+                <button type="button" className="btn btn-sm btn-primary" disabled={reading} onClick={() => byPhoto(photo)}>
+                  <Icon name="camera" size={15} /> {reading ? "Lezen…" : "Foto lezen"} <AiMark />
                 </button>
+              ) : (
+                <PhotoButton
+                  read={reads ? true : null}
+                  busy={reading}
+                  onPhoto={(file, read) => {
+                    setPhoto(file);
+                    setSource(null);
+                    if (read) byPhoto(file);
+                  }}
+                >
+                  {reading ? "Lezen…" : photo ? "Andere foto" : "Foto"}
+                </PhotoButton>
+              )}
+              {photo && (
+                <>
+                  <span className="photo-name">{photo.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setPhoto(null);
+                      setShared(false);
+                    }}
+                  >
+                    Weghalen
+                  </button>
+                </>
               )}
             </div>
             {source && <span className="muted">{source}</span>}
-            <input ref={photoRef} type="file" accept="image/*" hidden onChange={(e) => (e.target.files?.[0] && byPhoto(e.target.files[0]), (e.target.value = ""))} />
           </div>
         )}
         <FieldInputs defs={list.fields} value={draft} onChange={(next) => setDraft(next)} access={access} people={people ?? []} meId={person.id} />

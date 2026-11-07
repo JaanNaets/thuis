@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
-import { BASES, canManage, isBase, ROLES, type Base, type DirectRole, type KindInfo, type ListDetail, type ListPerson } from "../../shared/model";
+import { BASES, canManage, isBase, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson } from "../../shared/model";
+import { readsPhoto, THINGS_FORM, withReads } from "../../shared/photoread";
 import type { StockDef } from "../../shared/stock";
 import { templateFile } from "../../shared/template-file";
 import type { IconKey } from "../../shared/icons";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { Avatar, CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
-import { buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
+import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon, type IconName } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
@@ -183,13 +184,14 @@ function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }
   const { data: people } = useApi<Person[]>("/me/people");
   const toast = useToast();
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(list.fields));
+  const [reads, setReads] = useState(() => readsPhoto(list.read_photo, THINGS_FORM, null));
   const [busy, setBusy] = useState(false);
   async function save() {
     const built = buildFields(drafts, list.id);
     if ("error" in built) return toast(built.error, "alert");
     setBusy(true);
     try {
-      await api.put(`/lists/${list.id}`, { fields: built.fields });
+      await api.put(`/lists/${list.id}`, { fields: built.fields, ...(list.one ? { read_photo: withReads(list.read_photo, THINGS_FORM, null, reads) } : {}) });
       toast("Velden bewaard");
       onSaved();
     } catch (err) {
@@ -203,6 +205,11 @@ function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }
       <section className="card form-section">
         <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={list.name} selfId={list.id} people={people ?? []} meId={person.id} />
       </section>
+      {list.one && (
+        <section className="card form-section">
+          <Switch checked={reads} onChange={setReads} label={<>Foto lezen met AI <AiMark /></>} />
+        </section>
+      )}
       <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={save}>
         Opslaan
       </button>
@@ -312,10 +319,11 @@ function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
           </ul>
         )}
       </section>
+      <PhotoForms detail={detail} onSaved={onSaved} />
       <Sheet open={editing !== null} title={editing === "new" ? "Nieuwe soort" : (editing?.name ?? "")} onClose={() => setEditing(null)}>
         {editing !== null && (
           <KindForm
-            listId={detail.list.id}
+            list={detail.list}
             kind={editing === "new" ? null : editing}
             onDone={() => {
               setEditing(null);
@@ -328,7 +336,44 @@ function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
   );
 }
 
-function KindForm({ listId, kind, onDone }: { listId: string; kind: KindInfo | null; onDone: () => void }) {
+/** Welke soorten een foto lezen met de AI: de basissoorten en de eigen soorten, elk met een schakelaar (meteen bewaard). */
+function PhotoForms({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
+  const { list } = detail;
+  const toast = useToast();
+  const forms = [...detail.kinds.filter((k) => !k.list_id), ...detail.kinds.filter((k) => k.list_id === list.id)];
+  const [setting, setSetting] = useState(list.read_photo);
+  async function toggle(k: KindInfo, on: boolean) {
+    const before = setting;
+    const next = withReads(setting, k.id, k, on);
+    setSetting(next);
+    try {
+      await api.put(`/lists/${list.id}`, { read_photo: next });
+      onSaved();
+    } catch (err) {
+      setSetting(before);
+      toast((err as Error).message, "alert");
+    }
+  }
+  return (
+    <section className="card">
+      <CardHead
+        title={
+          <>
+            Foto lezen met AI <AiMark />
+          </>
+        }
+      />
+      <div className="card-body switch-list">
+        {forms.map((k) => (
+          <Switch key={k.id} checked={readsPhoto(setting, k.id, k)} onChange={(on) => toggle(k, on)} label={k.name} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; onDone: () => void }) {
+  const listId = list.id;
   const { person, lists } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
@@ -337,6 +382,9 @@ function KindForm({ listId, kind, onDone }: { listId: string; kind: KindInfo | n
   const [icon, setIcon] = useState<IconKey | null>((kind?.icon as IconKey) ?? null);
   const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
+  // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
+  const [readChoice, setReadChoice] = useState<boolean | null>(null);
+  const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { base, fields: kind?.fields ?? [] });
   async function save() {
     const built = buildFields(drafts, "self");
     if ("error" in built) return toast(built.error, "alert");
@@ -348,8 +396,8 @@ function KindForm({ listId, kind, onDone }: { listId: string; kind: KindInfo | n
       goal: base === "activiteit" && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
     };
     try {
-      if (kind) await api.put(`/kinds/${kind.id}`, body);
-      else await api.post(`/lists/${listId}/kinds`, body);
+      const id = kind ? (await api.put(`/kinds/${kind.id}`, body), kind.id) : (await api.post<{ id: string }>(`/lists/${listId}/kinds`, body)).id;
+      if (readChoice !== null) await api.put(`/lists/${listId}`, { read_photo: withReads(list.read_photo, id, { base, fields: built.fields }, readChoice) });
       toast(`${name} bewaard`);
       onDone();
     } catch (err) {
@@ -400,6 +448,7 @@ function KindForm({ listId, kind, onDone }: { listId: string; kind: KindInfo | n
         </label>
       )}
       <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Deze soort"} people={[]} meId={person.id} />
+      <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
       <div className="btn-row">
         <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>
           Opslaan

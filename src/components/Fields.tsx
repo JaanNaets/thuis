@@ -49,6 +49,7 @@ import { Avatar, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
+import { PhotoButton } from "./PhotoPicker";
 
 /** Wat je met een veld mag: niet zien, zien of wijzigen. */
 export type Access = "none" | "view" | "edit";
@@ -1689,7 +1690,6 @@ export function ItemPhoto({
   canEdit: boolean;
   onChange: (version: number | null, message: string) => void;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -1726,9 +1726,9 @@ export function ItemPhoto({
       {item.photo_version ? <img src={apiUrl(`/${base}/${item.id}/photo?v=${item.photo_version}`)} alt={`Foto van ${item.name}`} /> : null}
       {canEdit && (
         <div className="btn-row">
-          <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <Icon name="camera" size={15} /> {item.photo_version ? "Andere foto" : "Foto toevoegen"}
-          </button>
+          <PhotoButton read={null} busy={busy} onPhoto={(file) => upload(file)}>
+            {item.photo_version ? "Andere foto" : "Foto toevoegen"}
+          </PhotoButton>
           {item.photo_version ? (
             <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={remove}>
               Weghalen
@@ -1736,16 +1736,6 @@ export function ItemPhoto({
           ) : null}
         </div>
       )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          upload(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
       {error && <p className="error">{error}</p>}
     </div>
   );

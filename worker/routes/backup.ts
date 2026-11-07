@@ -85,6 +85,7 @@ backup.get("/backup", async (c) => {
       fields: parseJson(l.fields, []),
       stock: parseJson(l.stock, null),
       notify: parseJson(l.notify, null),
+      read_photo: parseJson(l.read_photo, null),
       archived: l.archived ? 1 : 0,
       tag_ids: tagIds.get(l.id) ?? [],
     })),
@@ -167,8 +168,8 @@ backup.post("/restore", async (c) => {
   for (const l of plan.lists) {
     st.push(
       db
-        .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, notify, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(l.id, `${l.name}`, l.one, l.icon, l.color, JSON.stringify(l.fields), l.stock ? JSON.stringify(l.stock) : null, l.notify ? JSON.stringify(l.notify) : null, l.archived, me),
+        .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, notify, read_photo, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(l.id, `${l.name}`, l.one, l.icon, l.color, JSON.stringify(l.fields), l.stock ? JSON.stringify(l.stock) : null, l.notify ? JSON.stringify(l.notify) : null, l.read_photo ? JSON.stringify(l.read_photo) : null, l.archived, me),
       db.prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(l.id, me),
     );
     for (const name of l.tags) {

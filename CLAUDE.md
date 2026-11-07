@@ -72,15 +72,21 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 ### Eén ingang
 
 - **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de rest van de tekst gaat
-  als `?tekst=` naar het formulier.
+  als `?tekst=` naar het formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
+  foto bij de + gaat mee naar het gekozen formulier (`putShared`, `?foto=gedeeld`, `&lezen=1`).
+- **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +;
+  zoeken, Verbanden en keuzelijsten tonen ze altijd. Alles op één plek: Je lijsten in Jouw gegevens.
 - **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, dingen met
   hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Dingen komen van
   `GET /things?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
-- **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (ook een
-  gedeelde foto wacht), per persoon aan of uit (`useAiBudget`). Kasticket lezen
-  (`POST /lists/:id/events/read-receipt`, `shared/receipt.ts`): één aankoop met een lijn per product, koppelt enkel
-  aan dingen die de lezer ziet, bewaart niets; de naam op het ticket wordt onthouden (`POST /things/:id/alias`, een
-  tekstveld met `aliases`). Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
+- **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (enkel na een
+  tik of de schakelaar Lezen met AI in de fotokiezer, `PhotoButton`), per persoon aan of uit (`useAiBudget`: 25 per
+  persoon per dag, 50 samen). Welke formulieren een foto lezen: per lijst (`lists.read_photo`, `shared/photoread.ts`;
+  standaard dingen, soorten met geld of voedingswaarden). Een foto lezen voor een gebeurtenis
+  (`POST /lists/:id/events/read-photo` met de soort): een aankoop is een kasticket (`shared/receipt.ts`): één aankoop
+  met een lijn per product, koppelt enkel aan dingen die de lezer ziet, bewaart niets; een soort met voedingswaarden
+  herkent een gerecht en schat (dat zegt de app); een andere soort vult haar velden met wat er echt staat. Van een
+  kasticket wordt de naam op het ticket onthouden (`POST /things/:id/alias`, een tekstveld met `aliases`). Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
   zonder AI); de app toont altijd of iets uit een databank komt of geschat is.
 - **Productinfo**: Open Food Facts krijgt enkel een barcode of productnaam, nooit iets van de gebruiker; NEVO
   (`shared/nevo.ts`) zonder netwerk, met `nevoCredit`.

@@ -1,6 +1,7 @@
 // De app instellen (Jouw gegevens → App): waar ze opent (per toestel), meerdere apps op één toestel (elk een eigen
 // icoon op je beginscherm met een eigen naam, dat naar een eigen pagina gaat), de snelkoppelingen als je lang op het
-// icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, en wat je stilzette.
+// icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, wat je stilzette, en welke
+// lijsten je niet in je menu of bij de + wil (een hulplijst zoals Winkels).
 // Alles verwijst met ids; wat je niet (meer) kan bereiken, valt weg (`cleanAppSettings`, `keepReachable`).
 
 /** Waar iets naartoe gaat: een overzicht (je borden: Geld, Agenda, …), een lijst of een formulier. */
@@ -33,12 +34,24 @@ export type AppSettings = {
   ai: boolean;
   /** Lijsten of tags die je stilzette: geen melding bij iets nieuws daar. */
   muted: string[];
+  /** Lijsten die je verborg: niet in je menu, of niet bij de + (Toevoegen). Zoeken en Verbanden tonen ze altijd. */
+  hidden: Hidden;
 };
+
+/** Waar een lijst staat (per persoon): in het menu (zijbalk, menublad) en bij de + (Toevoegen). */
+export const LIST_PLACES = { menu: "In het menu", add: "Bij de +" } as const;
+export type ListPlace = keyof typeof LIST_PLACES;
+export type Hidden = Record<ListPlace, string[]>;
+export const NO_HIDDEN: Hidden = { menu: [], add: [] };
 
 export const MAX_APPS = 12;
 export const MAX_SHORTCUTS = 4;
 export const MAX_MUTED = 200;
-export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] };
+export const MAX_HIDDEN = 500;
+export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: NO_HIDDEN };
+
+/** Staat deze lijst voor jou op die plek? */
+export const shownIn = (hidden: Hidden | undefined, place: ListPlace, list: string) => !hidden?.[place].includes(list);
 
 /** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
 export const aiAllowed = (raw: unknown): boolean => !(raw && typeof raw === "object" && (raw as Record<string, unknown>).ai === false);
@@ -99,7 +112,13 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
   const share: ShareChoice = s.kind === "receipt" && id(s.list) ? { kind: "receipt", list: s.list as string } : { kind: "ask" };
   const muted = Array.isArray(o.muted) ? [...new Set(o.muted.map(id).filter((x): x is string => x !== null))].slice(0, MAX_MUTED) : [];
-  return { apps, shortcuts, share, ai: aiAllowed(o), muted };
+  return { apps, shortcuts, share, ai: aiAllowed(o), muted, hidden: cleanHidden(o.hidden) };
+}
+
+export function cleanHidden(raw: unknown): Hidden {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.map(id).filter((x): x is string => x !== null))].slice(0, MAX_HIDDEN) : []);
+  return { menu: ids(o.menu), add: ids(o.add) };
 }
 
 export function destinationPath(d: Destination): string {
@@ -162,6 +181,7 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
     share,
     ai: s.ai,
     muted: s.muted,
+    hidden: { menu: s.hidden.menu.filter((l) => reach.lists.has(l)), add: s.hidden.add.filter((l) => reach.lists.has(l)) },
   };
 }
 

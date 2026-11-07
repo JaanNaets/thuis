@@ -4,6 +4,7 @@ import { cleanKindFields, cleanListFields } from "../../shared/listdef";
 import { withSelf } from "../../shared/template-file";
 import { isBase, isDirectRole, isRole, ROLES, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Role, type Tag } from "../../shared/model";
 import { cleanNotify } from "../../shared/alerts";
+import { cleanReadPhoto } from "../../shared/photoread";
 import { keepsAdmin } from "../../shared/rights";
 import { cleanStock } from "../../shared/stock";
 import { isTone, type Person } from "../../shared/types";
@@ -199,8 +200,9 @@ lists.put("/:id", async (c) => {
   const fields = body.fields === undefined ? list.fields : clean(() => cleanListFields(body.fields));
   const stock = body.stock === undefined ? list.stock : cleanStock(body.stock, fields);
   const notify = body.notify === undefined ? list.notify : cleanNotify(body.notify);
+  const readPhoto = body.read_photo === undefined ? list.read_photo : cleanReadPhoto(body.read_photo);
   await db
-    .prepare("UPDATE lists SET name = ?, one = ?, icon = ?, color = ?, fields = ?, stock = ?, notify = ?, updated_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE lists SET name = ?, one = ?, icon = ?, color = ?, fields = ?, stock = ?, notify = ?, read_photo = ?, updated_at = datetime('now') WHERE id = ?")
     .bind(
       body.name === undefined ? list.name : requiredString(body, "name", 60),
       body.one === undefined ? list.one : optionalString(body, "one", 40),
@@ -209,6 +211,7 @@ lists.put("/:id", async (c) => {
       JSON.stringify(fields),
       stock ? JSON.stringify(stock) : null,
       notify ? JSON.stringify(notify) : null,
+      readPhoto ? JSON.stringify(readPhoto) : null,
       list.id,
     )
     .run();

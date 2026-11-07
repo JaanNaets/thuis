@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, sameDestination, type Reach } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, sameDestination, shownIn, type Reach } from "../shared/apps.ts";
 
 const reach: Reach = {
   boards: [
@@ -59,7 +59,7 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
   assert.deepEqual(kept.share, { kind: "receipt", list: "pel" });
   assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", list: "wijn" } }, reach).share, { kind: "ask" });
-  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [] });
+  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: { menu: [], add: [] } });
   assert.deepEqual(cleanAppSettings({ muted: ["pel", "pel", "../x", 3] }).muted, ["pel"]);
 });
 
@@ -73,4 +73,14 @@ test("lezen met AI: staat aan tenzij je ze uitdrukkelijk uitzette, en blijft bij
   assert.equal(off.ai, false);
   assert.equal(keepReachable(off, reach).ai, false);
   assert.equal(cleanAppSettings({ ai: true }).ai, true);
+});
+
+test("lijsten verbergen: per plek, nagekeken, en wat je niet meer ziet valt weg", () => {
+  const s = cleanAppSettings({ hidden: { menu: ["l1", "l1", "<bad>"], add: ["l2", 4] } });
+  assert.deepEqual(s.hidden, { menu: ["l1"], add: ["l2"] });
+  assert.equal(shownIn(s.hidden, "menu", "l1"), false);
+  assert.equal(shownIn(s.hidden, "add", "l1"), true);
+  assert.deepEqual(cleanAppSettings(null).hidden, { menu: [], add: [] });
+  const reach = { boards: [], lists: new Map([["l1", { name: "Winkels", one: "Winkel", edit: true, kinds: new Map() }]]) };
+  assert.deepEqual(keepReachable(s, reach).hidden, { menu: ["l1"], add: [] });
 });

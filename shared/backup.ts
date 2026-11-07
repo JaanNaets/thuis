@@ -8,6 +8,7 @@ import { cleanAttributes, type AmountEntry, type Attributes, type FieldDef, type
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
 import { BASES, isLineRole, isStatus, type Base, type LineRole, type Status } from "./model.ts";
 import { cleanStock } from "./stock.ts";
+import { cleanReadPhoto, type ReadPhoto } from "./photoread.ts";
 
 export const BACKUP_KIND = "thuis-backup";
 export const BACKUP_VERSION = 2;
@@ -60,7 +61,7 @@ export type Backup = {
   created_at: string;
   people: { id: string; name: string; email: string | null; color: string | null }[];
   tags: { id: string; name: string; color: string | null }[];
-  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; archived: 0 | 1; tag_ids: string[] }[];
+  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
   kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; sort_order: number }[];
   things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean }[];
   events: {
@@ -139,12 +140,15 @@ export type RestoreContext = {
 };
 
 export type RestorePlan = {
-  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; archived: 0 | 1; tags: string[] }[];
+  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
   kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; sort_order: number }[];
   things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
   views: Backup["views"];
 };
+
+const remapReadPhoto = (r: ReadPhoto | null, map: Map<string, string>): ReadPhoto | null =>
+  r && { on: r.on.map((f) => map.get(f) ?? f), off: r.off.map((f) => map.get(f) ?? f) };
 
 /** Wat terugzetten maakt: alles met nieuwe ids, nagekeken. */
 export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
@@ -177,6 +181,8 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       fields,
       stock: cleanStock(l.stock, fields),
       notify: l.notify ?? null,
+      // Een eigen soort krijgt een nieuwe id; een basissoort en "dingen" blijven.
+      read_photo: remapReadPhoto(cleanReadPhoto(l.read_photo), map),
       archived: l.archived ? 1 : 0,
       tags: [...new Set((l.tag_ids ?? []).map((t) => tagName.get(t)).filter((n): n is string => Boolean(n)))],
     });

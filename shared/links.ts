@@ -68,6 +68,7 @@ export const LIST_LINKS = {
   fields: true, // zie FIELD_LINKS
   stock: true, // telt voorraad (Voorraad, Bijna op)
   notify: true, // melding bij iets nieuws
+  read_photo: false, // welke formulieren een foto lezen: verbindt niets
   archived: false, // een gearchiveerde lijst staat niet op de kaart
   created_at: false,
 } as const satisfies Record<keyof List, boolean>;

@@ -4,6 +4,8 @@ import { appPath, sameDestination, type AppSettings, type Destination } from "..
 import { canEdit, canManage, ROLES, type EventView, type ListDetail } from "../../shared/model";
 import { api, useApi } from "../api";
 import { Avatar, CardHead, Tabs } from "../components/Controls";
+import { usePalette } from "../components/CommandPalette";
+import { ListPlaceSwitches } from "../components/ListPlaces";
 import { Icon, type IconName } from "../components/Icon";
 import { LogList, type EventPage } from "../components/Log";
 import { SkeletonRows } from "../components/Motion";
@@ -29,6 +31,7 @@ export function ListPage() {
   const [menu, setMenu] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
+  const palette = usePalette();
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
   const { list, role } = detail;
@@ -40,17 +43,14 @@ export function ListPage() {
   const asked = params.get("tab") as Tab | null;
   const tab: Tab = asked && tabs.some((t) => t.value === asked) ? asked : tabs[0].value;
   const edit = canEdit(role) && !list.archived;
-  const primary =
-    edit &&
-    (tab === "dingen" ? (
-      <Link to={`/lijsten/${list.id}/nieuw`} className="btn btn-primary">
-        <Icon name="plus" size={16} /> {list.one} toevoegen
-      </Link>
-    ) : (
-      <Link to={`/lijsten/${list.id}/loggen${tab === "gepland" ? "?gepland=1" : ""}`} className="btn btn-primary">
-        <Icon name="plus" size={16} /> {tab === "gepland" ? "Plannen" : "Loggen"}
-      </Link>
-    ));
+  // Toevoegen: hetzelfde palet als de + overal, maar enkel met wat in deze lijst kan (op Dingen eerst een ding).
+  const addHere = () => palette("add", "", { list: list.id, thing: tab === "dingen", planned: tab === "gepland" });
+  const addLabel = tab === "gepland" ? "Plannen" : "Toevoegen";
+  const primary = edit && (
+    <button type="button" className="btn btn-primary" onClick={addHere}>
+      <Icon name="plus" size={16} /> {addLabel}
+    </button>
+  );
 
   const menuLink = (icon: IconName, label: string, to: string) => (
     <li key={label}>
@@ -135,13 +135,9 @@ export function ListPage() {
             </li>
           )}
         </ul>
+        <ListPlaceSwitches list={list.id} />
       </Sheet>
-      {edit &&
-        (tab === "dingen" ? (
-          <PhoneAdd label={`${list.one} toevoegen`} to={`/lijsten/${list.id}/nieuw`} />
-        ) : (
-          <PhoneAdd label={tab === "gepland" ? "Plannen" : "Loggen"} to={`/lijsten/${list.id}/loggen${tab === "gepland" ? "?gepland=1" : ""}`} />
-        ))}
+      {edit && <PhoneAdd label={addLabel} onClick={addHere} />}
     </div>
   );
 }

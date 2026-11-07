@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import type { Attributes, Interval } from "../../shared/fields";
 import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
+import { readsPhoto } from "../../shared/photoread";
 import { hasPrice } from "../../shared/targets";
 import { niceName } from "../../shared/receipt";
 import type { Person } from "../../shared/types";
@@ -13,6 +14,7 @@ import { AiMark } from "../components/Fields";
 import { Icon } from "../components/Icon";
 import { buildLine, emptyLine, lineDraft, LinesEditor, type LineDraft } from "../components/Lines";
 import { PageHead } from "../components/Page";
+import { PhotoButton } from "../components/PhotoPicker";
 import { useToast } from "../components/Toast";
 import { centsToInput, parseEuro } from "../format";
 import { prepareUpload } from "../image";
@@ -25,8 +27,9 @@ import type { EventPage } from "../components/Log";
 
 type EventDetail = EventPage & { event: EventView; can_edit: boolean };
 
-/** Een gelezen kasticket (POST /lists/:id/events/read-receipt). */
+/** Wat een foto opleverde (POST /lists/:id/events/read-photo): een kasticket bij een aankoop, anders de velden. */
 type ReceiptRead = {
+  kind: "receipt";
   store: ThingRef | null;
   store_text: string | null;
   date: string | null;
@@ -40,6 +43,7 @@ type ReceiptRead = {
   }[];
   message?: string;
 };
+type FormRead = { kind: "form"; name: string | null; date: string | null; amount: number | null; data: Attributes; estimate: boolean; message?: string };
 
 const EVERY: { value: string; label: string; every: Interval | null }[] = [
   { value: "", label: "Niet", every: null },
@@ -125,30 +129,42 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     return r ? (EVERY.find((e) => e.every?.n === r.n && e.every.unit === r.unit)?.value ?? "") : "";
   });
   const [photo, setPhoto] = useState<File | null>(null);
-  // Een kasticket: een gedeelde foto wacht op een tik (de AI start nooit vanzelf); per lijn de naam op het ticket.
+  // Een gedeelde foto wacht op een tik op Foto lezen (de AI start enkel na jouw keuze); per lijn de naam op het ticket.
   const [pending, setPending] = useState<File | null>(null);
   const [reading, setReading] = useState(false);
+  // Waar wat ingevuld is vandaan komt: "Gelezen met AI" of "Geschat met AI".
+  const [source, setSource] = useState<string | null>(null);
   const ticketNames = useRef(new Map<string, string>());
-  const receiptRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const access = useMemo(() => allEdit(kind.fields), [kind.fields]);
-  const photoRef = useRef<HTMLInputElement>(null);
+  // Leest dit formulier een foto (Instellen van de lijst, en de AI staat voor jou aan)?
+  const reads = Boolean(ai && !event && readsPhoto(list.read_photo, kind.id, kind));
 
   // Een ding uit het adres (Loggen vanaf een ding): meteen als eerste lijn.
   useEffect(() => {
     const t = preset?.things[0];
     if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "" }] : ls));
   }, [preset]);
-  // Een gedeelde foto (Android: delen met Thuis) als kasticket: ze wacht tot je op Kasticket lezen tikt.
+  // Een gedeelde foto (Android: delen met Thuis, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
+  // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.
+  const sharedTaken = useRef(false);
   useEffect(() => {
-    if (!event && params.get("kasticket") === "gedeeld") sharedFile().then((f) => f && setPending(f));
-    // Een gedeelde foto bij wat je logt (niet gelezen).
-    if (!event && params.get("foto") === "gedeeld")
-      sharedFile().then((f) => {
-        if (f) setPhoto(f);
-        clearShared();
-      });
+    const receipt = params.get("kasticket") === "gedeeld";
+    // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
+    if (sharedTaken.current || event || (!receipt && params.get("foto") !== "gedeeld")) return;
+    sharedTaken.current = true;
+    if (receipt && detail.kinds.some((k) => k.id === "aankoop")) {
+      chosenKind.current = true;
+      setKindId("aankoop");
+    }
+    sharedFile().then((f) => {
+      if (!f) return;
+      setPhoto(f);
+      if (params.get("lezen") === "1" && reads) readPhoto(f);
+      else if (receipt || reads) setPending(f);
+      else clearShared();
+    });
   }, []);
   // Een andere soort: haar (lege) velden, en lege lijnen krijgen de rol van de soort.
   const firstKind = useRef(kindId);
@@ -273,16 +289,28 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
   const money = base.money;
 
-  async function readReceipt(file: File) {
+  async function readPhoto(file: File) {
     setReading(true);
     setProblem(undefined);
     try {
       const form = new FormData();
       form.set("image", await prepareUpload(file));
-      const read = await api.post<ReceiptRead>(`/lists/${list.id}/events/read-receipt`, form);
+      form.set("kind", kind.id);
+      const read = await api.post<ReceiptRead | FormRead>(`/lists/${list.id}/events/read-photo`, form);
+      setPending(null);
+      clearShared();
+      if (read.kind === "form") {
+        const data = Object.fromEntries(Object.entries(read.data).filter(([, v]) => v !== null && v !== undefined));
+        if (read.message && !read.name && read.amount === null && !Object.keys(data).length) return toast(read.message, "alert");
+        if (read.name) setName(read.name);
+        if (read.date) setDay(read.date);
+        if (read.amount !== null) setAmount(centsToInput(read.amount));
+        setDraft((cur) => ({ ...cur, ...attributesDraft(kind.fields.filter((f) => data[f.key] !== undefined), data as Attributes) }));
+        setSource(read.estimate ? "Geschat met AI" : "Gelezen met AI");
+        return;
+      }
       if (read.message && !read.lines.length) return toast(read.message, "alert");
       chosenKind.current = true;
-      if (detail.kinds.some((k) => k.id === "aankoop")) setKindId("aankoop");
       if (read.date) setDay(read.date);
       if (read.total !== null) setAmount(centsToInput(read.total));
       if (!name.trim() && read.store_text && !read.store) setName(read.store_text);
@@ -301,10 +329,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       });
       const store = read.store ? [emptyLine("bij", read.store)] : read.store_text ? [{ ...emptyLine("bij"), text: read.store_text }] : [];
       setLines((cur) => [...cur.filter((l) => l.thing || l.text.trim()), ...store, ...made]);
-      setPhoto(file);
-      setPending(null);
-      clearShared();
-      toast(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
+      setSource(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
     } catch (err) {
       setProblem((err as Error).message);
     } finally {
@@ -404,18 +429,43 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       <PageHead title={event ? `${kind.name} bewerken` : status === "gepland" ? "Plannen" : "Loggen"} back={{ to: -1, label: list.name }} />
       <section className="card form-section">
         {!event && <input value={typed} maxLength={300} autoFocus={!typed} aria-label="Typ wat je weet" placeholder="Typ wat je weet…" onChange={(e) => setTyped(e.target.value)} />}
-        {!event && ai && (money || list.stock) && (
-          <div className="btn-row">
-            {pending ? (
-              <button type="button" className="btn btn-primary btn-sm" disabled={reading} onClick={() => readReceipt(pending)}>
-                <Icon name="receipt" size={15} /> {reading ? "Lezen…" : "Kasticket lezen"} <AiMark />
-              </button>
-            ) : (
-              <button type="button" className="btn btn-outline btn-sm" disabled={reading} onClick={() => receiptRef.current?.click()}>
-                <Icon name="receipt" size={15} /> {reading ? "Lezen…" : "Kasticket"} <AiMark />
-              </button>
-            )}
-            <input ref={receiptRef} type="file" accept="image/*" hidden onChange={(e) => (e.target.files?.[0] && readReceipt(e.target.files[0]), (e.target.value = ""))} />
+        {!event?.photo_version && (
+          <div className="field">
+            <div className="btn-row photo-row">
+              {pending && reads ? (
+                <button type="button" className="btn btn-primary btn-sm" disabled={reading} onClick={() => readPhoto(pending)}>
+                  <Icon name="camera" size={15} /> {reading ? "Lezen…" : "Foto lezen"} <AiMark />
+                </button>
+              ) : (
+                <PhotoButton
+                  read={reads ? true : null}
+                  busy={reading}
+                  onPhoto={(file, read) => {
+                    setPhoto(file);
+                    setSource(null);
+                    if (read) readPhoto(file);
+                  }}
+                >
+                  {reading ? "Lezen…" : photo ? "Andere foto" : "Foto"}
+                </PhotoButton>
+              )}
+              {photo && (
+                <>
+                  <span className="photo-name">{photo.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setPhoto(null);
+                      setPending(null);
+                    }}
+                  >
+                    Weghalen
+                  </button>
+                </>
+              )}
+            </div>
+            {source && <span className="muted">{source}</span>}
           </div>
         )}
         <div className="field">
@@ -529,22 +579,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             ))}
           </select>
         </label>
-        {!event?.photo_version && (
-          <div className="field">
-            <span className="label">Foto</span>
-            <div className="btn-row">
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => photoRef.current?.click()}>
-                <Icon name="camera" size={15} /> {photo ? photo.name : "Foto toevoegen"}
-              </button>
-              {photo && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPhoto(null)}>
-                  Weghalen
-                </button>
-              )}
-            </div>
-            <input ref={photoRef} type="file" accept="image/*" hidden onChange={(e) => (setPhoto(e.target.files?.[0] ?? null), (e.target.value = ""))} />
-          </div>
-        )}
       </section>
 
       {problem && <p className="error">{problem}</p>}

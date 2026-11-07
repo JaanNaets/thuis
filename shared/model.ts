@@ -10,6 +10,7 @@
 import type { Attributes, FieldDef, Interval, Share } from "./fields.ts";
 import type { IconKey } from "./icons.ts";
 import type { NotifyDef } from "./alerts.ts";
+import type { ReadPhoto } from "./photoread.ts";
 import type { StockDef } from "./stock.ts";
 import type { Person, Tone } from "./types.ts";
 
@@ -86,6 +87,8 @@ export type List = {
   fields: FieldDef[];
   stock: StockDef | null;
   notify: NotifyDef | null;
+  /** Welke formulieren een foto lezen met de AI (shared/photoread.ts); null = de standaard. */
+  read_photo: ReadPhoto | null;
   archived: 0 | 1;
   created_at: string;
 };

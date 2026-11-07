@@ -80,7 +80,7 @@ export function QuantityField({ value, onChange, min = 0, label }: { value: stri
 }
 
 /** Aan/uit-schakelaar met een label ervoor. Geen uitleg eronder: zegt het label het niet, kies een beter label. */
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
   return (
     <label className="switch-field">
       <span className="label">{label}</span>
@@ -215,7 +215,7 @@ export function LevelMeter({ quantity, min }: { quantity: number; min: number })
 }
 
 /** Kop van een kaart of sectie: titel, korte uitleg en eventueel een actie rechts. */
-export function CardHead({ title, description, action }: { title: string; description?: ReactNode; action?: ReactNode }) {
+export function CardHead({ title, description, action }: { title: ReactNode; description?: ReactNode; action?: ReactNode }) {
   return (
     <header className="card-head">
       <div style={{ minWidth: 0 }}>

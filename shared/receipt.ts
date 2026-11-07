@@ -1,4 +1,4 @@
-// Een kasticket lezen (✨, POST /lists/:id/events/read-receipt): de AI geeft de winkel, de datum, het totaal en de
+// Een kasticket lezen (✨, POST /lists/:id/events/read-photo bij een aankoop): de AI geeft de winkel, de datum, het totaal en de
 // lijnen zoals op het ticket; de code koppelt elke lijn aan een ding dat de lezer ziet (op naam, of op een naam die
 // eerder op een ticket stond: een tekstveld met `aliases`), en rekent de maat op de lijn om naar de eenheid van dat
 // ding (5 kg aardappelen in een voorraad in kg). Het formulier maakt er één aankoop van, met een lijn per product.

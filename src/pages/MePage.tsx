@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { formatIban, isValidIban } from "../../shared/payment";
 import type { AiState, Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
-import { CardHead, SubmitButton, Switch, ToneSwatches } from "../components/Controls";
+import { CardHead, FilterToggle, SubmitButton, Switch, ToneSwatches } from "../components/Controls";
+import { useListPlaces } from "../components/ListPlaces";
 import { Icon } from "../components/Icon";
 import { AppCard } from "../components/AppSettings";
 import { BackupCard } from "../components/Backup";
@@ -87,7 +88,7 @@ export function MePage() {
       <NotificationsCard />
       <AppCard />
       <AiCard />
-      {lists.filter((l) => !l.archived).length > 1 && <ListOrder />}
+      {lists.some((l) => !l.archived) && <ListOrder />}
       <BackupCard />
     </form>
   );
@@ -120,10 +121,14 @@ export function AiCard() {
   );
 }
 
-/** Jouw volgorde van de lijsten (in de zijbalk en op het overzicht). */
+/**
+ * Je lijsten, allemaal: je volgorde (in het menu en in de keuzelijsten) en waar ze staan (in het menu, bij de +). Een
+ * lijst die je verbergt, vind je hier altijd terug (en via zoeken en Verbanden).
+ */
 function ListOrder() {
   const { lists, reloadMe } = useSession();
   const toast = useToast();
+  const places = useListPlaces();
   const live = lists.filter((l) => !l.archived);
   const [order, setOrder] = useState(live.map((l) => l.id));
   const sortable = useSortable(
@@ -141,7 +146,7 @@ function ListOrder() {
   );
   return (
     <section className="card">
-      <CardHead title="Volgorde van je lijsten" />
+      <CardHead title="Je lijsten" />
       <ul className="rows sort-list">
         {order.map((id) => {
           const l = lists.find((x) => x.id === id);
@@ -157,6 +162,14 @@ function ListOrder() {
                     <Icon name={listIcon(l)} size={16} />
                   </span>
                   <span className="row-title">{l.name}</span>
+                </span>
+                <span className="place-pills">
+                  <FilterToggle on={places.shown(id, "menu")} onChange={(on) => places.set(id, "menu", on)}>
+                    Menu
+                  </FilterToggle>
+                  <FilterToggle on={places.shown(id, "add")} onChange={(on) => places.set(id, "add", on)}>
+                    Toevoegen
+                  </FilterToggle>
                 </span>
               </div>
             </li>

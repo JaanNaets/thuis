@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { NO_HIDDEN, type Hidden } from "../shared/apps";
 import type { BoardInfo } from "../shared/board";
 import type { ListNode, Tag } from "../shared/model";
 import type { Person } from "../shared/types";
@@ -15,6 +16,8 @@ export type Session = {
   boards: BoardInfo[];
   /** Mag de AI voor jou lezen (Jouw gegevens → AI)? Uit: geen ✨-knoppen (de server weigert dan ook). */
   ai: boolean;
+  /** Lijsten die je niet in je menu of bij de + wil (Je lijsten in Jouw gegevens, of ⋯ van een lijst). */
+  hidden: Hidden;
   reloadMe: () => void;
   openSearch: () => void;
 };
@@ -25,6 +28,7 @@ export const SessionContext = createContext<Session>({
   tags: [],
   boards: [],
   ai: false,
+  hidden: NO_HIDDEN,
   reloadMe: () => {},
   openSearch: () => {},
 });
@@ -34,4 +38,4 @@ export function useSession(): Session {
 }
 
 /** Het antwoord van GET /me. */
-export type Me = { person: Person; lists: ListNode[]; tags: Tag[]; ai: boolean; boards?: BoardInfo[] };
+export type Me = { person: Person; lists: ListNode[]; tags: Tag[]; ai: boolean; hidden?: Hidden; boards?: BoardInfo[] };

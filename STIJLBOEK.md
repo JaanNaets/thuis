@@ -416,6 +416,36 @@ lijsten altijd eerst (je meestgebruikte bovenaan) en Nieuwe lijst als laatste. P
 glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als groep in
 `CommandPalette.tsx`.
 
+- **Op een lijst** opent de + (gsm) of **Toevoegen** (tablet) hetzelfde palet, maar enkel met wat in die lijst kan
+  (`usePalette()("add", "", { list, thing, planned })`): de naam van de lijst als zacht pilletje voor het invulveld
+  (`.palette-scope`), op Dingen eerst "Wijn toevoegen", in het logboek eerst loggen, op Gepland wordt het plannen.
+  Geen aparte knoppen per formulier meer: overal één manier.
+- **De foto bij de +**: de camera rechts in het invulveld opent de [fotokiezer](#fotokiezer-photobutton-photopickertsx).
+  De gekozen foto staat als smalle rij onder het invulveld (naam, ✨ als ze gelezen wordt, ×); tik daarna op een
+  plek en ze gaat mee naar dat formulier (`foto=gedeeld`, met `lezen=1` als de AI ze leest). Sluit je zonder te
+  kiezen, dan gaat de foto weg.
+- Lijsten die je **bij de +** verborg ([Je lijsten](#je-lijsten-listplacestsx)), staan er niet; op die lijst zelf wel.
+
+### Fotokiezer: `PhotoButton` (`PhotoPicker.tsx`)
+
+Eén knop voor elke foto (een ding, een gebeurtenis, de foto bij de +): **Foto** (`btn-outline btn-sm`, camera, ✨ als
+het formulier foto's leest) opent een blad met **Camera** en **Foto's** (op een computer enkel **Foto kiezen**) en de
+schakelaar **Lezen met AI ✨**. Android opent bij een gewone fotoknop meteen de bibliotheek; daarom altijd deze twee.
+De schakelaar staat zoals het formulier het wil (Instellen → Velden voor dingen, Soorten voor gebeurtenissen,
+`shared/photoread.ts`) en kan per foto uit; de AI leest pas na die keuze. Leest niemand (AI uit, of het formulier
+leest geen foto's), dan geen schakelaar (en op een computer meteen het bestandsvenster). In een formulier staat de
+knop op zijn eigen breedte (`.photo-row`), met de naam van de foto en Weghalen ernaast, en eronder in grijs wat de AI
+deed ("Gelezen met AI", "Geschat met AI", "Kasticket gelezen met AI: 4 lijnen"). Een gedeelde foto die nog gelezen
+moet worden, staat klaar als **Foto lezen ✨** (`btn-primary`).
+
+### Je lijsten: `ListPlaces.tsx`
+
+Per persoon kies je waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +**. Een hulplijst zoals
+Winkels verberg je; zoeken, Verbanden en de keuzelijsten tonen ze altijd, en de lijst die je bekijkt staat altijd in
+het menu. Op één plek staan ze allemaal: **Je lijsten** in Jouw gegevens, een `sort-list` met greep, tegeltje, naam
+en twee filterpillen **Menu** en **Toevoegen** (aan = wit). Per lijst ook in ⋯ van de lijst, onder de rijen, als
+twee schakelaars (`ListPlaceSwitches`, `.sheet-switches`).
+
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
 Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam, in jouw volgorde (het eerste op `/`, de andere
@@ -504,7 +534,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | Porties (`PortionChips` in `FieldInputs`) | Bij een getal **In porties van** een ander getal (Hoeveel per Portie): onder het veld `.portion-chips`, drie `tag`-knoppen "½ portie 7,5 g", "1 portie 15 g", "2 porties 30 g" (de grammen grijs), enkel als de portie gekend is |
 | Vastzetten (`FieldPin` in `FieldInputs`) | Bij een veld met een vaste waarde (`remember_fixed`): een kleine punaise (`.field-pin`, icoon `pushpin`, 28px) rechts naast het label, naast het veld (nooit in het `label`). Stil grijs = de waarde van nu staat niet vast (tik: vastzetten voor de keuze, bv. "Vastzetten voor Pasta"); zwart (`aria-pressed`) = ze staat vast (tik: niet meer vast). Een toast zegt wat er gebeurde |
 | Typ wat je weet (`EventForm`) | Het eerste veld van Loggen (placeholder "Typ wat je weet…", de cursor staat er meteen in). Wat je typt, vult **live** in met code (`readEvent` in `shared/parse.ts`): datum en uur, bedrag, dingen met hoeveelheid, eenheid en prijs, velden van de soort; wat overblijft is de omschrijving. Enkel wat de tekst zelf zette, verandert mee: pas je iets aan, dan blijft dat staan; wis je een woord, dan komt terug wat er stond. Begint de tekst met een soort ("gegeten"), dan die soort. Eronder **Kasticket ✨**. |
-| Barcode en Foto (`ThingForm`) | Onder de naam van een nieuw ding: **Barcode** (lijsten met productinfo: `BarcodeScanner`, zoekt in Open Food Facts, zonder AI) en **Foto ✨** (een etiket of product; enkel met de AI aan). Eronder in grijs waar het vandaan komt ("Uit Open Food Facts: …", "Uit NEVO: …", "Geschat met AI"). Een gedeelde foto staat klaar als **Foto lezen ✨**: de AI leest pas na die tik; de foto komt bij het ding. |
+| Barcode en Foto (`ThingForm`) | Onder de naam van een nieuw ding: **Barcode** (lijsten met productinfo: `BarcodeScanner`, zoekt in Open Food Facts, zonder AI) en de [fotokiezer](#fotokiezer-photobutton-photopickertsx) (een etiket of product; lezen staat aan of uit in Instellen → Velden). Eronder in grijs waar het vandaan komt ("Uit Open Food Facts: …", "Uit NEVO: …", "Geschat met AI"). Een gedeelde foto staat klaar als **Foto lezen ✨**: de AI leest pas na die tik; de foto komt bij het ding. |
 | `ItemPhoto` | De foto van een ding of gebeurtenis bovenaan: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een lijst (`ICONS` in `shared/icons.ts`): grijze tegeltjes, het gekozen is zwart |
 | `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette lijsten en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser |
@@ -698,14 +728,16 @@ rood als het bijna op is: `.row-stepper-value.is-low`). − en + loggen na een k
 laatste kolom (Voorraad), naast die kolom staat er één veld minder. Geplande aankopen (boodschappen) staan in het
 logboek met een vinkje (`.row-check`, 44px); afgevinkt is doorstreept en stil (`.log-row.is-done`).
 
-### Kasticket (`EventForm.tsx`)
+### Foto lezen in een gebeurtenis (`EventForm.tsx`)
 
-Onder "Typ wat je weet" staat **Kasticket ✨** (`btn-outline btn-sm`, icoon receipt, `AiMark`), enkel als de AI voor
-jou aan staat en de soort een bedrag heeft of de lijst voorraad telt. De foto wordt één aankoop: de winkel als lijn
-**bij**, elk product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding dat je ziet; wat
-nieuw is, krijgt **Nieuw in** (de lijst met voorraad). Het totaal komt in Bedrag, de datum in Wanneer, de foto bij de
-gebeurtenis. De melding zegt "met AI". Een gedeelde foto staat klaar als **Kasticket lezen ✨** (`btn-primary`): de AI
-leest pas na die tik.
+Onder "Typ wat je weet" staat de [fotokiezer](#fotokiezer-photobutton-photopickertsx). Wat de AI leest, hangt af van
+de soort (`POST /lists/:id/events/read-photo`): een **aankoop** leest een kasticket (de winkel als lijn **bij**, elk
+product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding dat je ziet; wat nieuw is, krijgt
+**Nieuw in**; het totaal in Bedrag, de datum in Wanneer). Een soort met voedingswaarden (Gegeten) herkent een
+**gerecht** en schat de portie ("Geschat met AI"). Elke andere soort vult haar eigen velden, de omschrijving, datum en
+het bedrag in met wat er echt op de foto staat ("Gelezen met AI"). De foto komt altijd bij de gebeurtenis. Welke
+soorten lezen, zet een beheerder in Instellen → Soorten (**Foto lezen met AI ✨**, een schakelaar per soort, ook in
+het formulier van een eigen soort); standaard een soort met geld of voedingswaarden.
 
 ### Dingen tonen: `ThingsView` en het logboek: `LogList`
 

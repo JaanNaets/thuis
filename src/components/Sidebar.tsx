@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useLocation } from "react-router";
-import { boardPath } from "../../shared/apps";
+import { boardPath, shownIn } from "../../shared/apps";
 import type { BoardInfo } from "../../shared/board";
 import { isKiosk } from "../device";
 import { groupByTag, listIcon, listTone } from "../lists";
@@ -88,8 +88,13 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 /** Je lijsten per tag: elke tag klapt open (open als je er een lijst van bekijkt); wat zonder tag is, onderaan. De kop
  * "Lijsten" en Verbanden staan erboven, bij wie de boom toont. */
 export function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
+  const { hidden } = useSession();
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  const groups = groupByTag(lists, tags);
+  // Wat je in het menu verborg, staat er niet (behalve de lijst die je nu bekijkt).
+  const groups = groupByTag(
+    lists.filter((l) => l.id === current || shownIn(hidden, "menu", l.id)),
+    tags,
+  );
   return (
     <div className="sidebar-places">
       <ul className="place-tree">

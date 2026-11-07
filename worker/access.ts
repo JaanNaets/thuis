@@ -6,6 +6,7 @@
 import type { FieldDef } from "../shared/fields";
 import { isIconKey } from "../shared/icons";
 import { cleanNotify } from "../shared/alerts";
+import { cleanReadPhoto } from "../shared/photoread";
 import {
   baseKind,
   canEdit,
@@ -42,10 +43,11 @@ export const ids = (values: Iterable<string>) => JSON.stringify([...new Set(valu
 
 // ---------- rijen ----------
 
-export type ListRow = Omit<List, "fields" | "stock" | "notify" | "icon" | "color"> & {
+export type ListRow = Omit<List, "fields" | "stock" | "notify" | "read_photo" | "icon" | "color"> & {
   fields: string;
   stock: string | null;
   notify: string | null;
+  read_photo: string | null;
   icon: string | null;
   color: string | null;
   created_by: string;
@@ -62,6 +64,7 @@ export function toList(row: ListRow): List {
     fields,
     stock: row.stock ? cleanStock(parseJson(row.stock, null), fields) : null,
     notify: cleanNotify(parseJson(row.notify, null)),
+    read_photo: cleanReadPhoto(parseJson(row.read_photo, null)),
     archived: row.archived ? 1 : 0,
     created_at: row.created_at,
   };

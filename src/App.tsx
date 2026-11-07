@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { Outlet, useLocation, useNavigation } from "react-router";
 import { useApi } from "./api";
-import { CommandPalette, PaletteContext, type PaletteMode } from "./components/CommandPalette";
+import { NO_HIDDEN } from "../shared/apps";
+import { CommandPalette, PaletteContext, type PaletteMode, type PaletteScope } from "./components/CommandPalette";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import { Icon } from "./components/Icon";
 import { MenuSheet } from "./components/MenuSheet";
@@ -29,9 +30,9 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   const outbox = useOutbox(online);
   const { pathname } = useLocation();
   const navigation = useNavigation();
-  // Het palet (zoeken en toevoegen): dicht, of open in een modus, eventueel met tekst.
-  const [palette, setPalette] = useState<{ mode: PaletteMode; text: string } | null>(null);
-  const openPalette = useCallback((mode: PaletteMode, text = "") => setPalette({ mode, text }), []);
+  // Het palet (zoeken en toevoegen): dicht, of open in een modus, eventueel met tekst (en op een lijst: enkel die lijst).
+  const [palette, setPalette] = useState<{ mode: PaletteMode; text: string; scope?: PaletteScope } | null>(null);
+  const openPalette = useCallback((mode: PaletteMode, text = "", scope?: PaletteScope) => setPalette({ mode, text, scope }), []);
   // De + in de onderbalk: wat het scherm vraagt, anders het palet om toe te voegen.
   const [add, setAdd] = useState<AddAction | null>(null);
   const [menu, setMenu] = useState(false);
@@ -66,7 +67,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   }, [pathname]);
 
   const session = useMemo(
-    () => ({ person: me.person, lists: me.lists, tags: me.tags, boards: me.boards ?? [], ai: me.ai !== false, reloadMe, openSearch: () => openPalette("search") }),
+    () => ({ person: me.person, lists: me.lists, tags: me.tags, boards: me.boards ?? [], ai: me.ai !== false, hidden: me.hidden ?? NO_HIDDEN, reloadMe, openSearch: () => openPalette("search") }),
     [me, reloadMe],
   );
 
@@ -143,7 +144,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
               <Outlet />
             </main>
 
-            <CommandPalette open={palette !== null} mode={palette?.mode ?? "search"} text={palette?.text} onClose={() => setPalette(null)} />
+            <CommandPalette open={palette !== null} mode={palette?.mode ?? "search"} text={palette?.text} scope={palette?.scope} onClose={() => setPalette(null)} />
           </div>
         </ConfirmProvider>
       </ToastProvider>

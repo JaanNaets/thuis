@@ -18,6 +18,18 @@ export async function sharedFile(): Promise<File | null> {
   }
 }
 
+/** Een foto klaarzetten voor het formulier (de foto bij de +): zoals een gedeelde foto, met `?foto=gedeeld`. */
+export async function putShared(file: File): Promise<boolean> {
+  try {
+    if (!("caches" in window)) return false;
+    const headers = { "content-type": file.type || "image/jpeg", "x-name": encodeURIComponent(file.name) };
+    await (await caches.open(CACHE)).put(KEY, new Response(file, { headers }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** De gedeelde foto weggooien (na gebruik). */
 export async function clearShared(): Promise<void> {
   try {
