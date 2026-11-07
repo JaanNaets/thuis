@@ -63,7 +63,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   min `uit`, enkel `gebeurd`, omgerekend met `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op
   onder het minimum; zonder minimum enkel in een lijst met een minimumveld en als er ooit iets was.
 - **Geld** (`shared/ledger.ts`): `sharesOf` (lijnen met `owner` zijn van die persoon, de rest volgens `split`, anders
-  van wie betaalde), `netBalance` en `settleUp` voor Wie moet wie; een overdracht verrekent.
+  van wie betaalde), `netBalance` en `settleUp` voor Wie moet wie; een overdracht verrekent. Een nieuwe uitgave
+  (aankoop, dienst) in een lijst waar meer mensen loggen, is standaard gelijk verdeeld over hen (`defaultSharers`), zoals
+  in Splitwise; eten en een overdracht nooit vanzelf.
 - **Eten** (`shared/food.ts`): een gebruik met kcal (in de soort, of uit een ding met kcal per 100 g × gram; `isFood`).
 - **Berekeningen** (veldsoort `calc`, `shared/calc.ts`) enkel binnen het ding; geen verwijzende berekeningen meer.
 - Een **logboek als tabel** (`shared/logview.ts`: `logFields`, `logItem`) zodat filters, weergaven

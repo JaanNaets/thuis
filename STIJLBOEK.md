@@ -726,7 +726,8 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 ### Kosten verdelen: Wie moet wie en `SettleForm`
 
 Kosten verdelen is geen lijst: elke aankoop of dienst heeft Bedrag, Betaald door (begint met jou) en Gedeeld met
-(`SharesField`), en een lijn kan enkel van één persoon zijn. Wie moet wie rekent de app uit over alles wat je ziet
+(`SharesField`; in een lijst waar meer mensen loggen begint dat op Gelijk over hen, `defaultSharers`, zoals Splitwise),
+en een lijn kan enkel van één persoon zijn. Wie moet wie rekent de app uit over alles wat je ziet
 (`shared/ledger.ts`); een terugbetaling is een overdracht.
 
 - Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde.

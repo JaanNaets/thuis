@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { Attributes, Interval } from "../../shared/fields";
+import { defaultSharers } from "../../shared/ledger";
 import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { readsPhoto } from "../../shared/photoread";
@@ -112,7 +113,19 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [amount, setAmount] = useState(centsToInput(event?.amount ?? null));
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
-  const [shares, setShares] = useState<SharesDraft>(() => sharesDraft(event?.split ?? undefined));
+  // Een nieuwe uitgave in een gedeelde lijst: gelijk over wie er logt (shared/ledger.ts), tot je de verdeling zelf kiest.
+  const sharers = detail.people.filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, role: p.role }));
+  const defaultShares = (b: typeof kind.base): SharesDraft => {
+    const ids = defaultSharers(b, sharers);
+    return ids.length ? { mode: "equal", people: ids, values: {} } : sharesDraft(undefined);
+  };
+  const [shares, setShares] = useState<SharesDraft>(() => (event ? sharesDraft(event.split ?? undefined) : defaultShares(kind.base)));
+  const sharesChosen = useRef(Boolean(event));
+  useEffect(() => {
+    if (!sharesChosen.current) setShares(defaultShares(kind.base));
+    // Enkel bij een andere soort; de mensen van de lijst veranderen niet terwijl je invult.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind.base]);
   const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? (Object.fromEntries(Object.entries(prefill).filter(([k]) => k !== "name")) as Attributes)));
   const [lines, setLines] = useState<LineDraft[]>(() =>
     event
@@ -552,7 +565,15 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
           {kind.base !== "overdracht" && (
             <div className="field">
               <span className="label">{kind.base === "gebruik" ? "Wie at of gebruikte" : "Gedeeld met"}</span>
-              <SharesField people={people ?? []} meId={person.id} value={shares} onChange={setShares} total={amount.trim() ? parseEuro(amount) : null} />
+              <SharesField
+                people={people ?? []}
+                meId={person.id}
+                value={shares}
+                onChange={(next) => {
+                  sharesChosen.current = true;
+                  setShares(next);
+                }}
+                total={amount.trim() ? parseEuro(amount) : null} />
             </div>
           )}
         </section>

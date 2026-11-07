@@ -8,7 +8,7 @@
 //   zetten (`settleUp`). Bedragen tot op de cent: samen altijd precies het bedrag (`splitCents`).
 
 import type { Share } from "./fields.ts";
-import type { Base, Status } from "./model.ts";
+import type { Base, Role, Status } from "./model.ts";
 
 /** Wat nodig is om te rekenen met het geld van een gebeurtenis. */
 export type MoneyEvent = {
@@ -24,6 +24,17 @@ export type MoneyEvent = {
 };
 
 /** Telt deze gebeurtenis als uitgave? Gebeurd, met een bedrag, en geen overdracht. */
+/**
+ * Met wie een nieuwe uitgave (aankoop of dienst) standaard gedeeld wordt: in een lijst waar meer mensen loggen, gelijk
+ * over hen, zoals in Splitwise; anders niemand, en dan is ze van wie betaalde. Eten (gebruik: "wie at") en een
+ * overdracht krijgen nooit vanzelf een verdeling. Per uitgave kan je het altijd aanpassen.
+ */
+export function defaultSharers(base: Base, people: { id: string; role: Role }[]): string[] {
+  if (base !== "aankoop" && base !== "dienst") return [];
+  const loggers = people.filter((p) => p.role === "beheerder" || p.role === "lid").map((p) => p.id);
+  return loggers.length > 1 ? loggers : [];
+}
+
 export const isExpense = (e: Pick<MoneyEvent, "status" | "amount" | "base">) => e.status === "gebeurd" && e.amount !== null && e.amount !== 0 && e.base !== "overdracht";
 
 /**

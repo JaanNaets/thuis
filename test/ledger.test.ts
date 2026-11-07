@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isExpense, mineOf, netBalance, settleUp, sharesOf, splitCents, type MoneyEvent } from "../shared/ledger.ts";
+import { defaultSharers, isExpense, mineOf, type MoneyEvent, netBalance, settleUp, sharesOf, splitCents } from "../shared/ledger.ts";
 
 const ev = (o: Partial<MoneyEvent>): MoneyEvent => ({
   id: "e",
@@ -65,4 +65,17 @@ test("wie moet wie: uitgaven en een terugbetaling", () => {
   // Jana betaalt terug: alles in orde.
   const after = netBalance([...events, ev({ id: "4", base: "overdracht", amount: 1300, paid_by: "jana", to_person: "jaan" })]);
   assert.equal(after.size, 0);
+});
+
+test("standaard delen: een uitgave in een gedeelde lijst gelijk over wie logt, zoals Splitwise", () => {
+  const samen = [
+    { id: "jaan", role: "beheerder" as const },
+    { id: "jana", role: "beheerder" as const },
+    { id: "kijker", role: "gast" as const },
+  ];
+  assert.deepEqual(defaultSharers("aankoop", samen), ["jaan", "jana"]);
+  assert.deepEqual(defaultSharers("dienst", samen), ["jaan", "jana"]);
+  assert.deepEqual(defaultSharers("gebruik", samen), [], "eten: wie at kies je zelf");
+  assert.deepEqual(defaultSharers("overdracht", samen), []);
+  assert.deepEqual(defaultSharers("aankoop", [{ id: "jaan", role: "beheerder" }]), [], "alleen: van wie betaalde");
 });
