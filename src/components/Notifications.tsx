@@ -118,19 +118,19 @@ export function NotificationsCard() {
       <div className="card-body form">
         {state === "install" && (
           <Alert tone="none">
-            Op een iPhone of iPad: zet Thuis eerst op je beginscherm (Deel → Zet
+            Op een iPhone of iPad: zet Heystack eerst op je beginscherm (Deel → Zet
             op beginscherm) en open het van daar.
           </Alert>
         )}
         {state === "unsupported" && (
           <Alert tone="none">
-            Deze browser kan geen meldingen krijgen. Open Thuis in Chrome, Edge,
+            Deze browser kan geen meldingen krijgen. Open Heystack in Chrome, Edge,
             Firefox of Safari.
           </Alert>
         )}
         {state === "denied" && (
           <Alert tone="none">
-            Meldingen staan uit voor Thuis in de instellingen van je browser.
+            Meldingen staan uit voor Heystack in de instellingen van je browser.
             Zet ze daar aan en kom terug.
           </Alert>
         )}

@@ -19,7 +19,7 @@ export function SettleForm({ settle, onDone }: { settle: Settle; onDone: () => v
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const cents = parseEuro(amount);
-  const qr = settle.from.id === person.id && settle.iban && cents && cents > 0 ? epcPayload({ name: settle.to.name, iban: settle.iban }, cents, "Thuis: terugbetaling") : null;
+  const qr = settle.from.id === person.id && settle.iban && cents && cents > 0 ? epcPayload({ name: settle.to.name, iban: settle.iban }, cents, "Heystack: terugbetaling") : null;
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!cents || cents <= 0) return setError("Vul een bedrag in, bv. 12,50.");

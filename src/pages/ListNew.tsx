@@ -36,7 +36,7 @@ export function ListNew() {
       setFromFile(t);
       setTemplate(t);
     } catch (err) {
-      setProblem(err instanceof SyntaxError ? "Dit is geen sjabloon van Thuis." : (err as Error).message);
+      setProblem(err instanceof SyntaxError ? "Dit is geen sjabloon van Heystack." : (err as Error).message);
     }
   }
 

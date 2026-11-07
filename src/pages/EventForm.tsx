@@ -146,7 +146,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     const t = preset?.things[0];
     if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "" }] : ls));
   }, [preset]);
-  // Een gedeelde foto (Android: delen met Thuis, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
+  // Een gedeelde foto (Android: delen met Heystack, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
   // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.
   const sharedTaken = useRef(false);
   useEffect(() => {

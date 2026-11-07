@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { appManifest, ownAppManifest, SHARE_PATH, SHORTCUT_LISTS } from "../shared/manifest.ts";
 
-test("het manifest van de app: je meestgebruikte plekken als snelkoppeling, en delen met Thuis", () => {
+test("het manifest van de app: je meestgebruikte plekken als snelkoppeling, en delen met Heystack", () => {
   const often = [
     { name: "Gegeten", url: "/lijsten/v/loggen?soort=g" },
     { name: "Bijvulling", url: "/lijsten/p/loggen?soort=b" },

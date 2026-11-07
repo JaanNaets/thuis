@@ -40,7 +40,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Delen met Thuis (Android, share_target in het manifest): een foto bewaren we even in een eigen cache, de tekst gaat
+// Delen met Heystack (Android, share_target in het manifest): een foto bewaren we even in een eigen cache, de tekst gaat
 // mee in het adres; de app neemt het over op /delen (zie src/shared-file.ts en src/pages/QuickLinks.tsx).
 const SHARE_PATH = "/delen";
 const SHARE_CACHE = "gedeeld";
@@ -94,7 +94,7 @@ self.addEventListener("fetch", (event) => {
 
 // Meldingen (web push): de Worker stuurt ze versleuteld; de browser ontsleutelt en geeft ons de tekst.
 self.addEventListener("push", (event) => {
-  let message = { title: "Thuis", body: "", url: "/" };
+  let message = { title: "Heystack", body: "", url: "/" };
   try {
     message = { ...message, ...event.data.json() };
   } catch {

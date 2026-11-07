@@ -1,6 +1,6 @@
 // Snel naar het juiste formulier van buiten de app: een eigen app met een eigen naam en bestemming (/app/:id, zie
 // shared/apps.ts), een QR-sticker om af te drukken (/lijsten/:id/sticker), en een foto of tekst die je vanuit een
-// andere app deelt met Thuis (/delen, Android). Zie shared/manifest.ts en STIJLBOEK.md → Snel naar een formulier.
+// andere app deelt met Heystack (/delen, Android). Zie shared/manifest.ts en STIJLBOEK.md → Snel naar een formulier.
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";

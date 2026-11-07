@@ -116,9 +116,9 @@ export function PageHead({
         ) : (
           <Link to="/" className="phone-head-brand">
             <span className="brand-mark">
-              <Icon name="home" size={15} />
+              <Icon name="brand" size={16} />
             </span>
-            <span>Thuis</span>
+            <span>Heystack</span>
           </Link>
         )}
         <span className="phone-head-title" aria-hidden="true">

@@ -91,11 +91,11 @@ export type Backup = {
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const isId = (v: unknown): v is string => typeof v === "string" && ID.test(v);
 
-/** Is dit een back-up van Thuis? Gooit een fout met uitleg als het niet klopt. */
+/** Is dit een back-up van Heystack? Gooit een fout met uitleg als het niet klopt. */
 export function parseBackup(raw: unknown): Backup {
   const b = raw as Partial<Backup> | null;
-  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND) throw new Error("Dit is geen back-up van Thuis.");
-  if (b.version !== BACKUP_VERSION) throw new Error("Deze back-up is van een andere versie van Thuis.");
+  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND) throw new Error("Dit is geen back-up van Heystack.");
+  if (b.version !== BACKUP_VERSION) throw new Error("Deze back-up is van een andere versie van Heystack.");
   for (const key of ["people", "tags", "lists", "kinds", "things", "events", "views", "outside"] as const) if (!Array.isArray(b[key])) throw new Error("Deze back-up is onvolledig.");
   const all = [...b.lists!, ...b.kinds!, ...b.things!, ...b.events!, ...b.tags!];
   if (!all.every((x) => isId((x as { id?: unknown })?.id))) throw new Error("Deze back-up is beschadigd.");

@@ -1,6 +1,6 @@
-# Thuis: werkafspraken
+# Heystack: werkafspraken
 
-App voor thuis op Cloudflare (Workers, D1, R2): lijsten met dingen en een logboek, mensen per lijst, tags om te
+Heystack (het repo, de Worker en de databank heten nog `thuis`) is onze app op Cloudflare (Workers, D1, R2): lijsten met dingen en een logboek, mensen per lijst, tags om te
 groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, commits en uitleg.
 
 ## Ontwerp: lees eerst het stijlboek

@@ -6,7 +6,7 @@ import { nevoMatch } from "../shared/nevo";
 import { bestMatch, fromOff, isProductCode, type ProductInfo } from "../shared/product";
 
 const FIELDS = "code,product_name,product_name_nl,product_name_fr,product_name_en,brands,quantity,serving_quantity,nutriments,unique_scans_n";
-const HEADERS = { "User-Agent": "Thuis/1.0 (huishoud-app op Cloudflare)" };
+const HEADERS = { "User-Agent": "Heystack/1.0 (huishoud-app op Cloudflare)" };
 const KEEP_DAYS = 30;
 
 async function cached(db: D1Database, key: string, load: () => Promise<ProductInfo | null>): Promise<ProductInfo | null> {

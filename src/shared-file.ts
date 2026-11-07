@@ -1,4 +1,4 @@
-// Een foto die je vanuit een andere app deelt met Thuis (Android, share_target): de service worker bewaart ze even in
+// Een foto die je vanuit een andere app deelt met Heystack (Android, share_target): de service worker bewaart ze even in
 // een eigen cache (sw/sw.js), de app haalt ze daar op (/delen, Kasticket bijtellen, een foto lezen) en ruimt ze op.
 
 const CACHE = "gedeeld";

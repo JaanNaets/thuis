@@ -52,6 +52,6 @@ push.post("/remove", async (c) => {
 
 /** Een testmelding naar je eigen toestellen. */
 push.post("/test", async (c) => {
-  const sent = await notify(c.env.DB, c.get("person").id, { title: "Thuis", body: "Zo ziet een melding eruit.", url: "/ik", tag: "test" });
+  const sent = await notify(c.env.DB, c.get("person").id, { title: "Heystack", body: "Zo ziet een melding eruit.", url: "/ik", tag: "test" });
   return c.json({ sent });
 });

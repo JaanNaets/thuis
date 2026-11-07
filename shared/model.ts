@@ -1,4 +1,4 @@
-// Het model van Thuis: lijsten met dingen, en per lijst een logboek met gebeurtenissen.
+// Het model van Heystack: lijsten met dingen, en per lijst een logboek met gebeurtenissen.
 //
 // - Een **lijst** heeft dingen (allemaal met dezelfde velden; mag leeg zijn), mensen met een rol, tags en een logboek.
 // - Een **gebeurtenis** gebeurt op een moment en heeft een soort: een van de zes basissoorten (`BASES`) of een eigen

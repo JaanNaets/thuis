@@ -62,7 +62,7 @@ app.onError((err, c) => {
 
 export default {
   fetch: (request, env, ctx) => {
-    // Delen met Thuis zonder service worker (de allereerste keer): naar /delen, zonder de foto.
+    // Delen met Heystack zonder service worker (de allereerste keer): naar /delen, zonder de foto.
     const url = new URL(request.url);
     if (request.method === "POST" && url.pathname === SHARE_PATH) return Response.redirect(new URL(SHARE_PATH, url).toString(), 303);
     return app.fetch(request, env, ctx);

@@ -23,7 +23,10 @@ function serviceWorker(): Plugin {
         .map((file) => `/${file}`);
       const precache = ["/", ...PUBLIC_FILES, ...built];
       const template = readFileSync("sw/sw.js", "utf8");
-      const version = createHash("sha256").update(template).update(precache.join("\n")).digest("hex").slice(0, 12);
+      // Ook de inhoud van de bestanden uit public/: een nieuw icoon met dezelfde naam moet de cache vernieuwen.
+      const hash = createHash("sha256").update(template).update(precache.join("\n"));
+      for (const file of PUBLIC_FILES) hash.update(readFileSync(`public${file}`));
+      const version = hash.digest("hex").slice(0, 12);
 
       const source = template
         .replace('const VERSION = "__VERSION__";', `const VERSION = "${version}";`)

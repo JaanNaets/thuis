@@ -5,6 +5,14 @@
 
 /** Gevulde iconen, tekenvlak 256 × 256. */
 const FILLED = {
+  /** Het merkteken van Heystack: een stapel (dezelfde als het app-icoon, public/icon.svg). */
+  brand: (
+    <>
+      <rect x="85.33" y="48" width="85.33" height="42.67" rx="21.33" />
+      <rect x="58.67" y="106.67" width="138.67" height="42.67" rx="21.33" />
+      <rect x="32" y="165.33" width="192" height="42.67" rx="21.33" />
+    </>
+  ),
   receipt: (
     <path d="M216,40H40A16,16,0,0,0,24,56V208a8,8,0,0,0,11.58,7.15L64,200.94l28.42,14.21a8,8,0,0,0,7.16,0L128,200.94l28.42,14.21a8,8,0,0,0,7.16,0L192,200.94l28.42,14.21A8,8,0,0,0,232,208V56A16,16,0,0,0,216,40ZM176,144H80a8,8,0,0,1,0-16h96a8,8,0,0,1,0,16Zm0-32H80a8,8,0,0,1,0-16h96a8,8,0,0,1,0,16Z" />
   ),

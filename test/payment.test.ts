@@ -14,8 +14,8 @@ test("een IBAN nakijken en tonen", () => {
 
 test("een betaal-QR (EPC)", () => {
   assert.equal(
-    epcPayload({ name: "Jaan Naets", iban: "BE68 5390 0754 7034" }, 3500, "Thuis: terugbetaling Skireis"),
-    "BCD\n002\n1\nSCT\n\nJaan Naets\nBE68539007547034\nEUR35.00\n\n\nThuis: terugbetaling Skireis",
+    epcPayload({ name: "Jaan Naets", iban: "BE68 5390 0754 7034" }, 3500, "Heystack: terugbetaling Skireis"),
+    "BCD\n002\n1\nSCT\n\nJaan Naets\nBE68539007547034\nEUR35.00\n\n\nHeystack: terugbetaling Skireis",
   );
   assert.equal(epcPayload({ name: "X", iban: "BE68 5390 0754 7035" }, 100, ""), null);
   assert.equal(epcPayload({ name: "X", iban: "BE68539007547034" }, 0, ""), null);

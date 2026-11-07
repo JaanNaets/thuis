@@ -48,11 +48,11 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 
   return (
     <aside className="sidebar" aria-label="Hoofdmenu">
-      <Link to="/" className="workspace" title="Thuis">
+      <Link to="/" className="workspace" title="Heystack">
         <span className="brand-mark">
-          <Icon name="home" size={15} />
+          <Icon name="brand" size={16} />
         </span>
-        <span className="nav-text workspace-name">Thuis</span>
+        <span className="nav-text workspace-name">Heystack</span>
         {isKiosk && <span className="nav-text workspace-note">Kiosk</span>}
       </Link>
 

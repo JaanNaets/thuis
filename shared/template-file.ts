@@ -56,8 +56,8 @@ export function templateFile(list: { id: string; name: string; one: string | nul
 /** Een sjabloon uit een bestand, nagekeken; een fout met uitleg als het niet klopt. */
 export function parseTemplateFile(raw: unknown): ListTemplate {
   const t = raw as Partial<TemplateFile> | null;
-  if (!t || typeof t !== "object" || t.kind !== TEMPLATE_KIND) throw new Error("Dit is geen sjabloon van Thuis.");
-  if (t.version !== TEMPLATE_VERSION) throw new Error("Dit sjabloon is van een andere versie van Thuis.");
+  if (!t || typeof t !== "object" || t.kind !== TEMPLATE_KIND) throw new Error("Dit is geen sjabloon van Heystack.");
+  if (t.version !== TEMPLATE_VERSION) throw new Error("Dit sjabloon is van een andere versie van Heystack.");
   let fields: FieldDef[];
   try {
     fields = cleanListFields(t.fields);

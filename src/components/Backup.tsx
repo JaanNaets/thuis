@@ -23,7 +23,7 @@ export function BackupCard() {
     try {
       content = JSON.parse(await file.text());
     } catch {
-      setError("Dit is geen back-up van Thuis.");
+      setError("Dit is geen back-up van Heystack.");
       return;
     }
     const ok = await confirm({

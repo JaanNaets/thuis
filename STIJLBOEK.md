@@ -1,6 +1,6 @@
-# Stijlboek Thuis
+# Stijlboek Heystack
 
-Dit stijlboek is de afspraak voor hoe Thuis eruitziet en aanvoelt. **Raadpleeg het voor je een scherm,
+Dit stijlboek is de afspraak voor hoe Heystack eruitziet en aanvoelt. **Raadpleeg het voor je een scherm,
 onderdeel of tekst toevoegt of verandert**, en werk het bij als je iets nieuws introduceert.
 
 De stijl volgt de designtaal van Biohoeve (beheer en mijn): **een warme grijze schil met de pagina op één wit
@@ -149,7 +149,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 
 ```
 ┌ kop (schil, 48px, plakt) ──────────────┐
-│ ‹            Wijnen           ⌕   (J)  │  ← terug of ▣ Thuis · titel zodra je scrolt · zoeken · jij
+│ ‹            Wijnen           ⌕   (J)  │  ← terug of ▣ Heystack · titel zodra je scrolt · zoeken · jij
 ├────────────────────────────────────────┤
 │ Wijnen                          (⋯)    │  ← titel 24px
 │ [ Wijnen · Logboek ]                   │
@@ -161,7 +161,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 
 - Witte pagina, inhoud met 16px marge, een titel van 24px.
 - **De kop** (`.phone-head`, in `PageHead`): 48px op de schil met een waas, plakt bovenaan, een haarlijn eronder.
-  Links **terug** (een icoonknop van 36px) of het merk (▣ Thuis, naar je eerste bord); rechts **zoeken** (opent het
+  Links **terug** (een icoonknop van 36px) of het merk (▣ Heystack, naar je eerste bord); rechts **zoeken** (opent het
   [zoekpalet](#zoekpalet-commandpalette)) en **jouw letter** (naar `/ik`). Zodra de grote titel onder de kop
   schuift, verschijnt hij klein in het midden.
 - **De onderbalk** (`.tabbar`): vast onderaan, van rand tot rand, op de schil met een waas en een dekkende lijn
@@ -177,7 +177,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 
 ```
 ┌ schil #f2f2ef ─────────────────────────────────────────────────────────────┐
-│ ▣ Thuis          ┌ paneel (wit, haarlijn, 18px) ──────────────────────────┐ │
+│ ▣ Heystack       ┌ paneel (wit, haarlijn, 18px) ──────────────────────────┐ │
 │ [⌕ Zoeken…]      │ Thuis › Wijnen                   [+ Wijn toevoegen]  (J)│ │  ← paneelbalk 56px
 │ ◖Thuis◗          ├────────────────────────────────────────────────────────┤ │
 │ Geld, Agenda …   │ Wijnen                                          (⋯)    │ │  ← titel 24px
@@ -194,7 +194,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 - **Schil** met links de **zijbalk** (224px, tussen 768 en 1100px enkel iconen: 68px) en rechts een wit
   **paneel** (10px marge, een dekkende haarlijn `--line`, afronding 18px, geen schaduw). Het paneel scrollt zelf; de
   zijbalk blijft staan.
-- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje met "Thuis" (naar je eerste bord), het
+- **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje (de stapel, `Icon name="brand"`) met "Heystack" (naar je eerste bord), het
   zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden, en onder Lijsten Verbanden en
   de [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen bord ligt op het **witte vlak** dat
   meeglijdt. Smal (enkel iconen) blijft van de lijsten enkel Verbanden over, onder een haarlijn (`.sidebar-lists`).
@@ -537,7 +537,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | Barcode en Foto (`ThingForm`) | Onder de naam van een nieuw ding: **Barcode** (lijsten met productinfo: `BarcodeScanner`, zoekt in Open Food Facts, zonder AI) en de [fotokiezer](#fotokiezer-photobutton-photopickertsx) (een etiket of product; lezen staat aan of uit in Instellen → Velden). Eronder in grijs waar het vandaan komt ("Uit Open Food Facts: …", "Uit NEVO: …", "Geschat met AI"). Een gedeelde foto staat klaar als **Foto lezen ✨**: de AI leest pas na die tik; de foto komt bij het ding. |
 | `ItemPhoto` | De foto van een ding of gebeurtenis bovenaan: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een lijst (`ICONS` in `shared/icons.ts`): grijze tegeltjes, het gekozen is zwart |
-| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette lijsten en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser. Een melding toont het app-icoon (`icon-192.png`) en in de statusbalk de badge (`badge-96.png`: hetzelfde teken wit op doorzichtig; Android gebruikt enkel de doorzichtigheid, een icoon met achtergrond wordt een wit vierkant) |
+| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette lijsten en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser. Een melding toont het app-icoon (`icon-192.png`) en in de statusbalk de badge (`badge-96.png`: de stapel wit op doorzichtig; Android gebruikt enkel de doorzichtigheid, een icoon met achtergrond wordt een wit vierkant) |
 | `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
@@ -825,6 +825,10 @@ Twee soorten, inline in `Icon.tsx`:
 - **Lijnen voor richtingen en handelingen** (plus, min, kruis, vinkje, chevrons, pijl, zoeken, downloaden, delen,
   uitleg (i)): Lucide-stijl, 1,9 dik.
 - Een nieuw icoon: pad kopiëren van een van beide sites naar de juiste lijst (`FILLED` of `LINES`).
+- **Het merk** (`brand`): de stapel van Heystack, zwart op het gele tegeltje. Hetzelfde teken is het app-icoon
+  (`public/icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`: geel vlak, het teken op 62,5% zodat het
+  ook in een cirkel past) en de badge van een melding (`badge-96.png`, wit op doorzichtig). Verander je het teken,
+  maak ze dan alle vijf opnieuw.
 - Maten: 12 (in de toast) · 14–16 (knoppen, filters, tekst) · 17 (zijbalk) · 18 (standaard) · 21 (onderbalk).
 
 ### Getallen
@@ -1102,7 +1106,7 @@ gedeelde foto als kasticket ✨ of bij wat je toevoegt).
 - Geen nieuwe componentbibliotheek of CSS-framework; bouw op wat hier staat.
 - Geen klassenamen die al een component zijn (`alert`, `card`, `row`, `tag`, `badge`, `filter`, `tab`, …) als
   losse toevoeging op iets anders: kies een eigen naam.
-- Geen donkere modus (bewuste keuze: Thuis is wit).
+- Geen donkere modus (bewuste keuze: Heystack is wit).
 - Geen AI zonder ✨: elke knop die de AI laat lezen, draagt `AiMark` (of is de stille ✨), en de AI start nooit
   vanzelf (ook niet bij een gedeelde foto). Wat de AI vond, zegt het ook achteraf (`Alert` met `ai`). ✨ betekent enkel
   AI: niet voor iets anders gebruiken.

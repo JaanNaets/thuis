@@ -1,6 +1,6 @@
-# Thuis
+# Heystack
 
-Onze eigen app voor thuis, volledig op Cloudflare. Ze is **generiek**: je bouwt zelf wat je wil bijhouden, met
+Onze eigen app voor thuis (het repo en de Worker heten nog `thuis`), volledig op Cloudflare. Ze is **generiek**: je bouwt zelf wat je wil bijhouden, met
 één opbouw voor alles.
 
 - **Lijsten** met **dingen**: Wijnen, Voorraad, Wagens, Bezit, Winkels. De dingen van een lijst hebben dezelfde
@@ -249,7 +249,7 @@ met jouw deel, en wie wie nog moet betalen (met een betaal-QR). Terugbetaald log
   wat nieuw is, komt in de voorraad. De naam op het ticket wordt onthouden voor de volgende keer.
 - Een ding met **Barcode** (Open Food Facts, zonder AI) of **Foto ✨** (etiket of product; de app zegt of het uit een
   databank komt of geschat is).
-- Een gedeelde foto (Android: delen met Thuis) wacht tot je ✨ tikt. De AI staat per persoon aan of uit (Jouw gegevens).
+- Een gedeelde foto (Android: delen met Heystack) wacht tot je ✨ tikt. De AI staat per persoon aan of uit (Jouw gegevens).
 - Boodschappen en taken zijn geplande gebeurtenissen: afvinken, en een aankoop van hetzelfde ding vinkt een boodschap
   vanzelf af.
 
