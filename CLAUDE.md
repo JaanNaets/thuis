@@ -37,7 +37,7 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   pagina's (Geld, Voorraad, Eten, Te doen, Agenda): dat zijn **borden** met weergaven (bronnen: logboek, dingen,
   voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan
   met naam en icoon in het menu, in jouw volgorde (`placesOf`: `/` en `/bord/:id`; ⋯ → Volgorde); Alle lijsten staat niet
-  tussen de borden maar bovenaan de lijsten (`LINKS_PLACE`: `/lijsten`, met Verbanden als tab).
+  tussen de borden maar bovenaan de lijsten (`LINKS_PLACE`: `/lijsten`, je lijsten en hun verbanden).
 - Dingen houden bij het overzetten de id van hun oude item (foto's in R2: `items/{id}/photo`); een gebeurtenis
   gebruikt `events/{id}/photo` (`worker/media.ts`).
 
@@ -75,8 +75,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   als `?tekst=` naar het formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
   foto bij de + gaat mee naar het gekozen formulier (`putShared`, `?foto=gedeeld`, `&lezen=1`).
 - **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +;
-  zoeken, Verbanden en keuzelijsten tonen ze altijd. Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): per tag, met wat erin zit, wie erbij is, en per lijst Menu,
-  Toevoegen en Meldingen (stilzetten, `mutedBy` in `shared/apps.ts`), en je volgorde.
+  zoeken, Verbanden en keuzelijsten tonen ze altijd. Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): één pagina met je lijsten per tag (de naam opent de lijst,
+  ▸ toont haar verbanden), wie erbij is, per lijst Menu, Toevoegen en Meldingen (stilzetten, `mutedBy` in
+  `shared/apps.ts`), je volgorde, en op tablet ook de kaart.
 - **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, dingen met
   hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Dingen komen van
   `GET /things?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
@@ -111,7 +112,7 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   dat zelf handelt) zijn voor later. Opstarten blijft licht: elk blok haalt zijn eigen inhoud.
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
   (`keepReachable`).
-- **Verbanden** (`shared/links.ts`, `GET /insights/links`, `/lijsten/verbanden`): hoe je lijsten samenhangen (verwijzingen,
+- **Verbanden** (`shared/links.ts`, `GET /insights/links`, op `/lijsten`: Lijst of Kaart): hoe je lijsten samenhangen (verwijzingen,
   wat er gelogd is tussen lijsten, met welke dingen, de weergaven), enkel wat de lezer ziet, met wat voor iemand niet
   werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
   (getest); de keuze staat in het adres (`?lijst=`, `?keuze=`, `?groep=`, `?sort=`). **Een nieuwe

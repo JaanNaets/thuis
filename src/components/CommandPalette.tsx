@@ -18,7 +18,7 @@ import { isTouch } from "../device";
 import { clearShared, putShared } from "../shared-file";
 import { AiMark } from "./Fields";
 import { PhotoSheet, usePhotoInputs } from "./PhotoPicker";
-import { LINKS_PLACE, LINKS_TAB, placesOf } from "./Sidebar";
+import { LINKS_MAP, LINKS_PLACE, placesOf } from "./Sidebar";
 import { Icon, type IconName } from "./Icon";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon: IconName; to: string };
@@ -46,7 +46,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
   // Ga naar: je borden, Verbanden en jij.
   const ACTIONS: Entry[] = useMemo(
     () => [
-      ...[...placesOf(boards), LINKS_PLACE, LINKS_TAB].map((p) => ({ key: p.to, group: "Ga naar", label: p.label, icon: p.icon, to: p.to })),
+      ...[...placesOf(boards), LINKS_PLACE, LINKS_MAP].map((p) => ({ key: p.to, group: "Ga naar", label: p.label, icon: p.icon, to: p.to })),
       { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
     ],
     [boards],

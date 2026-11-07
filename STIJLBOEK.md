@@ -440,23 +440,28 @@ moet worden, staat klaar als **Foto lezen ✨** (`btn-primary`).
 
 ### Lijsten: `ListsPage`
 
-**Lijsten** (`/lijsten`, in het menu **Alle lijsten**, `LINKS_PLACE`) is de ene plek waar al je lijsten staan en waar
-je ze voor jezelf instelt. Bovenaan `ListsHead`: de titel, **Nieuwe lijst** (primary; op gsm in ⋯) en twee tabs,
-**Overzicht** en **Verbanden** (`/lijsten/verbanden`, `LINKS_TAB`). `/verbanden` stuurt door.
+**Lijsten** (`/lijsten`, in het menu **Alle lijsten**, `LINKS_PLACE`) is de ene plek waar al je lijsten staan, hoe
+ze samenhangen en waar je ze voor jezelf instelt. `PageHead` met in grijs "9 lijsten · 4 verbanden tussen lijsten · 1
+werkt niet voor iedereen", **Nieuwe lijst** (primary; op gsm in ⋯) en ⋯. Daaronder op tablet **Lijst | Kaart**
+(`Segmented`; de kaart met `?weergave=kaart`, of als er een lijst gekozen is) en het zoekveld, dan **Werkt niet voor
+iedereen**. Wat erna komt staat bij [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-listspage)
+(de lijst, de kaart, selecteren). `/verbanden` en `/lijsten/verbanden` sturen door.
 
-- **Overzicht**: zoeken (lijst of tag), de filterpil **Archief** als er gearchiveerde lijsten zijn, en een kaart per
-  tag (de kop linkt naar de tag; elke lijst één keer, bij haar eerste tag, zonder tag onderaan). Een rij: tegeltje,
-  naam, in grijs wat erin zit en wanneer laatst (gegevens uit `GET /insights/links`). Vanaf 1100px ook haar andere
-  tags, wie er nog bij is (letters, max. drie en "+2") en de filterpillen **Menu**, **Toevoegen** en **Meldingen**
-  (enkel als de lijst meldt; stil via een tag = uitgegrijsd). Smaller staat in de grijze regel enkel wat afwijkt
-  ("niet in het menu", "verborgen", "stil", "enkel kijken") en zitten de keuzes in ⋯.
-- **⋯ van een lijst**: Openen, Instellen (beheerder), Verbanden, en dan de schakelaars In het menu, Bij de + en
-  Meldingen (stil via een tag: een knop "<tag> weer laten melden").
-- **⋯ van de pagina**: Nieuwe lijst en **Volgorde** (een blad met een `sort-list` en Bewaren; je volgorde in het
-  menu en de keuzelijsten).
+- **Een rij** (`LinkList`, de lijst zelf): ▸ (klapt haar verbanden open; zonder verbanden een lege plek), tegeltje,
+  naam (**opent de lijst**) en in grijs haar verbanden, wat erin zit en wanneer laatst ("2 buiten · 7 weergaven · 7
+  dingen · laatst gisteren"). Rechts (`RowEnd`): vanaf 1100px haar andere tags, wie er nog bij is (letters, max. drie
+  en "+2") en de filterpillen **Menu**, **Toevoegen** en **Meldingen** (enkel als de lijst meldt; stil via een tag =
+  uitgegrijsd); altijd ⋯. Smaller staat in de grijze regel ook wat afwijkt ("niet in het menu", "verborgen", "stil",
+  "enkel kijken").
+- **⋯ van een lijst**: Openen, Instellen (beheerder), **Op de kaart** (tablet) of **Verbanden** (gsm: het eigen
+  scherm met het schema), en de schakelaars In het menu, Bij de + en Meldingen (stil via een tag: een knop "<tag>
+  weer laten melden").
+- **⋯ van de pagina**: Nieuwe lijst, **Volgorde** (een blad met een `sort-list` en Bewaren; je volgorde in het menu
+  en de keuzelijsten) en **Selecteren** (dan staat Klaar rechts boven de lijst).
+- De filterpil **Archief** (naast Groeperen en Sorteren) zet de gearchiveerde lijsten in een laatste groep.
 
 Per persoon kies je zo waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +** (`useListPlaces`,
-`ListPlaces.tsx`). Een hulplijst zoals Winkels verberg je; zoeken, Verbanden en de keuzelijsten tonen ze altijd, en
+`ListPlaces.tsx`). Een hulplijst zoals Winkels verberg je; zoeken, Lijsten en de keuzelijsten tonen ze altijd, en
 de lijst die je bekijkt staat altijd in het menu. Dezelfde twee schakelaars staan in ⋯ van de lijst zelf
 (`ListPlaceSwitches`, `.sheet-switches`). De structuur van een lijst (velden, soorten, mensen) blijft in Instellen.
 
@@ -464,8 +469,8 @@ de lijst die je bekijkt staat altijd in het menu. Dezelfde twee schakelaars staa
 
 Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam, in jouw volgorde (het eerste op `/`, de andere
 op `/bord/:id`). Er zijn geen vaste pagina's voor geld, voorraad, eten, te doen of de agenda: dat zijn borden die je
-zelf samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: eerst **Alle lijsten** (`LINKS_PLACE`, `/lijsten`: het overzicht
-met Verbanden als tab, geen bord), dan per tag een
+zelf samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: eerst **Alle lijsten** (`LINKS_PLACE`, `/lijsten`: je lijsten en hun
+verbanden, geen bord), dan per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
@@ -861,7 +866,7 @@ met de tijd die live meetelt (`font-variant-numeric: tabular-nums`) en **Stop** 
 die start en stopt toont dezelfde tijd op de knop. Een soort met een doel (16 u vasten) geeft een melding als dat doel
 bereikt is.
 
-### Verbanden: `LinkMapView`, `LinkSchema` (`LinkMap.tsx`), `LinkSearch`, `LinkDetail`, `LinkInline`, `LinkProblems`, `SelectionCard` (`LinkParts.tsx`), `LinkList` (`LinkList.tsx`) en `LinksPage`
+### Verbanden: `LinkMapView`, `LinkSchema` (`LinkMap.tsx`), `LinkSearch`, `LinkDetail`, `LinkInline`, `LinkProblems`, `SelectionCard` (`LinkParts.tsx`), `LinkList` (`LinkList.tsx`) en `ListsPage`
 
 Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.ts` (`GET /insights/links`): enkel
 wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
@@ -902,14 +907,13 @@ Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband d
   die het vaakst voorkomen als grijze chips ("Colruyt 8"), rechts hoe vaak en de dag van de laatste. Een tik kiest dat
   eind.
 - **De lijst** (`LinkList`): boven de lijst **Groeperen** (per tag, per soort verband, per weergave: `?groep=`),
-  **Sorteren** (eigen volgorde, naam, meeste verbanden, laatst gebruikt: `?sort=`), **Alles uitklappen**, **Alles
-  inklappen** en **Selecteren** (op gsm enkel iconen: één knop wisselt tussen uit- en inklappen). Een groep klapt
-  open en dicht met haar pijltje; dicht toont ze de namen van haar lijsten, of in rood voor wie iets niet werkt. Een
-  rij klapt open (`LinkInline`, op een zacht grijs vlak): Komt van en Gaat naar met één regel per ander eind (stukje
+  **Sorteren** (eigen volgorde, naam, meeste verbanden, laatst gebruikt: `?sort=`), **Archief**, **Alles uitklappen**
+  en **Alles inklappen** (op gsm één icoon dat wisselt); Selecteren zit in ⋯ van de pagina. Een groep klapt
+  open en dicht met haar pijltje; dicht toont ze de namen van haar lijsten, of in rood voor wie iets niet werkt. Het
+  pijltje van een rij klapt haar open (`LinkInline`, op een zacht grijs vlak; de naam opent de lijst): Komt van en Gaat naar met één regel per ander eind (stukje
   lijn, naam, zin, chips, hoe vaak, laatst) en de weergaven als chips; een tik springt naar dat eind (zijn groep en rij
-  gaan open, de lijst schuift ernaartoe). Rechts staat "laatst …"; met de muis erboven, de focus erin of open worden
-  dat **Op de kaart** en **Openen**, op dezelfde plaats (niets verspringt). Op gsm staat rechts een pijltje naar het
-  scherm van die lijst. Lijsten zonder verbanden staan er zachter bij, zonder pijltje. In de groepering per tag komen
+  gaan open, de lijst schuift ernaartoe). Rechts staat wat [Lijsten](#lijsten-listspage) erbij zet (tags, mensen, pillen, ⋯). Lijsten zonder verbanden
+  hebben geen pijltje. In de groepering per tag komen
   de weergaven als laatste groep.
 - **Selecteren**: vinkjes voor elke lijst en elke groep (een groep met een deel gekozen toont een streepje); een
   gekozen rij wordt zacht geel. Je keuze staat in het adres (`?keuze=a,b`). Ernaast (breed) of erboven (smaller dan
@@ -1055,9 +1059,8 @@ naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, A
 op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst
 of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI** en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
 
-**Verbanden** (`/lijsten/verbanden`, een tab van [Lijsten](#lijsten-listspage), ook via ⋯ → Verbanden van een lijst):
-`ListsHead`, de filters, Werkt niet voor iedereen,
-Kaart of Lijst, en de kaart van wat je kiest; zie [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-linkspage).
+**Lijsten** (`/lijsten`, ook via ⋯ → Verbanden van een lijst): zie [Lijsten](#lijsten-listspage); `PageHead`, de filters, Werkt niet voor iedereen,
+Kaart of Lijst, en de kaart van wat je kiest; zie [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-listspage).
 
 **Snel naar een formulier** (`QuickLinks.tsx`): de **QR-sticker** (`/lijsten/:id/sticker`, Afdrukken), een eigen app
 (`/app/:id`: als app meteen naar haar bestemming, in de browser `HomeScreenHint`) en **Gedeeld** (`/delen`: een

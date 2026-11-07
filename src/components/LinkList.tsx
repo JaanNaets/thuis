@@ -1,7 +1,8 @@
-// Verbanden als lijst (zie STIJLBOEK.md → Verbanden): groepen die je open- en dichtklapt, per lijst een rij die
-// openklapt met wat ze binnenkrijgt en doorgeeft, en een selectiemodus met vinkjes. Op gsm de enige weergave.
+// Je lijsten als lijst (zie STIJLBOEK.md → Lijsten): groepen die je open- en dichtklapt, per lijst een rij (de naam
+// opent de lijst, ▸ klapt open met wat ze binnenkrijgt en doorgeeft, rechts wat de pagina erbij zet: pillen, ⋯), en
+// een selectiemodus met vinkjes. Op gsm de enige weergave; op tablet is de kaart de andere.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { linkSummary, viewOf, type Link as LinkDef, type LinkHit, type LinksResponse } from "../../shared/links";
 import type { ListNode } from "../../shared/model";
 import { Link } from "../router";
@@ -15,6 +16,8 @@ export type ListGroup = {
   name: string;
   tone?: string | null;
   ids: string[];
+  /** Waar de groep naartoe gaat (de pagina van een tag). */
+  to?: string;
 };
 
 /** Een vinkje dat ook "een deel" kan tonen (een groep waarvan sommige lijsten gekozen zijn). */
@@ -38,12 +41,11 @@ export function LinkList({
   selecting,
   chosen,
   onChoose,
-  wide,
-  onMap,
-  onDetail,
   onJump,
   hits,
   query,
+  end,
+  states,
 }: {
   groups: ListGroup[];
   data: LinksResponse;
@@ -58,13 +60,14 @@ export function LinkList({
   selecting: boolean;
   chosen: string[];
   onChoose: (ids: string[], on: boolean) => void;
-  wide: boolean;
-  onMap: (id: string) => void;
-  onDetail: (id: string) => void;
   onJump: (id: string) => void;
   /** Tijdens zoeken: waarom een rij er staat. */
   hits: LinkHit[];
   query: string;
+  /** Wat rechts in de rij van een lijst staat (tags, mensen, pillen, ⋯); `group`: de groep waarin ze staat. */
+  end?: (id: string, group: ListGroup) => ReactNode;
+  /** Een toestand in de grijze regel ("niet in het menu"); op een brede tablet tonen de pillen dat. */
+  states?: (id: string) => string[];
 }) {
   const picked = new Set(chosen);
   const name = (id: string) => endOf(id, byId)?.name ?? "";
@@ -94,6 +97,11 @@ export function LinkList({
                     <span className="lm-group-sum">{g.ids.map(name).join(" · ")}</span>
                   ))}
               </button>
+              {g.to && (
+                <Link to={g.to} className="btn btn-ghost btn-icon btn-sm" aria-label={`Tag ${g.name}`}>
+                  <Icon name="tag" size={15} />
+                </Link>
+              )}
             </div>
             {isOpen && (
               <ul className="lm-rows">
@@ -109,12 +117,11 @@ export function LinkList({
                     selecting={selecting}
                     on={picked.has(id)}
                     onChoose={onChoose}
-                    wide={wide}
-                    onMap={onMap}
-                    onDetail={onDetail}
                     onJump={onJump}
                     hit={query ? hits.find((h) => h.nodes.includes(id) && h.group !== "lijsten") : undefined}
                     query={query}
+                    end={end && !viewOf(id) ? end(id, g) : null}
+                    states={states && !viewOf(id) ? states(id) : []}
                   />
                 ))}
               </ul>
@@ -136,12 +143,11 @@ function LinkRow({
   selecting,
   on,
   onChoose,
-  wide,
-  onMap,
-  onDetail,
   onJump,
   hit,
   query,
+  end,
+  states,
 }: {
   id: string;
   data: LinksResponse;
@@ -152,46 +158,47 @@ function LinkRow({
   selecting: boolean;
   on: boolean;
   onChoose: (ids: string[], on: boolean) => void;
-  wide: boolean;
-  onMap: (id: string) => void;
-  onDetail: (id: string) => void;
   onJump: (id: string) => void;
   hit: LinkHit | undefined;
   query: string;
+  end: ReactNode;
+  states: string[];
 }) {
-  const end = endOf(id, byId);
-  if (!end) return null;
+  const node = endOf(id, byId);
+  if (!node) return null;
   const view = viewOf(id);
   const list = byId.get(id);
   const has = links.some((l) => l.from === id || l.to === id) || (data.own[id]?.length ?? 0) > 0;
   const sum = linkSummary(links, id);
   const lists = view ? new Set(links.flatMap((l) => (l.from === id ? [l.to] : l.to === id ? [l.from] : []))).size : 0;
-  const summary = has
-    ? [
-        view && plural(lists, "lijst", "lijsten"),
-        sum.in && `${sum.in} binnen`,
-        sum.out && `${sum.out} buiten`,
-        sum.views && plural(sum.views, "weergave", "weergaven"),
-        list && listMeta(list, data.counts),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : "Geen verbanden";
-  const meta = hit ? <Mark text={`${hit.title} · ${hit.detail}`.replace(/ · $/, "")} query={query} /> : summary;
-  const last = lastText(data.counts[id]?.last);
-  const to = view ? null : `/lijsten/${id}`;
+  const summary = [
+    view && plural(lists, "lijst", "lijsten"),
+    sum.in && `${sum.in} binnen`,
+    sum.out && `${sum.out} buiten`,
+    sum.views && plural(sum.views, "weergave", "weergaven"),
+    list && listMeta(list, data.counts),
+    lastText(data.counts[id]?.last),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const media = (
-    <span className={`row-media${end.tone ? ` tone-${end.tone}` : ""}`}>
-      <Icon name={end.icon} size={16} />
+    <span className={`row-media${node.tone ? ` tone-${node.tone}` : ""}`}>
+      <Icon name={node.icon} size={16} />
     </span>
   );
   const main = (
     <span className="row-main">
       <span className="row-title">
-        <Mark text={end.name} query={query} />
+        <Mark text={node.name} query={query} />
       </span>
       <span className="row-meta">
-        <span>{meta}</span>
+        <span>{hit ? <Mark text={`${hit.title} · ${hit.detail}`.replace(/ · $/, "")} query={query} /> : summary}</span>
+        {!hit &&
+          states.map((s) => (
+            <span key={s} className="lo-state">
+              {s}
+            </span>
+          ))}
       </span>
     </span>
   );
@@ -209,44 +216,27 @@ function LinkRow({
   }
 
   return (
-    <li id={`lm-row-${id}`} className={`lm-row${expanded ? " open" : ""}${has ? "" : " lm-row-none"}`}>
+    <li id={`lm-row-${id}`} className={`lm-row${expanded ? " open" : ""}`}>
       <div className="lm-row-head">
         {has ? (
+          <button type="button" className="lm-row-toggle" aria-expanded={expanded} aria-label={`Verbanden van ${node.name}`} onClick={() => onToggle(id)}>
+            <Icon name={expanded ? "down" : "next"} size={16} />
+          </button>
+        ) : (
+          <span className="lm-row-toggle" aria-hidden="true" />
+        )}
+        {view ? (
           <button type="button" className="lm-row-main" aria-expanded={expanded} onClick={() => onToggle(id)}>
-            <Icon name={expanded ? "down" : "next"} size={16} className="lm-chev" />
             {media}
             {main}
           </button>
         ) : (
-          <div className="lm-row-main">
-            <span className="lm-chev-space" />
+          <Link to={`/lijsten/${id}`} className="lm-row-main">
             {media}
             {main}
-          </div>
+          </Link>
         )}
-        <span className="lm-row-end">
-          {wide && last && <span className="lm-row-last">{last}</span>}
-          <span className="lm-row-actions">
-            {wide ? (
-              <>
-                {!view && (
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMap(id)}>
-                    Op de kaart
-                  </button>
-                )}
-                {to && (
-                  <Link to={to} className="btn btn-outline btn-sm">
-                    Openen
-                  </Link>
-                )}
-              </>
-            ) : (
-              <button type="button" className="btn btn-ghost btn-icon" aria-label={`Meer over ${end.name}`} onClick={() => onDetail(id)}>
-                <Icon name="next" size={16} />
-              </button>
-            )}
-          </span>
-        </span>
+        {end && <span className="lm-row-end">{end}</span>}
       </div>
       {expanded && <LinkInline id={id} data={data} links={links} byId={byId} onJump={onJump} />}
     </li>

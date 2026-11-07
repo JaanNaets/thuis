@@ -5912,7 +5912,7 @@ dialog.palette[open]::backdrop {
 }
 
 
-/* ---------- verbanden (LinksPage.tsx, LinkMap.tsx, LinkParts.tsx, LinkList.tsx) ----------
+/* ---------- verbanden (ListsPage.tsx, LinkMap.tsx, LinkParts.tsx, LinkList.tsx) ----------
  * Een metrokaart: per tag een zachte grijze kolom, de lijsten als stations, de verbanden tussen lijsten als sporen
  * (eerst verticaal bij de lijst waar ze vertrekken, dan horizontaal naar hun doel, een eigen baan per soort). Logboek
  * doorlopend in de eerste grafiekkleur, verwijzingen in streepjes in de tweede, weergaven gestippeld in de derde, zodat
@@ -6661,10 +6661,41 @@ label.lm-row-main {
   cursor: pointer;
 }
 
+a.lm-row-main {
+  cursor: pointer;
+}
+
 @media (hover: hover) {
-  .lm-row:not(.open, .chosen) button.lm-row-main:hover,
+  .lm-row:not(.open, .chosen) :is(a, button).lm-row-main:hover,
   .lm-row:not(.chosen) label.lm-row-main:hover {
     background: var(--hover);
+  }
+}
+
+/* ▸ voor een rij: klapt haar verbanden open (de naam ernaast opent de lijst). Zonder verbanden: een lege plek. */
+.lm-row-toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+span.lm-row-toggle {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  button.lm-row-toggle:hover {
+    background: var(--hover);
+    color: var(--foreground);
   }
 }
 
@@ -6693,48 +6724,16 @@ label.lm-row-main {
   opacity: 0.7;
 }
 
-/* Rechts: wanneer laatst, en op tablet (met de muis erboven, de focus erin of open) Op de kaart en Openen op dezelfde plaats. */
+/* Rechts: wat de pagina erbij zet (op een brede tablet tags, mensen en pillen; altijd ⋯). */
 .lm-row-end {
-  display: grid;
+  display: flex;
   flex: none;
   align-items: center;
-  justify-items: end;
-}
-
-.lm-row-end > * {
-  grid-area: 1 / 1;
-}
-
-.lm-row-last {
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-  white-space: nowrap;
-  transition: opacity var(--dur);
-}
-
-.lm-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-@media (min-width: 768px) {
-  .lm-row-actions {
-    opacity: 0;
-    transition: opacity var(--dur);
-  }
-
-  .lm-row:is(:hover, :focus-within, .open) .lm-row-actions {
-    opacity: 1;
-  }
-
-  .lm-row:is(:hover, :focus-within, .open) .lm-row-last {
-    opacity: 0;
-  }
+  gap: 10px;
 }
 
 .lm-inline {
-  padding: 0 12px 12px 84px;
+  padding: 0 12px 12px 92px;
 }
 
 .lm-inline > .lm-cap {
@@ -8589,38 +8588,13 @@ dialog.sheet.builder-sheet {
   padding: 0 10px;
 }
 
-/* ---------- Lijsten (/lijsten): alles op één plek, per tag ---------- */
-.lo-groups {
-  display: grid;
-  gap: 16px;
-}
-
-.lo-group-head {
-  display: flex;
-  align-items: center;
-  padding: 14px 18px 4px;
-}
-
-.lo-group-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-soft);
-}
-
-a.lo-group-title:hover {
-  color: var(--foreground);
-}
-
-.lo-group-chevron {
-  color: var(--faint);
-}
-
-.lo-row > .row-link {
+/* ---------- Lijsten (/lijsten): pillen, mensen en tags in de rij ---------- */
+.lm-row-head > .lm-row-main {
   contain: inline-size;
+}
+
+.lo-state::before {
+  content: "· ";
 }
 
 /* Wat enkel op een brede tablet in de rij past (andere tags, mensen, pillen); anders staat het in ⋯. */

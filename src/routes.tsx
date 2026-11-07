@@ -1,6 +1,5 @@
 import { redirect, type RouteObject } from "react-router";
 import { App } from "./App";
-import { LinksPage } from "./pages/LinksPage";
 import { EventFormPage } from "./pages/EventForm";
 import { EventPage } from "./pages/EventPage";
 import { Home } from "./pages/Home";
@@ -25,7 +24,8 @@ export const routes: RouteObject[] = [
       { path: "bord/:boardId", element: <Home /> },
       { path: "lijsten", element: <ListsPage /> },
       { path: "lijsten/nieuw", element: <ListNew /> },
-      { path: "lijsten/verbanden", element: <LinksPage /> },
+      // Verbanden staat nu op Lijsten zelf (Lijst of Kaart); de oude adressen sturen door.
+      { path: "lijsten/verbanden", loader: ({ request }) => redirect(`/lijsten${new URL(request.url).search}`) },
       { path: "lijsten/:id", element: <ListPage /> },
       { path: "lijsten/:id/instellingen", element: <ListSettings /> },
       { path: "lijsten/:id/nieuw", element: <ThingFormPage /> },
@@ -37,8 +37,7 @@ export const routes: RouteObject[] = [
       { path: "gebeurtenissen/:eventId", element: <EventPage /> },
       { path: "gebeurtenissen/:eventId/bewerken", element: <EventFormPage /> },
       { path: "tags/:tagId", element: <TagPage /> },
-      // Het oude adres van Verbanden (bladwijzers, oude meldingen).
-      { path: "verbanden", loader: ({ request }) => redirect(`/lijsten/verbanden${new URL(request.url).search}`) },
+      { path: "verbanden", loader: ({ request }) => redirect(`/lijsten${new URL(request.url).search}`) },
       { path: "delen", element: <SharedPage /> },
       { path: "app/:appId", element: <AppPage /> },
       { path: "ik", element: <MePage /> },
