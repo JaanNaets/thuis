@@ -152,7 +152,7 @@ Venster gemist? Je vindt de waarden ook terug:
 Open `https://thuis.<jouw-subdomein>.workers.dev`. Je krijgt het loginscherm van Cloudflare, vult je
 e-mailadres in, krijgt een code per mail, en komt in de app. Bij **Jouw gegevens** (je letter rechtsboven) staat waarmee je aangemeld bent.
 
-Wie de eerste keer aanmeldt, ziet nog geen lijsten. Maak er een (bv. "Voorraad" met het sjabloon Voorraad en de tag
+Wie de eerste keer aanmeldt, ziet nog geen lijsten. Maak er een (bv. "Uitgaven" met het sjabloon Uitgaven en de tag
 Huis), en voeg de anderen toe bij **Instellen → Mensen** met het e-mailadres waarmee ze aanmelden, of met een regel op
 de tag (bij de tag: Altijd erbij).
 
@@ -202,9 +202,8 @@ In kioskmodus:
 ### Lijsten, dingen en het logboek
 
 Een lijst heeft dingen (allemaal met dezelfde velden) en een logboek. Een lijst zonder dingen kan ook: dan is ze
-enkel een logboek (Jaan: eten, gewicht, werk, dokter). Een nieuwe lijst begin je uit een sjabloon (Voorraad, Wijnen,
-Wagens, Bezit, Afspraken, Winkels, Pellets, Persoonlijk, Taken, Recepten) of uit een bestand dat iemand deelde
-(Instellen → Als sjabloon).
+enkel een logboek (Jaan: eten en gewicht). Een nieuwe lijst begin je leeg, uit een sjabloon (Uitgaven zoals
+Splitwise, Dieet zoals Yazio) of uit een bestand dat iemand deelde (Instellen → Als sjabloon).
 
 Een gebeurtenis heeft een soort: een van de zes basissoorten, of een eigen soort van de lijst met eigen velden
 (Tankbeurt met liter en km, Gegeten met kcal). Haar lijnen wijzen naar dingen, ook in andere lijsten:

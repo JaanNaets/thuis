@@ -12,7 +12,7 @@ import { useNavigate } from "../router";
 import { useSession } from "../session";
 
 /**
- * Een nieuwe lijst: kies een sjabloon (of leeg, of enkel een logboek), een naam en tags. Met een tag die een regel
+ * Een nieuwe lijst: kies een sjabloon (een lege lijst, een sjabloon of uit een bestand), een naam en tags. Met een tag die een regel
  * heeft (Jana altijd bij Huis), kan die persoon er meteen bij. `?tag=`: die tag staat al aan.
  */
 export function ListNew() {
@@ -52,6 +52,7 @@ export function ListNew() {
         fields: template.fields,
         stock: template.stock ?? null,
         kinds: template.kinds ?? [],
+        notify: template.notify ?? null,
         tag_ids: tagIds,
         new_tags: newTags,
       });
@@ -78,7 +79,7 @@ export function ListNew() {
                   <Icon name={t.icon as IconName} size={18} />
                 </span>
                 <span className="template-text">
-                  <span className="template-title">{t.name}</span>
+                  <span className="template-title">{t.label ?? t.name}</span>
                 </span>
               </button>
             ))}

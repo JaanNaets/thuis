@@ -580,15 +580,12 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
   lijst toont het nieuwste eerst.
 - Een nieuwe lijst begint met een **sjabloon** (`TEMPLATES` in `shared/catalog.ts`, `.template-picker`): velden,
-  voorraad en eigen soorten. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen wordt het het witte vlak
-  met een zwart icoontegeltje. Daarna kan je alles aanpassen. Een nieuwe use case begint best als sjabloon, gebouwd
-  uit de bouwstenen (velden, formule, totalen): **Voeding** is Eten (kcal en macro's per 100 g × Hoeveel als
-  formule, of de kcal van een Gerecht met `of(…)`), Gerechten (de kcal uit hun Ingrediënten), Gewicht en Water, met
-  totalen "enkel van jou"; **Gedeelde uitgaven** is Betaald door, een Verdeling en een totaal dat verrekent. Geen
-  eigen code. Een veld in een sjabloon kan een eenvoudigere berekening meekrijgen (`alt`) voor als een lijst los
-  wordt toegevoegd (Eten zonder Gerechten: de kcal enkel uit kcal per 100 g). Losse
-  lijsten (Onderhoud, Abonnementen, Recepten, Reizen, Contacten, Taken) staan in `LIST_TEMPLATES`; je voegt ze toe
-  bij **Instellen → Lijsten → Uit sjabloon**.
+  voorraad, eigen soorten en wie een melding krijgt. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen wordt
+  het het witte vlak met een zwart icoontegeltje. Er zijn er zo weinig mogelijk: **Lege lijst** (dingen met een
+  notitieveld), **Uitgaven** (zoals Splitwise: de soort Uitgave, gelijk verdeeld, een melding aan wie in de verdeling
+  staat), **Dieet** (zoals Yazio: Gegeten met kcal en Gewicht) en als laatste tegel **Uit bestand**. Elke lijst heeft
+  een logboek, dus geen sjabloon "Logboek". Alles daarbovenop voeg je zelf toe (Instellen); een sjabloon voor één
+  geval komt er niet, dat wordt een bestand dat iemand deelt.
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
   item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
   (`datalist`); kies je er een, dan vult de app de rest in zoals de vorige keer. Een datum die met vandaag begint,
@@ -689,7 +686,8 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
 ### Sjabloon delen (`shared/template-file.ts`)
 
 Instellen → Algemeen → **Als sjabloon** (`btn-ghost`, icoon download) bewaart de opbouw van de lijst als bestand:
-naam, hoe één ding heet, icoon, velden, voorraad en eigen soorten, zonder dingen, logboek of mensen. Bij een nieuwe
+naam, hoe één ding heet, icoon, velden, voorraad, eigen soorten en wie een melding krijgt, zonder dingen, logboek of
+mensen. Bij een nieuwe
 lijst is **Uit bestand** de laatste tegel van de sjablonen; het gekozen bestand staat daarna als eerste tegel.
 
 ### Volgorde: `useSortable` (`Sortable.tsx`)

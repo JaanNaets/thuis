@@ -21,6 +21,11 @@ test("een lijst als sjabloon: zonder verwijzingen naar elders, de lijst zelf wor
   assert.deepEqual(back.stock, { unit: "eenheid", min: "minimum" });
   assert.deepEqual(back.kinds?.map((k) => k.name), ["Gegeten"]);
   assert.equal(withSelf(back.fields, "NIEUW").find((f) => f.key === "zoals")?.ref_type, "NIEUW");
+  assert.equal(back.notify, undefined, "zonder melding");
+  // Wie een melding krijgt, gaat mee.
+  const shared = templateFile({ id: "L2", name: "Uitgaven", one: null, icon: "wallet", fields: [], stock: null, notify: { to: "people" } }, []);
+  assert.deepEqual(parseTemplateFile(JSON.parse(JSON.stringify(shared))).notify, { to: "people" });
+  assert.equal(parseTemplateFile({ ...shared, notify: { to: "raar" } }).notify, undefined);
 });
 
 test("wat geen sjabloon is, of niet klopt", () => {

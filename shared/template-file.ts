@@ -1,9 +1,10 @@
 // Een lijst als sjabloon delen (Instellen → Algemeen → Als sjabloon): een bestand met de opbouw van de lijst (naam, hoe
-// één ding heet, icoon, velden, voorraad en eigen soorten), zonder dingen, logboek, mensen, tags of weergaven. Een
+// één ding heet, icoon, velden, voorraad, eigen soorten en wie een melding krijgt), zonder dingen, logboek, mensen, tags of weergaven. Een
 // verwijzing naar de lijst zelf wordt "self" (bij het maken weer de nieuwe lijst); een verwijzing naar een andere lijst
 // betekent elders niets en valt weg. Wat binnenkomt, gaat door `parseTemplateFile` en daarna door de gewone
 // controle van POST /lists.
 
+import { cleanNotify } from "./alerts.ts";
 import type { ListTemplate, KindTemplate } from "./catalog.ts";
 import type { FieldDef } from "./fields.ts";
 import { isIconKey } from "./icons.ts";
@@ -25,6 +26,8 @@ export type TemplateFile = {
   fields: FieldDef[];
   stock: unknown;
   kinds: KindTemplate[];
+  /** Wie een melding krijgt (sinds deze versie; ontbreekt het, dan geen). */
+  notify?: unknown;
 };
 
 const REF_TYPES = new Set(["item", "items", "amounts"]);
@@ -40,7 +43,7 @@ function refsTo(fields: FieldDef[], from: string, to: string): FieldDef[] {
 }
 
 /** Het bestand voor een lijst en haar eigen soorten. */
-export function templateFile(list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown }, kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null }[]): TemplateFile {
+export function templateFile(list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown }, kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null }[]): TemplateFile {
   return {
     kind: TEMPLATE_KIND,
     version: TEMPLATE_VERSION,
@@ -50,6 +53,7 @@ export function templateFile(list: { id: string; name: string; one: string | nul
     fields: refsTo(list.fields, list.id, SELF),
     stock: list.stock,
     kinds: kinds.map((k) => ({ base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}) })),
+    ...(list.notify ? { notify: list.notify } : {}),
   };
 }
 
@@ -80,6 +84,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
   }
   const name = typeof t.name === "string" && t.name.trim() ? t.name.trim().slice(0, 60) : "Lijst";
   const stock = cleanStock(t.stock, fields);
+  const notify = cleanNotify(t.notify);
   return {
     key: "bestand",
     name,
@@ -88,6 +93,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
     fields,
     ...(stock ? { stock } : {}),
     kinds,
+    ...(notify ? { notify } : {}),
   };
 }
 

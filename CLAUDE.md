@@ -129,7 +129,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
   nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
   waarom niet; `test/backup.test.ts` leest de migraties na).
-- **Sjabloon delen** (`shared/template-file.ts`): de opbouw van een lijst, zonder dingen of mensen.
+- **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise) en Dieet (Yazio), zo eenvoudig mogelijk;
+  geen sjabloon per geval. **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst (ook
+  wie een melding krijgt), zonder dingen of mensen.
 - De oude tabellen (projecten, items, …) staan er nog maar worden niet meer gebruikt; ze gaan weg in een latere
   migratie.
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
