@@ -99,7 +99,10 @@ listReceipt.post("/:id/events/read-receipt", async (c) => {
     console.error("AI kon het kasticket niet lezen", err);
     return c.json({ ...none, message: "Automatisch lezen lukte niet." });
   }
-  return c.json(await matchReceipt(db, me, parsed));
+  const read = await matchReceipt(db, me, parsed);
+  // Geen lijn, winkel of totaal: dit is geen kasticket (een foto van een gerecht, …). Dan verandert het formulier niets.
+  if (!read.lines.length && !read.store_text && !read.total) return c.json({ ...read, message: "Geen kasticket herkend op deze foto. Vul het zelf in." });
+  return c.json(read);
 });
 
 /** Wat de AI las, gekoppeld aan wat de lezer ziet: producten uit een voorraad, de winkel uit de rest. */
