@@ -7,6 +7,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ACTION_DOES,
+  canPlan,
   counts,
   DEFAULT_LIMIT,
   overTime,
@@ -37,7 +38,7 @@ import { kindOfKey, NAME, OPS, OPS_FOR, PERIODS, WEEKDAYS, type Condition, type 
 import { useApi } from "../api";
 import { useSession } from "../session";
 import { actionKind, ActionTile } from "./ActionBlock";
-import { CardHead } from "./Controls";
+import { CardHead, Switch } from "./Controls";
 import { Icon, type IconName } from "./Icon";
 import { ViewBody, viewUrl } from "./ViewBlock";
 
@@ -733,13 +734,15 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
           <span className="label">Een tik</span>
           <div className="does-grid">
             {(Object.keys(ACTION_DOES) as ActionDoes[]).map((d) => (
-              <button key={d} type="button" className="show-tile does-tile" aria-pressed={draft.does === d} disabled={d === "timer" && kind?.base !== "activiteit"} onClick={() => set({ does: d })}>
+              <button key={d} type="button" className="show-tile does-tile" aria-pressed={draft.does === d} disabled={d === "timer" && kind?.base !== "activiteit"} onClick={() => set({ does: d, planned: canPlan(d) ? draft.planned : undefined })}>
                 <Icon name={DOES_ICONS[d]} size={16} />
                 {ACTION_DOES[d]}
               </button>
             ))}
           </div>
         </div>
+
+        {canPlan(draft.does) && <Switch label="Gepland" checked={draft.planned === true} onChange={(on) => set({ planned: on ? true : undefined })} />}
 
         {kind && (
           <div className="field">

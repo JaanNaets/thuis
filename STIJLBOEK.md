@@ -974,8 +974,10 @@ ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en
   weergave die verbergt als er niets is, staat er dan niet.
 - **Een actie** (`ActionBuilder`): bovenaan de knop zoals hij wordt (`.builder-preview-tile`), dan Lijst, Soort (chips),
   **Een tik** (`.does-grid`, vier keuzes: Opent het formulier · Bewaart meteen · Telt er een bij · Start en stopt, die
-  laatste enkel bij een activiteit), **Vooraf ingevuld** (`.prefill`: de omschrijving en de velden van de soort, het
-  formulier krijgt ze via `?vooraf=`) en **Naam op de knop**.
+  laatste enkel bij een activiteit), bij formulier en bewaren de schakelaar **Gepland** (`Switch`: het formulier opent
+  met Gepland aan, `?gepland=1`, of bewaren zet het gepland: een boodschap, iets te doen; toast "… gepland"),
+  **Vooraf ingevuld** (`.prefill`: de omschrijving en de velden van de soort, het formulier krijgt ze via `?vooraf=`)
+  en **Naam op de knop**.
 - **Een actie op het bord** (`ActionTile`, `.quick-tile`): geen kaart maar een knop van 56px, het icoon van de soort
   op de tint van de lijst, de naam en rechts wat een tik doet (+ formulier of tellen, ✓ bewaren, klok timer).
   Bewaren en tellen tonen een toast met **Ongedaan maken**; tellen toont hoeveel vandaag (`.quick-tile-count`), een

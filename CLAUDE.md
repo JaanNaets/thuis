@@ -18,6 +18,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 
 ## Code
 
+- **Bouw altijd generiek.** Een vraag voor één geval (boodschappen, de wijnkelder, Jana) wordt een eigenschap die voor
+  elke lijst, soort, gebeurtenis of blok werkt (zoals `planned` op een actie, niet een knop Boodschap). Het geval
+  zelf is dan instellen of gegevens, geen code. Nooit een lijst, soort, persoon of id in de code.
 - Navigeren altijd met `Link`, `NavLink` en `useNavigate` uit `src/router.tsx` (vloeiende schermwissels), nooit
   rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
 - Bedragen in cent, datums als `YYYY-MM-DD` (een tijdstip `YYYY-MM-DDTHH:MM`, tijd in België). Opmaak via `src/format.ts`.
@@ -111,7 +114,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   verbergen als er niets is; de uitkomst kleuren). De server rekent ze uit met de rechten van de lezer
   (`GET /insights/view`, `evaluateView`); met een periode blader je (`viewSpan`, `?periode=`), een agenda per maand.
   Een **actie** logt: soort, vooraf ingevulde velden en wat een tik doet
-  (formulier, meteen bewaren met Ongedaan maken, tellen, timer). Geen vaste blokken of voorbeelden; oude blokken
+  (formulier, meteen bewaren met Ongedaan maken, tellen, timer); formulier en bewaren kunnen ook gepland (`planned`,
+  `canPlan`: een boodschap, iets te doen). Geen vaste blokken of voorbeelden; oude blokken
   (todo, money, stock, quick, chart, …) worden bij het lezen een gelijke zin (`upgradeBlock`). Automatisaties (iets
   dat zelf handelt) zijn voor later. Opstarten blijft licht: elk blok haalt zijn eigen inhoud.
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt

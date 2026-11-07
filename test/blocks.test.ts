@@ -78,6 +78,12 @@ test("een weergave nakijken: wat niet klopt valt weg, de dingen vragen een lijst
   const a = cleanActionBlock({ list: "L1", type: "k1", does: "save", values: { ml: 250, name: "Glas water", "x y": 1, obj: { a: 1 } } })!;
   assert.deepEqual(a, { kind: "action", name: "", list: "L1", type: "k1", does: "save", values: { ml: 250, name: "Glas water" } });
   assert.equal(cleanActionBlock({ type: "k1" }), null);
+  // Gepland: bij formulier en bewaren (een boodschap, iets te doen), niet bij tellen of een timer.
+  assert.equal(cleanActionBlock({ list: "L1", type: "aankoop", does: "form", planned: true })?.planned, true);
+  assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "save", planned: true })?.planned, true);
+  assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "count", planned: true })?.planned, undefined);
+  assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "timer", planned: true })?.planned, undefined);
+  assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "form", planned: "ja" })?.planned, undefined);
 });
 
 test("oude blokken worden de gelijkwaardige weergave of actie", () => {

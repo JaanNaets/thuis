@@ -1,6 +1,7 @@
 // Een actie op het overzicht (zie shared/blocks.ts): een knop die logt. Acties na elkaar staan naast elkaar (twee per
 // rij op gsm). Een tik opent het formulier met wat vooraf ingevuld is, bewaart meteen (met Ongedaan maken), telt er
-// een bij (met hoeveel vandaag) of start en stopt een activiteit (met hoe lang ze al loopt).
+// een bij (met hoeveel vandaag) of start en stopt een activiteit (met hoe lang ze al loopt). Een geplande actie
+// (`planned`) opent het formulier met Gepland aan of bewaart meteen gepland: een boodschap, iets te doen.
 
 import { useEffect, useState } from "react";
 import type { ActionBlock, ViewBlock, ViewResponse } from "../../shared/blocks";
@@ -34,10 +35,11 @@ export function actionKind(block: Pick<ActionBlock, "type" | "list">, detail: Li
 }
 
 /** Wat een actie bewaart: de soort, nu, en wat vooraf ingevuld is (de omschrijving apart). */
-function eventOf(kind: KindInfo, values: Attributes, running = false) {
+function eventOf(kind: KindInfo, values: Attributes, running = false, planned = false) {
   const { name, ...data } = values as Attributes & { name?: string };
   const now = brusselsNow();
-  return { kind: kind.id, name: typeof name === "string" ? name : "", status: "gebeurd", at: running || kind.base === "activiteit" ? now : now.slice(0, 10), data, lines: [] };
+  const at = running || (kind.base === "activiteit" && !planned) ? now : now.slice(0, 10);
+  return { kind: kind.id, name: typeof name === "string" ? name : "", status: planned ? "gepland" : "gebeurd", at, data, lines: [] };
 }
 
 /** Vandaag in deze lijst met deze soort: hoeveel keer (teller), of wat nu loopt (timer). */
@@ -78,7 +80,7 @@ export function ActionTile({ block, preview = false }: { block: ActionBlock; pre
   );
   if (block.does === "form" || (block.does === "timer" && kind.base !== "activiteit")) {
     const values = Object.keys(block.values).length ? `&vooraf=${encodeURIComponent(JSON.stringify(block.values))}` : "";
-    const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${values}`;
+    const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${block.planned ? "&gepland=1" : ""}${values}`;
     const inner = (
       <>
         {media}
@@ -89,7 +91,7 @@ export function ActionTile({ block, preview = false }: { block: ActionBlock; pre
     return preview ? (
       <span className="quick-tile">{inner}</span>
     ) : (
-      <Link to={to} className="quick-tile" aria-label={`${label} loggen`}>
+      <Link to={to} className="quick-tile" aria-label={`${label} ${block.planned ? "plannen" : "loggen"}`}>
         {inner}
       </Link>
     );
@@ -120,8 +122,9 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
         await api.post(`/events/${running.id}/stop`, {});
         toast(`${label} gestopt`);
       } else {
-        const { id } = await api.post<{ id: string }>(`/lists/${block.list}/events`, eventOf(kind, block.values, timer));
-        toast(timer ? `${label} gestart` : `${label} bewaard`, "check", {
+        const planned = block.planned === true && !timer;
+        const { id } = await api.post<{ id: string }>(`/lists/${block.list}/events`, eventOf(kind, block.values, timer, planned));
+        toast(timer ? `${label} gestart` : planned ? `${label} gepland` : `${label} bewaard`, "check", {
           label: "Ongedaan maken",
           run: async () => {
             await api.delete(`/events/${id}`);
@@ -149,7 +152,7 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
     <button
       type="button"
       className={`quick-tile${running ? " is-running" : ""}`}
-      aria-label={running ? `${label} stoppen` : timer ? `${label} starten` : `${label} bewaren`}
+      aria-label={running ? `${label} stoppen` : timer ? `${label} starten` : block.planned ? `${label} plannen` : `${label} bewaren`}
       aria-busy={busy}
       onClick={run}
     >

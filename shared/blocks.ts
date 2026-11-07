@@ -209,7 +209,12 @@ export type ActionBlock = {
   does: ActionDoes;
   /** Vooraf ingevuld: velden van de soort (en `name`, de omschrijving). */
   values: Attributes;
+  /** Gepland in plaats van gebeurd (een boodschap, iets te doen): enkel bij formulier en bewaren (`canPlan`). */
+  planned?: true;
 };
+
+/** Wat een tik doet en ook gepland kan: het formulier openen of meteen bewaren (tellen en een timer gaan over nu). */
+export const canPlan = (does: ActionDoes) => does === "form" || does === "save";
 
 export const MAX_LIMIT = 50;
 export const DEFAULT_LIMIT = 6;
@@ -316,7 +321,7 @@ export function cleanActionBlock(raw: unknown): ActionBlock | null {
       if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") values[k] = (typeof v === "string" ? v.slice(0, 200) : v) as FieldValue;
     }
   }
-  return { kind: "action", name: text(o.name), list, type: id(o.type) ?? "", does, values };
+  return { kind: "action", name: text(o.name), list, type: id(o.type) ?? "", does, values, ...(o.planned === true && canPlan(does) ? { planned: true as const } : {}) };
 }
 
 // ---------- oude blokken ----------
