@@ -417,7 +417,9 @@ insights.get("/links", async (c) => {
   const listed = await Promise.all(peopleLists.map((l) => listPeople(db, l.id)));
   const people: Record<string, LinkPersonView[]> = {};
   peopleLists.forEach((l, i) => {
-    people[l.id] = listed[i].filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, name: p.person.name, role: p.role, via: p.direct ? null : (p.via?.tag ?? null) }));
+    people[l.id] = listed[i]
+      .filter((p) => p.direct !== "geen")
+      .map((p) => ({ id: p.person.id, name: p.person.name, color: p.person.color ?? null, role: p.role, via: p.direct ? null : (p.via?.tag ?? null) }));
   });
   const managed = new Set(lists.filter((l) => l.role === "beheerder").map((l) => l.id));
   const problems = linkProblems(links, new Map(Object.entries(people)), managed);
@@ -433,6 +435,7 @@ insights.get("/links", async (c) => {
   // De eigen soorten van je lijsten (om op te zoeken).
   const open = new Set(lists.map((l) => l.id));
   const seenKinds = kinds.filter((k) => open.has(k.list_id)).map((k) => ({ id: k.id, list: k.list_id, name: k.name }));
-  return c.json({ links, own, counts, people, problems, kinds: seenKinds } satisfies LinksResponse);
+  const alerts = lists.filter((l) => l.notify).map((l) => l.id);
+  return c.json({ links, own, counts, people, alerts, problems, kinds: seenKinds } satisfies LinksResponse);
 });
 

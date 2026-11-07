@@ -170,7 +170,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 - **De +** doet wat het scherm vraagt (`useAddAction` of `<PhoneAdd>` uit `src/shell.ts`: een lijst voegt een ding
   toe of logt), anders opent hij het palet om toe te voegen. Er is geen zwevende knop.
 - **Het menublad** (`MenuSheet`, achter Menu): op de schil, zoeken bovenaan (opent het palet), je borden, onder
-  Lijsten Verbanden en je lijsten per tag, en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
+  Lijsten eerst Alle lijsten en dan je lijsten per tag, en Jouw gegevens; het witte vlak op waar je bent. Een tik op een rij sluit het blad.
 - Tabelkolommen verdwijnen: de info staat in de grijze regel onder de titel (`.narrow-only`).
 
 ### Tablet en kiosk (vanaf 768px)
@@ -182,7 +182,7 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
 │ ◖Thuis◗          ├────────────────────────────────────────────────────────┤ │
 │ Geld, Agenda …   │ Wijnen                                          (⋯)    │ │  ← titel 24px
 │ LIJSTEN          │ [ Wijnen · Logboek ]                                   │ │  ← tabs
-│ ⌇ Verbanden      │                                                        │ │
+│ ☰ Alle lijsten   │                                                        │ │
 │ ⌄ Huis           │ zijkolom (320px)        zoeken, filters                │ │
 │ │ Voorraad       │ Wie                     Wijn          Wijnhuis   Fles  │ │
 │ │ Wijnen         │ ───────────             ─────────────────────────────  │ │
@@ -195,11 +195,11 @@ de iconen van lijsten in de zijbalk en tags. Nooit voor knoppen, kaarten of grot
   **paneel** (10px marge, een dekkende haarlijn `--line`, afronding 18px, geen schaduw). Het paneel scrollt zelf; de
   zijbalk blijft staan.
 - **Zijbalk** (`Sidebar.tsx`), van boven naar onder: het gele merktegeltje (de stapel, `Icon name="brand"`) met "Heystack" (naar je eerste bord), het
-  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden, en onder Lijsten Verbanden en
+  zoekveld als wit vlak (opent het [zoekpalet](#zoekpalet-commandpalette)), je borden, en onder Lijsten **Alle lijsten** en
   de [lijsten per tag](#zijbalk-lijsten-per-tag-sidebartsx). Het gekozen bord ligt op het **witte vlak** dat
-  meeglijdt. Smal (enkel iconen) blijft van de lijsten enkel Verbanden over, onder een haarlijn (`.sidebar-lists`).
+  meeglijdt. Smal (enkel iconen) blijft van de lijsten enkel Alle lijsten over, onder een haarlijn (`.sidebar-lists`).
 - **Paneelbalk** (56px, wit, plakt bovenaan het paneel met een haarlijn eronder; de inhoud scrollt eronder door):
-  kruimelpad met `›` links ("Thuis › Wijnen": je eerste bord; een bord of Verbanden zelf staat er alleen, `top`),
+  kruimelpad met `›` links ("Thuis › Wijnen": je eerste bord; een bord of Lijsten zelf staat er alleen, `top`),
   rechts de hoofdactie (gele knop) en jouw letter in een wit rondje (naar `/ik`).
 - **Kop**: een titel (24px, vet) + badge, eventueel gegevens eronder in grijs (zie principe 11), acties op het
   item rechts (`btn-outline btn-sm`). Geen lijn eronder.
@@ -424,7 +424,7 @@ glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? V
   De gekozen foto staat als smalle rij onder het invulveld (naam, ✨ als ze gelezen wordt, ×); tik daarna op een
   plek en ze gaat mee naar dat formulier (`foto=gedeeld`, met `lezen=1` als de AI ze leest). Sluit je zonder te
   kiezen, dan gaat de foto weg.
-- Lijsten die je **bij de +** verborg ([Je lijsten](#je-lijsten-listplacestsx)), staan er niet; op die lijst zelf wel.
+- Lijsten die je **bij de +** verborg ([Lijsten](#lijsten-listspage)), staan er niet; op die lijst zelf wel.
 
 ### Fotokiezer: `PhotoButton` (`PhotoPicker.tsx`)
 
@@ -438,20 +438,34 @@ knop op zijn eigen breedte (`.photo-row`), met de naam van de foto en Weghalen e
 deed ("Gelezen met AI", "Geschat met AI", "Kasticket gelezen met AI: 4 lijnen"). Een gedeelde foto die nog gelezen
 moet worden, staat klaar als **Foto lezen ✨** (`btn-primary`).
 
-### Je lijsten: `ListPlaces.tsx`
+### Lijsten: `ListsPage`
 
-Per persoon kies je waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +**. Een hulplijst zoals
-Winkels verberg je; zoeken, Verbanden en de keuzelijsten tonen ze altijd, en de lijst die je bekijkt staat altijd in
-het menu. Op één plek staan ze allemaal: **Je lijsten** in Jouw gegevens, een `sort-list` met greep, tegeltje, naam
-en twee filterpillen **Menu** en **Toevoegen** (aan = wit). Per lijst ook in ⋯ van de lijst, onder de rijen, als
-twee schakelaars (`ListPlaceSwitches`, `.sheet-switches`).
+**Lijsten** (`/lijsten`, in het menu **Alle lijsten**, `LINKS_PLACE`) is de ene plek waar al je lijsten staan en waar
+je ze voor jezelf instelt. Bovenaan `ListsHead`: de titel, **Nieuwe lijst** (primary; op gsm in ⋯) en twee tabs,
+**Overzicht** en **Verbanden** (`/lijsten/verbanden`, `LINKS_TAB`). `/verbanden` stuurt door.
+
+- **Overzicht**: zoeken (lijst of tag), de filterpil **Archief** als er gearchiveerde lijsten zijn, en een kaart per
+  tag (de kop linkt naar de tag; elke lijst één keer, bij haar eerste tag, zonder tag onderaan). Een rij: tegeltje,
+  naam, in grijs wat erin zit en wanneer laatst (gegevens uit `GET /insights/links`). Vanaf 1100px ook haar andere
+  tags, wie er nog bij is (letters, max. drie en "+2") en de filterpillen **Menu**, **Toevoegen** en **Meldingen**
+  (enkel als de lijst meldt; stil via een tag = uitgegrijsd). Smaller staat in de grijze regel enkel wat afwijkt
+  ("niet in het menu", "verborgen", "stil", "enkel kijken") en zitten de keuzes in ⋯.
+- **⋯ van een lijst**: Openen, Instellen (beheerder), Verbanden, en dan de schakelaars In het menu, Bij de + en
+  Meldingen (stil via een tag: een knop "<tag> weer laten melden").
+- **⋯ van de pagina**: Nieuwe lijst en **Volgorde** (een blad met een `sort-list` en Bewaren; je volgorde in het
+  menu en de keuzelijsten).
+
+Per persoon kies je zo waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +** (`useListPlaces`,
+`ListPlaces.tsx`). Een hulplijst zoals Winkels verberg je; zoeken, Verbanden en de keuzelijsten tonen ze altijd, en
+de lijst die je bekijkt staat altijd in het menu. Dezelfde twee schakelaars staan in ⋯ van de lijst zelf
+(`ListPlaceSwitches`, `.sheet-switches`). De structuur van een lijst (velden, soorten, mensen) blijft in Instellen.
 
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
 Bovenaan de plekken (`placesOf`): je **borden** met hun icoon en naam, in jouw volgorde (het eerste op `/`, de andere
 op `/bord/:id`). Er zijn geen vaste pagina's voor geld, voorraad, eten, te doen of de agenda: dat zijn borden die je
-zelf samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: eerst **Verbanden** (`LINKS_PLACE`, het overzicht van
-al je lijsten, geen bord), dan per tag een
+zelf samenstelt (Geld, Agenda, Keuken). Daaronder **Lijsten**: eerst **Alle lijsten** (`LINKS_PLACE`, `/lijsten`: het overzicht
+met Verbanden als tab, geen bord), dan per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
@@ -858,7 +872,7 @@ Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband d
 "Gegeten haalt eraf uit de voorraad"); hoe vaak en wanneer laatst staan apart, rechts.
 
 - **Bovenaan** onder de titel één regel met cijfers (lijsten · verbanden tussen lijsten · wat niet werkt). Dan één rij:
-  **Kaart en Lijst** als tabs (`?weergave=`, enkel op tablet, `useWide`; het begint op Kaart) en het **zoekveld**
+  **Kaart en Lijst** als `Segmented` (`?weergave=`, enkel op tablet, `useWide`; het begint op Kaart) en het **zoekveld**
   (`LinkSearch`, "Zoek een lijst, ding, soort of weergave"). Daaronder per soort een filter die je aan- en uitzet (met
   een stukje lijn), en **Werkt niet voor iedereen** (`LinkProblems`): één regel per persoon ("Rik ziet Winkels en
   diensten niet") met de knop die het oplost ("Rik toevoegen" als je de ontbrekende lijst beheert, anders Mensen van de
@@ -1039,10 +1053,10 @@ naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, A
 
 **Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en wat je stilzette), **App** (`AppCard`: Openen
 op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst
-of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI**, de
-volgorde van je lijsten en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
+of Formulier, met bij een formulier Loggen, een soort of "<Ding> toevoegen" en Met tekst), **AI** en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
 
-**Verbanden** (`/verbanden`, ook via ⋯ → Verbanden van een lijst): `PageHead`, de filters, Werkt niet voor iedereen,
+**Verbanden** (`/lijsten/verbanden`, een tab van [Lijsten](#lijsten-listspage), ook via ⋯ → Verbanden van een lijst):
+`ListsHead`, de filters, Werkt niet voor iedereen,
 Kaart of Lijst, en de kaart van wat je kiest; zie [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-linkspage).
 
 **Snel naar een formulier** (`QuickLinks.tsx`): de **QR-sticker** (`/lijsten/:id/sticker`, Afdrukken), een eigen app

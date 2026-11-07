@@ -22,8 +22,10 @@ export function placesOf(boards: BoardInfo[]): Place[] {
 }
 
 /** Verbanden: het overzicht van al je lijsten, dus bovenaan de lijsten in het menu en niet tussen de borden. */
-export const LINKS_PLACE: Place = { to: "/verbanden", label: "Verbanden", icon: "links" };
-export const onLinks = (pathname: string) => pathname === LINKS_PLACE.to || pathname.startsWith(`${LINKS_PLACE.to}/`);
+/** Al je lijsten (`/lijsten`), bovenaan de lijsten in het menu; Verbanden is daar een tab. */
+export const LINKS_PLACE: Place = { to: "/lijsten", label: "Alle lijsten", icon: "listLines" };
+export const LINKS_TAB: Place = { to: "/lijsten/verbanden", label: "Verbanden", icon: "links" };
+export const onLinks = (pathname: string) => pathname === LINKS_PLACE.to || pathname === LINKS_TAB.to;
 
 /** Welke plek je nu bekijkt (-1: geen, bv. een lijst). */
 export function placeIndex(places: Place[], pathname: string): number {

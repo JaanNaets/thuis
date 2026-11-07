@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, sameDestination, shownIn, type Reach } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, mutedBy, sameDestination, shownIn, type Reach } from "../shared/apps.ts";
 
 const reach: Reach = {
   boards: [
@@ -83,4 +83,12 @@ test("lijsten verbergen: per plek, nagekeken, en wat je niet meer ziet valt weg"
   assert.deepEqual(cleanAppSettings(null).hidden, { menu: [], add: [] });
   const reach = { boards: [], lists: new Map([["l1", { name: "Winkels", one: "Winkel", edit: true, kinds: new Map() }]]) };
   assert.deepEqual(keepReachable(s, reach).hidden, { menu: ["l1"], add: [] });
+});
+
+test("stil: de lijst zelf, of via een van haar tags", () => {
+  const list = { id: "wijn", tags: ["huis", "eten"] };
+  assert.equal(mutedBy([], list), null);
+  assert.equal(mutedBy(["wijn", "eten"], list), "list");
+  assert.equal(mutedBy(["eten"], list), "eten");
+  assert.equal(mutedBy(["ander"], list), null);
 });

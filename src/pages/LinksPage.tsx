@@ -20,13 +20,14 @@ import {
   type LinksResponse,
 } from "../../shared/links";
 import { useApi } from "../api";
-import { FilterSelect, FilterToggle, Tabs } from "../components/Controls";
+import { FilterSelect, FilterToggle, Segmented } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { LinkList, type ListGroup } from "../components/LinkList";
 import { lastText, LinkMapView, LinkSwatch, listMeta, plural, type MapColumn } from "../components/LinkMap";
 import { LinkDetail, LinkProblems, LinkSearch, SelectionCard, selectionLit } from "../components/LinkParts";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
+import { ListsHead } from "./ListsPage";
 import { useWide } from "../device";
 import { groupByTag } from "../lists";
 import { useSession } from "../session";
@@ -40,7 +41,7 @@ const toggled = (set: Set<string>, key: string) => {
 };
 
 /**
- * Verbanden (`/verbanden`, zie STIJLBOEK.md → Verbanden): hoe al je lijsten met elkaar en met de weergaven samenhangen,
+ * Verbanden (`/lijsten/verbanden`, een tab van Lijsten; zie STIJLBOEK.md → Verbanden): hoe al je lijsten met elkaar en met de weergaven samenhangen,
  * zoals jij ze ziet. Op tablet als metrokaart of als lijst, op gsm enkel als lijst (een gekozen lijst krijgt er een
  * eigen scherm met een schema). Zoeken licht op de kaart op wat overeenkomt en filtert de lijst; in de lijst klap je
  * groepen en lijsten open en dicht, groepeer en sorteer je, en kies je lijsten om te zien wat ze verbindt. De weergave,
@@ -186,7 +187,7 @@ export function LinksPage() {
         <PageHead
           title={name}
           back={{
-            to: `/verbanden${back.size ? `?${back}` : ""}`,
+            to: `/lijsten/verbanden${back.size ? `?${back}` : ""}`,
             label: "Verbanden",
           }}
           description={metaOf(selected)}
@@ -213,7 +214,7 @@ export function LinksPage() {
 
   return (
     <div className="page">
-      <PageHead top title="Verbanden" description={summary} />
+      <ListsHead tab="verbanden" description={summary} />
       {error && <p className="error">{error}</p>}
       {!data && !error && <SkeletonRows rows={4} />}
       {data && !lists.length && <EmptyState icon="links" title="Nog geen lijsten" />}
@@ -221,11 +222,11 @@ export function LinksPage() {
         <>
           <div className="lm-toolbar">
             {wide && (
-              <Tabs<View>
+              <Segmented<View>
                 label="Weergave"
                 value={view}
                 onChange={(v) => set({ weergave: v === "lijst" ? "lijst" : null })}
-                tabs={[
+                options={[
                   { value: "kaart", label: "Kaart" },
                   { value: "lijst", label: "Lijst" },
                 ]}

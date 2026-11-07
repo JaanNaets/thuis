@@ -11,6 +11,7 @@ import { canAgenda } from "./agenda.ts";
 import { refLists, type FieldDef } from "./fields.ts";
 import { BASES, type Base, type Event, type Kind, type Line, type LineRole, type List, type Role } from "./model.ts";
 import { fold } from "./targets.ts";
+import type { Tone } from "./types.ts";
 
 // ---------- altijd mee ----------
 // Elke eigenschap van een veld, een lijst, een soort, een gebeurtenis, een lijn en elk soort blok staat hieronder, met
@@ -484,7 +485,7 @@ export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<
 }
 
 /** Iemand bij een lijst op de kaart: met zijn rol, en via welke tag als het geen rechtstreekse rol is. */
-export type LinkPersonView = LinkPerson & { via: string | null };
+export type LinkPersonView = LinkPerson & { via: string | null; color: Tone | null };
 
 /** Een eigen soort van een lijst die de lezer ziet (om op te zoeken). */
 export type LinkKindName = { id: string; list: string; name: string };
@@ -497,6 +498,8 @@ export type LinksResponse = {
   /** Per lijst: hoeveel dingen en gebeurtenissen, en de dag van de laatste die gebeurd is. */
   counts: Record<string, { things: number; events: number; last: string | null }>;
   people: Record<string, LinkPersonView[]>;
+  /** De lijsten die een melding sturen bij iets nieuws (`notify`), om ze per persoon stil te kunnen zetten. */
+  alerts: string[];
   problems: LinkProblem[];
   kinds: LinkKindName[];
 };

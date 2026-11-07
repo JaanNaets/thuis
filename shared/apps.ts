@@ -53,6 +53,15 @@ export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share:
 /** Staat deze lijst voor jou op die plek? */
 export const shownIn = (hidden: Hidden | undefined, place: ListPlace, list: string) => !hidden?.[place].includes(list);
 
+/**
+ * Waarom een lijst voor jou stil staat (geen melding bij iets nieuws): `"list"` als je de lijst zelf stilzette, de id
+ * van een tag als het via die tag is (dan laat enkel de tag ze weer melden), of null.
+ */
+export function mutedBy(muted: readonly string[], list: { id: string; tags: readonly string[] }): "list" | string | null {
+  if (muted.includes(list.id)) return "list";
+  return list.tags.find((t) => muted.includes(t)) ?? null;
+}
+
 /** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
 export const aiAllowed = (raw: unknown): boolean => !(raw && typeof raw === "object" && (raw as Record<string, unknown>).ai === false);
 

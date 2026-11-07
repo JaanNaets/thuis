@@ -8588,3 +8588,83 @@ dialog.sheet.builder-sheet {
 .place-pills .filter {
   padding: 0 10px;
 }
+
+/* ---------- Lijsten (/lijsten): alles op één plek, per tag ---------- */
+.lo-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.lo-group-head {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px 4px;
+}
+
+.lo-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+a.lo-group-title:hover {
+  color: var(--foreground);
+}
+
+.lo-group-chevron {
+  color: var(--faint);
+}
+
+.lo-row > .row-link {
+  contain: inline-size;
+}
+
+/* Wat enkel op een brede tablet in de rij past (andere tags, mensen, pillen); anders staat het in ⋯. */
+.lo-wide {
+  display: none;
+}
+
+.lo-tags {
+  gap: 6px;
+  flex: none;
+}
+
+.lo-people {
+  align-items: center;
+  flex: none;
+}
+
+.lo-people .avatar + .avatar {
+  margin-left: -5px;
+  box-shadow:
+    0 0 0 2px var(--background),
+    inset 0 0 0 1px var(--tone-line, var(--border));
+}
+
+.lo-people-more {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.filter:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (min-width: 1100px) {
+  .lo-tags.lo-wide,
+  .lo-people.lo-wide,
+  .place-pills.lo-wide {
+    display: inline-flex;
+  }
+
+  /* De pillen tonen al waar een lijst staat. */
+  .lo-state {
+    display: none;
+  }
+}

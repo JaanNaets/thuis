@@ -1,4 +1,4 @@
-import type { RouteObject } from "react-router";
+import { redirect, type RouteObject } from "react-router";
 import { App } from "./App";
 import { LinksPage } from "./pages/LinksPage";
 import { EventFormPage } from "./pages/EventForm";
@@ -7,6 +7,7 @@ import { Home } from "./pages/Home";
 import { ImportPage } from "./pages/ImportPage";
 import { ListNew } from "./pages/ListNew";
 import { ListPage } from "./pages/ListPage";
+import { ListsPage } from "./pages/ListsPage";
 import { ListSettings } from "./pages/ListSettings";
 import { MePage } from "./pages/MePage";
 import { AppPage, SharedPage, StickerPage } from "./pages/QuickLinks";
@@ -22,7 +23,9 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Home /> },
       { path: "bord/:boardId", element: <Home /> },
+      { path: "lijsten", element: <ListsPage /> },
       { path: "lijsten/nieuw", element: <ListNew /> },
+      { path: "lijsten/verbanden", element: <LinksPage /> },
       { path: "lijsten/:id", element: <ListPage /> },
       { path: "lijsten/:id/instellingen", element: <ListSettings /> },
       { path: "lijsten/:id/nieuw", element: <ThingFormPage /> },
@@ -34,7 +37,8 @@ export const routes: RouteObject[] = [
       { path: "gebeurtenissen/:eventId", element: <EventPage /> },
       { path: "gebeurtenissen/:eventId/bewerken", element: <EventFormPage /> },
       { path: "tags/:tagId", element: <TagPage /> },
-      { path: "verbanden", element: <LinksPage /> },
+      // Het oude adres van Verbanden (bladwijzers, oude meldingen).
+      { path: "verbanden", loader: ({ request }) => redirect(`/lijsten/verbanden${new URL(request.url).search}`) },
       { path: "delen", element: <SharedPage /> },
       { path: "app/:appId", element: <AppPage /> },
       { path: "ik", element: <MePage /> },
