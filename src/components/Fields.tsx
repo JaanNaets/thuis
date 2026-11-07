@@ -45,7 +45,7 @@ import { Link } from "../router";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
-import { Avatar, Segmented, Switch } from "./Controls";
+import { Avatar, RequiredMark, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
@@ -369,6 +369,7 @@ export function FieldInputs({
         const label = (
           <span className="label">
             {def.label}
+            {def.required && <RequiredMark />}
             {def.unit && <span className="optional"> · in {def.unit}</span>}
             {disabled && <span className="optional"> · enkel zien</span>}
           </span>
@@ -1381,7 +1382,7 @@ export function FieldsEditor({
                 />
                 <select
                   value={f.type}
-                  aria-label={`Soort van ${f.label || "het veld"}`}
+                  aria-label={`Type van ${f.label || "het veld"}`}
                   onChange={(e) => update(i, { type: e.target.value as FieldType, open: true })}
                 >
                   {Object.entries(FIELD_GROUPS).map(([group, groupLabel]) => (

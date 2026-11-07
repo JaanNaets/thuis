@@ -1834,6 +1834,13 @@ button.row-link {
   font-weight: 450;
 }
 
+/* Een verplicht veld: een grijs sterretje vlak achter het label. */
+.required-mark {
+  margin-left: -3px;
+  color: var(--muted-foreground);
+  font-weight: 450;
+}
+
 .hint {
   font-size: 13px;
   color: var(--muted-foreground);

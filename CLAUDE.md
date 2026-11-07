@@ -30,9 +30,11 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - Er zijn enkel **lijsten** (`lists`). Een lijst heeft **dingen** (`things`, allemaal met dezelfde velden: `fields`;
   `one` = hoe één ding heet, leeg = een lijst zonder dingen), altijd een **logboek** met **gebeurtenissen**
   (`events`), **mensen** (`list_people`) en **tags** (`list_tags`, `list_tag_links`). Geen projecten, geen lijsten in
-  lijsten: tags groeperen, een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "ding" en "logboek".
+  lijsten: tags groeperen, een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "ding", "logboek" en
+  "formulier" (een soort; het woord "soort" staat nergens in de interface).
 - Een gebeurtenis heeft een **soort**: één van zes basissoorten (`BASES`: aankoop, gebruik, dienst, activiteit, meting,
-  overdracht) of een eigen soort van een lijst (`kinds`, met eigen velden; Gegeten, Tankbeurt). Ze heeft **lijnen**
+  overdracht) of een eigen soort van een lijst (`kinds`, met eigen velden; Gegeten, Tankbeurt). Kiezen gebeurt in
+  `FormPicker`: de formulieren van de lijst, zonder eigen de basissoorten, de rest onder Ander formulier (`formsOf`). Ze heeft **lijnen**
   (`lines`): `in` (erbij), `uit` (eraf), `voor` (waarvoor, de wagen) en `bij` (waar, de winkel), naar een ding of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon). Status: `gebeurd`,
   `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee).

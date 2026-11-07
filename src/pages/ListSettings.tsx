@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
-import { BASES, canManage, isBase, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson } from "../../shared/model";
+import { BASES, canManage, formsOf, isBase, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson } from "../../shared/model";
 import { readsPhoto, THINGS_FORM, withReads } from "../../shared/photoread";
 import type { StockDef } from "../../shared/stock";
 import { templateFile } from "../../shared/template-file";
@@ -38,7 +38,7 @@ export function ListSettings() {
           { value: "voorraad" as const, label: "Voorraad" },
         ]
       : []),
-    { value: "soorten", label: "Soorten" },
+    { value: "soorten", label: "Formulieren" },
     { value: "mensen", label: "Mensen" },
   ];
   const asked = params.get("tab") as Tab | null;
@@ -285,15 +285,15 @@ function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
     <>
       <section className="card">
         <CardHead
-          title="Eigen soorten"
+          title="Formulieren"
           action={
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
-              <Icon name="plus" size={15} /> Soort
+              <Icon name="plus" size={15} /> Formulier
             </button>
           }
         />
         {own.length === 0 ? (
-          <p className="card-body muted">Enkel de basissoorten</p>
+          <p className="card-body muted">{Object.values(BASES).map((b) => b.label).join(", ")}</p>
         ) : (
           <ul className="rows">
             {own.map((k) => (
@@ -320,7 +320,7 @@ function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
         )}
       </section>
       <PhotoForms detail={detail} onSaved={onSaved} />
-      <Sheet open={editing !== null} title={editing === "new" ? "Nieuwe soort" : (editing?.name ?? "")} onClose={() => setEditing(null)}>
+      <Sheet open={editing !== null} title={editing === "new" ? "Nieuw formulier" : (editing?.name ?? "")} onClose={() => setEditing(null)}>
         {editing !== null && (
           <KindForm
             list={detail.list}
@@ -336,11 +336,11 @@ function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
   );
 }
 
-/** Welke soorten een foto lezen met de AI: de basissoorten en de eigen soorten, elk met een schakelaar (meteen bewaard). */
+/** Welke formulieren een foto lezen met de AI: die van de lijst (`formsOf`), elk met een schakelaar (meteen bewaard). */
 function PhotoForms({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
   const { list } = detail;
   const toast = useToast();
-  const forms = [...detail.kinds.filter((k) => !k.list_id), ...detail.kinds.filter((k) => k.list_id === list.id)];
+  const forms = formsOf(detail.kinds, list.id).shown;
   const [setting, setSetting] = useState(list.read_photo);
   async function toggle(k: KindInfo, on: boolean) {
     const before = setting;
@@ -423,7 +423,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
     <div className="form">
       {!kind && (
         <label className="field">
-          <span className="label">Basissoort</span>
+          <span className="label">Werkt als</span>
           <select value={base} onChange={(e) => isBase(e.target.value) && setBase(e.target.value)}>
             {Object.entries(BASES).map(([k, b]) => (
               <option key={k} value={k} title={b.hint}>
@@ -447,7 +447,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
           <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
         </label>
       )}
-      <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Deze soort"} people={[]} meId={person.id} />
+      <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
       <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
       <div className="btn-row">
         <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>

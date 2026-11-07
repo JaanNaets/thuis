@@ -506,7 +506,9 @@ Een sectiekop ("Lijsten") staat in kleine kapitalen.
   eronder. Een voorbeeld hoort in de placeholder ("bv. Rood, Wit"). `.hint` onder een veld enkel voor wat de app
   las of uitrekende ("= 1 u 30 min") of een fout.
 - `Switch` heeft enkel een label: zegt dat het niet genoeg, kies een beter label.
-- Verplichte velden krijgen `required`, geen sterretje.
+- Verplichte velden krijgen `required` en een grijs sterretje achter het label (`RequiredMark` in `Controls.tsx`):
+  de velden die een beheerder verplicht zette, de naam van een ding en de datum van een gebeurtenis. Zonder sterretje
+  is een veld optioneel; geen "· optioneel".
 - **Een lijst heeft een notitieveld** (een lange tekst); de sjablonen zetten er een klaar. In de fiche komt een
   lange tekst als eigen kaart.
 - Automatisch ingevulde velden krijgen klasse `auto` (zacht geel) tot de gebruiker ze aanpast.
@@ -519,9 +521,10 @@ Een sectiekop ("Lijsten") staat in kleine kapitalen.
 
 ### Lijsten en velden: `Fields.tsx`
 
-Wat je bijhoudt, is een **ding** in een **lijst**, of een **gebeurtenis** in haar logboek. De dingen van een lijst
-hebben dezelfde velden (Wijnen met jaargang en druiven); een eigen soort (Tankbeurt) heeft eigen velden voor haar
-gebeurtenissen. Beide gebruiken dezelfde veldsoorten. De veldsoorten
+Wat je bijhoudt, is een **ding** in een **lijst** (wat er is en blijft), of een **gebeurtenis** in haar logboek (wat
+er gebeurt). De dingen van een lijst hebben dezelfde velden (Wijnen met jaargang en druiven); een **formulier** (in de
+code een soort, `kinds`: Tankbeurt, Uitgave) heeft eigen velden voor haar gebeurtenissen. In de interface heet een
+soort altijd **Formulier**; het woord "soort" komt er niet in voor (een veld heeft een **type**). Beide gebruiken dezelfde veldsoorten. De veldsoorten
 staan in `FIELD_TYPES` (`shared/fields.ts`), elk met een groep (`FIELD_GROUPS`) en één zin uitleg (de titel van de keuze); een nieuwe
 veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`formatFieldValue`), tekst lezen
 (`parseFieldText`) en hier een invoer.
@@ -754,8 +757,8 @@ product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding
 **Nieuw in**; het totaal in Bedrag, de datum in Wanneer). Een soort met voedingswaarden (Gegeten) herkent een
 **gerecht** en schat de portie ("Geschat met AI"). Elke andere soort vult haar eigen velden, de omschrijving, datum en
 het bedrag in met wat er echt op de foto staat ("Gelezen met AI"). De foto komt altijd bij de gebeurtenis. Welke
-soorten lezen, zet een beheerder in Instellen → Soorten (**Foto lezen met AI ✨**, een schakelaar per soort, ook in
-het formulier van een eigen soort); standaard een soort met geld of voedingswaarden.
+formulieren lezen, zet een beheerder in Instellen → Formulieren (**Foto lezen met AI ✨**, een schakelaar per formulier
+van de lijst, `formsOf`, ook in het formulier zelf); standaard een formulier met geld of voedingswaarden.
 
 ### Dingen tonen: `ThingsView` en het logboek: `LogList`
 
@@ -877,7 +880,7 @@ Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband d
 
 - **Bovenaan** onder de titel één regel met cijfers (lijsten · verbanden tussen lijsten · wat niet werkt). Dan één rij:
   **Kaart en Lijst** als `Segmented` (`?weergave=`, enkel op tablet, `useWide`; het begint op Kaart) en het **zoekveld**
-  (`LinkSearch`, "Zoek een lijst, ding, soort of weergave"). Daaronder per soort een filter die je aan- en uitzet (met
+  (`LinkSearch`, "Zoek een lijst, ding, formulier of weergave"). Daaronder per soort een filter die je aan- en uitzet (met
   een stukje lijn), en **Werkt niet voor iedereen** (`LinkProblems`): één regel per persoon ("Rik ziet Winkels en
   diensten niet") met de knop die het oplost ("Rik toevoegen" als je de ontbrekende lijst beheert, anders Mensen van de
   andere lijst). Enkel als je een van beide lijsten beheert.
@@ -970,7 +973,7 @@ ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en
   (`.view-table`): kleine grijze koppen, getallen rechts. Per dag (`.view-calendar`): per dag een vakje van hoogstens
   32px, de weekdagen erboven, van licht naar donker in één kleur (`--chart-1`) met "minder … meer". Niets: "Niets"; een
   weergave die verbergt als er niets is, staat er dan niet.
-- **Een actie** (`ActionBuilder`): bovenaan de knop zoals hij wordt (`.builder-preview-tile`), dan Lijst, Soort (chips),
+- **Een actie** (`ActionBuilder`): bovenaan de knop zoals hij wordt (`.builder-preview-tile`), dan Lijst, Formulier (`FormPicker`),
   **Een tik** (`.does-grid`, vier keuzes: Opent het formulier · Bewaart meteen · Telt er een bij · Start en stopt, die
   laatste enkel bij een activiteit), bij formulier en bewaren de schakelaar **Gepland** (`Switch`: het formulier opent
   met Gepland aan, `?gepland=1`, of bewaren zet het gepland: een boodschap, iets te doen; toast "… gepland"),
@@ -1037,8 +1040,9 @@ Archiveren en Verwijderen.
 lijst) in de zijkolom, rechts de **Lijnen** en wat ze afvinkte → Verwijderen.
 
 **Loggen** (`/lijsten/:id/loggen`, `EventForm`): bovenaan **Typ wat je weet** (vult live in, zie `shared/parse.ts`)
-met Kasticket ✨, dan Soort (filterpillen: de eigen soorten, dan de basissoorten; soorten van andere lijsten in
-"Andere soort…"), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland; bij geld Bedrag, Betaald
+met Kasticket ✨, dan **Formulier** (`FormPicker`, filterpillen met icoon: de formulieren van de lijst, zonder eigen
+formulieren de zes basissoorten; de rest, dus de basissoorten naast eigen formulieren en de formulieren van andere
+lijsten, in "Ander formulier…"; zie `formsOf`), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland; bij geld Bedrag, Betaald
 door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van de
 soort; Herhalen en Foto. Een prijs in de tekst zonder gekozen soort maakt er een aankoop van.
 

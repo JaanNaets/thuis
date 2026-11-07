@@ -5,7 +5,7 @@ import { canEdit, type ListDetail, type Thing, type ThingRef } from "../../share
 import { isProductCode, productData, productLabel } from "../../shared/product";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
-import { SubmitButton } from "../components/Controls";
+import { RequiredMark, SubmitButton } from "../components/Controls";
 import { BarcodeScanner } from "../components/BarcodeScanner";
 import { AiMark, attributesDraft, buildAttributes, FieldInputs, findProduct, type Access, type AttributeDraft } from "../components/Fields";
 import { Combo, useThingOptions } from "../components/ItemPicker";
@@ -193,7 +193,10 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
       <PageHead title={thing ? `${thing.name} bewerken` : `${list.one} toevoegen`} back={{ to: -1, label: list.name }} />
       <section className="card form-section">
         <label className="field">
-          <span className="label">Naam</span>
+          <span className="label">
+            Naam
+            <RequiredMark />
+          </span>
           <input value={name} required maxLength={200} autoFocus={!thing} onChange={(e) => setName(e.target.value)} />
         </label>
         {!thing && (

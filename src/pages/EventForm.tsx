@@ -9,9 +9,10 @@ import { hasPrice } from "../../shared/targets";
 import { niceName } from "../../shared/receipt";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
-import { SubmitButton, Switch } from "../components/Controls";
+import { RequiredMark, SubmitButton, Switch } from "../components/Controls";
 import { attributesDraft, buildAttributes, buildShares, FieldInputs, sharesDraft, SharesField, type AttributeDraft, type SharesDraft } from "../components/Fields";
 import { AiMark } from "../components/Fields";
+import { FormPicker } from "../components/FormPicker";
 import { Icon } from "../components/Icon";
 import { buildLine, emptyLine, lineDraft, LinesEditor, type LineDraft } from "../components/Lines";
 import { PageHead } from "../components/Page";
@@ -85,7 +86,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   // De soorten: die van deze lijst eerst, dan de basissoorten, dan die van andere lijsten.
   const own = detail.kinds.filter((k) => k.list_id === list.id);
   const bases = detail.kinds.filter((k) => !k.list_id);
-  const others = detail.kinds.filter((k) => k.list_id && k.list_id !== list.id);
   const wantedKind = params.get("soort");
   const [kindId, setKindId] = useState<string>(
     () => event?.kind ?? (wantedKind && detail.kinds.some((k) => k.id === wantedKind) ? wantedKind : (own[0]?.id ?? (list.stock ? "aankoop" : "activiteit"))),
@@ -167,9 +167,11 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
     if (sharedTaken.current || event || (!receipt && params.get("foto") !== "gedeeld")) return;
     sharedTaken.current = true;
-    if (receipt && detail.kinds.some((k) => k.id === "aankoop")) {
+    // Een kasticket: het eigen aankoopformulier van de lijst, anders de aankoop zelf.
+    const buy = own.find((k) => k.base === "aankoop")?.id ?? (detail.kinds.some((k) => k.id === "aankoop") ? "aankoop" : null);
+    if (receipt && buy) {
       chosenKind.current = true;
-      setKindId("aankoop");
+      setKindId(buy);
     }
     sharedFile().then((f) => {
       if (!f) return;
@@ -422,20 +424,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     }
   }
 
-  const pill = (k: KindInfo) => (
-    <button
-      key={k.id}
-      type="button"
-      className="filter"
-      aria-pressed={k.id === kindId}
-      onClick={() => {
-        chosenKind.current = true;
-        setKindId(k.id);
-      }}
-    >
-      {k.name}
-    </button>
-  );
 
   return (
     <form className="form page" onSubmit={save}>
@@ -481,37 +469,25 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             {source && <span className="muted">{source}</span>}
           </div>
         )}
-        <div className="field">
-          <span className="label">Soort</span>
-          <div className="filters" role="group" aria-label="Soort">
-            {[...own, ...bases].map(pill)}
-          </div>
-          {others.length > 0 && (
-            <select
-              aria-label="Andere soort"
-              value={others.some((k) => k.id === kindId) ? kindId : ""}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                chosenKind.current = true;
-                setKindId(e.target.value);
-              }}
-            >
-              <option value="">Andere soort…</option>
-              {others.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <FormPicker
+          kinds={detail.kinds}
+          listId={list.id}
+          value={kindId}
+          onChange={(k) => {
+            chosenKind.current = true;
+            setKindId(k.id);
+          }}
+        />
         <label className="field">
           <span className="label">Omschrijving</span>
           <input value={name} maxLength={200} placeholder={kind.name} onChange={(e) => setName(e.target.value)} />
         </label>
         <div className="field-row">
           <label className="field">
-            <span className="label">Wanneer</span>
+            <span className="label">
+              Wanneer
+              <RequiredMark />
+            </span>
             <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} />
           </label>
           <label className="field">

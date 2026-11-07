@@ -303,7 +303,7 @@ export function buildLinks(input: LinkInput): LinkResult {
     if (!lists.has(s.list)) continue;
     const name = kindName(kinds, s.kind, s.base);
     const owner = kinds.get(s.kind)?.list_id;
-    if (owner && owner !== s.list && lists.has(owner)) add("log", s.list, owner, `Logt met de soort ${name}`, s.events, s.last);
+    if (owner && owner !== s.list && lists.has(owner)) add("log", s.list, owner, `Logt met het formulier ${name}`, s.events, s.last);
     if (s.money) add("view", s.list, viewNode("geld"), `${name}: ${times(s.money)} met een bedrag`, s.money, s.last);
     if (s.shared) add("view", s.list, viewNode("balans"), `${name}: ${times(s.shared)} gedeeld`, s.shared, s.last);
     if (s.food) add("view", s.list, viewNode("eten"), `${name}: ${times(s.food)} gegeten`, s.food, s.last);
@@ -511,7 +511,7 @@ export const linkKey = (l: Pick<Link, "kind" | "from" | "to">) => `${l.kind} ${l
 /** De groepen treffers, in deze volgorde. */
 export const HIT_GROUPS = {
   lijsten: "Lijsten",
-  soorten: "Soorten",
+  soorten: "Formulieren",
   dingen: "Dingen",
   verbanden: "Verbanden",
   weergaven: "Weergaven",
@@ -585,7 +585,7 @@ export function searchLinks(
       key: `soort ${k.id}`,
       select: k.list,
       title: k.name,
-      detail: `Soort van ${names.get(k.list)}`,
+      detail: `Formulier van ${names.get(k.list)}`,
       nodes: [...new Set([k.list, ...ends])],
       links: used.map(linkKey),
     });

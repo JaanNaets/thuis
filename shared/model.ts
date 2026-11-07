@@ -75,6 +75,22 @@ export function kindInfo(kind: Kind): KindInfo {
   return { id: kind.id, base: kind.base, name: kind.name, icon: kind.icon ?? BASES[kind.base].icon, fields: kind.fields, list_id: kind.list_id, goal: kind.goal };
 }
 
+/**
+ * De formulieren (soorten) om in een lijst te loggen, zoals je ze kiest: haar eigen, of zonder eigen de zes
+ * basissoorten (`shown`). De rest (de basissoorten naast eigen formulieren, de formulieren van andere lijsten) staat
+ * onder Ander formulier (`more`). Een formulier dat al gekozen is (een gebeurtenis die je bewerkt, een actie, een
+ * kasticket), staat er vooraan bij.
+ */
+export function formsOf(kinds: KindInfo[], listId: string, chosen?: string | null): { shown: KindInfo[]; more: KindInfo[] } {
+  const own = kinds.filter((k) => k.list_id === listId);
+  const bases = kinds.filter((k) => !k.list_id);
+  const others = kinds.filter((k) => k.list_id && k.list_id !== listId);
+  const first = own.length ? own : bases;
+  const rest = own.length ? [...bases, ...others] : others;
+  const extra = rest.find((k) => k.id === chosen);
+  return { shown: extra ? [...first, extra] : first, more: rest.filter((k) => k !== extra) };
+}
+
 // ---------- lijsten ----------
 
 export type List = {

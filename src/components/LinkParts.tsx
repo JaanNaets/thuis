@@ -131,7 +131,7 @@ export function LinkSearch({
           enterKeyHint="search"
           autoComplete="off"
           value={query}
-          placeholder="Zoek een lijst, ding, soort of weergave"
+          placeholder="Zoek een lijst, ding, formulier of weergave"
           aria-label="Zoeken in verbanden"
           role={popover ? "combobox" : undefined}
           aria-expanded={popover ? show : undefined}

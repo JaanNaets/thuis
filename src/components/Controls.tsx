@@ -80,6 +80,13 @@ export function QuantityField({ value, onChange, min = 0, label }: { value: stri
 }
 
 /** Aan/uit-schakelaar met een label ervoor. Geen uitleg eronder: zegt het label het niet, kies een beter label. */
+/** Achter het label van een verplicht veld: een grijs sterretje (de schermlezer hoort `required` op het veld). */
+export const RequiredMark = () => (
+  <span className="required-mark" aria-hidden="true">
+    *
+  </span>
+);
+
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
   return (
     <label className="switch-field">

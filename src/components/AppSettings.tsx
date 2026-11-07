@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from "react";
 import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
+import { formsOf } from "../../shared/model";
 import type { Targets } from "../../shared/targets";
 import { api, useApi } from "../api";
 import { useSession } from "../session";
@@ -16,7 +17,7 @@ import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
-/** Wat je kan kiezen: je overzichten en de lijsten waarin je iets mag toevoegen, met hun soorten. */
+/** Wat je kan kiezen: je overzichten en de lijsten waarin je iets mag toevoegen, met hun formulieren. */
 type Choices = { boards: { id: string; name: string }[]; lists: { id: string; name: string; one: string | null; stock: boolean; kinds: { id: string; name: string }[] }[]; reach: Reach };
 
 function useChoices(): Choices | null {
@@ -24,13 +25,15 @@ function useChoices(): Choices | null {
   const { data: overview } = useApi<Overview>("/me/overview");
   return useMemo(() => {
     if (!targets || !overview) return null;
+    // Kiezen uit de formulieren van de lijst (`formsOf`); wat al gekozen was (een basissoort), blijft bereikbaar.
     const lists = targets.lists.map((l) => ({
       ...l,
-      kinds: targets.kinds.filter((k) => k.list_id === l.id || k.list_id === null).map((k) => ({ id: k.id, name: k.name })),
+      kinds: formsOf(targets.kinds, l.id).shown.map((k) => ({ id: k.id, name: k.name })),
     }));
+    const all = (id: string) => targets.kinds.filter((k) => k.list_id === id || k.list_id === null);
     const reach: Reach = {
       boards: overview.boards,
-      lists: new Map(lists.map((l) => [l.id, { name: l.name, one: l.one, edit: true, kinds: new Map(l.kinds.map((k) => [k.id, k.name])) }])),
+      lists: new Map(lists.map((l) => [l.id, { name: l.name, one: l.one, edit: true, kinds: new Map(all(l.id).map((k) => [k.id, k.name])) }])),
     };
     return { boards: overview.boards, lists, reach };
   }, [targets, overview]);

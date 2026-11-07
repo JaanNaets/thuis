@@ -39,6 +39,7 @@ import { useApi } from "../api";
 import { useSession } from "../session";
 import { actionKind, ActionTile } from "./ActionBlock";
 import { CardHead, Switch } from "./Controls";
+import { FormPicker } from "./FormPicker";
 import { Icon, type IconName } from "./Icon";
 import { ViewBody, viewUrl } from "./ViewBlock";
 
@@ -700,7 +701,6 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
     else values[key] = v;
     set({ values });
   };
-  const kinds = detail ? [...detail.kinds.filter((k) => k.list_id === draft.list), ...detail.kinds.filter((k) => !k.list_id)] : [];
   const fields = (kind?.fields ?? []).filter((f) => ["number", "money", "text", "select", "bool", "duration"].includes(f.type));
 
   return (
@@ -719,16 +719,15 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
           </select>
         </label>
 
-        <div className="field">
-          <span className="label">Soort</span>
-          <div className="filters builder-chips">
-            {kinds.map((k) => (
-              <button key={k.id} type="button" className="filter" aria-pressed={kind?.id === k.id} onClick={() => set({ type: k.id, values: {}, ...(draft.does === "timer" && k.base !== "activiteit" ? { does: "save" as const } : {}) })}>
-                <Icon name={k.icon as IconName} size={14} /> {k.name}
-              </button>
-            ))}
-          </div>
-        </div>
+        {detail && (
+          <FormPicker
+            kinds={detail.kinds}
+            listId={draft.list}
+            value={kind?.id ?? ""}
+            wrap
+            onChange={(k) => set({ type: k.id, values: {}, ...(draft.does === "timer" && k.base !== "activiteit" ? { does: "save" as const } : {}) })}
+          />
+        )}
 
         <div className="field">
           <span className="label">Een tik</span>

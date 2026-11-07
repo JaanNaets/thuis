@@ -15,7 +15,7 @@ export function logFields(kinds: Pick<KindInfo, "name">[], lists: { name: string
   const names = (xs: { name: string }[]) => [...new Set(xs.map((x) => x.name))].slice(0, 60);
   return [
     { key: "at", label: "Wanneer", type: "date" },
-    { key: "kind", label: "Soort", type: "select", options: names(kinds).length ? names(kinds) : ["—"] },
+    { key: "kind", label: "Formulier", type: "select", options: names(kinds).length ? names(kinds) : ["—"] },
     { key: "amount", label: "Bedrag", type: "money" },
     { key: "mine", label: "Jouw deel", type: "money" },
     { key: "paid_by", label: "Betaald door", type: "person" },

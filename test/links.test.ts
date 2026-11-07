@@ -218,7 +218,7 @@ const sampleKinds = [
   { id: "k2", list: "ONZICHTBAAR", name: "Gegeten" },
 ];
 
-test("zoeken: lijsten, soorten, dingen, verbanden en weergaven; elk woord, zonder accenten", () => {
+test("zoeken: lijsten, formulieren, dingen, verbanden en weergaven; elk woord, zonder accenten", () => {
   const find = (q: string) => searchLinks(q, { lists: sampleLists, kinds: sampleKinds, links: sample });
   assert.deepEqual(find("  "), []);
   assert.deepEqual(
@@ -242,7 +242,7 @@ test("zoeken: lijsten, soorten, dingen, verbanden en weergaven; elk woord, zonde
   const soort = gegeten.find((h) => h.group === "soorten")!;
   assert.deepEqual(soort.nodes, ["J", "V"]);
   assert.ok(soort.links.includes(linkKey(sample[0])));
-  assert.equal(soort.detail, "Soort van Jaan");
+  assert.equal(soort.detail, "Formulier van Jaan");
   // Een ding in een verband: kiest de lijst van het ding.
   const pasta = find("pasta");
   assert.deepEqual(

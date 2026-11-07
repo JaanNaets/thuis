@@ -62,7 +62,7 @@ export function EventPage() {
   }
 
   const facts: [string, string][] = [
-    ["Soort", kind.name],
+    ["Formulier", kind.name],
     ["Wanneer", `${dayLabel(e.at.slice(0, 10))}${timeOf(e.at) ? ` om ${timeOf(e.at)}` : ""}${e.end_at ? ` tot ${timeOf(e.end_at)}` : ""}`],
     ...(minutes !== null && minutes > 0 ? ([["Duur", formatDuration(minutes)]] as [string, string][]) : []),
     ...(e.amount !== null ? ([["Bedrag", formatCents(e.amount)]] as [string, string][]) : []),

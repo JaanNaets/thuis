@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { brusselsNow, eventTitle, isAt, minutesBetween } from "../shared/model.ts";
+import { baseKind, brusselsNow, eventTitle, formsOf, isAt, minutesBetween, type KindInfo } from "../shared/model.ts";
 import { keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
@@ -101,4 +101,21 @@ test("lijnen zien en bewaren", () => {
   assert.ok(lineAllowed("bij", "gast"));
   assert.ok(!lineAllowed("voor", null));
   assert.ok(lineAllowed("in", "none"));
+});
+
+test("de formulieren van een lijst: haar eigen, anders de basissoorten; de rest onder Ander formulier", () => {
+  const bases = (["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht"] as const).map(baseKind);
+  const own = (id: string, name: string, list: string): KindInfo => ({ ...baseKind("gebruik"), id, name, list_id: list });
+  const kinds = [...bases, own("k1", "Gegeten", "DIEET"), own("k2", "Gewicht", "DIEET"), own("k3", "Proeverij", "WIJN")];
+  const ids = (xs: KindInfo[]) => xs.map((k) => k.id);
+  assert.deepEqual(ids(formsOf(kinds, "DIEET").shown), ["k1", "k2"]);
+  assert.deepEqual(ids(formsOf(kinds, "DIEET").more), ["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht", "k3"]);
+  // Zonder eigen formulieren: de basissoorten.
+  assert.deepEqual(ids(formsOf(kinds, "LEEG").shown), ["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht"]);
+  assert.deepEqual(ids(formsOf(kinds, "LEEG").more), ["k1", "k2", "k3"]);
+  // Wat al gekozen is, staat erbij (een boodschap als aankoop, een gebeurtenis van vroeger) en niet nog eens onderaan.
+  const chosen = formsOf(kinds, "DIEET", "aankoop");
+  assert.deepEqual(ids(chosen.shown), ["k1", "k2", "aankoop"]);
+  assert.ok(!ids(chosen.more).includes("aankoop"));
+  assert.deepEqual(ids(formsOf(kinds, "DIEET", "k1").shown), ["k1", "k2"]);
 });
