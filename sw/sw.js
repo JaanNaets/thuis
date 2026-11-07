@@ -104,7 +104,9 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(message.title, {
       body: message.body,
       icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      // Het kleine icoon in de statusbalk: Android gebruikt enkel de doorzichtigheid, dus wit op doorzichtig (een
+      // icoon met een achtergrond wordt een wit vierkant).
+      badge: "/badge-96.png",
       tag: message.tag,
       data: { url: message.url },
     }),

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 // Bestanden uit public/ die offline beschikbaar moeten zijn.
-const PUBLIC_FILES = ["/icon.svg", "/icon-192.png"];
+const PUBLIC_FILES = ["/icon.svg", "/icon-192.png", "/badge-96.png"];
 
 // Enkel nodig om iets toe te voegen of te bekijken (scanner, PDF), niet om een barcode te tonen.
 // Die worden pas bewaard wanneer ze een eerste keer gebruikt worden.
