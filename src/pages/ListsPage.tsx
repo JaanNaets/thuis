@@ -631,18 +631,23 @@ function ListSheet({
 }
 
 /** Je volgorde van de lijsten (in het menu en in de keuzelijsten), bewaard met PUT /me/order. */
+/** Je volgorde: de tags (in het menu en hier) en de lijsten (binnen een tag), elk met een greep; samen bewaard. */
 function ListOrder({ lists, onDone }: { lists: ListNode[]; onDone: () => void }) {
-  const { reloadMe } = useSession();
+  const { reloadMe, tags } = useSession();
   const toast = useToast();
   const [order, setOrder] = useState(() => lists.map((l) => l.id));
+  const [tagOrder, setTagOrder] = useState(() => tags.map((t) => t.id));
   const [busy, setBusy] = useState(false);
   const byId = new Map(lists.map((l) => [l.id, l]));
+  const tagById = new Map(tags.map((t) => [t.id, t]));
   const sortable = useSortable(order, setOrder, (id) => byId.get(id)?.name ?? "Lijst");
-  const changed = order.some((id, i) => lists[i]?.id !== id);
+  const sortTags = useSortable(tagOrder, setTagOrder, (id) => tagById.get(id)?.name ?? "Tag");
+  const listsChanged = order.some((id, i) => lists[i]?.id !== id);
+  const tagsChanged = tagOrder.some((id, i) => tags[i]?.id !== id);
   async function save() {
     setBusy(true);
     try {
-      await api.put("/me/order", { ids: order });
+      await Promise.all([listsChanged && api.put("/me/order", { ids: order }), tagsChanged && api.put("/me/tag-order", { ids: tagOrder })]);
       reloadMe();
       onDone();
     } catch (err) {
@@ -653,29 +658,59 @@ function ListOrder({ lists, onDone }: { lists: ListNode[]; onDone: () => void })
   }
   return (
     <div className="form">
-      <ul className="rows sort-list">
-        {order.map((id) => {
-          const l = byId.get(id);
-          if (!l) return null;
-          return (
-            <li key={id} {...sortable.itemProps(id)}>
-              <div className="row">
-                <button {...sortable.handleProps(id)}>
-                  <Icon name="grip" size={16} />
-                </button>
-                <span className="cell-main">
-                  <span className={`row-media tone-${listTone(l)}`}>
-                    <Icon name={listIcon(l)} size={16} />
+      {tags.length > 1 && (
+        <div className="field">
+          <span className="label">Tags</span>
+          <ul className="rows sort-list">
+            {tagOrder.map((id) => {
+              const t = tagById.get(id);
+              if (!t) return null;
+              return (
+                <li key={id} {...sortTags.itemProps(id)}>
+                  <div className="row">
+                    <button {...sortTags.handleProps(id)}>
+                      <Icon name="grip" size={16} />
+                    </button>
+                    <span className="cell-main">
+                      <span className={`row-media tone-${t.color ?? "sky"}`}>
+                        <Icon name="tag" size={16} />
+                      </span>
+                      <span className="row-title">{t.name}</span>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {sortTags.status}
+        </div>
+      )}
+      <div className="field">
+        {tags.length > 1 && <span className="label">Lijsten</span>}
+        <ul className="rows sort-list">
+          {order.map((id) => {
+            const l = byId.get(id);
+            if (!l) return null;
+            return (
+              <li key={id} {...sortable.itemProps(id)}>
+                <div className="row">
+                  <button {...sortable.handleProps(id)}>
+                    <Icon name="grip" size={16} />
+                  </button>
+                  <span className="cell-main">
+                    <span className={`row-media tone-${listTone(l)}`}>
+                      <Icon name={listIcon(l)} size={16} />
+                    </span>
+                    <span className="row-title">{l.name}</span>
                   </span>
-                  <span className="row-title">{l.name}</span>
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      {sortable.status}
-      <button type="button" className="btn btn-primary" disabled={busy || !changed} onClick={save}>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {sortable.status}
+      </div>
+      <button type="button" className="btn btn-primary" disabled={busy || (!listsChanged && !tagsChanged)} onClick={save}>
         Bewaren
       </button>
     </div>

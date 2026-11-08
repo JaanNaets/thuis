@@ -93,11 +93,11 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
 export function TagTree({ lists, tags, current }: { lists: ReturnType<typeof useSession>["lists"]; tags: ReturnType<typeof useSession>["tags"]; current: string | null }) {
   const { hidden } = useSession();
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  // Wat je in het menu verborg, staat er niet (behalve de lijst die je nu bekijkt).
+  // Wat je in het menu verborg (een lijst of een hele tag), staat er niet; behalve de lijst die je nu bekijkt.
   const groups = groupByTag(
     lists.filter((l) => l.id === current || shownIn(hidden, "menu", l.id)),
     tags,
-  );
+  ).filter((g) => !g.tag || shownIn(hidden, "menu", g.tag.id) || g.lists.some((l) => l.id === current));
   return (
     <div className="sidebar-places">
       <ul className="place-tree">

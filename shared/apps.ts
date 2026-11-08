@@ -34,8 +34,13 @@ export type AppSettings = {
   ai: boolean;
   /** Lijsten of tags die je stilzette: geen melding bij iets nieuws daar. */
   muted: string[];
-  /** Lijsten die je verborg: niet in je menu, of niet bij de + (Toevoegen). Zoeken en Verbanden tonen ze altijd. */
+  /**
+   * Lijsten die je verborg: niet in je menu, of niet bij de + (Toevoegen). In het menu ook tags: hun groep staat er dan
+   * niet (een lijst staat er nog onder haar andere tags). Zoeken, Lijsten en Verbanden tonen alles.
+   */
   hidden: Hidden;
+  /** Jouw volgorde van de tags (in het menu en op Lijsten); wat er niet in staat, komt erachter, op naam. */
+  tag_order: string[];
 };
 
 /** Waar een lijst staat (per persoon): in het menu (zijbalk, menublad) en bij de + (Toevoegen). */
@@ -48,7 +53,13 @@ export const MAX_APPS = 12;
 export const MAX_SHORTCUTS = 4;
 export const MAX_MUTED = 200;
 export const MAX_HIDDEN = 500;
-export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: NO_HIDDEN };
+export const DEFAULT_SETTINGS: AppSettings = { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: NO_HIDDEN, tag_order: [] };
+
+/** De tags in jouw volgorde (`tag_order`), de rest erachter op naam. */
+export function orderTags<T extends { id: string; name: string }>(tags: readonly T[], order: readonly string[]): T[] {
+  const at = new Map(order.map((id, i) => [id, i]));
+  return [...tags].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity) || a.name.localeCompare(b.name, "nl", { sensitivity: "base" }));
+}
 
 /** Staat deze lijst voor jou op die plek? */
 export const shownIn = (hidden: Hidden | undefined, place: ListPlace, list: string) => !hidden?.[place].includes(list);
@@ -121,7 +132,8 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
   const share: ShareChoice = s.kind === "receipt" && id(s.list) ? { kind: "receipt", list: s.list as string } : { kind: "ask" };
   const muted = Array.isArray(o.muted) ? [...new Set(o.muted.map(id).filter((x): x is string => x !== null))].slice(0, MAX_MUTED) : [];
-  return { apps, shortcuts, share, ai: aiAllowed(o), muted, hidden: cleanHidden(o.hidden) };
+  const tagOrder = Array.isArray(o.tag_order) ? [...new Set(o.tag_order.map(id).filter((x): x is string => x !== null))].slice(0, MAX_HIDDEN) : [];
+  return { apps, shortcuts, share, ai: aiAllowed(o), muted, hidden: cleanHidden(o.hidden), tag_order: tagOrder };
 }
 
 export function cleanHidden(raw: unknown): Hidden {
@@ -150,6 +162,8 @@ export function destinationPath(d: Destination): string {
 export type Reach = {
   boards: { id: string; name: string; icon?: string }[];
   lists: Map<string, { name: string; one: string | null; edit: boolean; kinds: Map<string, string> }>;
+  /** De tags die je ziet (verborgen in het menu, je volgorde); zonder: niet nagekeken. */
+  tags?: Set<string>;
 };
 
 export function reachable(d: Destination, reach: Reach): boolean {
@@ -190,7 +204,8 @@ export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
     share,
     ai: s.ai,
     muted: s.muted,
-    hidden: { menu: s.hidden.menu.filter((l) => reach.lists.has(l)), add: s.hidden.add.filter((l) => reach.lists.has(l)) },
+    hidden: { menu: s.hidden.menu.filter((x) => reach.lists.has(x) || (reach.tags?.has(x) ?? false)), add: s.hidden.add.filter((l) => reach.lists.has(l)) },
+    tag_order: reach.tags ? s.tag_order.filter((t) => reach.tags!.has(t)) : s.tag_order,
   };
 }
 

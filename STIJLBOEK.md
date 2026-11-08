@@ -456,8 +456,8 @@ iedereen**. Wat erna komt staat bij [Verbanden](#verbanden-linkmapview-linklist-
 - **⋯ van een lijst**: Openen, Instellen (beheerder), **Op de kaart** (tablet) of **Verbanden** (gsm: het eigen
   scherm met het schema), en de schakelaars In het menu, Bij de + en Meldingen (stil via een tag: een knop "<tag>
   weer laten melden").
-- **⋯ van de pagina**: Nieuwe lijst, **Volgorde** (een blad met een `sort-list` en Bewaren; je volgorde in het menu
-  en de keuzelijsten) en **Selecteren** (dan staat Klaar rechts boven de lijst).
+- **⋯ van de pagina**: Nieuwe lijst, **Volgorde** (een blad met eerst **Tags** en dan **Lijsten**, elk een
+  `sort-list` met greep, en één Bewaren; je volgorde in het menu, hier en in de keuzelijsten; per persoon) en **Selecteren** (dan staat Klaar rechts boven de lijst).
 - De filterpil **Archief** (naast Groeperen en Sorteren) zet de gearchiveerde lijsten in een laatste groep.
 
 Per persoon kies je zo waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +** (`useListPlaces`,
@@ -1077,7 +1077,9 @@ naar gisteren).
 **Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). Algemeen:
 naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, Archiveren en Verwijderen.
 
-**Tag** (`/tags/:id`): de lijsten met die tag (met jouw rol), Tag weghalen, en **Altijd erbij** met Aanpassen.
+**Tag** (`/tags/:id`): de lijsten met die tag (met jouw rol), Tag weghalen, **In het menu** (een schakelaar, per
+persoon: uit = de groep van de tag staat niet in je menu; een lijst staat er nog onder haar andere tags, Lijsten en
+zoeken tonen alles) en **Altijd erbij** met Aanpassen.
 
 **Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en wat je stilzette), **App** (`AppCard`: Openen
 op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst

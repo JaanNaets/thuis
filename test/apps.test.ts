@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, mutedBy, sameDestination, shownIn, type Reach } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, mutedBy, sameDestination, shownIn, type Reach, orderTags } from "../shared/apps.ts";
 
 const reach: Reach = {
   boards: [
@@ -59,7 +59,7 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
   assert.deepEqual(kept.share, { kind: "receipt", list: "pel" });
   assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", list: "wijn" } }, reach).share, { kind: "ask" });
-  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: { menu: [], add: [] } });
+  assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: { menu: [], add: [] }, tag_order: [] });
   assert.deepEqual(cleanAppSettings({ muted: ["pel", "pel", "../x", 3] }).muted, ["pel"]);
 });
 
@@ -91,4 +91,22 @@ test("stil: de lijst zelf, of via een van haar tags", () => {
   assert.equal(mutedBy(["wijn", "eten"], list), "list");
   assert.equal(mutedBy(["eten"], list), "eten");
   assert.equal(mutedBy(["ander"], list), null);
+});
+
+test("tags: jouw volgorde (de rest op naam), en een verborgen tag blijft verborgen zolang je ze ziet", () => {
+  const tags = [
+    { id: "t1", name: "Wijnkelder" },
+    { id: "t2", name: "Huis" },
+    { id: "t3", name: "auto" },
+    { id: "t4", name: "Biohoeve" },
+  ];
+  assert.deepEqual(orderTags(tags, ["t1", "t2"]).map((t) => t.name), ["Wijnkelder", "Huis", "auto", "Biohoeve"]);
+  assert.deepEqual(orderTags(tags, []).map((t) => t.name), ["auto", "Biohoeve", "Huis", "Wijnkelder"]);
+  assert.deepEqual(orderTags(tags, ["weg", "t4"]).map((t) => t.id), ["t4", "t3", "t2", "t1"]);
+  const s = cleanAppSettings({ tag_order: ["t2", "t2", "t1", "../x"], hidden: { menu: ["t1", "pel"], add: ["t1"] } });
+  assert.deepEqual(s.tag_order, ["t2", "t1"]);
+  const kept = keepReachable(s, { ...reach, tags: new Set(["t1"]) });
+  assert.deepEqual(kept.hidden.menu, ["t1", "pel"], "een tag in het menu blijft verborgen");
+  assert.deepEqual(kept.hidden.add, [], "bij de + gaat het per lijst");
+  assert.deepEqual(kept.tag_order, ["t1"], "een tag die je niet meer ziet, valt uit je volgorde");
 });

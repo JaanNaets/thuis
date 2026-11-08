@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type ListPlace, type Reach } from "../../shared/apps";
+import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type ListPlace, type Reach, orderTags } from "../../shared/apps";
 import { cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/board";
 import { appManifest, ownAppManifest } from "../../shared/manifest";
 import { canEdit, type KindInfo } from "../../shared/model";
@@ -18,7 +18,7 @@ me.get("/", async (c) => {
   const db = c.env.DB;
   const person = c.get("person");
   const [{ lists, tags }, settings, boards] = await Promise.all([myLists(db, person.id), storedSettings(db, person.id), boardsOf(db, person.id)]);
-  return c.json({ person, lists, tags, ai: settings.ai, hidden: settings.hidden, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
+  return c.json({ person, lists, tags: orderTags(tags, settings.tag_order), ai: settings.ai, hidden: settings.hidden, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
 });
 
 /** Je eigen naam, kleur en rekeningnummer. Je e-mailadres komt van je aanmelding en verandert hier niet. */
@@ -126,6 +126,19 @@ me.put("/app", async (c) => {
   return c.json(settings);
 });
 
+/** Jouw volgorde van de tags (in het menu en op Lijsten): { ids }; enkel tags die je ziet. */
+me.put("/tag-order", async (c) => {
+  const db = c.env.DB;
+  const personId = c.get("person").id;
+  const raw = asObject(await c.req.json()).ids;
+  const { tags } = await myLists(db, personId);
+  const known = new Set(tags.map((t) => t.id));
+  const order = Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === "string" && known.has(x)))] : [];
+  const settings = await storedSettings(db, personId);
+  await saveSettings(db, personId, { ...settings, tag_order: order });
+  return c.json({ tag_order: order });
+});
+
 /** Een lijst of tag stilzetten (of niet meer): geen melding bij iets nieuws daar. */
 me.put("/muted", async (c) => {
   const db = c.env.DB;
@@ -148,8 +161,9 @@ me.put("/hidden", async (c) => {
   const target = typeof obj.id === "string" ? obj.id : "";
   if (obj.place !== "menu" && obj.place !== "add") throw new ValidationError("Waar?");
   const place: ListPlace = obj.place;
-  const { lists } = await myLists(db, personId);
-  if (!lists.some((l) => l.id === target)) throw new NotFoundError("Die lijst ken je niet.");
+  const { lists, tags } = await myLists(db, personId);
+  // Een tag verbergen kan enkel in het menu (haar groep); bij de + gaat het per lijst.
+  if (!lists.some((l) => l.id === target) && !(place === "menu" && tags.some((t) => t.id === target))) throw new NotFoundError("Die lijst ken je niet.");
   const settings = await storedSettings(db, personId);
   const now = settings.hidden[place].filter((x) => x !== target);
   const hidden = { ...settings.hidden, [place]: obj.hidden === true ? [...now, target] : now };
@@ -201,9 +215,11 @@ async function reachFor(db: D1Database, personId: string): Promise<Reach> {
     boardsOf(db, personId),
   ]);
   const kindMap = new Map(kinds.map((k) => [k.id, k.name]));
+  const { tags } = await myLists(db, personId);
   return {
     boards: boards.map(({ id, name, icon }) => ({ id, name, icon })),
     lists: new Map(results.map((l) => [l.id, { name: l.name, one: l.one, edit: canEdit(seen.get(l.id)), kinds: kindMap }])),
+    tags: new Set(tags.map((t) => t.id)),
   };
 }
 

@@ -81,7 +81,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de rest van de tekst gaat
   als `?tekst=` naar het formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
   foto bij de + gaat mee naar het gekozen formulier (`putShared`, `?foto=gedeeld`, `&lezen=1`).
-- **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +;
+- **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +; in
+  het menu ook een hele tag (haar groep, schakelaar op de tagpagina). Je volgorde van de tags staat in `tag_order`
+  (`orderTags`, `PUT /me/tag-order`, Lijsten → Volgorde);
   zoeken, Verbanden en keuzelijsten tonen ze altijd. Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): één pagina met je lijsten per tag (de naam opent de lijst,
   ▸ toont haar verbanden), wie erbij is, per lijst Menu, Toevoegen en Meldingen (stilzetten, `mutedBy` in
   `shared/apps.ts`), je volgorde, en op tablet ook de kaart.

@@ -3,7 +3,8 @@ import { useParams } from "react-router";
 import { ROLES, type ListNode, type Role, type Tag, type TagRule } from "../../shared/model";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
-import { CardHead, ToneSwatches } from "../components/Controls";
+import { shownIn } from "../../shared/apps";
+import { CardHead, Switch, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
 import { stagger } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
@@ -29,7 +30,17 @@ type TagDetail = {
 export function TagPage() {
   const { tagId } = useParams();
   const { data, error, reload } = useApi<TagDetail>(`/tags/${tagId}`);
-  const { person, reloadMe } = useSession();
+  const { person, reloadMe, hidden } = useSession();
+  /** De tag (haar groep) in jouw menu tonen of niet. */
+  async function setInMenu(on: boolean) {
+    if (!data) return;
+    try {
+      await api.put("/me/hidden", { id: data.tag.id, place: "menu", hidden: !on });
+      reloadMe();
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -73,6 +84,9 @@ export function TagPage() {
       />
       <div className="split split-main-first">
         <aside className="split-aside">
+          <section className="card form-section">
+            <Switch label="In het menu" checked={shownIn(hidden, "menu", data.tag.id)} onChange={setInMenu} />
+          </section>
           <section className="card">
             <CardHead
               title="Altijd erbij"
