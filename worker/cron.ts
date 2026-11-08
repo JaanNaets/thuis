@@ -1,5 +1,5 @@
-// Elk kwartier (de cron in wrangler.jsonc): de herinneringen met een uur die in het voorbije kwartier vielen, timers die
-// hun doel haalden, en om 7 u 's morgens eerst de herhalingen (Netflix van deze maand), dan de gewone herinneringen
+// Elk kwartier (de cron in wrangler.jsonc): de koppelingen tussen lijsten (worker/mirrors.ts), de herinneringen met een
+// uur die in het voorbije kwartier vielen, timers die hun doel haalden, en om 7 u 's morgens eerst de herhalingen (Netflix van deze maand), dan de gewone herinneringen
 // (de garantie over een week, wat vandaag gepland staat). Een melding gaat enkel naar wie het nu mag zien, en niet naar
 // wie de lijst of een tag ervan stilzette. Zo gebeurt alles één keer, zonder bij te houden wat al verstuurd is.
 
@@ -11,6 +11,7 @@ import { canEdit, eventTitle, type Role } from "../shared/model";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
 import { lineAllowed } from "../shared/rights";
 import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "./access";
+import { syncAll } from "./mirrors";
 import { notify } from "./push";
 import { brusselsMoment, brusselsToday } from "./today";
 import type { AppEnv } from "./types";
@@ -27,6 +28,7 @@ export async function quarter(env: Env, at = new Date()): Promise<void> {
   const from = brusselsMoment(new Date(at.getTime() - 15 * 60_000));
   const morning = `${to.slice(0, 10)}T${MORNING}`;
   if (morning >= from && morning < to) await daily(db, to.slice(0, 10));
+  await syncAll(db).catch((err) => console.error("Koppelingen bijwerken lukte niet", err));
   await sendTimed(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
   await sendTimerGoals(db, from, to).catch((err) => console.error("Timers lukte niet", err));
 }

@@ -24,11 +24,11 @@ backup.get("/backup", async (c) => {
   const mine = [...seen].filter(([, role]) => canManage(role)).map(([id]) => id);
   if (!mine.length) throw new ValidationError("Je beheert nog geen lijst.");
   const L = ids(mine);
-  const [lists, links, kinds, things, events, lines, views, people] = (await db.batch([
+  const [lists, links, kinds, things, events, lines, views, people, mirrors] = (await db.batch([
     db.prepare("SELECT * FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT l.list_id, t.id, t.name, t.color FROM list_tag_links l JOIN list_tags t ON t.id = l.tag_id WHERE l.list_id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
-    db.prepare("SELECT id, list_id, name, data, part_of, archived, photo_version FROM things WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
+    db.prepare("SELECT id, list_id, name, data, part_of, archived, photo_version, mirror_id, mirror_of FROM things WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT * FROM events WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
     db
       .prepare(
@@ -41,6 +41,7 @@ backup.get("/backup", async (c) => {
         `SELECT DISTINCT p.id, p.name, p.email, p.color FROM people p JOIN list_people lp ON lp.person_id = p.id WHERE lp.list_id IN (SELECT value FROM json_each(?))`,
       )
       .bind(L),
+    db.prepare("SELECT id, list_id, source_id, plan FROM mirrors WHERE list_id IN (SELECT value FROM json_each(?1)) AND source_id IN (SELECT value FROM json_each(?1))").bind(L),
   ])) as D1Result<Record<string, unknown>>[];
   const linesOf = new Map<string, BackupLine[]>();
   for (const l of lines.results) {
@@ -107,7 +108,10 @@ backup.get("/backup", async (c) => {
       part_of: (t.part_of as string | null) ?? null,
       archived: t.archived ? 1 : 0,
       photo: Boolean(t.photo_version),
+      mirror_id: (t.mirror_id as string | null) ?? null,
+      mirror_of: (t.mirror_of as string | null) ?? null,
     })),
+    mirrors: mirrors.results.map((m) => ({ id: m.id as string, list_id: m.list_id as string, source_id: m.source_id as string, plan: parseJson(m.plan as string, {}) })),
     events: events.results.map((e) => ({
       id: e.id as string,
       list_id: e.list_id as string,
@@ -185,7 +189,13 @@ backup.post("/restore", async (c) => {
   for (const k of plan.kinds)
     st.push(db.prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.sort_order));
   // Eerst zonder "deel van" (dat wijst misschien naar een ding dat later komt), daarna die verwijzing.
-  for (const t of plan.things) st.push(db.prepare("INSERT INTO things (id, list_id, name, data, archived, created_by) VALUES (?, ?, ?, ?, ?, ?)").bind(t.id, t.list_id, t.name, JSON.stringify(t.data), t.archived, me));
+  for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));
+  for (const t of plan.things)
+    st.push(
+      db
+        .prepare("INSERT INTO things (id, list_id, name, data, archived, created_by, mirror_id, mirror_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(t.id, t.list_id, t.name, JSON.stringify(t.data), t.archived, me, t.mirror_id, t.mirror_of),
+    );
   for (const t of plan.things) if (t.part_of) st.push(db.prepare("UPDATE things SET part_of = ? WHERE id = ?").bind(t.part_of, t.id));
   for (const e of plan.events) {
     st.push(

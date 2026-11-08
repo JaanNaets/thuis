@@ -1084,6 +1084,8 @@ dialog.sheet.menu-sheet {
 
 .btn-row {
   display: flex;
+  /* Past de rij niet (gsm), dan gaat ze naar een volgende regel in plaats van de pagina te verbreden. */
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1566,6 +1568,8 @@ button.row-link {
   gap: 2px;
   width: fit-content;
   max-width: 100%;
+  /* In een grid (een formulier) mag de rij smaller dan haar tabs: dan schuift ze, niet de pagina. */
+  min-width: 0;
   margin: 0 0 14px;
   padding: 2px;
   overflow-x: auto;
@@ -1755,6 +1759,8 @@ button.row-link {
 
 .form {
   display: grid;
+  /* Eén kolom die nooit breder wordt dan het scherm (een rij tabs schuift dan zelf). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   max-width: 680px;
 }

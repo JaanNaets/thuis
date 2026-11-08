@@ -51,6 +51,8 @@ type ThingDetail = {
   people: Person[];
   refs: ThingRef[];
   backlinks: (ThingRef & { field_label: string })[];
+  /** Gekoppeld (zie shared/transfer.ts): uit welke lijst (als je die ziet) en het origineel. */
+  mirror: { source: { id: string; name: string } | null; of: ThingRef | null; locked: string[] } | null;
 };
 
 const ROLE_WORD = { in: "erbij", uit: "eraf", voor: "voor", bij: "bij" } as const;
@@ -122,6 +124,20 @@ export function ThingPage() {
                 </div>
               )}
               <AttributeRows defs={other} data={thing.data} names={names} refs={data.refs} />
+              {data.mirror && (
+                <div>
+                  <dt>Uit</dt>
+                  <dd>
+                    {data.mirror.of ? (
+                      <Link to={`/dingen/${data.mirror.of.id}`} className="link-quiet">
+                        {data.mirror.source ? `${data.mirror.of.name} in ${data.mirror.source.name}` : data.mirror.of.name}
+                      </Link>
+                    ) : (
+                      (data.mirror.source?.name ?? "Een andere lijst")
+                    )}
+                  </dd>
+                </div>
+              )}
               {data.part_of && (
                 <div>
                   <dt>Deel van</dt>
@@ -238,7 +254,7 @@ export function ThingPage() {
               </ul>
             </section>
           )}
-          {data.can_edit && (
+          {data.can_edit && !data.mirror && (
             <div className="btn-row" style={{ justifySelf: "start" }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={archive}>
                 <Icon name="archive" size={15} /> {thing.archived ? "Uit het archief" : "Archiveren"}

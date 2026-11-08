@@ -1,3 +1,4 @@
+import { syncFrom } from "../mirrors";
 import { Hono } from "hono";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields, cleanListFields } from "../../shared/listdef";
@@ -215,6 +216,8 @@ lists.put("/:id", async (c) => {
       list.id,
     )
     .run();
+  // Andere velden: wat uit deze lijst haalt of erin schrijft, opnieuw uitrekenen.
+  await syncFrom(db, list.id, { asTarget: true });
   return c.json({ ok: true });
 });
 

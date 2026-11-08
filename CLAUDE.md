@@ -131,10 +131,16 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
   nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
   waarom niet; `test/backup.test.ts` leest de migraties na).
-- **Toevoegen uit andere lijst** (`shared/transfer.ts`, getest; `POST /lists/:id/things/from`, `FromListPage`): dingen
-  uit een bron met voorwaarden (zoals een weergave), per veld een veld van de bron, een vaste waarde of een verwijzing
-  naar het origineel, keuzes vertaald; Weghalen uit de bron verhuist het ding zelf (dezelfde id). De server rekent het
-  plan opnieuw uit (`cleanPlan`, `transferRows`) en elke waarde gaat door `prepareData`. Eenmalig, geen koppeling.
+- **Toevoegen uit andere lijst** (`shared/transfer.ts`, getest; `FromListPage`): dingen uit een bron met voorwaarden
+  (zoals een weergave), per veld een veld van de bron, een vaste waarde of een verwijzing naar het origineel, keuzes
+  vertaald. Drie manieren (`TRANSFER_MODES`): kopiëren en verplaatsen (het ding zelf, dezelfde id) zijn eenmalig
+  (`POST /lists/:id/things/from`); **koppelen** is blijvend (`mirrors`, `things.mirror_id`/`mirror_of`,
+  `PUT|DELETE /lists/:id/mirrors/:bron`): `worker/mirrors.ts` werkt de doellijst bij na elke wijziging aan de dingen of
+  velden van een lijst (`syncFrom`, ook langs koppelingen na elkaar) en elk kwartier (`syncAll`), met de rechten die
+  wie koppelde nu heeft (beheerder van beide, anders staat ze stil), zonder kringen (`makesCycle`). Een gekoppeld ding
+  is een eigen ding; de naam en de gekoppelde velden volgen de bron (`syncChanges`, `linkedKeys`) en zijn in de
+  doellijst niet te wijzigen of te verwijderen; wat niet meer voldoet, gaat naar het archief. De server rekent elk plan
+  opnieuw uit (`cleanPlan`) en elke waarde gaat door `prepareData`.
 - **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise) en Dieet (Yazio), zo eenvoudig mogelijk;
   geen sjabloon per geval. **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst (ook
   wie een melding krijgt), zonder dingen of mensen.

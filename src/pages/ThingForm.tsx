@@ -1,3 +1,4 @@
+import { NAME } from "../../shared/views";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { FieldDef } from "../../shared/fields";
@@ -20,7 +21,8 @@ import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
 import { PhotoButton } from "../components/PhotoPicker";
 import { useSession } from "../session";
 
-type ThingDetail = { thing: Thing; list: { id: string } };
+/** `mirror`: gekoppeld (zie shared/transfer.ts); de naam en de velden in `locked` volgen de bron. */
+type ThingDetail = { thing: Thing; list: { id: string }; mirror: { locked: string[] } | null };
 
 /** Wat een foto opleverde (POST /lists/:id/things/read-photo). */
 type PhotoRead = {
@@ -44,10 +46,10 @@ export function ThingFormPage() {
   const { data: detail, error } = useApi<ListDetail>(listId ? `/lists/${listId}` : null);
   if (error) return <p className="error page">{error}</p>;
   if (!detail || (thingId && !existing)) return <p className="page muted">Laden…</p>;
-  return <ThingForm key={thingId ?? listId} detail={detail} thing={existing?.thing ?? null} />;
+  return <ThingForm key={thingId ?? listId} detail={detail} thing={existing?.thing ?? null} locked={existing?.mirror?.locked ?? []} />;
 }
 
-function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null }) {
+function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing | null; locked: string[] }) {
   const { list, role } = detail;
   const toast = useToast();
   const navigate = useNavigate();
@@ -65,7 +67,8 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
   const [partOf, setPartOf] = useState<string | null>(thing?.part_of ?? null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
-  const access = useMemo(() => allEdit(list.fields), [list.fields]);
+  // Gekoppeld: wat uit de bron komt, toon je enkel (de server houdt het zo).
+  const access = useMemo(() => ({ ...allEdit(list.fields), ...Object.fromEntries(locked.filter((k) => k !== NAME).map((k) => [k, "view" as const])) }), [list.fields, locked]);
   // Barcode (zonder AI, uit Open Food Facts) en Foto (✨): vullen in, en zeggen waar het vandaan komt.
   const products = list.fields.some((f) => f.product);
   const [scanning, setScanning] = useState(false);
@@ -197,7 +200,7 @@ function ThingForm({ detail, thing }: { detail: ListDetail; thing: Thing | null 
             Naam
             <RequiredMark />
           </span>
-          <input value={name} required maxLength={200} autoFocus={!thing} onChange={(e) => setName(e.target.value)} />
+          <input value={name} required maxLength={200} autoFocus={!thing} disabled={locked.includes(NAME)} onChange={(e) => setName(e.target.value)} />
         </label>
         {!thing && (
           <div className="field">

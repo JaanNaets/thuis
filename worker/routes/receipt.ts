@@ -6,6 +6,7 @@
 // te kijken. POST /things/:id/alias onthoudt de naam op het ticket bij het ding (een tekstveld met `aliases`, enkel als
 // je in die lijst mag wijzigen).
 
+import { syncFrom } from "../mirrors";
 import { Hono } from "hono";
 import type { Attributes, FieldDef } from "../../shared/fields";
 import { BASES, baseKind, canEdit, isBase, type KindInfo, type ThingRef } from "../../shared/model";
@@ -249,5 +250,6 @@ thingAlias.post("/:id/alias", async (c) => {
     .prepare("UPDATE things SET data = json_set(data, ?, ?), updated_at = datetime('now') WHERE id = ?")
     .bind(`$.${field.key}`, next, thing.id)
     .run();
+  await syncFrom(db, thing.list_id);
   return c.json({ ok: true });
 });

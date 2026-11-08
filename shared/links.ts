@@ -216,7 +216,10 @@ export type LineThing = { list: string; to: string; thing: string; name: string;
 /** Een blok op een van je overzichten dat een lijst toont. */
 export type BoardUse = { board: string; list: string; block: BlockKind };
 
-export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; things?: LineThing[]; boards: BoardUse[] };
+/** Een koppeling (zie shared/transfer.ts): `list` haalt blijvend dingen uit `source`, met de velden die meelopen. */
+export type MirrorUse = { list: string; source: string; fields: string[] };
+
+export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; things?: LineThing[]; boards: BoardUse[]; mirrors?: MirrorUse[] };
 
 /** Verbanden en wat een lijst met haar eigen dingen doet (dat is geen lijn op de kaart). */
 export type LinkResult = { links: Link[]; own: Record<string, string[]> };
@@ -291,6 +294,10 @@ export function buildLinks(input: LinkInput): LinkResult {
     fieldLinks(list.id, list.fields, "");
     if (list.stock) add("view", list.id, viewNode("voorraad"), list.stock.min ? "Telt voorraad, met bijna op" : "Telt voorraad");
     if (list.notify) add("view", list.id, viewNode("meldingen"), list.notify.to === "all" ? "Iets nieuws: een melding aan iedereen bij de lijst" : "Iets nieuws: een melding aan wie erin staat");
+  }
+  // Een koppeling: de doellijst hangt van de bron af, zoals een verwijzing.
+  for (const m of input.mirrors ?? []) {
+    if (lists.has(m.list) && lists.has(m.source)) add("ref", m.list, m.source, m.fields.length ? `Gekoppeld: ${m.fields.join(", ")} lopen mee` : "Gekoppeld: de namen lopen mee");
   }
   for (const k of input.kinds) {
     if (!lists.has(k.list_id)) continue;

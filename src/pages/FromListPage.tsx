@@ -1,17 +1,19 @@
 // Toevoegen uit andere lijst (zie shared/transfer.ts en STIJLBOEK.md): kies een lijst, welke dingen meegaan
 // (voorwaarden zoals in een weergave), wat er per veld in komt (een veld van de bron, een vaste waarde of het origineel),
-// hoe keuzes vertalen en of ze uit de bron weg moeten. Een voorbeeld toont wat erbij komt; de server rekent het opnieuw
-// uit. Wat je koos, blijft per paar lijsten bewaard (in dit toestel).
+// hoe keuzes vertalen, en of je kopieert, verplaatst of koppelt (blijvend: PUT /lists/:id/mirrors/:bron). Een voorbeeld
+// toont wat erbij komt; de server rekent het opnieuw uit. Een bestaande koppeling opent hier om aan te passen
+// (`?bron=`); wat je eenmalig koos, blijft per paar lijsten bewaard (in dit toestel).
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { formatFieldValue, refLists, type FieldDef } from "../../shared/fields";
-import { canEdit, type List, type ListDetail, type ThingRef, type ThingRow } from "../../shared/model";
-import { canCarry, canPointBack, cleanPlan, fillable, guessPlan, toTranslate, transferRows, type FieldSource, type TransferPlan } from "../../shared/transfer";
+import { canEdit, canManage, type List, type ListDetail, type Role, type ThingRef, type ThingRow } from "../../shared/model";
+import { canCarry, canPointBack, cleanPlan, fillable, guessPlan, toTranslate, transferRows, TRANSFER_MODES, type FieldSource, type TransferMode, type TransferPlan } from "../../shared/transfer";
 import type { Person } from "../../shared/types";
 import { kindOf, NAME, viewFields, type ViewContext } from "../../shared/views";
 import { api, useApi } from "../api";
-import { Alert, SubmitButton, Switch } from "../components/Controls";
+import { Alert, Segmented, SubmitButton } from "../components/Controls";
+import { useConfirm } from "../components/ConfirmDialog";
 import { attributesDraft, buildAttributes, FieldInputs, namesFrom, type AttributeDraft } from "../components/Fields";
 import { ConditionsEditor, type Choices } from "../components/Filters";
 import { PageHead } from "../components/Page";
@@ -23,6 +25,8 @@ import { allEdit } from "./ThingForm";
 
 type ThingList = { things: ThingRow[]; people: Person[]; refs: ThingRef[] };
 type Result = { created: number; skipped: { name: string; error: string }[] };
+/** Een koppeling die in deze lijst schrijft (GET /lists/:id/mirrors); het plan enkel als je beide lijsten beheert. */
+type MirrorInfo = { id: string; source_id: string; source: string | null; plan: unknown; can_manage: boolean };
 
 export function FromListPage() {
   const { id } = useParams();
@@ -30,13 +34,19 @@ export function FromListPage() {
   if (error) return <p className="error page">{error}</p>;
   if (!detail) return null;
   if (!detail.list.one || !canEdit(detail.role)) return <p className="error page">Je kan hier niets toevoegen.</p>;
-  return <FromListForm key={detail.list.id} list={detail.list} />;
+  return <FromListForm key={detail.list.id} list={detail.list} role={detail.role} />;
 }
 
 const planKey = (target: string, source: string) => `thuis:uit-lijst:${target}:${source}`;
 
-/** Wat je de vorige keer koos voor dit paar lijsten (nagekeken tegen de velden van nu), anders een voorstel. */
-function startPlan(target: List, source: ListDetail): TransferPlan {
+/** De bestaande koppeling, anders wat je de vorige keer koos voor dit paar lijsten (nagekeken tegen de velden van nu), anders een voorstel. */
+function startPlan(target: List, source: ListDetail, mirror: MirrorInfo | undefined): TransferPlan {
+  try {
+    if (mirror?.plan) return { ...cleanPlan(mirror.plan, source.list, target.fields), mode: "link" };
+  } catch {
+    // Past niet meer: een voorstel, als koppeling.
+    return { ...guessPlan({ id: source.list.id, fields: source.list.fields }, { fields: target.fields }), mode: "link" };
+  }
   try {
     const raw = localStorage.getItem(planKey(target.id, source.list.id));
     if (raw) return cleanPlan(JSON.parse(raw), source.list, target.fields);
@@ -49,12 +59,15 @@ function startPlan(target: List, source: ListDetail): TransferPlan {
 /** De keuze in de kolomkeuzelijst als tekst: `field:<sleutel>`, `value`, `self` of leeg. */
 const choiceOf = (s: FieldSource | undefined) => (!s ? "" : s.from === "field" ? `field:${s.key}` : s.from);
 
-function FromListForm({ list }: { list: List }) {
+function FromListForm({ list, role }: { list: List; role: Role }) {
   const { lists, person } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
+  const [params] = useSearchParams();
   const sources = lists.filter((l) => l.one && l.id !== list.id && !l.archived);
-  const [sourceId, setSourceId] = useState("");
+  const [sourceId, setSourceId] = useState(() => params.get("bron") ?? "");
+  const { data: mirrors, reload: reloadMirrors } = useApi<MirrorInfo[]>(`/lists/${list.id}/mirrors`);
   const { data: source } = useApi<ListDetail>(sourceId ? `/lists/${sourceId}` : null);
   const { data: sourceData } = useApi<ThingList>(sourceId ? `/lists/${sourceId}/things` : null);
   const [plan, setPlan] = useState<TransferPlan | null>(null);
@@ -64,9 +77,10 @@ function FromListForm({ list }: { list: List }) {
   const [result, setResult] = useState<Result>();
 
   const targets = useMemo(() => fillable(list.fields), [list.fields]);
+  const mirror = mirrors?.find((m) => m.source_id === sourceId);
   useEffect(() => {
-    if (!source || source.list.id !== sourceId || plan?.source === sourceId) return;
-    const start = startPlan(list, source);
+    if (!source || !mirrors || source.list.id !== sourceId || plan?.source === sourceId) return;
+    const start = startPlan(list, source, mirrors.find((m) => m.source_id === sourceId));
     setPlan(start);
     setValues(
       attributesDraft(
@@ -75,9 +89,14 @@ function FromListForm({ list }: { list: List }) {
       ),
     );
     setResult(undefined);
-  }, [source, sourceId, plan?.source, list, targets]);
+  }, [source, sourceId, plan?.source, list, targets, mirrors]);
 
   const ready = source && sourceData && plan && plan.source === source.list.id ? { source, sourceData, plan } : null;
+  // Wat je met deze bron mag: kopiëren altijd, verplaatsen als je de bron mag wijzigen, koppelen als je beide beheert.
+  const modes = (Object.keys(TRANSFER_MODES) as TransferMode[]).filter(
+    (m) => m === "copy" || (m === "move" && ready && canEdit(ready.source.role)) || (m === "link" && ready && canManage(role) && canManage(ready.source.role)),
+  );
+  const linking = ready?.plan.mode === "link";
   const sourceFields = ready?.source.list.fields ?? [];
   const vfields = useMemo(() => viewFields(sourceFields, ready?.source.list.one ?? "Naam"), [sourceFields, ready?.source.list.one]);
   const names = useMemo(() => namesFrom(ready?.sourceData.people ?? [], ready?.sourceData.refs ?? []), [ready?.sourceData]);
@@ -121,8 +140,14 @@ function FromListForm({ list }: { list: List }) {
       } catch {
         // Niet bewaard (privévenster): volgende keer gewoon een voorstel.
       }
+      if (linking) {
+        await api.put(`/lists/${list.id}/mirrors/${ready.plan.source}`, ready.plan);
+        toast(`Gekoppeld met ${ready.source.list.name}`);
+        navigate(`/lijsten/${list.id}`, { replace: true });
+        return;
+      }
       const res = await api.post<Result>(`/lists/${list.id}/things/from`, ready.plan);
-      toast(`${formatNumber(res.created)} ${ready.plan.move ? "verplaatst naar" : "toegevoegd aan"} ${list.name}`);
+      toast(`${formatNumber(res.created)} ${ready.plan.mode === "move" ? "verplaatst naar" : "toegevoegd aan"} ${list.name}`);
       if (res.skipped.length === 0) {
         navigate(`/lijsten/${list.id}`, { replace: true });
         return;
@@ -132,6 +157,20 @@ function FromListForm({ list }: { list: List }) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** De koppeling weghalen: wat ze bracht, blijft als gewone dingen staan. */
+  async function unlink() {
+    if (!ready || !mirror) return;
+    if (!(await confirm({ title: `Koppeling met ${ready.source.list.name} weghalen?`, body: "Wat ze bracht, blijft staan en volgt niet meer mee.", confirmLabel: "Weghalen", danger: true }))) return;
+    try {
+      await api.delete(`/lists/${list.id}/mirrors/${ready.plan.source}`);
+      toast("Koppeling weggehaald");
+      reloadMirrors();
+      navigate(`/lijsten/${list.id}`, { replace: true });
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -160,6 +199,9 @@ function FromListForm({ list }: { list: List }) {
             ))}
           </select>
         </label>
+        {ready && modes.length > 1 && (
+          <Segmented label="Hoe" value={ready.plan.mode} onChange={(mode) => update({ mode })} options={modes.map((m) => ({ value: m, label: TRANSFER_MODES[m] }))} />
+        )}
         {ready && (
           <ConditionsEditor label="Welke" def={ready.plan.where} fields={vfields} choices={choices} onChange={(where) => update({ where: { ...ready.plan.where, ...where } })} />
         )}
@@ -244,7 +286,6 @@ function FromListForm({ list }: { list: List }) {
               );
             })}
           </ul>
-          {canEdit(ready.source.role) && <Switch label={`Weghalen uit ${ready.source.list.name}`} checked={ready.plan.move} onChange={(move) => update({ move })} />}
         </section>
       )}
 
@@ -286,9 +327,16 @@ function FromListForm({ list }: { list: List }) {
       {error && <p className="error">{error}</p>}
 
       {ready && !result && (
-        <SubmitButton busy={busy} className="btn btn-primary btn-lg" disabled={!rows.length}>
-          {`${formatNumber(rows.length)} ${ready.plan.move ? "verplaatsen" : "toevoegen"}`}
-        </SubmitButton>
+        <div className="btn-row">
+          <SubmitButton busy={busy} className="btn btn-primary btn-lg" disabled={!linking && !rows.length}>
+            {linking ? (mirror ? "Koppeling bewaren" : `${formatNumber(rows.length)} koppelen`) : `${formatNumber(rows.length)} ${ready.plan.mode === "move" ? "verplaatsen" : "toevoegen"}`}
+          </SubmitButton>
+          {linking && mirror && (
+            <button type="button" className="btn btn-danger-ghost btn-lg" onClick={unlink}>
+              Koppeling weghalen
+            </button>
+          )}
+        </div>
       )}
       {result && (
         <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`/lijsten/${list.id}`, { replace: true })}>

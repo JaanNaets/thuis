@@ -3,13 +3,14 @@
 // bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een ding geeft geen
 // bedrag of verdeling).
 
+import { linkedKeys, type TransferPlan } from "../../shared/transfer";
 import { Hono } from "hono";
 import { cleanViewBlock, evaluateView, MAX_SHIFT, sourceFields, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { FieldDef } from "../../shared/fields";
 import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
-import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat } from "../../shared/links";
+import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { netBalance, settleUp, type MoneyEvent } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
 import { canEdit, dayOf, STATUSES, type EventView, type List, type Role, type Status } from "../../shared/model";
@@ -410,7 +411,19 @@ insights.get("/links", async (c) => {
     }),
   );
 
-  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, things: thingLineRows.results, boards: uses });
+  // Koppelingen tussen lijsten die je ziet, met de velden die meelopen (hun naam in de doellijst).
+  const { results: mirrorRows } = await db
+    .prepare("SELECT list_id, source_id, plan FROM mirrors WHERE list_id IN (SELECT value FROM json_each(?1)) AND source_id IN (SELECT value FROM json_each(?1))")
+    .bind(listIds)
+    .all<{ list_id: string; source_id: string; plan: string }>();
+  const fieldsOf = new Map(lists.map((l) => [l.id, l.fields]));
+  const mirrors: MirrorUse[] = mirrorRows.map((m) => {
+    const keys = linkedKeys({ fields: parseJson<Partial<TransferPlan>>(m.plan, {}).fields ?? {} });
+    const labels = keys.flatMap((k) => (fieldsOf.get(m.list_id) ?? []).filter((f) => f.key === k).map((f) => f.label));
+    return { list: m.list_id, source: m.source_id, fields: labels };
+  });
+
+  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, things: thingLineRows.results, boards: uses, mirrors });
 
   // Wie bij elke lijst is (zonder wie er rechtstreeks niet bij mag), en wat voor wie niet werkt.
   const peopleLists = lists.slice(0, LINK_PEOPLE_LISTS);

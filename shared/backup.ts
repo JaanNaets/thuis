@@ -25,6 +25,7 @@ export const BACKUP_TABLES = {
   list_tag_links: true,
   kinds: true,
   things: true,
+  mirrors: "koppelingen tussen lijsten die allebei in de back-up zitten",
   events: true,
   lines: true,
   attachments: "de bestanden zelf staan in R2",
@@ -64,7 +65,9 @@ export type Backup = {
   tags: { id: string; name: string; color: string | null }[];
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
   kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; sort_order: number }[];
-  things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean }[];
+  things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id?: string | null; mirror_of?: string | null }[];
+  /** Koppelingen (zie shared/transfer.ts) tussen lijsten die allebei in de back-up zitten; ontbreekt in oudere back-ups. */
+  mirrors?: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: {
     id: string;
     list_id: string;
@@ -143,7 +146,8 @@ export type RestoreContext = {
 export type RestorePlan = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
   kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; sort_order: number }[];
-  things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean }[];
+  things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id: string | null; mirror_of: string | null }[];
+  mirrors: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
   views: Backup["views"];
 };
@@ -154,7 +158,7 @@ const remapReadPhoto = (r: ReadPhoto | null, map: Map<string, string>): ReadPhot
 /** Wat terugzetten maakt: alles met nieuwe ids, nagekeken. */
 export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
   const map = new Map<string, string>();
-  for (const x of [...backup.lists, ...backup.kinds, ...backup.things, ...backup.events, ...backup.views]) map.set(x.id, ctx.newId());
+  for (const x of [...backup.lists, ...backup.kinds, ...backup.things, ...backup.events, ...backup.views, ...(backup.mirrors ?? [])]) map.set(x.id, ctx.newId());
   const newThings = new Set(backup.things.map((t) => map.get(t.id)!));
   const thingOk = (id: string) => newThings.has(id) || ctx.seenThings.has(id);
   const personOk = (id: string) => ctx.people.has(id);
@@ -204,8 +208,16 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, sort_order: k.sort_order ?? 0 });
   }
 
+  // Een koppeling enkel tussen twee lijsten die terugkomen; de bron en de doellijst met hun nieuwe ids.
+  const restored = new Set(backup.lists.map((l) => map.get(l.id)!));
+  const mirrors: RestorePlan["mirrors"] = (backup.mirrors ?? [])
+    .map((m) => ({ id: map.get(m.id)!, list_id: map.get(m.list_id) ?? "", source_id: map.get(m.source_id) ?? "", plan: remap(m.plan, map) }))
+    .filter((m) => restored.has(m.list_id) && restored.has(m.source_id) && m.list_id !== m.source_id);
+  const mirrorIds = new Set(mirrors.map((m) => m.id));
+
   const things: RestorePlan["things"] = backup.things.map((t) => {
     const list_id = map.get(t.list_id)!;
+    const mirror = t.mirror_id ? (map.get(t.mirror_id) ?? null) : null;
     const fields = fieldsOf.get(list_id) ?? [];
     const partOf = t.part_of ? (map.get(t.part_of) ?? t.part_of) : null;
     return {
@@ -217,6 +229,8 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       part_of: partOf && thingOk(partOf) ? partOf : null,
       archived: t.archived ? 1 : 0,
       photo: Boolean(t.photo),
+      mirror_id: mirror && mirrorIds.has(mirror) ? mirror : null,
+      mirror_of: mirror && mirrorIds.has(mirror) && t.mirror_of ? (map.get(t.mirror_of) ?? null) : null,
     };
   });
 
@@ -253,5 +267,5 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
   }
 
   const views = backup.views.map((v) => ({ ...v, id: map.get(v.id)!, list_id: map.get(v.list_id) ?? v.list_id, def: remap(v.def, map) })).filter((v) => lists.some((l) => l.id === v.list_id));
-  return { lists, kinds, things, events, views };
+  return { lists, kinds, things, mirrors, events, views };
 }

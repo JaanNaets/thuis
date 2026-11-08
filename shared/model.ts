@@ -149,6 +149,9 @@ export type Thing = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Gekoppeld (zie shared/transfer.ts): de koppeling en het ding in de bron. */
+  mirror_id?: string | null;
+  mirror_of?: string | null;
 };
 
 /** Een ding in een lijst, met zijn voorraad als de lijst telt. */

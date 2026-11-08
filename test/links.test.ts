@@ -379,3 +379,11 @@ test("weergaven staan bij de lijst, niet als lijn op de kaart", () => {
   );
 });
 
+
+test("een koppeling is een verband van de doellijst naar de bron, met de velden die meelopen", () => {
+  const { links } = buildLinks(input({ mirrors: [{ list: "A", source: "B", fields: ["Kleur", "Jaargang"] }] }));
+  assert.ok(has(links, "ref", "A", "B"));
+  assert.deepEqual(links.find((l) => l.kind === "ref" && l.from === "A")?.texts, ["Gekoppeld: Kleur, Jaargang lopen mee"]);
+  // Met een lijst die je niet ziet: geen verband.
+  assert.equal(buildLinks(input({ mirrors: [{ list: "A", source: "VERBORGEN", fields: [] }] })).links.length, 0);
+});

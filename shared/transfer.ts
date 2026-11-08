@@ -1,8 +1,9 @@
 // Toevoegen uit een andere lijst: dingen uit een bron (welke: voorwaarden zoals in een weergave) als dingen in deze
 // lijst, met per veld wat erin komt (een veld van de bron, een vaste waarde of een verwijzing naar het origineel) en
-// keuzes die anders heten vertaald (Rood → Drinken). Met Weghalen uit de bron verplaatst het ding zelf (foto, logboek en
-// voorraad gaan mee); anders komt er een nieuw ding bij. Dezelfde logica in het voorbeeld (src/pages/FromListPage.tsx)
-// en op de server (POST /lists/:id/things/from), die ze opnieuw uitrekent met wat de lezer ziet.
+// keuzes die anders heten vertaald (Rood → Drinken). Drie manieren (`TRANSFER_MODES`): kopiëren (nieuwe dingen),
+// verplaatsen (het ding zelf verhuist, met foto, logboek en voorraad) of koppelen (blijvend: `syncChanges` houdt de
+// doellijst bij, de gekoppelde velden volgen de bron). Dezelfde logica in het voorbeeld (src/pages/FromListPage.tsx) en
+// op de server (POST /lists/:id/things/from, PUT /lists/:id/mirrors/:bron, worker/mirrors.ts), met wat de lezer ziet.
 
 import { refLists, type Attributes, type FieldDef, type FieldValue } from "./fields.ts";
 import { cleanView, matchesView, NAME, viewFields, type ViewContext, type ViewDef } from "./views.ts";
@@ -16,6 +17,10 @@ export type FieldSource =
   /** Een verwijzing naar het ding in de bron (enkel bij een verwijzing naar die lijst). */
   | { from: "self" };
 
+/** Kopiëren laat de bron staan, verplaatsen haalt het ding eruit, koppelen blijft meelopen. */
+export const TRANSFER_MODES = { copy: "Kopiëren", move: "Verplaatsen", link: "Koppelen" } as const;
+export type TransferMode = keyof typeof TRANSFER_MODES;
+
 export type TransferPlan = {
   source: string;
   where: ViewDef;
@@ -25,8 +30,7 @@ export type TransferPlan = {
   fields: Record<string, FieldSource>;
   /** Per keuzeveld van deze lijst: een waarde van de bron → een keuze hier ("" = leeg laten). */
   translate: Record<string, Record<string, string>>;
-  /** Weghalen uit de bron: het ding zelf verhuist. */
-  move: boolean;
+  mode: TransferMode;
 };
 
 export type SourceThing = { id: string; name: string; data: Attributes; tag_ids: string[]; created_at?: string };
@@ -79,7 +83,7 @@ export function guessPlan(source: { id: string; fields: FieldDef[] }, target: { 
       fields[t.key] = { from: "field", key: pick.key };
     } else if (canPointBack(t, source.id)) fields[t.key] = { from: "self" };
   }
-  return { source: source.id, where: { match: "all", conditions: [] }, name: NAME, fields, translate: {}, move: false };
+  return { source: source.id, where: { match: "all", conditions: [] }, name: NAME, fields, translate: {}, mode: "copy" };
 }
 
 const asTexts = (v: FieldValue | undefined): string[] =>
@@ -176,5 +180,81 @@ export function cleanPlan(raw: unknown, source: { id: string; fields: FieldDef[]
       .slice(0, 50);
     if (pairs.length) translate[target.key] = Object.fromEntries(pairs);
   }
-  return { source: source.id, where, name, fields, translate, move: o.move === true };
+  // `move` is hoe een plan vroeger verplaatsen zei (nog zo bewaard in een toestel).
+  const mode: TransferMode = typeof o.mode === "string" && Object.hasOwn(TRANSFER_MODES, o.mode) ? (o.mode as TransferMode) : o.move === true ? "move" : "copy";
+  return { source: source.id, where, name, fields, translate, mode };
+}
+
+// ---------- koppelen ----------
+
+/** De velden die een koppeling bijhoudt (in de doellijst niet te wijzigen): wat uit de bron komt. Een vaste waarde is een begin. */
+export function linkedKeys(plan: Pick<TransferPlan, "fields">): string[] {
+  return Object.entries(plan.fields)
+    .filter(([, s]) => s.from !== "value")
+    .map(([k]) => k);
+}
+
+/** Een ding in de doellijst van een koppeling, met het ding in de bron waar het bij hoort. */
+export type MirrorThing = { id: string; mirror_of: string | null; name: string; data: Attributes; archived: 0 | 1 };
+export type MirrorChanges = {
+  /** Nieuw in de doellijst (met de vaste waarden). */
+  create: TransferRow[];
+  /** De naam en de gekoppelde velden volgen de bron; `restore`: was gearchiveerd en voldoet weer. */
+  update: { id: string; name: string; data: Attributes; restore: boolean }[];
+  /** Voldoet niet meer of is weg uit de bron: gearchiveerd, met zijn logboek. */
+  archive: string[];
+};
+
+const sameData = (a: Attributes, b: Attributes) => {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+};
+
+/**
+ * Een koppeling bijwerken: wat aan de voorwaarden voldoet, staat in de doellijst (nieuw met de vaste waarden; al
+ * gekoppeld: de naam en de gekoppelde velden volgen de bron, de eigen velden blijven); wat niet meer voldoet of uit de
+ * bron weg is, wordt gearchiveerd en komt terug als het weer voldoet. Enkel wat echt verandert.
+ */
+export function syncChanges(things: SourceThing[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], existing: MirrorThing[], ctx: ViewContext): MirrorChanges {
+  const rows = transferRows(things, plan, sourceFields, targetFields, ctx);
+  const linked = linkedKeys(plan);
+  const bySource = new Map(existing.filter((e) => e.mirror_of).map((e) => [e.mirror_of!, e]));
+  const kept = new Set<string>();
+  const create: TransferRow[] = [];
+  const update: MirrorChanges["update"] = [];
+  for (const r of rows) {
+    const had = bySource.get(r.source_id);
+    if (!had) {
+      create.push(r);
+      continue;
+    }
+    kept.add(had.id);
+    const data: Attributes = { ...had.data };
+    for (const k of linked) {
+      if (r.data[k] === undefined) delete data[k];
+      else data[k] = r.data[k];
+    }
+    const restore = had.archived === 1;
+    if (restore || had.name !== r.name || !sameData(data, had.data)) update.push({ id: had.id, name: r.name, data, restore });
+  }
+  const archive = existing.filter((e) => !kept.has(e.id) && e.archived === 0).map((e) => e.id);
+  return { create, update, archive };
+}
+
+/** Zou deze koppeling een kring maken (de bron haalt, rechtstreeks of via andere, al uit de doellijst)? */
+export function makesCycle(links: { list: string; source: string }[], target: string, source: string): boolean {
+  if (target === source) return true;
+  // Van de bron terug langs de bronnen: komen we bij de doellijst, dan is het een kring.
+  const sourcesOf = new Map<string, string[]>();
+  for (const l of links) sourcesOf.set(l.list, [...(sourcesOf.get(l.list) ?? []), l.source]);
+  const seen = new Set<string>();
+  const todo = [source];
+  while (todo.length) {
+    const at = todo.pop()!;
+    if (at === target) return true;
+    if (seen.has(at)) continue;
+    seen.add(at);
+    todo.push(...(sourcesOf.get(at) ?? []));
+  }
+  return false;
 }

@@ -141,3 +141,29 @@ test("elke tabel uit de migraties staat in BACKUP_TABLES (mee in de back-up of b
   }
   assert.deepEqual([...tables].sort(), Object.keys(BACKUP_TABLES).sort());
 });
+
+test("terugzetten met een koppeling: enkel tussen lijsten die terugkomen, met de nieuwe ids", () => {
+  const KEUKEN = "99999999-9999-4999-8999-999999999999";
+  const MIRROR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const ELDERS = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const KOPIE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const withMirror: Backup = {
+    ...backup,
+    lists: [...backup.lists, { ...backup.lists[0], id: KEUKEN, name: "Keuken", fields: [], tag_ids: [] }],
+    things: [...backup.things, { id: KOPIE, list_id: KEUKEN, name: "Pasta", data: {}, part_of: null, archived: 0, photo: false, mirror_id: MIRROR, mirror_of: PASTA }],
+    mirrors: [
+      { id: MIRROR, list_id: KEUKEN, source_id: VOORRAAD, plan: { source: VOORRAAD, where: { match: "all", conditions: [] }, name: "_name", fields: {}, translate: {}, mode: "link" } },
+      { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", list_id: KEUKEN, source_id: ELDERS, plan: {} },
+    ],
+  };
+  const plan = planRestore(withMirror, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenThings: new Set() });
+  const keuken = plan.lists.find((l) => l.name === "Keuken")!;
+  const voorraad = plan.lists.find((l) => l.name === "Voorraad")!;
+  assert.equal(plan.mirrors.length, 1, "een koppeling met een lijst buiten de back-up valt weg");
+  const [m] = plan.mirrors;
+  assert.deepEqual([m.list_id, m.source_id, (m.plan as { source: string }).source], [keuken.id, voorraad.id, voorraad.id]);
+  const kopie = plan.things.find((t) => t.old === KOPIE)!;
+  const pasta = plan.things.find((t) => t.old === PASTA)!;
+  assert.deepEqual([kopie.mirror_id, kopie.mirror_of], [m.id, pasta.id]);
+  assert.deepEqual([pasta.mirror_id, pasta.mirror_of], [null, null]);
+});

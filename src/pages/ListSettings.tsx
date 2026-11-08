@@ -17,7 +17,7 @@ import { Sheet } from "../components/Sheet";
 import { TagChooser } from "../components/TagChooser";
 import { useConfirm } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
-import { useNavigate } from "../router";
+import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 
 type Tab = "algemeen" | "velden" | "voorraad" | "soorten" | "mensen";
@@ -53,6 +53,58 @@ export function ListSettings() {
       {tab === "soorten" && <Kinds detail={detail} onSaved={reload} />}
       {tab === "mensen" && <People detail={detail} onSaved={reload} />}
     </div>
+  );
+}
+
+/** Een koppeling die in deze lijst schrijft (GET /lists/:id/mirrors). */
+type MirrorInfo = { id: string; source_id: string; source: string | null; can_manage: boolean };
+
+/**
+ * De koppelingen van deze lijst (zie shared/transfer.ts): elk "Uit <bron>", aan te passen in Toevoegen uit andere lijst
+ * (`?bron=`); + Koppeling voor een beheerder. Zonder koppelingen en zonder rechten: niets.
+ */
+function Mirrors({ listId, manage }: { listId: string; manage: boolean }) {
+  const { data: mirrors } = useApi<MirrorInfo[]>(`/lists/${listId}/mirrors`);
+  if (!mirrors || (!mirrors.length && !manage)) return null;
+  return (
+    <section className="card">
+      <CardHead
+        title="Gekoppeld"
+        action={
+          manage && (
+            <Link to={`/lijsten/${listId}/uit-lijst`} className="btn btn-outline btn-sm">
+              <Icon name="plus" size={15} /> Koppeling
+            </Link>
+          )
+        }
+      />
+      {mirrors.length > 0 && (
+        <ul className="rows">
+          {mirrors.map((m) => {
+            const title = `Uit ${m.source ?? "een andere lijst"}`;
+            const inner = (
+              <span className="cell-main">
+                <span className="row-media">
+                  <Icon name="links" size={16} />
+                </span>
+                <span className="row-title">{title}</span>
+              </span>
+            );
+            return (
+              <li key={m.id}>
+                {m.can_manage ? (
+                  <Link to={`/lijsten/${listId}/uit-lijst?bron=${m.source_id}`} className="row">
+                    {inner}
+                  </Link>
+                ) : (
+                  <div className="row">{inner}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -163,6 +215,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
       <button type="button" className="btn btn-primary btn-lg" disabled={busy || !name.trim()} onClick={save}>
         Opslaan
       </button>
+      {list.one && <Mirrors listId={list.id} manage={canManage(detail.role)} />}
       <div className="btn-row" style={{ justifySelf: "start" }}>
         <button type="button" className="btn btn-ghost" onClick={downloadTemplate}>
           <Icon name="download" size={15} /> Als sjabloon

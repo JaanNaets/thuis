@@ -610,14 +610,24 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   lange tekst) is een eigen scherm. Exporteren is een iconknop `download` in de toolbar: een gewone `<a download>`
   naar een CSV-bestand (CSV met ; en een komma in getallen, voor Excel; `shared/csv.ts`), met enkel wat jij mag zien.
 - **Toevoegen uit andere lijst** (⋯ van de dingen, `FromListPage`, `/lijsten/:id/uit-lijst`, logica in
-  `shared/transfer.ts`): een eigen scherm zoals Importeren. **Uit** (een lijst met dingen), **Welke**
-  (`ConditionsEditor` uit `Filters.tsx`, dezelfde voorwaarden als een weergave), **Kolommen** (`.column-map`: per veld
-  van deze lijst Leeg, een veld van de bron dat past (`canCarry`), het origineel bij een verwijzing naar de bron, of
-  Vaste waarde met het gewone veld eronder, `.column-map-value`; keuzes die hier niet bestaan vertaal je eronder,
-  `.column-map-translate`) en de schakelaar **Weghalen uit <bron>** (enkel als je de bron mag wijzigen: het ding zelf
-  verhuist, met foto, logboek en voorraad). Dan **Zo komt het erin** (`.import-preview`) en de knop "N toevoegen" of
-  "N verplaatsen". Wat je koos, blijft per paar lijsten bewaard; de server rekent alles opnieuw uit
-  (`POST /lists/:id/things/from`). Het is een eenmalige actie, geen blijvende koppeling.
+  `shared/transfer.ts`): een eigen scherm zoals Importeren. **Uit** (een lijst met dingen), **Hoe** (`Segmented`:
+  Kopiëren · Verplaatsen · Koppelen; verplaatsen enkel als je de bron mag wijzigen, koppelen enkel als je beide lijsten
+  beheert), **Welke** (`ConditionsEditor` uit `Filters.tsx`, dezelfde voorwaarden als een weergave), **Kolommen**
+  (`.column-map`: per veld van deze lijst Leeg, een veld van de bron dat past (`canCarry`), het origineel bij een
+  verwijzing naar de bron, of Vaste waarde met het gewone veld eronder, `.column-map-value`; keuzes die hier niet
+  bestaan vertaal je eronder, `.column-map-translate`). Dan **Zo komt het erin** (`.import-preview`) en de knop
+  "N toevoegen", "N verplaatsen" of "N koppelen". Kopiëren maakt nieuwe dingen, verplaatsen verhuist het ding zelf
+  (foto, logboek en voorraad gaan mee); beide eenmalig (`POST /lists/:id/things/from`), wat je koos blijft per paar
+  lijsten bewaard in het toestel.
+- **Koppelen** is blijvend (`PUT /lists/:id/mirrors/:bron`, `worker/mirrors.ts`): wat aan de voorwaarden voldoet,
+  staat ook in deze lijst als eigen ding (eigen voorraad en logboek); de naam en de gekoppelde velden volgen de bron,
+  een vaste waarde is enkel een begin. Wat niet meer voldoet of uit de bron weg is, gaat naar het archief en komt
+  terug als het weer voldoet. Bijgewerkt na elke wijziging in de bron en elk kwartier, met de rechten van wie
+  koppelde; geen kringen. Een bestaande koppeling opent hetzelfde scherm met `?bron=` (knoppen "Koppeling bewaren"
+  en `btn-danger-ghost` "Koppeling weghalen": de dingen blijven, ze volgen niet meer). In het formulier van een
+  gekoppeld ding staan de gekoppelde velden op "· enkel zien" en is de naam niet te wijzigen; de fiche toont **Uit**
+  (het origineel, `link-quiet`) en geen Archiveren of Verwijderen. Instellen → Algemeen heeft de kaart **Gekoppeld**
+  (elke koppeling "Uit <bron>", + Koppeling voor een beheerder; zonder koppelingen en rechten niets).
 - **Offline**: zonder internet staat bovenaan `.offline-note` (op gsm onder de terugknop). Een nieuw item bewaren
   lukt toch: het wacht op het toestel (`src/outbox.ts`, IndexedDB) en de melding zegt hoeveel er wacht; met internet
   gaat het vanzelf mee (toast "2 items van offline verstuurd"). Wijzigen en verwijderen vragen internet.

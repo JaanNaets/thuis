@@ -7,6 +7,7 @@ import type { Person } from "../../shared/types";
 import { brusselsToday } from "../today";
 import { ids, kindOf, needEdit, requireList, requireThing, seenLists, toThing, type ThingRowDb } from "../access";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
+import { lockedOf, syncFrom } from "../mirrors";
 import { prepareData } from "../prepare";
 import { cleanPlan, MAX_TRANSFER, transferRows, type TransferPlan } from "../../shared/transfer";
 import type { AppEnv } from "../types";
@@ -112,6 +113,7 @@ listThings.post("/:id/things", async (c) => {
     .prepare("INSERT INTO things (id, list_id, name, data, part_of, created_by) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(id, list.id, requiredString(body, "name", 200), JSON.stringify(data), partOf, me.id)
     .run();
+  await syncFrom(db, list.id);
   return c.json({ id }, 201);
 });
 
@@ -144,6 +146,7 @@ listThings.post("/:id/things/import", async (c) => {
     }
   }
   for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));
+  await syncFrom(db, list.id);
   return c.json({ created: statements.length, skipped });
 });
 
@@ -169,7 +172,9 @@ listThings.post("/:id/things/from", async (c) => {
   } catch (err) {
     throw new ValidationError((err as Error).message);
   }
-  if (plan.move) needEdit(sourceRole, "Enkel wie die lijst mag wijzigen, haalt er iets uit weg.");
+  if (plan.mode === "link") throw new ValidationError("Een koppeling bewaar je bij Koppelen.");
+  const move = plan.mode === "move";
+  if (move) needEdit(sourceRole, "Enkel wie die lijst mag wijzigen, haalt er iets uit weg.");
   const { results } = await db
     .prepare(`SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`)
     .bind(source.id)
@@ -188,7 +193,7 @@ listThings.post("/:id/things/from", async (c) => {
     try {
       const data = await prepareData(db, me.id, seen, list.fields, r.data);
       statements.push(
-        plan.move
+        move
           ? db
               .prepare("UPDATE things SET list_id = ?, name = ?, data = ?, updated_at = datetime('now') WHERE id = ? AND list_id = ?")
               .bind(list.id, r.name, JSON.stringify(data), r.source_id, source.id)
@@ -199,6 +204,8 @@ listThings.post("/:id/things/from", async (c) => {
     }
   }
   for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));
+  await syncFrom(db, list.id);
+  if (move) await syncFrom(db, source.id);
   return c.json({ created: statements.length, skipped });
 });
 
@@ -353,7 +360,16 @@ things.get("/:id", async (c) => {
     };
   });
   const stock = list.stock ? (await stockOf(db, list, [thing])).get(thing.id) : null;
+  const locked = thing.mirror_id ? await lockedOf(db, thing.mirror_id) : null;
+  const mirror = locked
+    ? {
+        source: seen.has(locked.source.id) ? locked.source : null,
+        of: thing.mirror_of ? ((await thingRefs(db, seen, [thing.mirror_of]))[0] ?? null) : null,
+        locked: locked.keys,
+      }
+    : null;
   return c.json({
+    mirror,
     thing: { ...thing, data: shown(list.fields, thing.data, today) },
     list: { id: list.id, name: list.name, one: list.one, icon: list.icon, color: list.color, fields: list.fields, stock: list.stock },
     role,
@@ -400,11 +416,22 @@ things.put("/:id", async (c) => {
   const body = asObject(await c.req.json());
   const seen = await seenLists(db, me.id);
   const data = await prepareData(db, me.id, seen, list.fields, body.data, thing.data);
+  let name = requiredString(body, "name", 200);
+  // Gekoppeld: de naam en de gekoppelde velden volgen de bron, wat hier binnenkomt telt daarvoor niet.
+  const locked = thing.mirror_id ? await lockedOf(db, thing.mirror_id) : null;
+  if (locked) {
+    name = thing.name;
+    for (const k of locked.keys) {
+      if (thing.data[k] === undefined) delete data[k];
+      else data[k] = thing.data[k];
+    }
+  }
   const partOf = body.part_of === undefined ? thing.part_of : await checkPartOf(db, seen, optionalString(body, "part_of", 64), thing.id);
   await db
     .prepare("UPDATE things SET name = ?, data = ?, part_of = ?, updated_at = datetime('now') WHERE id = ?")
-    .bind(requiredString(body, "name", 200), JSON.stringify(data), partOf, thing.id)
+    .bind(name, JSON.stringify(data), partOf, thing.id)
     .run();
+  await syncFrom(db, list.id);
   return c.json({ ok: true });
 });
 
@@ -412,8 +439,10 @@ things.put("/:id/archived", async (c) => {
   const db = c.env.DB;
   const { thing, role } = await requireThing(db, c.get("person").id, c.req.param("id"));
   needEdit(role);
+  await notMirrored(db, thing.mirror_id);
   const archived = asObject(await c.req.json()).archived === true ? 1 : 0;
   await db.prepare("UPDATE things SET archived = ?, updated_at = datetime('now') WHERE id = ?").bind(archived, thing.id).run();
+  await syncFrom(db, thing.list_id);
   return c.json({ ok: true });
 });
 
@@ -422,6 +451,7 @@ things.delete("/:id", async (c) => {
   const db = c.env.DB;
   const { thing, role } = await requireThing(db, c.get("person").id, c.req.param("id"));
   needEdit(role);
+  await notMirrored(db, thing.mirror_id);
   const { results } = await db.prepare("SELECT r2_key FROM attachments WHERE owner_kind = 'thing' AND owner_id = ?").bind(thing.id).all<{ r2_key: string }>();
   await db.batch([
     db.prepare("UPDATE lines SET text = ?, thing_id = NULL WHERE thing_id = ?").bind(thing.name, thing.id),
@@ -429,8 +459,16 @@ things.delete("/:id", async (c) => {
     db.prepare("DELETE FROM things WHERE id = ?").bind(thing.id),
   ]);
   await purgeMedia(c.env, "thing", thing.id, results.map((r) => r.r2_key));
+  await syncFrom(db, thing.list_id);
   return c.body(null, 204);
 });
+
+/** Een gekoppeld ding komt en gaat met de bron: weghalen of archiveren doe je daar (of je past de koppeling aan). */
+async function notMirrored(db: D1Database, mirrorId: string | null | undefined) {
+  if (!mirrorId) return;
+  const locked = await lockedOf(db, mirrorId);
+  if (locked) throw new ValidationError(`Dit komt uit ${locked.source.name}: haal het daar weg of pas de koppeling aan.`);
+}
 
 // ---------- foto en bestanden ----------
 
