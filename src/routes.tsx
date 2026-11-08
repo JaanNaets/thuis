@@ -3,6 +3,7 @@ import { App } from "./App";
 import { EventFormPage } from "./pages/EventForm";
 import { EventPage } from "./pages/EventPage";
 import { Home } from "./pages/Home";
+import { FromListPage } from "./pages/FromListPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ListNew } from "./pages/ListNew";
 import { ListPage } from "./pages/ListPage";
@@ -31,6 +32,7 @@ export const routes: RouteObject[] = [
       { path: "lijsten/:id/nieuw", element: <ThingFormPage /> },
       { path: "lijsten/:id/loggen", element: <EventFormPage /> },
       { path: "lijsten/:id/importeren", element: <ImportPage /> },
+      { path: "lijsten/:id/uit-lijst", element: <FromListPage /> },
       { path: "lijsten/:id/sticker", element: <StickerPage /> },
       { path: "dingen/:thingId", element: <ThingPage /> },
       { path: "dingen/:thingId/bewerken", element: <ThingFormPage /> },

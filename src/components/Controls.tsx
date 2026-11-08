@@ -114,9 +114,9 @@ export function Alert({ tone, ai, children }: { tone: AlertTone; ai?: boolean; c
 }
 
 /** Knop die tijdens het opslaan een draaiend icoontje toont. */
-export function SubmitButton({ busy, children, className = "btn btn-primary" }: { busy: boolean; children: ReactNode; className?: string }) {
+export function SubmitButton({ busy, children, className = "btn btn-primary", disabled = false }: { busy: boolean; children: ReactNode; className?: string; disabled?: boolean }) {
   return (
-    <button type="submit" className={className} disabled={busy}>
+    <button type="submit" className={className} disabled={busy || disabled}>
       {busy && <Spinner />}
       {children}
     </button>

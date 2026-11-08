@@ -254,6 +254,69 @@ function ConditionEditor({
  * Het onderblad Filters: voorwaarden (alle of één ervan), sorteren, kolommen, en bewaren als weergave (nieuw, of de
  * weergave die openstaat bijwerken of verwijderen).
  */
+/**
+ * Voorwaarden: aan alles of aan één ervan, elk veld met een vergelijking en een waarde, en + Voorwaarde. In een
+ * weergave (`ViewEditor`) en bij Toevoegen uit andere lijst (welke dingen meegaan).
+ */
+export function ConditionsEditor({
+  label,
+  def,
+  fields,
+  choices,
+  onChange,
+}: {
+  label: string;
+  def: Pick<ViewDef, "match" | "conditions">;
+  fields: FieldDef[];
+  choices: Choices;
+  onChange: (def: Pick<ViewDef, "match" | "conditions">) => void;
+}) {
+  const setConditions = (conditions: Condition[]) => onChange({ match: def.match, conditions });
+  return (
+    <>
+      <div className="field">
+        <span className="label">{label}</span>
+        <Segmented
+          label={label}
+          value={def.match}
+          onChange={(match) => onChange({ match, conditions: def.conditions })}
+          options={[
+            { value: "all", label: "Aan alles voldoet" },
+            { value: "any", label: "Aan één ervan voldoet" },
+          ]}
+        />
+      </div>
+      {def.conditions.length > 0 && (
+        <ul className="conditions">
+          {def.conditions.map((c, i) => (
+            <ConditionEditor
+              key={i}
+              condition={c}
+              fields={fields}
+              choices={choices}
+              onChange={(next) => setConditions(def.conditions.map((x, k) => (k === i ? next : x)))}
+              onRemove={() => setConditions(def.conditions.filter((_, k) => k !== i))}
+            />
+          ))}
+        </ul>
+      )}
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => {
+            const field = fields[0];
+            const op = OPS_FOR[kindOfKey(field.key, field)][0];
+            setConditions([...def.conditions, { field: field.key, op, value: firstValue(op, field, choices) }]);
+          }}
+        >
+          <Icon name="plus" size={15} /> Voorwaarde
+        </button>
+      </div>
+    </>
+  );
+}
+
 export function ViewEditor({
   fields,
   columnsFrom,
@@ -290,7 +353,6 @@ export function ViewEditor({
   const sortable = fields.filter((f) => f.key !== TAGS);
   const groupable = fields.filter((f) => canGroup(f.key, f));
   const sort = def.sort?.[0];
-  const setConditions = (conditions: Condition[]) => setDef((d) => ({ ...d, conditions }));
   const dateFields = fields.filter((f) => kindOf(f) === "date" && !f.key.startsWith("_"));
 
   async function save(asNew: boolean) {
@@ -326,45 +388,7 @@ export function ViewEditor({
 
   return (
     <div className="form">
-      <div className="field">
-        <span className="label">Toon wat</span>
-        <Segmented
-          label="Toon wat"
-          value={def.match}
-          onChange={(match) => setDef((d) => ({ ...d, match }))}
-          options={[
-            { value: "all", label: "Aan alles voldoet" },
-            { value: "any", label: "Aan één ervan voldoet" },
-          ]}
-        />
-      </div>
-      {def.conditions.length > 0 && (
-        <ul className="conditions">
-          {def.conditions.map((c, i) => (
-            <ConditionEditor
-              key={i}
-              condition={c}
-              fields={fields}
-              choices={choices}
-              onChange={(next) => setConditions(def.conditions.map((x, k) => (k === i ? next : x)))}
-              onRemove={() => setConditions(def.conditions.filter((_, k) => k !== i))}
-            />
-          ))}
-        </ul>
-      )}
-      <div className="btn-row">
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={() => {
-            const field = fields[0];
-            const op = OPS_FOR[kindOfKey(field.key, field)][0];
-            setConditions([...def.conditions, { field: field.key, op, value: firstValue(op, field, choices) }]);
-          }}
-        >
-          <Icon name="plus" size={15} /> Voorwaarde
-        </button>
-      </div>
+      <ConditionsEditor label="Toon wat" def={def} fields={fields} choices={choices} onChange={(next) => setDef((d) => ({ ...d, match: next.match, conditions: next.conditions }))} />
 
       <div className="field">
         <span className="label">Sorteren op</span>

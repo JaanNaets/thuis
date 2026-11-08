@@ -609,6 +609,15 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   importeren (`ImportPage`, `.column-map`: kolom → veld, onthouden per lijst; wat we niet herkennen gaat bij de
   lange tekst) is een eigen scherm. Exporteren is een iconknop `download` in de toolbar: een gewone `<a download>`
   naar een CSV-bestand (CSV met ; en een komma in getallen, voor Excel; `shared/csv.ts`), met enkel wat jij mag zien.
+- **Toevoegen uit andere lijst** (⋯ van de dingen, `FromListPage`, `/lijsten/:id/uit-lijst`, logica in
+  `shared/transfer.ts`): een eigen scherm zoals Importeren. **Uit** (een lijst met dingen), **Welke**
+  (`ConditionsEditor` uit `Filters.tsx`, dezelfde voorwaarden als een weergave), **Kolommen** (`.column-map`: per veld
+  van deze lijst Leeg, een veld van de bron dat past (`canCarry`), het origineel bij een verwijzing naar de bron, of
+  Vaste waarde met het gewone veld eronder, `.column-map-value`; keuzes die hier niet bestaan vertaal je eronder,
+  `.column-map-translate`) en de schakelaar **Weghalen uit <bron>** (enkel als je de bron mag wijzigen: het ding zelf
+  verhuist, met foto, logboek en voorraad). Dan **Zo komt het erin** (`.import-preview`) en de knop "N toevoegen" of
+  "N verplaatsen". Wat je koos, blijft per paar lijsten bewaard; de server rekent alles opnieuw uit
+  (`POST /lists/:id/things/from`). Het is een eenmalige actie, geen blijvende koppeling.
 - **Offline**: zonder internet staat bovenaan `.offline-note` (op gsm onder de terugknop). Een nieuw item bewaren
   lukt toch: het wacht op het toestel (`src/outbox.ts`, IndexedDB) en de melding zegt hoeveel er wacht; met internet
   gaat het vanzelf mee (toast "2 items van offline verstuurd"). Wijzigen en verwijderen vragen internet.
@@ -1027,7 +1036,7 @@ Klaar.
 eerste woorden een soort of lijst, dan staat die bovenaan, staat er een ding in je tekst, dan loggen in zijn lijst
 eerst; de rest van je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
 
-**Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, QR-sticker, Op je beginscherm) en `primary`
+**Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, Toevoegen uit andere lijst, QR-sticker, Op je beginscherm) en `primary`
 "<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland) → `split
 split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
 

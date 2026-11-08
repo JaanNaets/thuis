@@ -8,6 +8,7 @@ import { brusselsToday } from "../today";
 import { ids, kindOf, needEdit, requireList, requireThing, seenLists, toThing, type ThingRowDb } from "../access";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { prepareData } from "../prepare";
+import { cleanPlan, MAX_TRANSFER, transferRows, type TransferPlan } from "../../shared/transfer";
 import type { AppEnv } from "../types";
 import { asObject, NotFoundError, optionalString, requiredString, ValidationError } from "../validate";
 
@@ -140,6 +141,61 @@ listThings.post("/:id/things/import", async (c) => {
       statements.push(db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, name, JSON.stringify(data), me.id));
     } catch (err) {
       skipped.push({ row: i + 2, error: err instanceof Error ? err.message : "Ongeldig" });
+    }
+  }
+  for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));
+  return c.json({ created: statements.length, skipped });
+});
+
+/**
+ * Toevoegen uit een andere lijst (zie shared/transfer.ts): de server rekent het plan opnieuw uit met wat de lezer van de
+ * bron ziet. Zonder Weghalen komen er nieuwe dingen bij (zoals Importeren); met Weghalen verhuist het ding zelf (dezelfde
+ * id: foto, logboek en voorraad gaan mee), enkel als je de bron mag wijzigen. Elke waarde gaat door `prepareData`.
+ */
+listThings.post("/:id/things/from", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { list, role } = await requireList(db, me.id, c.req.param("id"));
+  needEdit(role);
+  if (!list.one) throw new ValidationError("Deze lijst heeft geen dingen, enkel een logboek.");
+  const body = asObject(await c.req.json());
+  const sourceId = typeof body.source === "string" ? body.source : "";
+  if (!sourceId || sourceId === list.id) throw new ValidationError("Kies een andere lijst.");
+  const { list: source, role: sourceRole } = await requireList(db, me.id, sourceId);
+  if (!source.one) throw new ValidationError("Die lijst heeft geen dingen.");
+  let plan: TransferPlan;
+  try {
+    plan = cleanPlan(body, source, list.fields);
+  } catch (err) {
+    throw new ValidationError((err as Error).message);
+  }
+  if (plan.move) needEdit(sourceRole, "Enkel wie die lijst mag wijzigen, haalt er iets uit weg.");
+  const { results } = await db
+    .prepare(`SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`)
+    .bind(source.id)
+    .all<ThingRowDb>();
+  const today = brusselsToday();
+  const rows = results.map(toThing);
+  const seen = await seenLists(db, me.id);
+  const people = new Map((await peopleByIds(db, rows.flatMap((t) => referencedPeople(source.fields, t.data)))).map((p) => [p.id, p.name]));
+  const refs = new Map((await thingRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
+  const names = { person: (id: string) => people.get(id) ?? "?", item: (id: string) => refs.get(id) ?? "?" };
+  const items = rows.map((t) => ({ id: t.id, name: t.name, data: shown(source.fields, t.data, today), tag_ids: [], created_at: t.created_at }));
+  const out = transferRows(items, plan, source.fields, list.fields, { today, me: me.id, names });
+  const statements: D1PreparedStatement[] = [];
+  const skipped: { name: string; error: string }[] = [];
+  for (const r of out) {
+    try {
+      const data = await prepareData(db, me.id, seen, list.fields, r.data);
+      statements.push(
+        plan.move
+          ? db
+              .prepare("UPDATE things SET list_id = ?, name = ?, data = ?, updated_at = datetime('now') WHERE id = ? AND list_id = ?")
+              .bind(list.id, r.name, JSON.stringify(data), r.source_id, source.id)
+          : db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, r.name, JSON.stringify(data), me.id),
+      );
+    } catch (err) {
+      skipped.push({ name: r.name, error: err instanceof Error ? err.message : "Ongeldig" });
     }
   }
   for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));

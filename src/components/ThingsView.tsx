@@ -412,6 +412,18 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
               </Link>
             </li>
           )}
+          {edit && (
+            <li>
+              <Link to={`/lijsten/${list.id}/uit-lijst`} className="row">
+                <span className="cell-main">
+                  <span className="row-media">
+                    <Icon name="copy" size={16} />
+                  </span>
+                  <span className="row-title">Toevoegen uit andere lijst</span>
+                </span>
+              </Link>
+            </li>
+          )}
           {shown.length > 0 && (
             <li>
               <button type="button" className="row" onClick={exportCsv}>

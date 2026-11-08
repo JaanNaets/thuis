@@ -131,6 +131,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
   nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
   waarom niet; `test/backup.test.ts` leest de migraties na).
+- **Toevoegen uit andere lijst** (`shared/transfer.ts`, getest; `POST /lists/:id/things/from`, `FromListPage`): dingen
+  uit een bron met voorwaarden (zoals een weergave), per veld een veld van de bron, een vaste waarde of een verwijzing
+  naar het origineel, keuzes vertaald; Weghalen uit de bron verhuist het ding zelf (dezelfde id). De server rekent het
+  plan opnieuw uit (`cleanPlan`, `transferRows`) en elke waarde gaat door `prepareData`. Eenmalig, geen koppeling.
 - **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise) en Dieet (Yazio), zo eenvoudig mogelijk;
   geen sjabloon per geval. **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst (ook
   wie een melding krijgt), zonder dingen of mensen.

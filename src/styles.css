@@ -5105,7 +5105,8 @@ dialog.palette[open]::backdrop {
 
 .column-map-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  /* De keuzelijst hoogstens 220px en nooit meer dan de helft: op gsm blijft de kolomnaam leesbaar. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(220px, 52%));
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -5134,6 +5135,30 @@ dialog.palette[open]::backdrop {
   font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Toevoegen uit andere lijst: een vaste waarde of de vertaling van keuzes onder de rij, over de hele breedte. */
+.column-map-value,
+.column-map-translate {
+  grid-column: 1 / -1;
+  padding-right: 9px;
+}
+
+.column-map-translate {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.column-map-translate li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(220px, 52%));
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
 }
 
 .import-preview {
