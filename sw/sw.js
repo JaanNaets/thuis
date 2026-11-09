@@ -5,19 +5,26 @@ const VERSION = "__VERSION__";
 const PRECACHE = __PRECACHE__;
 
 const SHELL_CACHE = `shell-${VERSION}`;
-const DATA_CACHE = "data-v1";
+// Een nieuwe naam als de routes hieronder veranderen: bij het activeren gaat de oude cache weg.
+const DATA_CACHE = "data-v2";
 
-// API-routes die offline beschikbaar blijven: jij, je overzicht, een project, zijn lijsten en totalen en een item
-// (wat je eerder bekeek). Zo opent ook het formulier offline; een nieuw item wacht dan in de app (src/outbox.ts).
-// Al de rest vraagt internet.
+// API-routes die offline beschikbaar blijven (wat je eerder bekeek): jij, je borden en hun weergaven, een lijst met
+// haar dingen en logboek, een ding of gebeurtenis, en wat een formulier nodig heeft (palet, mensen, de keuzelijst van
+// dingen). Zo opent ook een formulier offline; wat je bewaart wacht dan in de app (src/outbox.ts). Een nieuw scherm
+// dat offline moet werken, zet zijn GET-route hier. Zoeken terwijl je typt (`q`, `in`) bewaren we niet: dat zou de
+// cache met elke letter laten groeien. Al de rest vraagt internet.
 const OFFLINE_API = [
   /^\/api\/me$/,
-  /^\/api\/me\/overview$/,
-  /^\/api\/projects\/[\w-]+$/,
-  /^\/api\/projects\/[\w-]+\/items$/,
-  /^\/api\/projects\/[\w-]+\/totals$/,
-  /^\/api\/items\/[\w-]+$/,
+  /^\/api\/me\/(overview|people|app|targets)$/,
+  /^\/api\/insights\/view$/,
+  /^\/api\/lists\/[\w-]+$/,
+  /^\/api\/lists\/[\w-]+\/(things|events)$/,
+  /^\/api\/things$/,
+  /^\/api\/things\/[\w-]+$/,
+  /^\/api\/events\/[\w-]+$/,
 ];
+const SEARCH_PARAMS = ["q", "in"];
+const offlineApi = (url) => OFFLINE_API.some((pattern) => pattern.test(url.pathname)) && !SEARCH_PARAMS.some((p) => url.searchParams.has(p));
 const NETWORK_TIMEOUT_MS = 3000;
 
 self.addEventListener("install", (event) => {
@@ -34,7 +41,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k.startsWith("shell-") && k !== SHELL_CACHE).map((k) => caches.delete(k))),
+        Promise.all(
+          keys
+            .filter((k) => (k.startsWith("shell-") && k !== SHELL_CACHE) || (k.startsWith("data-") && k !== DATA_CACHE))
+            .map((k) => caches.delete(k)),
+        ),
       )
       .then(() => self.clients.claim()),
   );
@@ -81,7 +92,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Netwerk met korte time-out, anders de laatst bewaarde versie.
-  if (OFFLINE_API.some((pattern) => pattern.test(url.pathname))) {
+  if (offlineApi(url)) {
     event.respondWith(networkFirst(request));
     return;
   }

@@ -148,6 +148,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   wie een melding krijgt), zonder dingen of mensen.
 - De oude tabellen (projecten, items, …) staan er nog maar worden niet meer gebruikt; ze gaan weg in een latere
   migratie.
+- **Offline** (`sw/sw.js`): de service worker bewaart wat je eerder bekeek voor de GET-routes in `OFFLINE_API` (jij, borden
+  en weergaven, een lijst met dingen en logboek, een ding, een gebeurtenis, wat een formulier nodig heeft); wat je dan
+  bewaart, wacht in `src/outbox.ts`. Een nieuw scherm dat offline moet openen, zet zijn route daar (`test/sw.test.ts`
+  kijkt na dat elk patroon een echte route is). Verander je de routes, geef `DATA_CACHE` dan een nieuwe naam.
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit (een andere tak rolt
