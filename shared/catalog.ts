@@ -44,7 +44,7 @@ export const TEMPLATES: ListTemplate[] = [
     one: null,
     icon: "wallet",
     fields: [],
-    kinds: [{ base: "aankoop", name: "Uitgave", icon: "wallet" }],
+    kinds: [{ base: "aankoop", name: "Aankoop", icon: "cart" }],
     notify: { to: "people" },
   },
   {

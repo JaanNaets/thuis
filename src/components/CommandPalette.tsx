@@ -1,14 +1,15 @@
 // Eén veld voor alles (⌘K, Zoeken onderaan, of de + op het overzicht): zoeken naar een lijst, een ding of iets dat
-// gebeurde, en iets toevoegen. Typ "gegeten pasta 300 g" en bovenaan staat "Gegeten: pasta 300 g" (het formulier opent
-// met die tekst, zie shared/targets.ts); daaronder wat je zoekt. Met de + (modus "add") staan je meestgebruikte
-// plekken eerst; Nieuwe lijst als laatste. Pijltjes kiezen, Enter opent, Escape sluit. Op een lijst (`scope`) staat er
-// enkel wat in die lijst kan, verder precies hetzelfde. Met de camera neem of kies je eerst een foto: ze gaat mee naar
+// gebeurde, en iets toevoegen. De + is voor wat er gebeurde, in drie groepen: **Loggen** (de formulieren; typ je een
+// ding, dan "Uit eten · Het Forum" met dat ding al ingevuld, zie `logForms`), **Nieuw** (een ding in een lijst:
+// Restaurant “Foru”) en **Openen** (wat je typte, om naartoe te gaan). Typ "gegeten pasta 300 g" en bovenaan staat
+// "Gegeten: pasta 300 g" (het formulier opent met die tekst, zie shared/targets.ts). Pijltjes kiezen, Enter opent,
+// Escape sluit. Op een lijst (`scope`) staat er enkel wat bij die lijst hoort (ook Aankoop in Uitgaven bij Wijnen). Met de camera neem of kies je eerst een foto: ze gaat mee naar
 // het formulier dat je kiest (en wordt daar gelezen als je dat aanzette). Lijsten die je bij de + verborg, staan er
 // niet (Je lijsten in Jouw gegevens); op die lijst zelf wel.
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { shownIn } from "../../shared/apps";
-import { buildTargets, fold, matchTargets, targetPath, type Targets } from "../../shared/targets";
+import { buildTargets, fold, logForms, logPath, matchTargets, pricedFirst, restAfter, targetPath, withoutPrice, type Match, type Targets } from "../../shared/targets";
 import type { ThingRef } from "../../shared/model";
 import { api, useApi } from "../api";
 import { listIcon } from "../lists";
@@ -26,13 +27,16 @@ export type PaletteMode = "search" | "add";
 /** Enkel deze lijst (de + op een lijst): eerst een ding toevoegen (`thing`) of eerst loggen, en eventueel plannen. */
 export type PaletteScope = { list: string; thing?: boolean; planned?: boolean };
 
-type Found = { lists: { id: string; name: string }[]; things: { id: string; name: string; list: string; icon: string | null }[]; events: { id: string; name: string; list: string; at: string }[] };
+type Found = { lists: { id: string; name: string }[]; things: { id: string; name: string; list_id: string; list: string; icon: string | null }[]; events: { id: string; name: string; list: string; at: string }[] };
 
 const NEW_LIST: Entry = { key: "new-list", group: "Nieuw", label: "Nieuwe lijst", icon: "folder", to: "/lijsten/nieuw" };
 
 const PER_GROUP = 6;
 const ADD_SHOWN = 8;
 const ADD_TOP = 3;
+/** Zoveel dingen uit je tekst krijgen hun formulieren erbij ("Uit eten · Het Forum"), elk met zoveel formulieren. */
+const THINGS_LOGGED = 3;
+const FORMS_PER_THING = 3;
 
 /** Het palet openen vanaf eender waar (de + op het overzicht, een snelkoppeling, gedeelde tekst). */
 export const PaletteContext = createContext<(mode: PaletteMode, text?: string, scope?: PaletteScope) => void>(() => {});
@@ -53,14 +57,14 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
   );
   const { data: raw } = useApi<Targets>(open ? "/me/targets" : null);
   const all = useMemo(() => (raw ? buildTargets(raw) : []), [raw]);
-  // Op een lijst: enkel haar plekken (wat je wil toevoegen eerst); anders alles wat je niet verborg.
-  const targets = useMemo(
-    () =>
-      scope
-        ? [...all.filter((t) => t.list_id === scope.list && t.thing === Boolean(scope.thing)), ...all.filter((t) => t.list_id === scope.list && t.thing !== Boolean(scope.thing))]
-        : all.filter((t) => shownIn(hidden, "add", t.list_id)),
-    [all, scope, hidden],
-  );
+  // Wat je bij de + verborg, staat er niet; de lijst waarop je staat altijd wel.
+  const shown = (id: string) => shownIn(hidden, "add", id) || id === scope?.list;
+  // Op een lijst: een nieuw ding erin en de formulieren die bij haar dingen horen (`logForms`); anders alles.
+  const targets = useMemo(() => {
+    if (!scope) return all.filter((t) => shownIn(hidden, "add", t.list_id));
+    const forms = new Set(raw ? logForms(raw, scope.list, shown).map((f) => f.key) : []);
+    return all.filter((t) => (t.thing ? t.list_id === scope.list : forms.has(t.key)));
+  }, [all, scope, hidden, raw]);
   const scopeList = scope ? lists.find((l) => l.id === scope.list) : undefined;
   // De foto bij de +: klaargezet voor het formulier, en of de AI ze daar leest.
   const [photo, setPhoto] = useState<{ name: string; read: boolean } | null>(null);
@@ -112,20 +116,58 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     const q = fold(query);
     const matches = matchTargets(query, targets);
     const strong = matches[0]?.strong ?? false;
-    // Staat er een ding in je tekst (yoghurt), dan loggen in zijn lijst eerst.
-    const homes = new Set(named.map((t) => t.list_id));
-    const ranked = strong ? matches : [...matches.filter((m) => homes.has(m.target.list_id) && !m.target.thing), ...matches.filter((m) => !(homes.has(m.target.list_id) && !m.target.thing))];
-    const add: Entry[] = ranked.slice(0, mode === "add" || strong || homes.size ? ADD_SHOWN : ADD_TOP).map(({ target, rest }) => ({
+    const extras = (thing: boolean) => ({ planned: Boolean(scope?.planned && !thing), photo });
+    const listOf = (id: string) => lists.find((l) => l.id === id);
+    // De dingen in je tekst ("chablis 54 euro", "foru"): wat de tekst noemt en wat het zoeken vond; op een lijst de hare.
+    const seen = new Set<string>();
+    const things = [...named.map((t) => ({ id: t.id, name: t.name, list_id: t.list_id, icon: null as string | null })), ...(found?.things ?? [])].filter(
+      (t) => !seen.has(t.id) && (seen.add(t.id), !scope || t.list_id === scope.list),
+    );
+
+    // Loggen: eerst met een ding uit je tekst (het formulier opent met dat ding als lijn), dan de formulieren zelf.
+    const withThing: Entry[] = raw
+      ? things.slice(0, THINGS_LOGGED).flatMap((t) =>
+          pricedFirst(logForms(raw, t.list_id, shown), query)
+            .slice(0, FORMS_PER_THING)
+            .map((f) => ({
+              key: `l${f.key}|${t.id}`,
+              group: "Loggen",
+              label: `${f.label} · ${t.name}`,
+              hint: f.hint ?? undefined,
+              icon: f.icon as IconName,
+              to: withExtras(logPath(f, t.id, restAfter(query, t.name)), extras(false)),
+            })),
+        )
+      : [];
+    const entry = ({ target, rest }: Match, group: string, label: string): Entry => ({
       key: `a${target.key}`,
-      group: "Toevoegen",
-      label: rest ? `${target.label}: ${rest}` : target.label,
-      hint: scope ? undefined : (target.hint ?? undefined),
+      group,
+      label,
+      hint: scope && target.list_id === scope.list ? undefined : (target.hint ?? undefined),
       icon: (target.icon ?? "plus") as IconName,
-      to: withExtras(targetPath(target, rest), { planned: Boolean(scope?.planned && !target.thing), photo }),
-    }));
-    if (scope) return add;
+      to: withExtras(targetPath(target, rest), extras(target.thing)),
+    });
+    const forms = matches.filter((m) => !m.target.thing).map((m) => entry(m, "Loggen", m.rest ? `${m.target.label}: ${m.rest}` : m.target.label));
+    // Noemt je tekst een ding, dan staan de formulieren al bij dat ding; enkel een formulier dat je zelf noemde nog los.
+    const logs = [...withThing, ...(withThing.length && !strong ? [] : forms)].slice(0, ADD_SHOWN);
+    // Nieuw: een ding in een lijst, met wat je typte als naam.
+    const news = matches
+      .filter((m) => m.target.thing)
+      .slice(0, ADD_TOP)
+      .map((m) => {
+        const name = withoutPrice(m.rest);
+        return entry(m, "Nieuw", name ? `${m.target.name} “${name}”` : m.target.name);
+      });
+    // Openen: de dingen die je typte.
+    const opens: Entry[] = things.slice(0, PER_GROUP).map((t) => {
+      const list = listOf(t.list_id);
+      return { key: `d${t.id}`, group: "Openen", label: t.name, hint: scope ? undefined : list?.name, icon: (t.icon ?? (list ? listIcon(list) : "folder")) as IconName, to: `/dingen/${t.id}` };
+    });
+
+    if (scope) return scope.thing ? [...news, ...logs, ...opens] : [...logs, ...news, ...opens];
+    const add = [...logs, ...news];
     const newList = !q || "nieuwe lijst".startsWith(q) || "lijst".startsWith(q) ? [NEW_LIST] : [];
-    if (!q) return mode === "add" ? [...add, ...newList] : [...ACTIONS, ...add, ...newList];
+    if (!q) return mode === "add" ? [...add, ...newList] : [...ACTIONS, ...add.slice(0, ADD_TOP), ...newList];
     const match = (...texts: (string | null | undefined)[]) => texts.some((t) => t && fold(t).includes(q));
     const search: Entry[] = [
       ...ACTIONS.filter((a) => match(a.label)),
@@ -140,9 +182,15 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
       ...(found?.things ?? []).slice(0, PER_GROUP).map((t) => ({ key: `d${t.id}`, group: "Dingen", label: t.name, hint: t.list, icon: (t.icon ?? "folder") as IconName, to: `/dingen/${t.id}` })),
       ...(found?.events ?? []).slice(0, PER_GROUP).map((e) => ({ key: `e${e.id}`, group: "Logboek", label: e.name, hint: `${e.list} · ${e.at.slice(0, 10)}`, icon: "note" as IconName, to: `/gebeurtenissen/${e.id}` })),
     ];
-    if (mode === "add" || strong || homes.size) return [...add, ...newList, ...search];
-    return [...search, ...add.slice(0, ADD_TOP), ...newList];
-  }, [query, lists, tags, found, targets, named, mode, scope, photo]);
+    // De +: wat je typte om naartoe te gaan, onder Openen (de dingen eerst).
+    if (mode === "add") {
+      const rest = search.filter((e) => e.group !== "Dingen" && !opens.some((o) => o.key === e.key)).map((e) => ({ ...e, group: "Openen" }));
+      return [...add, ...newList, ...opens, ...rest];
+    }
+    // Zoeken: eerst wat je zoekt; begint je tekst met een formulier ("gegeten pasta"), dan dat eerst.
+    if (strong) return [...add, ...newList, ...search];
+    return [...search, ...add.slice(0, ADD_SHOWN), ...newList];
+  }, [query, lists, tags, found, targets, named, mode, scope, photo, raw]);
 
   const current = Math.min(active, results.length - 1);
 

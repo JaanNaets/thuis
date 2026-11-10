@@ -80,8 +80,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 
 ### Eén ingang
 
-- **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de rest van de tekst gaat
-  als `?tekst=` naar het formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
+- **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de + is voor wat er
+  gebeurde, in drie groepen: **Loggen** (formulieren; noemt je tekst een ding, dan "Uit eten · Het Forum" met dat ding
+  als lijn), **Nieuw** (een ding in een lijst) en **Openen**. De rest van de tekst gaat als `?tekst=` naar het
+  formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
   foto bij de + gaat mee naar het gekozen formulier (`putShared`, `?foto=gedeeld`, `&lezen=1`).
 - **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +; in
   het menu ook een hele tag (haar groep, schakelaar op de tagpagina). Je volgorde van de tags staat in `tag_order`
@@ -92,6 +94,11 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, dingen met
   hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Dingen komen van
   `GET /things?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
+- **Waarmee je logt** (`logForms`, getest; `LogButtons` op een ding en bovenaan het logboek, en in het palet): de eigen
+  formulieren van de lijst en, telt ze voorraad, de formulieren van lijsten zonder dingen die de voorraad veranderen
+  (Aankoop in Uitgaven, Boodschap, Gegeten). Een aankoop logt in de lijst van wie meebetaalt (Uitgaven = met Jana), de
+  lijnen bepalen welke voorraad stijgt (Chablis in Wijnen); een kasticket gaat naar een lijst met een eigen aankoop
+  (`receiptLists`).
 - **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (enkel na een
   tik of de schakelaar Lezen met AI in de fotokiezer, `PhotoButton`), per persoon aan of uit (`useAiBudget`: 25 per
   persoon per dag, 50 samen). Welke formulieren een foto lezen: per lijst (`lists.read_photo`, `shared/photoread.ts`;

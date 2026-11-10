@@ -8,6 +8,7 @@ import { usePalette } from "../components/CommandPalette";
 import { ListPlaceSwitches } from "../components/ListPlaces";
 import { Icon, type IconName } from "../components/Icon";
 import { LogList, type EventPage } from "../components/Log";
+import { LogButtons } from "../components/LogButtons";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
@@ -116,6 +117,7 @@ export function ListPage() {
         </aside>
         <div className="split-main">
           {tab === "dingen" && <ThingsView key={list.id} list={list} role={role} onChanged={reload} />}
+          {tab !== "dingen" && edit && <LogButtons listId={list.id} planned={tab === "gepland"} row />}
           {tab !== "dingen" && <ListLog key={`${list.id}-${tab}`} listId={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />}
         </div>
       </div>

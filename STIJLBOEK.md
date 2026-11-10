@@ -404,22 +404,42 @@ wordt een schakelaar "Label: nu"), plus Archief. Toon een filter pas als er iets
 Keuze tussen 2–4 opties in een formulier (Niet zien · Zien · Wijzigen, Gelijk · Procent). Zoals tabs: een grijs spoor
 met een wit vlak dat meeglijdt. Meer dan 4 opties: gebruik een `select`.
 
+### Loggen: `LogButtons`
+
+Waarmee je logt bij een lijst of een ding: een `btn btn-outline btn-sm` per formulier, met zijn icoon ("Uit eten",
+"Proeverij", "Aankoop"). Op een ding in de `PageHead` (naast Bewerken; op een gsm links onder de titel, ze lopen door
+op een tweede regel), op een lijst bovenaan het logboek en Gepland (`.log-buttons`, niet uitgerekt; op Gepland met
+`gepland=1`). Welke formulieren: `logForms` (shared/targets.ts): de eigen formulieren van de lijst (zonder eigen
+formulieren één knop Loggen) en, telt de lijst voorraad, de formulieren van lijsten zonder dingen die de voorraad
+veranderen (Aankoop in Uitgaven, Boodschap, Gegeten). De gebeurtenis komt in de lijst van het formulier; heten twee
+formulieren hetzelfde, dan staat de lijst erbij ("Aankoop · Uitgaven"). Geen knop "Loggen" naast de formulieren: de
+knop zegt wat er gebeurde.
+
 ### Zoekpalet: `CommandPalette`
 
 Eén veld voor zoeken én toevoegen. Opent met **⌘K / Ctrl K**, het zoekveld in de zijbalk, de loep in de kop of
 Zoeken in het menublad (modus zoeken), of met de + (modus toevoegen; `usePalette()("add", tekst)` vanuit een scherm):
 een wit venster (rond 14px, `--shadow-lg`) boven een licht verduisterd scherm. Zoekt zonder op hoofdletters of accenten te letten in acties, je
 lijsten en tags, en (via `/insights/search`) de dingen en gebeurtenissen die je ziet, en biedt aan waar je kan loggen
-of toevoegen (`GET /me/targets`, `matchTargets`): noemen de eerste woorden een soort of lijst ("gegeten pasta"), dan
-staat **Toevoegen** ("Gegeten: pasta", de rest gaat als `?tekst=` naar het formulier) bovenaan, anders wat je zoekt. Met de + staan de
-lijsten altijd eerst (je meestgebruikte bovenaan) en Nieuwe lijst als laatste. Pijltjes kiezen (een grijs vlak
-glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als groep in
-`CommandPalette.tsx`.
+of toevoegen (`GET /me/targets`, `matchTargets`). **De + is voor wat er gebeurde**, in drie groepen die zeggen wat het
+is:
+
+- **Loggen**: de formulieren (je meestgebruikte bovenaan; "Loggen in …" enkel voor een lijst zonder eigen formulieren).
+  Noemt je tekst een ding ("foru", "chablis 54 euro"), dan eerst dat ding met zijn formulieren: "Uit eten · Het Forum",
+  "Aankoop · Chablis" (zie [`LogButtons`](#loggen-logbuttons): dezelfde formulieren, `logForms`), het formulier opent met
+  dat ding als lijn en de rest van je tekst (`restAfter`); met een bedrag eerst een aankoop (`pricedFirst`). Noemen de
+  eerste woorden een formulier ("gegeten pasta"), dan staat dat bovenaan ("Gegeten: pasta", de rest als `?tekst=`).
+- **Nieuw**: een ding in een lijst, met wat je typte als naam zonder bedrag (Restaurant “Foru”), en Nieuwe lijst.
+- **Openen**: wat je typte om naartoe te gaan (de dingen eerst, dan lijsten en tags).
+
+Zoeken (het menublad) toont eerst wat je zoekt, per soort (Lijsten, Dingen, …), en daaronder Loggen en Nieuw. Pijltjes
+kiezen (een grijs vlak glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als
+groep in `CommandPalette.tsx`.
 
 - **Op een lijst** opent de + (gsm) of **Toevoegen** (tablet) hetzelfde palet, maar enkel met wat in die lijst kan
   (`usePalette()("add", "", { list, thing, planned })`): de naam van de lijst als zacht pilletje voor het invulveld
-  (`.palette-scope`), op Dingen eerst "Wijn toevoegen", in het logboek eerst loggen, op Gepland wordt het plannen.
-  Geen aparte knoppen per formulier meer: overal één manier.
+  (`.palette-scope`), op Dingen eerst Nieuw, in het logboek eerst Loggen, op Gepland wordt het plannen. Ook de
+  formulieren van andere lijsten die bij haar dingen horen (Aankoop in Uitgaven op Wijnen, met de lijst ernaast).
 - **De foto bij de +**: de camera rechts in het invulveld opent de [fotokiezer](#fotokiezer-photobutton-photopickertsx).
   De gekozen foto staat als smalle rij onder het invulveld (naam, ✨ als ze gelezen wordt, ×); tik daarna op een
   plek en ze gaat mee naar dat formulier (`foto=gedeeld`, met `lezen=1` als de AI ze leest). Sluit je zonder te
@@ -1044,16 +1064,17 @@ staan in de zijbalk en onder Menu (en in Verbanden). Elk blok is een [weergave o
 greep, de naam, een potlood (de bouwer), Breed als filterpil (enkel op tablet) en ×, Toevoegen → Blok toevoegen, onderaan
 Klaar.
 
-**Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); noemen de
-eerste woorden een soort of lijst, dan staat die bovenaan, staat er een ding in je tekst, dan loggen in zijn lijst
-eerst; de rest van je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
+**Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); Loggen ·
+Nieuw · Openen. Staat er een ding in je tekst, dan eerst dat ding met zijn formulieren ("Aankoop · Chablis"); de rest van
+je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
 
 **Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, Toevoegen uit andere lijst, QR-sticker, Op je beginscherm) en `primary`
 "<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland; heeft de lijst een
 formulier dat gepland begint, dan altijd en vóór het logboek: Boodschappen opent op wat je nog moet kopen) → `split
 split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
 
-**Ding** (`/dingen/:id`): `PageHead` met Loggen en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
+**Ding** (`/dingen/:id`): `PageHead` met een knop per formulier ([`LogButtons`](#loggen-logbuttons), dit ding al
+ingevuld) en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
 velden (`dl`), rechts de **Tijdlijn** (alles wat ermee gebeurde: wanneer, waar, erbij of eraf, prijs per eenheid;
 gaat een gebeurtenis enkel over dit ding, dan haar bedrag), de delen, wat ernaar verwijst en bestanden → onderaan
 Archiveren en Verwijderen.

@@ -9,6 +9,7 @@ import { CardHead } from "../components/Controls";
 import { AttributeRows, ItemPhoto, namesFrom } from "../components/Fields";
 import { FileViewer, type Attachment } from "../components/FileViewer";
 import { Icon, type IconName } from "../components/Icon";
+import { LogButtons } from "../components/LogButtons";
 import { BASE_TONES, dayLabel } from "../components/Log";
 import { stagger } from "../components/Motion";
 import { PageHead } from "../components/Page";
@@ -94,16 +95,15 @@ export function ThingPage() {
         badge={thing.archived ? <span className="badge badge-muted">Gearchiveerd</span> : undefined}
         back={{ to: `/lijsten/${list.id}`, label: list.name }}
         actions={
-          data.can_edit && (
-            <>
-              <Link to={`/lijsten/${list.id}/loggen?ding=${thing.id}`} className="btn btn-outline btn-sm">
-                Loggen
-              </Link>
+          <>
+            {/* Een knop per formulier ("Uit eten", "Aankoop"), met dit ding al ingevuld. */}
+            {!thing.archived && <LogButtons listId={list.id} thing={thing.id} />}
+            {data.can_edit && (
               <Link to={`/dingen/${thing.id}/bewerken`} className="btn btn-outline btn-sm">
                 Bewerken
               </Link>
-            </>
-          )
+            )}
+          </>
         }
       />
       <div className="split">

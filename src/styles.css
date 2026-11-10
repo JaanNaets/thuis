@@ -884,10 +884,20 @@ dialog.sheet.menu-sheet {
   font-size: 14px;
 }
 
+/* Waarmee je logt (LogButtons): een knop per formulier, bovenaan het logboek van een lijst. */
+.log-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .page-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* ---------- knoppen ---------- */
@@ -5924,6 +5934,11 @@ dialog.palette[open]::backdrop {
 
 /* Op een gsm: kleine vakjes met stipjes; wat op de dag valt, staat eronder. */
 @media (max-width: 767px) {
+  /* Op een gsm staan de knoppen onder de titel: links, zoals de rest van de pagina. */
+  .page-actions {
+    justify-content: flex-start;
+  }
+
   .calendar-grid {
     gap: 2px;
   }

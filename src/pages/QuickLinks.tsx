@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { destinationPath, type AppSettings } from "../../shared/apps";
 import type { ListDetail } from "../../shared/model";
-import { buildTargets, matchTargets, targetPath, type Targets } from "../../shared/targets";
+import { buildTargets, matchTargets, receiptLists, targetPath, type Targets } from "../../shared/targets";
 import { useApi } from "../api";
 import { Barcode } from "../components/Barcode";
 import { AiMark } from "../components/Fields";
@@ -177,8 +177,8 @@ export function SharedPage() {
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   if (!file || !raw || !settings || receipt) return null;
-  // Een kasticket: in een lijst die voorraad telt of waar je aankopen logt.
-  const buyLists = ai ? raw.lists.filter((l) => l.stock || raw.used.some((u) => u.list_id === l.id && u.kind === "aankoop")) : [];
+  // Een kasticket: in een lijst met een eigen aankoop (Uitgaven), zonder zo'n lijst een die voorraad telt.
+  const buyLists = ai ? receiptLists(raw) : [];
   const read = matchTargets(text, targets).slice(0, 8);
   const row = (key: string, to: string, icon: IconName, title: string, meta: string | null, aiMark = false) => (
     <li key={key}>
