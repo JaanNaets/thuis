@@ -216,6 +216,9 @@ export type ActionBlock = {
 /** Wat een tik doet en ook gepland kan: het formulier openen of meteen bewaren (tellen en een timer gaan over nu). */
 export const canPlan = (does: ActionDoes) => does === "form" || does === "save";
 
+/** Of een actie gepland logt: als ze dat vraagt of haar formulier standaard gepland begint (een boodschap), en enkel als dat kan. */
+export const actionPlans = (block: Pick<ActionBlock, "does" | "planned">, kind: { planned: boolean }): boolean => canPlan(block.does) && (block.planned === true || kind.planned);
+
 export const MAX_LIMIT = 50;
 export const DEFAULT_LIMIT = 6;
 const ID = /^[A-Za-z0-9-]{1,64}$/;

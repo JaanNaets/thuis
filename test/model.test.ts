@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, brusselsNow, eventTitle, formsOf, isAt, minutesBetween, type KindInfo } from "../shared/model.ts";
+import { baseKind, brusselsNow, eventTitle, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
 import { keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
@@ -101,6 +101,14 @@ test("lijnen zien en bewaren", () => {
   assert.ok(lineAllowed("bij", "gast"));
   assert.ok(!lineAllowed("voor", null));
   assert.ok(lineAllowed("in", "none"));
+});
+
+test("een nieuwe gebeurtenis begint gepland als je erom vraagt of als haar formulier dat doet", () => {
+  const boodschap: KindInfo = { ...baseKind("aankoop"), id: "k1", name: "Boodschap", list_id: "BOODSCHAPPEN", planned: true };
+  assert.equal(baseKind("aankoop").planned, false);
+  assert.equal(startsPlanned(baseKind("aankoop"), false), false);
+  assert.equal(startsPlanned(baseKind("aankoop"), true), true);
+  assert.equal(startsPlanned(boodschap, false), true);
 });
 
 test("de formulieren van een lijst: haar eigen, anders de basissoorten; de rest onder Ander formulier", () => {

@@ -34,7 +34,7 @@ export function usePageNames(page: EventPage | undefined) {
     const lists = new Map((page?.lists ?? []).map((l) => [l.id, l.name]));
     return {
       thing: (id: string) => things.get(id),
-      kind: (e: Pick<EventView, "kind" | "base">) => kinds.get(e.kind) ?? { id: e.base, base: e.base, name: BASES[e.base].label, icon: BASES[e.base].icon, fields: [], list_id: null, goal: null },
+      kind: (e: Pick<EventView, "kind" | "base">) => kinds.get(e.kind) ?? { id: e.base, base: e.base, name: BASES[e.base].label, icon: BASES[e.base].icon, fields: [], list_id: null, goal: null, planned: false },
       person: (id: string | null) => (id ? (people.get(id)?.name ?? "Onbekend") : ""),
       list: (id: string) => lists.get(id) ?? "",
       title: (e: EventView) => eventTitle(e, kinds.get(e.kind) ?? { name: BASES[e.base].label }, (id) => things.get(id)?.name),

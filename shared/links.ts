@@ -83,6 +83,7 @@ export const KIND_LINKS = {
   icon: false,
   fields: true, // zie FIELD_LINKS (kcal: Eten; een verwijzing: naar die lijst)
   goal: true, // een activiteit die loopt, geeft na zoveel minuten een melding
+  planned: false, // enkel hoe een nieuwe gebeurtenis begint; de status zelf staat op de gebeurtenis (EVENT_LINKS.status)
   sort_order: false,
 } as const satisfies Record<keyof Kind, boolean>;
 

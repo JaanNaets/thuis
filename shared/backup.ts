@@ -64,7 +64,8 @@ export type Backup = {
   people: { id: string; name: string; email: string | null; color: string | null }[];
   tags: { id: string; name: string; color: string | null }[];
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; sort_order: number }[];
+  /** `planned` ontbreekt in back-ups van vóór 2026-11-10 (dan: niet gepland). */
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; sort_order: number }[];
   things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id?: string | null; mirror_of?: string | null }[];
   /** Koppelingen (zie shared/transfer.ts) tussen lijsten die allebei in de back-up zitten; ontbreekt in oudere back-ups. */
   mirrors?: { id: string; list_id: string; source_id: string; plan: unknown }[];
@@ -145,7 +146,7 @@ export type RestoreContext = {
 
 export type RestorePlan = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; sort_order: number }[];
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; sort_order: number }[];
   things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id: string | null; mirror_of: string | null }[];
   mirrors: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
@@ -205,7 +206,7 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     }
     const id = map.get(k.id)!;
     kindFields.set(id, fields);
-    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, sort_order: k.sort_order ?? 0 });
+    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, sort_order: k.sort_order ?? 0 });
   }
 
   // Een koppeling enkel tussen twee lijsten die terugkomen; de bron en de doellijst met hun nieuwe ids.

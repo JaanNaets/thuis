@@ -434,6 +434,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
   const [name, setName] = useState(kind?.name ?? "");
   const [icon, setIcon] = useState<IconKey | null>((kind?.icon as IconKey) ?? null);
   const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
+  const [planned, setPlanned] = useState(kind?.planned ?? false);
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
   // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
   const [readChoice, setReadChoice] = useState<boolean | null>(null);
@@ -447,6 +448,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
       icon,
       fields: built.fields,
       goal: base === "activiteit" && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
+      planned,
     };
     try {
       const id = kind ? (await api.put(`/kinds/${kind.id}`, body), kind.id) : (await api.post<{ id: string }>(`/lists/${listId}/kinds`, body)).id;
@@ -501,6 +503,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
         </label>
       )}
       <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
+      <Switch checked={planned} onChange={setPlanned} label="Gepland" />
       <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
       <div className="btn-row">
         <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>

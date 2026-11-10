@@ -741,7 +741,9 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
           </div>
         </div>
 
-        {canPlan(draft.does) && <Switch label="Gepland" checked={draft.planned === true} onChange={(on) => set({ planned: on ? true : undefined })} />}
+        {canPlan(draft.does) && (
+          <Switch label="Gepland" checked={draft.planned === true || kind?.planned === true} disabled={kind?.planned === true} onChange={(on) => set({ planned: on ? true : undefined })} />
+        )}
 
         {kind && (
           <div className="field">

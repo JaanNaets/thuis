@@ -84,12 +84,13 @@ export const toEvent = (row: EventRowDb): Event => ({
 export type LineRowDb = Line & { event_id: string };
 export const toLine = ({ event_id: _e, ...l }: LineRowDb): Line => l;
 
-export type KindRowDb = Omit<Kind, "fields" | "icon"> & { fields: string; icon: string | null };
+export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned"> & { fields: string; icon: string | null; planned: number };
 export const toKind = (row: KindRowDb): Kind => ({
   ...row,
   base: row.base as Base,
   icon: isIconKey(row.icon) ? row.icon : null,
   fields: parseJson<FieldDef[]>(row.fields, []),
+  planned: row.planned === 1,
 });
 
 // ---------- rollen ----------

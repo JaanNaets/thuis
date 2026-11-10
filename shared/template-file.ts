@@ -43,7 +43,7 @@ function refsTo(fields: FieldDef[], from: string, to: string): FieldDef[] {
 }
 
 /** Het bestand voor een lijst en haar eigen soorten. */
-export function templateFile(list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown }, kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null }[]): TemplateFile {
+export function templateFile(list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown }, kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean }[]): TemplateFile {
   return {
     kind: TEMPLATE_KIND,
     version: TEMPLATE_VERSION,
@@ -52,7 +52,7 @@ export function templateFile(list: { id: string; name: string; one: string | nul
     icon: list.icon,
     fields: refsTo(list.fields, list.id, SELF),
     stock: list.stock,
-    kinds: kinds.map((k) => ({ base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}) })),
+    kinds: kinds.map((k) => ({ base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}), ...(k.planned ? { planned: true as const } : {}) })),
     ...(list.notify ? { notify: list.notify } : {}),
   };
 }
@@ -80,7 +80,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
       kf = [];
     }
     const name = typeof k.name === "string" && k.name.trim() ? k.name.trim().slice(0, 40) : BASES[k.base].label;
-    kinds.push({ base: k.base, name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: kf, ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}) });
+    kinds.push({ base: k.base, name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: kf, ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}), ...(k.planned === true ? { planned: true as const } : {}) });
   }
   const name = typeof t.name === "string" && t.name.trim() ? t.name.trim().slice(0, 60) : "Lijst";
   const stock = cleanStock(t.stock, fields);

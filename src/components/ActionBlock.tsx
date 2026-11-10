@@ -4,7 +4,7 @@
 // (`planned`) opent het formulier met Gepland aan of bewaart meteen gepland: een boodschap, iets te doen.
 
 import { useEffect, useState } from "react";
-import type { ActionBlock, ViewBlock, ViewResponse } from "../../shared/blocks";
+import { actionPlans, type ActionBlock, type ViewBlock, type ViewResponse } from "../../shared/blocks";
 import { blockKey } from "../../shared/board";
 import { formatDuration, type Attributes } from "../../shared/fields";
 import { brusselsNow, minutesBetween, STATUSES, type KindInfo, type ListDetail } from "../../shared/model";
@@ -80,7 +80,8 @@ export function ActionTile({ block, preview = false }: { block: ActionBlock; pre
   );
   if (block.does === "form" || (block.does === "timer" && kind.base !== "activiteit")) {
     const values = Object.keys(block.values).length ? `&vooraf=${encodeURIComponent(JSON.stringify(block.values))}` : "";
-    const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${block.planned ? "&gepland=1" : ""}${values}`;
+    const planned = actionPlans(block, kind);
+    const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${planned ? "&gepland=1" : ""}${values}`;
     const inner = (
       <>
         {media}
@@ -91,7 +92,7 @@ export function ActionTile({ block, preview = false }: { block: ActionBlock; pre
     return preview ? (
       <span className="quick-tile">{inner}</span>
     ) : (
-      <Link to={to} className="quick-tile" aria-label={`${label} ${block.planned ? "plannen" : "loggen"}`}>
+      <Link to={to} className="quick-tile" aria-label={`${label} ${planned ? "plannen" : "loggen"}`}>
         {inner}
       </Link>
     );
@@ -122,7 +123,7 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
         await api.post(`/events/${running.id}/stop`, {});
         toast(`${label} gestopt`);
       } else {
-        const planned = block.planned === true && !timer;
+        const planned = actionPlans(block, kind);
         const { id } = await api.post<{ id: string }>(`/lists/${block.list}/events`, eventOf(kind, block.values, timer, planned));
         toast(timer ? `${label} gestart` : planned ? `${label} gepland` : `${label} bewaard`, "check", {
           label: "Ongedaan maken",
@@ -152,7 +153,7 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
     <button
       type="button"
       className={`quick-tile${running ? " is-running" : ""}`}
-      aria-label={running ? `${label} stoppen` : timer ? `${label} starten` : block.planned ? `${label} plannen` : `${label} bewaren`}
+      aria-label={running ? `${label} stoppen` : timer ? `${label} starten` : actionPlans(block, kind) ? `${label} plannen` : `${label} bewaren`}
       aria-busy={busy}
       onClick={run}
     >

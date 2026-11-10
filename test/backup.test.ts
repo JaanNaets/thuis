@@ -36,7 +36,10 @@ const backup: Backup = {
       tag_ids: [TAG],
     },
   ],
-  kinds: [{ id: GEGETEN, list_id: VOORRAAD, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, sort_order: 0 }],
+  kinds: [
+    { id: GEGETEN, list_id: VOORRAAD, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, sort_order: 0 },
+    { id: "33333333-3333-4333-8333-333333333333", list_id: VOORRAAD, base: "aankoop", name: "Boodschap", icon: "cart", fields: [], goal: null, planned: true, sort_order: 1 },
+  ],
   things: [
     { id: PASTA, list_id: VOORRAAD, name: "Pasta", data: { eenheid: "g", met: SAUS, van: "vreemde" }, part_of: null, archived: 0, photo: true },
     { id: SAUS, list_id: VOORRAAD, name: "Saus", data: { eenheid: "kg", met: WEG, van: "jaan" }, part_of: PASTA, archived: 0, photo: false },
@@ -93,6 +96,8 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
   // De verwijzing in een veld wijst naar de nieuwe lijst.
   assert.equal(list.fields.find((f) => f.key === "met")?.ref_type, list.id);
   assert.deepEqual(list.stock, { unit: "eenheid", default_unit: "stuk" });
+  // Een formulier dat gepland begint, blijft dat; een back-up van vroeger (zonder) is niet gepland.
+  assert.deepEqual(plan.kinds.map((k) => [k.name, k.planned]), [["Gegeten", false], ["Boodschap", true]]);
   const pasta = plan.things.find((t) => t.old === PASTA)!;
   const saus = plan.things.find((t) => t.old === SAUS)!;
   // Pasta: met = de nieuwe saus; een persoon die je niet kent valt weg.

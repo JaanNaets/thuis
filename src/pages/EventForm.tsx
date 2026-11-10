@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { Attributes, Interval } from "../../shared/fields";
 import { defaultSharers } from "../../shared/ledger";
-import { BASES, brusselsNow, canEdit, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
+import { BASES, brusselsNow, canEdit, startsPlanned, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { readsPhoto } from "../../shared/photoread";
 import { hasPrice } from "../../shared/targets";
@@ -109,7 +109,10 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [day, setDay] = useState((event?.at ?? now).slice(0, 10));
   const [time, setTime] = useState(event ? event.at.slice(11, 16) : kind.base === "activiteit" ? now.slice(11, 16) : "");
   const [endTime, setEndTime] = useState(event?.end_at?.slice(11, 16) ?? "");
-  const [status, setStatus] = useState<Status>(event?.status ?? (params.get("gepland") ? "gepland" : "gebeurd"));
+  // Gepland als je erom vroeg (`?gepland=1`) of als het formulier gepland begint; tot je de schakelaar zelf zet.
+  const askedPlanned = Boolean(params.get("gepland"));
+  const [status, setStatus] = useState<Status>(event?.status ?? (startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd"));
+  const statusChosen = useRef(Boolean(event));
   const [amount, setAmount] = useState(centsToInput(event?.amount ?? null));
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
@@ -188,6 +191,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     firstKind.current = "";
     setDraft(attributesDraft(kind.fields, {}));
     setLines((ls) => ls.map((l) => (!l.thing && !l.text ? { ...l, role: base.line } : l)));
+    if (!statusChosen.current) setStatus(startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd");
   }, [kindId]);
 
   // Wat je typt ("pasta 300 g", "tankbeurt 84,50 52 liter"), live in de velden (shared/parse.ts). Enkel wat de tekst
@@ -409,7 +413,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         form.set("file", await prepareUpload(photo));
         await api.put(`/events/${id}/photo`, form).catch((err: Error) => toast(err.message, "alert"));
       }
-      toast(`${kind.name} bewaard${extra}`);
+      toast(`${kind.name} ${!event && status === "gepland" ? "gepland" : "bewaard"}${extra}`);
       navigate(event ? `/gebeurtenissen/${event.id}` : `/lijsten/${list.id}?tab=${status === "gepland" ? "gepland" : "logboek"}`, { replace: true });
     } catch (err) {
       if (!event && isOffline(err)) {
@@ -501,7 +505,14 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             </label>
           )}
         </div>
-        <Switch label="Gepland" checked={status === "gepland"} onChange={(on) => setStatus(on ? "gepland" : event?.status === "afgevinkt" ? "afgevinkt" : "gebeurd")} />
+        <Switch
+          label="Gepland"
+          checked={status === "gepland"}
+          onChange={(on) => {
+            statusChosen.current = true;
+            setStatus(on ? "gepland" : event?.status === "afgevinkt" ? "afgevinkt" : "gebeurd");
+          }}
+        />
       </section>
 
       {(money || kind.base === "gebruik") && (

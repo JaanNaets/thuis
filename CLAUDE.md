@@ -37,7 +37,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   `FormPicker`: de formulieren van de lijst, zonder eigen de basissoorten, de rest onder Ander formulier (`formsOf`). Ze heeft **lijnen**
   (`lines`): `in` (erbij), `uit` (eraf), `voor` (waarvoor, de wagen) en `bij` (waar, de winkel), naar een ding of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon). Status: `gebeurd`,
-  `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee).
+  `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee). Een formulier kan
+  gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschappen een lijst zonder dingen met een
+  formulier Boodschap, die op Gepland opent.
 - Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen. Er zijn ook geen vaste
   pagina's (Geld, Voorraad, Eten, Te doen, Agenda): dat zijn **borden** met weergaven (bronnen: logboek, dingen,
   voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan

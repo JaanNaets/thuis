@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agendaDays, cleanActionBlock, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
+import { actionPlans, agendaDays, cleanActionBlock, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
 import { cleanBlock, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, segmentBlocks, type Block } from "../shared/board.ts";
 import type { FieldDef } from "../shared/fields.ts";
 import { NAME } from "../shared/views.ts";
@@ -84,6 +84,12 @@ test("een weergave nakijken: wat niet klopt valt weg, de dingen vragen een lijst
   assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "count", planned: true })?.planned, undefined);
   assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "timer", planned: true })?.planned, undefined);
   assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "form", planned: "ja" })?.planned, undefined);
+  // Een formulier dat gepland begint (een boodschap), plant ook zonder dat de actie het vraagt; tellen en een timer nooit.
+  assert.equal(actionPlans({ does: "save" }, { planned: false }), false);
+  assert.equal(actionPlans({ does: "save", planned: true }, { planned: false }), true);
+  assert.equal(actionPlans({ does: "form" }, { planned: true }), true);
+  assert.equal(actionPlans({ does: "count" }, { planned: true }), false);
+  assert.equal(actionPlans({ does: "timer", planned: true }, { planned: true }), false);
 });
 
 test("oude blokken worden de gelijkwaardige weergave of actie", () => {

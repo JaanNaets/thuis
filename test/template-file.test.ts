@@ -13,13 +13,14 @@ const fields: FieldDef[] = [
 test("een lijst als sjabloon: zonder verwijzingen naar elders, de lijst zelf wordt self", () => {
   const file = templateFile({ id: "L1", name: "Voorraad", one: "Product", icon: "food", fields, stock: { unit: "eenheid", min: "minimum" } }, [
     { base: "gebruik", name: "Gegeten", icon: "food", fields: [{ key: "kcal", label: "Kcal", type: "number" }], goal: null },
+    { base: "aankoop", name: "Boodschap", icon: "cart", fields: [], goal: null, planned: true },
   ]);
   assert.deepEqual(file.fields.map((f) => [f.key, f.ref_type]), [["eenheid", undefined], ["minimum", undefined], ["zoals", SELF]]);
   const back = parseTemplateFile(JSON.parse(JSON.stringify(file)));
   assert.equal(back.name, "Voorraad");
   assert.equal(back.one, "Product");
   assert.deepEqual(back.stock, { unit: "eenheid", min: "minimum" });
-  assert.deepEqual(back.kinds?.map((k) => k.name), ["Gegeten"]);
+  assert.deepEqual(back.kinds?.map((k) => [k.name, k.planned]), [["Gegeten", undefined], ["Boodschap", true]]);
   assert.equal(withSelf(back.fields, "NIEUW").find((f) => f.key === "zoals")?.ref_type, "NIEUW");
   assert.equal(back.notify, undefined, "zonder melding");
   // Wie een melding krijgt, gaat mee.

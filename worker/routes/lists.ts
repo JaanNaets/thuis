@@ -105,8 +105,8 @@ lists.post("/", async (c) => {
     if (!isBase(k.base)) throw new ValidationError("Onbekende basissoort");
     statements.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(withSelf(clean(() => cleanKindFields(k.fields)), id)), goalOf(k), i),
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(withSelf(clean(() => cleanKindFields(k.fields)), id)), goalOf(k), plannedOf(k), i),
     );
   });
   await db.batch(statements);
@@ -334,6 +334,9 @@ lists.put("/:id/people/:personId", async (c) => {
 const goalOf = (o: Record<string, unknown>): number | null =>
   o.base !== undefined && o.base !== "activiteit" ? null : typeof o.goal === "number" && Number.isInteger(o.goal) && o.goal > 0 && o.goal < 100_000 ? o.goal : null;
 
+/** Begint een nieuwe gebeurtenis met dit formulier gepland (een boodschap)? Als 0 of 1 voor de databank. */
+const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 1 : 0);
+
 lists.post("/:id/kinds", async (c) => {
   const db = c.env.DB;
   const { list, role } = await requireList(db, c.get("person").id, c.req.param("id"));
@@ -344,8 +347,8 @@ lists.post("/:id/kinds", async (c) => {
   if ((count?.n ?? 0) >= MAX_KINDS) throw new ValidationError(`Hoogstens ${MAX_KINDS} soorten per lijst`);
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, list.id, body.base, requiredString(body, "name", 40), isIconKey(body.icon) ? body.icon : null, JSON.stringify(clean(() => cleanKindFields(body.fields))), goalOf(body), count?.n ?? 0)
+    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, list.id, body.base, requiredString(body, "name", 40), isIconKey(body.icon) ? body.icon : null, JSON.stringify(clean(() => cleanKindFields(body.fields))), goalOf(body), plannedOf(body), count?.n ?? 0)
     .run();
   return c.json({ id }, 201);
 });
@@ -363,12 +366,13 @@ kinds.put("/:id", async (c) => {
   const kind = await requireKind(db, c.get("person").id, c.req.param("id"));
   const body = asObject(await c.req.json());
   await db
-    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ? WHERE id = ?")
+    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ? WHERE id = ?")
     .bind(
       body.name === undefined ? kind.name : requiredString(body, "name", 40),
       body.icon === undefined ? kind.icon : isIconKey(body.icon) ? body.icon : null,
       body.fields === undefined ? JSON.stringify(kind.fields) : JSON.stringify(clean(() => cleanKindFields(body.fields))),
       body.goal === undefined ? kind.goal : kind.base === "activiteit" ? goalOf(body) : null,
+      body.planned === undefined ? (kind.planned ? 1 : 0) : plannedOf(body),
       kind.id,
     )
     .run();

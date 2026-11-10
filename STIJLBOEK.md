@@ -777,7 +777,9 @@ product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding
 **gerecht** en schat de portie ("Geschat met AI"). Elke andere soort vult haar eigen velden, de omschrijving, datum en
 het bedrag in met wat er echt op de foto staat ("Gelezen met AI"). De foto komt altijd bij de gebeurtenis. Welke
 formulieren lezen, zet een beheerder in Instellen → Formulieren (**Foto lezen met AI ✨**, een schakelaar per formulier
-van de lijst, `formsOf`, ook in het formulier zelf); standaard een formulier met geld of voedingswaarden.
+van de lijst, `formsOf`, ook in het formulier zelf); standaard een formulier met geld of voedingswaarden. Daar staat
+ook **Gepland** (`kinds.planned`): een nieuwe gebeurtenis met dat formulier begint gepland (een boodschap, een taak),
+in het logformulier, het palet en een actie op een bord (de schakelaar Gepland van de actie staat dan vast aan).
 
 ### Dingen tonen: `ThingsView` en het logboek: `LogList`
 
@@ -1047,7 +1049,8 @@ eerste woorden een soort of lijst, dan staat die bovenaan, staat er een ding in 
 eerst; de rest van je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
 
 **Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, Toevoegen uit andere lijst, QR-sticker, Op je beginscherm) en `primary`
-"<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland) → `split
+"<Wijn> toevoegen" of Loggen → `Tabs` <dingen> · Logboek · Gepland (enkel met iets gepland; heeft de lijst een
+formulier dat gepland begint, dan altijd en vóór het logboek: Boodschappen opent op wat je nog moet kopen) → `split
 split-main-first`: de dingen of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
 
 **Ding** (`/dingen/:id`): `PageHead` met Loggen en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
@@ -1061,7 +1064,8 @@ lijst) in de zijkolom, rechts de **Lijnen** en wat ze afvinkte → Verwijderen.
 **Loggen** (`/lijsten/:id/loggen`, `EventForm`): bovenaan **Typ wat je weet** (vult live in, zie `shared/parse.ts`)
 met Kasticket ✨, dan **Formulier** (`FormPicker`, filterpillen met icoon: de formulieren van de lijst, zonder eigen
 formulieren de zes basissoorten; de rest, dus de basissoorten naast eigen formulieren en de formulieren van andere
-lijsten, in "Ander formulier…"; zie `formsOf`), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland; bij geld Bedrag, Betaald
+lijsten, in "Ander formulier…"; zie `formsOf`), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland
+(aan bij `?gepland=1` of een formulier dat gepland begint, `startsPlanned`; volgt een ander formulier tot je hem zelf zet); bij geld Bedrag, Betaald
 door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van de
 soort; Herhalen en Foto. Een prijs in de tekst zonder gekozen soort maakt er een aankoop van.
 

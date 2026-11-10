@@ -98,6 +98,7 @@ backup.get("/backup", async (c) => {
       icon: k.icon as string,
       fields: parseJson(k.fields as string, []),
       goal: (k.goal as number | null) ?? null,
+      planned: k.planned === 1,
       sort_order: (k.sort_order as number) ?? 0,
     })),
     things: things.results.map((t) => ({
@@ -187,7 +188,11 @@ backup.post("/restore", async (c) => {
     }
   }
   for (const k of plan.kinds)
-    st.push(db.prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.sort_order));
+    st.push(
+      db
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.sort_order),
+    );
   // Eerst zonder "deel van" (dat wijst misschien naar een ding dat later komt), daarna die verwijzing.
   for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));
   for (const t of plan.things)

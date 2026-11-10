@@ -87,11 +87,11 @@ export const RequiredMark = () => (
   </span>
 );
 
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+export function Switch({ checked, onChange, label, disabled = false }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; disabled?: boolean }) {
   return (
     <label className="switch-field">
       <span className="label">{label}</span>
-      <button type="button" role="switch" aria-checked={checked} className="switch" onClick={() => onChange(!checked)} />
+      <button type="button" role="switch" aria-checked={checked} className="switch" disabled={disabled} onClick={() => onChange(!checked)} />
     </label>
   );
 }

@@ -35,10 +35,13 @@ export function ListPage() {
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
   const { list, role } = detail;
+  // Gepland als er iets gepland staat of een eigen formulier gepland begint (Boodschappen); dan ook vóór het logboek.
+  const plans = detail.kinds.some((k) => k.list_id === list.id && k.planned);
+  const planTab = detail.counts.planned || plans ? [{ value: "gepland" as const, label: "Gepland" }] : [];
+  const logTab = [{ value: "logboek" as const, label: "Logboek" }];
   const tabs: { value: Tab; label: string }[] = [
     ...(list.one ? [{ value: "dingen" as const, label: list.name }] : []),
-    { value: "logboek", label: "Logboek" },
-    ...(detail.counts.planned ? [{ value: "gepland" as const, label: "Gepland" }] : []),
+    ...(plans ? [...planTab, ...logTab] : [...logTab, ...planTab]),
   ];
   const asked = params.get("tab") as Tab | null;
   const tab: Tab = asked && tabs.some((t) => t.value === asked) ? asked : tabs[0].value;

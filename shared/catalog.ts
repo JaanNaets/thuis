@@ -8,7 +8,7 @@ import type { IconKey } from "./icons.ts";
 import type { Base } from "./model.ts";
 import type { StockDef } from "./stock.ts";
 
-export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number };
+export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number; planned?: true };
 
 export type ListTemplate = {
   key: string;
