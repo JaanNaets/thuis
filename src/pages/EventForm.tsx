@@ -113,7 +113,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const askedPlanned = Boolean(params.get("gepland"));
   const [status, setStatus] = useState<Status>(event?.status ?? (startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd"));
   const statusChosen = useRef(Boolean(event));
-  const [amount, setAmount] = useState(centsToInput(event?.amount ?? null));
+  // Vooraf ingevuld in het palet (stap voor stap, Alles invullen): het bedrag ($amount) en hoeveel van het ding ($qty).
+  const [amount, setAmount] = useState(centsToInput(event?.amount ?? (typeof prefill.$amount === "number" ? prefill.$amount : null)));
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
   // Een nieuwe uitgave in een gedeelde lijst: gelijk over wie er logt (shared/ledger.ts), tot je de verdeling zelf kiest.
@@ -160,7 +161,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   // Een ding uit het adres (Loggen vanaf een ding): meteen als eerste lijn.
   useEffect(() => {
     const t = preset?.things[0];
-    if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "" }] : ls));
+    const qty = typeof prefill.$qty === "number" ? String(prefill.$qty).replace(".", ",") : "";
+    if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "", amount: qty }] : ls));
   }, [preset]);
   // Een gedeelde foto (Android: delen met Heystack, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
   // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.

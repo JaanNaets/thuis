@@ -430,7 +430,19 @@ is:
   dat ding als lijn en de rest van je tekst (`restAfter`); met een bedrag eerst een aankoop (`pricedFirst`). Noemen de
   eerste woorden een formulier ("gegeten pasta"), dan staat dat bovenaan ("Gegeten: pasta", de rest als `?tekst=`).
 - **Nieuw**: een ding in een lijst, met wat je typte als naam zonder bedrag (Restaurant “Foru”), en Nieuwe lijst.
+  Bestaat wat je typte al als ding, dan staat Loggen bovenaan (ook op het tabblad met de dingen): geen dubbels.
 - **Openen**: wat je typte om naartoe te gaan (de dingen eerst, dan lijsten en tags).
+
+**Stap voor stap** (shared/steps.ts): kies je "Uit eten · Het Forum" of iets onder Nieuw, dan wordt het invulveld telkens
+het volgende veld. Het pilletje toont wat je invult ("Uit eten · Het Forum", `.palette-scope.is-flow`), de placeholder
+het veld ("Score", "Hoeveel (fles)"), rechts de stap (`.palette-step`, 2/4) en links Terug (`.palette-back`; wissen in een
+leeg veld doet hetzelfde). Daaronder de suggesties onder de naam van het veld (de keuzes, ★ tot ★★★★★, Vandaag en
+Gisteren, de mensen, wat je eerder invulde), dan na een lijn (`.palette-divider`) **Bewaren** en **Alles invullen…**.
+Enter neemt de bovenste suggestie die past of wat je typte; leeg is overslaan; na het laatste veld bewaar je, met
+Ongedaan maken in de toast. Wat niet klopt, staat in rood boven de suggesties (`.palette-error`). Welke velden: bij
+loggen hoeveel (als het ding erbij komt of eraf gaat), de velden van het formulier in één regel en het bedrag; bij iets
+nieuws de naam, de verplichte velden en die als kolom in de lijst staan. Lijnen, een eigen verdeling, een foto, een
+activiteit of een overdracht: Alles invullen (het formulier, met wat je al invulde in `?vooraf=`).
 
 Zoeken (het menublad) toont eerst wat je zoekt, per soort (Lijsten, Dingen, …), en daaronder Loggen en Nieuw. Pijltjes
 kiezen (een grijs vlak glijdt mee), Enter opent, Escape sluit. Iets nieuws dat je moet kunnen vinden? Voeg het toe als

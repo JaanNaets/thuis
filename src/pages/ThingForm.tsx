@@ -1,7 +1,7 @@
 import { NAME } from "../../shared/views";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
-import type { FieldDef } from "../../shared/fields";
+import type { Attributes, FieldDef } from "../../shared/fields";
 import { canEdit, type ListDetail, type Thing, type ThingRef } from "../../shared/model";
 import { isProductCode, productData, productLabel } from "../../shared/product";
 import type { Person } from "../../shared/types";
@@ -58,7 +58,15 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
   const { data: people } = useApi<Person[]>("/me/people");
   const [name, setName] = useState(thing?.name ?? params.get("tekst") ?? "");
   const [draft, setDraft] = useState<AttributeDraft>(() => {
-    const data = { ...(thing?.data ?? {}) };
+    // Vooraf ingevuld in het palet (stap voor stap, Alles invullen): enkel de velden van de lijst tellen.
+    let pre: Attributes = {};
+    try {
+      const raw = JSON.parse(params.get("vooraf") ?? "null");
+      if (!thing && raw && typeof raw === "object" && !Array.isArray(raw)) pre = raw as Attributes;
+    } catch {
+      pre = {};
+    }
+    const data = { ...pre, ...(thing?.data ?? {}) };
     const field = params.get("veld");
     const day = params.get("op");
     if (!thing && field && day && list.fields.some((f) => f.key === field && f.type === "date")) data[field] = day;

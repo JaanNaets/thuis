@@ -83,7 +83,10 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de + is voor wat er
   gebeurde, in drie groepen: **Loggen** (formulieren; noemt je tekst een ding, dan "Uit eten · Het Forum" met dat ding
   als lijn), **Nieuw** (een ding in een lijst) en **Openen**. De rest van de tekst gaat als `?tekst=` naar het
-  formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). Een
+  formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). **Stap voor stap**
+  (`shared/steps.ts`, getest): na "Uit eten · Het Forum" of Nieuw vul je veld na veld in het palet in, met suggesties;
+  leeg is overslaan, na het laatste bewaar je (`eventBody`, `thingBody`: zoals het formulier, met de gelijke verdeling)
+  met Ongedaan maken; Alles invullen opent het formulier met wat er al staat (`prefillOf`, `?vooraf=`). Een
   foto bij de + gaat mee naar het gekozen formulier (`putShared`, `?foto=gedeeld`, `&lezen=1`).
 - **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +; in
   het menu ook een hele tag (haar groep, schakelaar op de tagpagina). Je volgorde van de tags staat in `tag_order`

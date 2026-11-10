@@ -8603,6 +8603,35 @@ dialog.sheet.builder-sheet {
   flex: none;
 }
 
+/* Stap voor stap invullen: terug, de stap (2/4), een lijn boven Bewaren en Alles invullen, en wat niet klopt. */
+.palette-back {
+  flex: none;
+  margin-left: -8px;
+}
+
+.palette-scope.is-flow {
+  max-width: 55%;
+}
+
+.palette-step {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.palette-divider {
+  margin: 6px 12px;
+  border: 0;
+  border-top: 1px solid var(--divider);
+}
+
+.palette-error {
+  padding: 10px 12px 4px;
+  color: var(--danger);
+  font-size: 14px;
+}
+
 /* De foto bij de +: een smalle rij onder het invulveld. */
 .palette-photo {
   display: flex;
