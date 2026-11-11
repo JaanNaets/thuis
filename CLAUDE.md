@@ -91,7 +91,9 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 - **Lijsten tonen** (per persoon, `hidden` in `app_settings`, `PUT /me/hidden`): niet in het menu of niet bij de +; in
   het menu ook een hele tag (haar groep, schakelaar op de tagpagina). Je volgorde van de tags staat in `tag_order`
   (`orderTags`, `PUT /me/tag-order`, Lijsten → Volgorde);
-  zoeken, Verbanden en keuzelijsten tonen ze altijd. Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): één pagina met je lijsten per tag (de naam opent de lijst,
+  zoeken, Verbanden en keuzelijsten tonen ze altijd. Een **tag** toont al de dingen van haar lijsten samen
+  (`tagView` in `shared/blocks.ts`, getest: zoeken, de gedeelde kolommen en rechts de lijst; alle wijnen over Wijnen,
+  Geproefd en de gedeelde kelder); een weergave over meer lijsten heeft daarvoor de kolom Lijst (`LIST_KEY`). Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): één pagina met je lijsten per tag (de naam opent de lijst,
   ▸ toont haar verbanden), wie erbij is, per lijst Menu, Toevoegen en Meldingen (stilzetten, `mutedBy` in
   `shared/apps.ts`), je volgorde, en op tablet ook de kaart.
 - **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, dingen met

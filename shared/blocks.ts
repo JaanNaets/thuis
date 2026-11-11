@@ -74,12 +74,14 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
     case "dingen": {
       const seen = new Set<string>();
       const fields = ctx.lists.flatMap((l) => l.fields).filter((f) => !seen.has(f.key) && (seen.add(f.key), true));
-      return [{ key: NAME, label: "Naam", type: "text" }, ...fields];
+      // Uit meer lijsten: ook in welke lijst het staat (om te tonen, te filteren of te groeperen).
+      const list: FieldDef[] = ctx.lists.length > 1 ? [{ key: LIST_KEY, label: "Lijst", type: "select", options: ctx.lists.map((l) => l.name).slice(0, 60) }] : [];
+      return [{ key: NAME, label: "Naam", type: "text" }, ...list, ...fields.filter((f) => f.key !== LIST_KEY)];
     }
     case "voorraad":
       return [
         { key: NAME, label: "Naam", type: "text" },
-        { key: "list", label: "Lijst", type: "select", options: ctx.lists.map((l) => l.name).slice(0, 60) },
+        { key: LIST_KEY, label: "Lijst", type: "select", options: ctx.lists.map((l) => l.name).slice(0, 60) },
         { key: "level", label: "Voorraad", type: "text" },
         { key: "amount", label: "Hoeveel", type: "number" },
         { key: "low", label: "Bijna op", type: "bool" },
@@ -220,6 +222,8 @@ export const canPlan = (does: ActionDoes) => does === "form" || does === "save";
 export const actionPlans = (block: Pick<ActionBlock, "does" | "planned">, kind: { planned: boolean }): boolean => canPlan(block.does) && (block.planned === true || kind.planned);
 
 export const MAX_LIMIT = 50;
+/** In een weergave over meer lijsten: in welke lijst een rij staat. */
+export const LIST_KEY = "list";
 export const DEFAULT_LIMIT = 6;
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const KEY = /^[A-Za-z_][a-z0-9_]{0,39}$/;
@@ -664,4 +668,34 @@ export function columnsOf(block: ViewBlock, fields: FieldDef[]): FieldDef[] {
   const keys = fallback[block.source];
   if (keys.length) return keys.map((k) => byKey.get(k)).filter((f): f is FieldDef => Boolean(f));
   return fields.filter((f) => f.key !== NAME).slice(0, 2);
+}
+
+/**
+ * Alles van een tag (de tagpagina): de dingen van haar lijsten samen, met wat je zoekt in de naam. Als kolommen de
+ * velden die een van die lijsten als kolom toont en die in minstens twee ervan staan (bij één lijst: haar kolommen),
+ * hoogstens drie, en rechts de lijst (Wijnhuis · Jaargang · Waar, Wijnen). Null als geen van de lijsten dingen heeft.
+ */
+export function tagView(lists: { id: string; one: string | null; fields: FieldDef[] }[], query = ""): ViewBlock | null {
+  const withThings = lists.filter((l) => l.one);
+  if (!withThings.length) return null;
+  const count = new Map<string, number>();
+  for (const l of withThings) for (const f of l.fields) count.set(f.key, (count.get(f.key) ?? 0) + 1);
+  const need = withThings.length > 1 ? 2 : 1;
+  const keys: string[] = [];
+  for (const l of withThings) for (const f of l.fields) if (f.column && f.key !== LIST_KEY && (count.get(f.key) ?? 0) >= need && !keys.includes(f.key)) keys.push(f.key);
+  const q = query.trim();
+  return {
+    kind: "view",
+    name: "",
+    source: "dingen",
+    lists: withThings.map((l) => l.id),
+    where: {
+      match: "all",
+      conditions: q ? [{ field: NAME, op: "contains", value: q }] : [],
+      columns: [...keys.slice(0, 3), ...(withThings.length > 1 ? [LIST_KEY] : [])],
+      sort: [{ field: NAME, dir: "asc" }],
+    },
+    show: "lijst",
+    limit: MAX_LIMIT,
+  };
 }

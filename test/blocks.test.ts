@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { actionPlans, agendaDays, cleanActionBlock, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
+import { actionPlans, agendaDays, cleanActionBlock, tagView, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
 import { cleanBlock, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, segmentBlocks, type Block } from "../shared/board.ts";
 import type { FieldDef } from "../shared/fields.ts";
 import { NAME } from "../shared/views.ts";
@@ -49,10 +49,38 @@ test("de bronnen: het logboek met de velden van zijn soorten, de rest met hun ei
     ],
     kinds: [],
   });
+  // Uit meer lijsten: ook in welke lijst het staat.
   assert.deepEqual(
     dingen.map((f) => f.key),
-    [NAME, "prijs", "kleur"],
+    [NAME, "list", "prijs", "kleur"],
   );
+  assert.deepEqual(sourceFields("dingen", { lists: [{ name: "A", fields: [{ key: "prijs", label: "Prijs", type: "money" }] }], kinds: [] }).map((f) => f.key), [NAME, "prijs"]);
+});
+
+test("alles van een tag: de dingen van haar lijsten samen, de gedeelde kolommen en rechts de lijst", () => {
+  const wijn = (id: string, extra: FieldDef[] = []) => ({
+    id,
+    one: "Wijn",
+    fields: [
+      { key: "wijnhuis", label: "Wijnhuis", type: "text", column: true },
+      { key: "jaargang", label: "Jaargang", type: "year", column: true },
+      { key: "kleur", label: "Kleur", type: "select", options: ["Rood", "Wit"] },
+      ...extra,
+    ] as FieldDef[],
+  });
+  const waar: FieldDef = { key: "waar", label: "Waar", type: "select", options: ["Keuken", "Kelder"], column: true };
+  const proef: FieldDef = { key: "geproefd_op", label: "Geproefd op", type: "date", column: true };
+  const lists = [wijn("WIJNEN", [waar]), wijn("KELDER", [waar]), wijn("GEPROEFD", [proef]), { id: "UITGAVEN", one: null, fields: [] }];
+  const block = tagView(lists, " chab ")!;
+  // Lijsten zonder dingen niet; Geproefd op staat maar in één lijst, kleur is nergens een kolom.
+  assert.deepEqual(block.lists, ["WIJNEN", "KELDER", "GEPROEFD"]);
+  assert.deepEqual(block.where.columns, ["wijnhuis", "jaargang", "waar", "list"]);
+  assert.deepEqual(block.where.conditions, [{ field: NAME, op: "contains", value: "chab" }]);
+  assert.equal(block.source, "dingen");
+  // Eén lijst: haar eigen kolommen, zonder Lijst; zonder dingen: niets.
+  assert.deepEqual(tagView([wijn("GEPROEFD", [proef])])!.where.columns, ["wijnhuis", "jaargang", "geproefd_op"]);
+  assert.equal(tagView([{ id: "UITGAVEN", one: null, fields: [] }]), null);
+  assert.deepEqual(tagView(lists)!.where.conditions, []);
 });
 
 test("een weergave nakijken: wat niet klopt valt weg, de dingen vragen een lijst", () => {

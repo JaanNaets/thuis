@@ -1114,7 +1114,10 @@ naar gisteren).
 **Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). Algemeen:
 naam, hoe één ding heet, icoon, kleur, tags, melding; onderaan Als sjabloon, Archiveren en Verwijderen.
 
-**Tag** (`/tags/:id`): de lijsten met die tag (met jouw rol), Tag weghalen, **In het menu** (een schakelaar, per
+**Tag** (`/tags/:id`): hebben haar lijsten dingen, dan `Tabs` <naam van de tag> · Lijsten. Onder de naam al die dingen
+samen (`tagView`, via `ViewBody`): een zoekveld (`.toolbar .search`, "Zoek in wijn…", in de naam) en per ding de
+kolommen die de lijsten delen (Wijnhuis · Jaargang · Waar) met rechts de lijst waar het staat (Wijnen, Geproefd,
+Gedeelde wijnkelder). Onder Lijsten: de lijsten met die tag (met jouw rol), Tag weghalen. Opzij **In het menu** (een schakelaar, per
 persoon: uit = de groep van de tag staat niet in je menu; een lijst staat er nog onder haar andere tags, Lijsten en
 zoeken tonen alles) en **Altijd erbij** met Aanpassen.
 

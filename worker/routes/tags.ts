@@ -4,7 +4,7 @@
 import { Hono } from "hono";
 import { isRole, ROLES, type Role, type TagRule } from "../../shared/model";
 import { isTone, type Person } from "../../shared/types";
-import { ids, seenLists } from "../access";
+import { ids, parseJson, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, NotFoundError, requiredString, ValidationError } from "../validate";
 import { knownPeople, myLists } from "./lists";
@@ -33,7 +33,13 @@ tags.get("/:id", async (c) => {
     .prepare("SELECT id, name, NULL AS email, color, NULL AS iban FROM people WHERE id IN (SELECT value FROM json_each(?))")
     .bind(ids(results.flatMap((r) => [r.person_id, r.created_by])))
     .all<Person>();
-  return c.json({ tag, lists, rules: results, people, can_edit: canEdit });
+  // De velden van haar lijsten: om al haar dingen samen te tonen (tagView in shared/blocks.ts).
+  const { results: rows } = await db
+    .prepare("SELECT id, fields FROM lists WHERE id IN (SELECT value FROM json_each(?))")
+    .bind(ids(lists.map((l) => l.id)))
+    .all<{ id: string; fields: string }>();
+  const fields = Object.fromEntries(rows.map((r) => [r.id, parseJson(r.fields, [])]));
+  return c.json({ tag, lists, rules: results, people, can_edit: canEdit, fields });
 });
 
 tags.put("/:id", async (c) => {

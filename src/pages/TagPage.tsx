@@ -1,12 +1,15 @@
-import { useState } from "react";
-import { useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router";
+import { tagView, type ViewResponse } from "../../shared/blocks";
+import type { FieldDef } from "../../shared/fields";
 import { ROLES, type ListNode, type Role, type Tag, type TagRule } from "../../shared/model";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { shownIn } from "../../shared/apps";
-import { CardHead, Switch, ToneSwatches } from "../components/Controls";
+import { CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
 import { Icon } from "../components/Icon";
-import { stagger } from "../components/Motion";
+import { SkeletonRows, stagger } from "../components/Motion";
+import { ViewBody, viewUrl } from "../components/ViewBlock";
 import { EmptyState, PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -21,11 +24,14 @@ type TagDetail = {
   rules: TagRule[];
   people: Person[];
   can_edit: boolean;
+  /** De velden per lijst: om al haar dingen samen te tonen. */
+  fields: Record<string, FieldDef[]>;
 };
 
 /**
- * Een tag: de lijsten ermee, en de regels (wie altijd bij die lijsten kan). Een regel geldt enkel op lijsten waar wie
- * ze bewaarde rechtstreeks beheerder is; wat rechtstreeks bij een lijst staat, wint.
+ * Een tag: al de dingen van haar lijsten samen (zoeken, en zien in welke lijst iets staat: `tagView`), de lijsten ermee,
+ * en de regels (wie altijd bij die lijsten kan). Een regel geldt enkel op lijsten waar wie ze bewaarde rechtstreeks
+ * beheerder is; wat rechtstreeks bij een lijst staat, wint.
  */
 export function TagPage() {
   const { tagId } = useParams();
@@ -45,8 +51,12 @@ export function TagPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [editing, setEditing] = useState<"tag" | "rules" | null>(null);
+  const [params, setParams] = useSearchParams();
   if (error && !data) return <p className="error page">{error}</p>;
   if (!data) return <p className="page muted">Laden…</p>;
+  // Met dingen in haar lijsten: eerst die (onder de naam van de tag), dan de lijsten zelf.
+  const things = data.lists.some((l) => l.one);
+  const tab = things && params.get("tab") !== "lijsten" ? "dingen" : "lijsten";
   const name = (id: string) => data.people.find((p) => p.id === id)?.name ?? "Iemand";
 
   async function remove() {
@@ -82,6 +92,17 @@ export function TagPage() {
           </Link>
         }
       />
+      {things && (
+        <Tabs
+          label="Weergaven"
+          value={tab}
+          onChange={(t) => setParams(t === "lijsten" ? { tab: t } : {}, { replace: true })}
+          tabs={[
+            { value: "dingen", label: data.tag.name },
+            { value: "lijsten", label: "Lijsten" },
+          ]}
+        />
+      )}
       <div className="split split-main-first">
         <aside className="split-aside">
           <section className="card form-section">
@@ -124,7 +145,9 @@ export function TagPage() {
           </section>
         </aside>
         <div className="split-main">
-          {data.lists.length === 0 ? (
+          {tab === "dingen" ? (
+            <TagThings tag={data.tag} lists={data.lists} fields={data.fields} />
+          ) : data.lists.length === 0 ? (
             <EmptyState icon="tag" title="Nog geen lijsten" />
           ) : (
             <div className="card">
@@ -150,7 +173,7 @@ export function TagPage() {
               </ul>
             </div>
           )}
-          {data.can_edit && data.tag.created_by === person.id && (
+          {tab === "lijsten" && data.can_edit && data.tag.created_by === person.id && (
             <div className="btn-row" style={{ justifySelf: "start" }}>
               <button type="button" className="btn btn-danger-ghost btn-sm" onClick={remove}>
                 <Icon name="trash" size={15} /> Tag weghalen
@@ -278,5 +301,29 @@ function RulesForm({ tag, rules, onDone }: { tag: Tag; rules: TagRule[]; onDone:
         Opslaan
       </button>
     </div>
+  );
+}
+
+/** Al de dingen van de lijsten met deze tag (zie `tagView`): zoeken in de naam, en rechts in welke lijst iets staat. */
+function TagThings({ tag, lists, fields }: { tag: Tag; lists: ListNode[]; fields: Record<string, FieldDef[]> }) {
+  const [query, setQuery] = useState("");
+  const [wanted, setWanted] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWanted(query), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const block = useMemo(() => tagView(lists.map((l) => ({ id: l.id, one: l.one, fields: fields[l.id] ?? [] })), wanted), [lists, fields, wanted]);
+  const { data } = useApi<ViewResponse>(block ? viewUrl(block) : null);
+  const label = `Zoek in ${tag.name.toLowerCase()}`;
+  return (
+    <>
+      <div className="toolbar">
+        <label className="search">
+          <Icon name="search" size={16} />
+          <input type="search" placeholder={`${label}…`} aria-label={label} value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+      </div>
+      <section className="card">{block && data ? <ViewBody block={block} data={data} /> : <SkeletonRows rows={6} />}</section>
+    </>
   );
 }

@@ -5,10 +5,10 @@
 
 import { linkedKeys, type TransferPlan } from "../../shared/transfer";
 import { Hono } from "hono";
-import { cleanViewBlock, evaluateView, MAX_SHIFT, sourceFields, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
+import { cleanViewBlock, evaluateView, LIST_KEY, MAX_SHIFT, sourceFields, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
-import type { FieldDef } from "../../shared/fields";
+import type { Attributes, FieldDef } from "../../shared/fields";
 import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { netBalance, settleUp, type MoneyEvent } from "../../shared/ledger";
@@ -202,7 +202,9 @@ insights.get("/view", async (c) => {
       : { results: [] as ThingRowDb[] };
     const byList = new Map(lists.map((l) => [l.id, l]));
     fields = sourceFields("dingen", { lists, kinds: [] });
-    items = results.map(toThing).map((t) => ({ id: t.id, name: t.name, data: computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
+    // Uit meer lijsten: ook in welke lijst (LIST_KEY, zie sourceFields).
+    const listOf = (id: string): Attributes => (lists.length > 1 ? { [LIST_KEY]: byList.get(id)?.name ?? "" } : {});
+    items = results.map(toThing).map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
     // Namen van personen en verwijzingen in de velden.
     const values = items.flatMap((i) => Object.values(i.data));
     const strings = values.flatMap((v) => (typeof v === "string" ? [v] : Array.isArray(v) ? (v as unknown[]).flatMap((x) => (typeof x === "string" ? [x] : x && typeof x === "object" ? Object.values(x as object).filter((y): y is string => typeof y === "string") : [])) : []));
