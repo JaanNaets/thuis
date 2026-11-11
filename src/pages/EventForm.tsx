@@ -113,6 +113,12 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const askedPlanned = Boolean(params.get("gepland"));
   const [status, setStatus] = useState<Status>(event?.status ?? (startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd"));
   const statusChosen = useRef(Boolean(event));
+  // Lijsten waarin een nieuw ding kan komen. Iets nieuws dat erbij komt (een wijn die er nog niet staat): in de lijst
+  // waar je vandaan kwam (`?nieuw=`), anders in deze. Niet bij iets gepland: een wijn op de boodschappenlijst komt pas in
+  // Wijnen als je hem koopt.
+  const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
+  const defaultNew = [params.get("nieuw"), list.stock ? list.id : ""].find((id) => id && targets.some((t) => t.id === id)) ?? "";
+  const newIn = status === "gepland" ? "" : defaultNew;
   // Vooraf ingevuld in het palet (stap voor stap, Alles invullen): het bedrag ($amount) en hoeveel van het ding ($qty).
   const [amount, setAmount] = useState(centsToInput(event?.amount ?? (typeof prefill.$amount === "number" ? prefill.$amount : null)));
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
@@ -267,8 +273,11 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     const data: AttributeDraft = Object.fromEntries(Object.keys(p.data).map((k) => [k, filled[k]]));
     const sig = (l: LineDraft) => JSON.stringify({ ...l, key: "" });
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    // Kom je van een lijst (Aankoop vanuit Wijnen) en noemt je tekst geen ding dat erbij komt, dan is de rest van je
+    // tekst iets nieuws in die lijst ("Meursault 2019 32 euro"), niet de omschrijving.
+    const loose = newIn && base.line === "in" && p.name && !p.lines.some((l) => l.thing.role === "in") ? niceName(p.name) : "";
     const next = {
-      name: p.name,
+      name: loose ? "" : p.name,
       amount: p.amount !== null ? centsToInput(p.amount) : "",
       day: p.day ?? now.slice(0, 10),
       time: p.time ?? startTime,
@@ -291,6 +300,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         price: l.price !== null ? centsToInput(l.price) : "",
       };
     });
+    if (loose) made.push({ ...emptyLine("in"), text: loose, newIn });
     setLines((cur) => {
       // Wat de tekst vroeger maakte en niet aangepast is, gaat weg; een lege lijn ook.
       const kept = cur.filter((l) => (before.lines.has(l.key) ? before.lines.get(l.key) !== sig(l) : Boolean(l.thing || l.text.trim() || l.amount || l.price)));
@@ -307,10 +317,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
 
   if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
   const shareWith = (people ?? []).filter((p) => shares.people.includes(p.id));
-  const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
-  // Iets nieuws dat erbij komt (een wijn die er nog niet staat): in de lijst waar je vandaan kwam, anders in deze. Niet
-  // bij iets gepland: een wijn op de boodschappenlijst komt pas in Wijnen als je hem koopt.
-  const defaultNew = [params.get("nieuw"), list.stock ? list.id : ""].find((id) => id && targets.some((t) => t.id === id)) ?? "";
   const money = base.money;
 
   async function readPhoto(file: File) {
@@ -572,7 +578,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       )}
 
       <section className="card form-section">
-        <LinesEditor lines={lines} onChange={setLines} money={money} people={shareWith} targets={targets} defaultNew={status === "gepland" ? "" : defaultNew} />
+        <LinesEditor lines={lines} onChange={setLines} money={money} people={shareWith} targets={targets} defaultNew={newIn} />
       </section>
 
       {kind.fields.length > 0 && (
