@@ -242,7 +242,7 @@ export type LineInput = {
   thing_id?: string | null;
   text?: string | null;
   /** Een nieuw ding in een lijst (een product dat nog niet bestaat). */
-  new_thing?: { list_id: string; name: string; data?: Attributes } | null;
+  new_thing?: { list_id: string; name: string; data?: Attributes; alias?: string } | null;
   amount?: number | null;
   unit?: string | null;
   price?: number | null;

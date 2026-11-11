@@ -2,6 +2,8 @@ import { Hono, type Context } from "hono";
 import { normalizeShares, type Attributes, type Interval, type Share } from "../../shared/fields";
 import { addToDate } from "../../shared/calc";
 import { BASES, brusselsNow, canEdit, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
+import { fold } from "../../shared/parse";
+import { withAlias } from "../../shared/receipt";
 import { lineAllowed } from "../../shared/rights";
 import { normalizeUnit } from "../../shared/units";
 import { ids, kindsFor, needEdit, requireList, seenLists, toEvent, toLine, type EventRowDb, type LineRowDb } from "../access";
@@ -95,7 +97,8 @@ type CleanLine = {
   price: number | null;
   expires: string | null;
   owner: string | null;
-  new_thing: { list_id: string; name: string; data: Attributes } | null;
+  /** `alias`: de naam op het kasticket als het ding anders heet (Go-tan wok → Noedels), in zijn tekstveld met `aliases`. */
+  new_thing: { list_id: string; name: string; data: Attributes; alias: string | null } | null;
 };
 
 type CleanEvent = {
@@ -180,7 +183,12 @@ async function cleanEvent(
       expires,
       owner: person(o.owner, "Van wie"),
       new_thing: newThing
-        ? { list_id: typeof newThing.list_id === "string" ? newThing.list_id : "", name: optionalString(newThing, "name", 200) ?? "", data: (newThing.data ?? {}) as Attributes }
+        ? {
+            list_id: typeof newThing.list_id === "string" ? newThing.list_id : "",
+            name: optionalString(newThing, "name", 200) ?? "",
+            data: (newThing.data ?? {}) as Attributes,
+            alias: optionalString(newThing, "alias", 80),
+          }
         : null,
     } satisfies CleanLine;
   });
@@ -260,6 +268,9 @@ async function newThingStatements(db: D1Database, meId: string, seen: Map<string
     const { list } = await requireList(db, meId, l.new_thing.list_id);
     if (!list.one) throw new ValidationError(`${list.name} heeft geen dingen`);
     const data = await prepareData(db, meId, seen, list.fields, l.new_thing.data);
+    const aliasField = list.fields.find((f) => f.type === "text" && f.aliases);
+    const alias = aliasField && l.new_thing.alias && fold(l.new_thing.alias) !== fold(l.new_thing.name) ? withAlias(data[aliasField.key], l.new_thing.alias) : null;
+    if (aliasField && alias) data[aliasField.key] = alias;
     const id = crypto.randomUUID();
     statements.push(db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(id, list.id, l.new_thing.name, JSON.stringify(data), meId));
     newIds.set(i, id);

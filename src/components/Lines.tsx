@@ -1,8 +1,9 @@
-// De lijnen van een gebeurtenis: per lijn wat ermee gebeurt (erbij, eraf, voor, bij), het ding (of een tekst, of een
-// nieuw ding in een lijst), hoeveel, de eenheid en de prijs. Zie STIJLBOEK.md → Lijnen.
+// De lijnen van een gebeurtenis: per lijn wat ermee gebeurt (toevoegen, weghalen, voor, bij), het ding (of een tekst, of
+// een nieuw ding in een lijst), hoeveel, de eenheid en de prijs, elk met een label. Zie STIJLBOEK.md → Lijnen.
 
 import { useState } from "react";
 import { LINE_ROLES, type LineRole, type ListNode, type ThingRef } from "../../shared/model";
+import { fold } from "../../shared/parse";
 import { UNITS } from "../../shared/units";
 import { centsToInput, parseEuro } from "../format";
 import { Combo, useThingOptions } from "./ItemPicker";
@@ -20,6 +21,8 @@ export type LineDraft = {
   price: string;
   expires: string;
   owner: string;
+  /** De naam op het kasticket: kies of maak je een ding met een andere naam (Go-tan wok → Noedels), dan onthoudt dat ding hem. */
+  ticket: string;
 };
 
 let counter = 0;
@@ -34,6 +37,7 @@ export const emptyLine = (role: LineRole, thing: ThingRef | null = null): LineDr
   price: "",
   expires: "",
   owner: "",
+  ticket: "",
 });
 
 /** Een lijn zoals de API ze wil, of null als ze leeg is; een fout als iets niet klopt. */
@@ -45,7 +49,11 @@ export function buildLine(l: LineDraft): Record<string, unknown> | null | { erro
   if (price !== null && Number.isNaN(price)) return { error: `De prijs bij ${l.thing?.name ?? l.text} klopt niet` };
   return {
     role: l.role,
-    ...(l.thing ? { thing_id: l.thing.id } : l.newIn ? { new_thing: { list_id: l.newIn, name: l.text.trim() } } : { text: l.text.trim() }),
+    ...(l.thing
+      ? { thing_id: l.thing.id }
+      : l.newIn
+        ? { new_thing: { list_id: l.newIn, name: l.text.trim(), ...(renamed(l) ? { alias: l.ticket } : {}) } }
+        : { text: l.text.trim() }),
     amount,
     unit: l.unit || null,
     price,
@@ -53,6 +61,9 @@ export function buildLine(l: LineDraft): Record<string, unknown> | null | { erro
     owner: l.owner || null,
   };
 }
+
+/** Heet de lijn anders dan op het kasticket (dan onthoudt het ding de naam op het ticket)? */
+export const renamed = (l: LineDraft): boolean => Boolean(l.ticket && fold(l.ticket) !== fold(l.thing?.name ?? l.text));
 
 /** Een bewaarde lijn terug als ontwerp. */
 export function lineDraft(l: { role: LineRole; thing_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null }, thing: ThingRef | undefined): LineDraft {
@@ -165,36 +176,52 @@ function LineRow({
           <Icon name="close" size={15} />
         </button>
       </div>
+      {renamed(line) && <p className="line-ticket">Op het ticket: {line.ticket}</p>}
       {line.role !== "bij" && (
         <div className="line-details">
-          <input className="line-amount" inputMode="decimal" aria-label={`Hoeveel ${what}`} placeholder="Hoeveel" value={line.amount} onChange={(e) => onChange({ amount: e.target.value })} />
-          <select className="line-unit" aria-label={`Eenheid van ${what}`} value={line.unit} onChange={(e) => onChange({ unit: e.target.value })}>
-            {units.map((u) => (
-              <option key={u} value={u}>
-                {u || "—"}
-              </option>
-            ))}
-          </select>
-          {money && (
-            <input className="line-price" inputMode="decimal" aria-label={`Prijs van ${what}`} placeholder="€" value={line.price} onChange={(e) => onChange({ price: e.target.value })} />
-          )}
-          {line.role === "in" && (
-            <input className="line-expires" type="date" aria-label={`${what}: houdbaar tot`} title="Houdbaar tot" value={line.expires} onChange={(e) => onChange({ expires: e.target.value })} />
-          )}
-          {money && people.length > 1 && (
-            <select className="line-owner" aria-label={`${what}: van wie`} value={line.owner} onChange={(e) => onChange({ owner: e.target.value })}>
-              <option value="">Gedeeld</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  Van {p.name}
+          <label className="line-field">
+            <span>Hoeveel</span>
+            <input inputMode="decimal" aria-label={`Hoeveel ${what}`} value={line.amount} onChange={(e) => onChange({ amount: e.target.value })} />
+          </label>
+          <label className="line-field">
+            <span>Eenheid</span>
+            <select aria-label={`Eenheid van ${what}`} value={line.unit} onChange={(e) => onChange({ unit: e.target.value })}>
+              {units.map((u) => (
+                <option key={u} value={u}>
+                  {u || "—"}
                 </option>
               ))}
             </select>
+          </label>
+          {money && (
+            <label className="line-field">
+              <span>Prijs</span>
+              <input inputMode="decimal" aria-label={`Prijs van ${what}`} placeholder="€" value={line.price} onChange={(e) => onChange({ price: e.target.value })} />
+            </label>
+          )}
+          {line.role === "in" && (
+            <label className="line-field">
+              <span>Houdbaar tot</span>
+              <input type="date" aria-label={`${what}: houdbaar tot`} value={line.expires} onChange={(e) => onChange({ expires: e.target.value })} />
+            </label>
+          )}
+          {money && people.length > 1 && (
+            <label className="line-field">
+              <span>Van wie</span>
+              <select aria-label={`${what}: van wie`} value={line.owner} onChange={(e) => onChange({ owner: e.target.value })}>
+                <option value="">Samen</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
         </div>
       )}
       {free && (line.role === "in" || line.role === "uit") && targets.length > 0 && (
-        <label className="line-new">
+        <label className="line-field">
           <span>Nieuw in</span>
           <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>
             <option value="">Enkel tekst</option>

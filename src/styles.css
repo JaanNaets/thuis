@@ -8518,17 +8518,23 @@ dialog.sheet.builder-sheet {
   gap: 8px;
 }
 
-.line-new {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Elk veld van een lijn met zijn naam erboven (Hoeveel, Eenheid, Prijs, Houdbaar tot, Van wie, Nieuw in); een
+   placeholder verdwijnt zodra er iets staat. */
+.line-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.line-field > span,
+.line-ticket {
+  padding: 0 2px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
 
-.line-new select {
-  flex: 1;
-  min-width: 0;
+.line-ticket {
+  margin: 0;
 }
 
 @media (max-width: 520px) {

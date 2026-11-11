@@ -14,7 +14,7 @@ import { attributesDraft, buildAttributes, buildShares, FieldInputs, sharesDraft
 import { AiMark } from "../components/Fields";
 import { FormPicker } from "../components/FormPicker";
 import { Icon } from "../components/Icon";
-import { buildLine, emptyLine, lineDraft, LinesEditor, type LineDraft } from "../components/Lines";
+import { buildLine, emptyLine, lineDraft, LinesEditor, renamed, type LineDraft } from "../components/Lines";
 import { PageHead } from "../components/Page";
 import { PhotoButton } from "../components/PhotoPicker";
 import { useToast } from "../components/Toast";
@@ -157,7 +157,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [reading, setReading] = useState(false);
   // Waar wat ingevuld is vandaan komt: "Gelezen met AI" of "Geschat met AI".
   const [source, setSource] = useState<string | null>(null);
-  const ticketNames = useRef(new Map<string, string>());
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const access = useMemo(() => allEdit(kind.fields), [kind.fields]);
@@ -344,19 +343,15 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       if (read.date) setDay(read.date);
       if (read.total !== null) setAmount(centsToInput(read.total));
       if (!name.trim() && read.store_text && !read.store) setName(read.store_text);
-      ticketNames.current = new Map();
-      const made: LineDraft[] = read.lines.map((l) => {
-        const line = {
-          ...emptyLine("in", l.thing),
-          text: l.thing ? "" : niceName(l.name),
-          newIn: l.thing ? "" : defaultNew,
-          amount: String(l.amount).replace(".", ","),
-          unit: l.unit ?? "",
-          price: l.price !== null ? centsToInput(l.price) : "",
-        };
-        ticketNames.current.set(line.key, l.name);
-        return line;
-      });
+      const made: LineDraft[] = read.lines.map((l) => ({
+        ...emptyLine("in", l.thing),
+        text: l.thing ? "" : niceName(l.name),
+        newIn: l.thing ? "" : defaultNew,
+        amount: String(l.amount).replace(".", ","),
+        unit: l.unit ?? "",
+        price: l.price !== null ? centsToInput(l.price) : "",
+        ticket: l.name,
+      }));
       const store = read.store ? [emptyLine("bij", read.store)] : read.store_text ? [{ ...emptyLine("bij"), text: read.store_text }] : [];
       setLines((cur) => [...cur.filter((l) => l.thing || l.text.trim()), ...store, ...made]);
       setSource(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
@@ -414,11 +409,9 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         if (saved.made.length) extra += `, nieuw: ${saved.made.map((m) => m.name).join(", ")}`;
         if (saved.ticked.length) extra += `, afgevinkt: ${saved.ticked.length === 1 ? "1 boodschap" : `${saved.ticked.length} boodschappen`}`;
       }
-      // De naam op het ticket bij het gekozen ding onthouden (de volgende keer koppelt het vanzelf).
-      for (const l of lines) {
-        const ticket = ticketNames.current.get(l.key);
-        if (ticket && l.thing && fold(ticket) !== fold(l.thing.name)) api.post(`/things/${l.thing.id}/alias`, { name: ticket }).catch(() => {});
-      }
+      // De naam op het ticket bij het gekozen ding onthouden (de volgende keer koppelt het vanzelf); een nieuw ding krijgt
+      // hem bij het maken (`alias` in `buildLine`).
+      for (const l of lines) if (l.thing && renamed(l)) api.post(`/things/${l.thing.id}/alias`, { name: l.ticket }).catch(() => {});
       if (photo && id) {
         const form = new FormData();
         form.set("file", await prepareUpload(photo));

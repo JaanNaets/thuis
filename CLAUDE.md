@@ -113,7 +113,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   (`POST /lists/:id/events/read-photo` met de soort): een aankoop is een kasticket (`shared/receipt.ts`): één aankoop
   met een lijn per product, koppelt enkel aan dingen die de lezer ziet, bewaart niets; een soort met voedingswaarden
   herkent een gerecht en schat (dat zegt de app); een andere soort vult haar velden met wat er echt staat. Van een
-  kasticket wordt de naam op het ticket onthouden (`POST /things/:id/alias`, een tekstveld met `aliases`). Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
+  kasticket wordt de naam op het ticket onthouden (`POST /things/:id/alias`, een tekstveld met `aliases`; een nieuw ding
+  met een andere naam krijgt hem bij het maken, `new_thing.alias`): Go-tan wok wordt de volgende keer vanzelf Noedels. Een ding van een foto (`POST /lists/:id/things/read-photo`) of barcode (Open Food Facts,
   zonder AI); de app toont altijd of iets uit een databank komt of geschat is.
 - **Productinfo**: Open Food Facts krijgt enkel een barcode of productnaam, nooit iets van de gebruiker; NEVO
   (`shared/nevo.ts`, `nevoMatch` op hoofdwoord en synoniemen) zonder netwerk, met `nevoCredit`. NEVO staat in D1
