@@ -141,7 +141,7 @@ export function EventPage() {
                   const t = l.thing_id ? names.thing(l.thing_id) : undefined;
                   const label = t?.name ?? l.text ?? "Verborgen";
                   const meta = [
-                    LINE_ROLES[l.role].label,
+                    LINE_ROLES[l.role].done,
                     l.amount !== null ? formatAmount(l.amount, l.unit ?? t?.unit ?? null) : null,
                     t?.list || null,
                     l.owner ? `van ${names.person(l.owner)}` : null,

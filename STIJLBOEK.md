@@ -828,14 +828,13 @@ raakt, zonder bedrag. Gepland: met een vinkje vooraan.
 
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
-Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Erbij, Eraf, Voor, Bij: een keuzelijst,
-`.line-role`) en met wat (`Combo`: typ of kies een ding, of laat tekst staan) met × om weg te halen; eronder Hoeveel,
-de eenheid, de prijs (bij geld), houdbaar tot (bij erbij) en Gedeeld of Van <persoon>. Tekst zonder ding in een lijn
-erbij of eraf krijgt **Nieuw in** (een lijst waarin je mag toevoegen, of Enkel tekst); iets nieuws erbij staat
-standaard op de lijst waar je vandaan kwam (Aankoop vanuit Wijnen: Nieuw in Wijnen), behalve als het gepland is; wat
-je dan in Typ wat je weet zet en geen ding is ("Meursault 2019 32 euro"), wordt zo'n lijn in plaats van de omschrijving.
-Onderaan "+ Lijn". Op gsm komt
-het ding onder de rol.
+Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Toevoegen, Weghalen, Voor, Bij: een
+keuzelijst, `.line-role`; op de gebeurtenis Toegevoegd, Weggehaald) en met wat (`Combo`: typ of kies een ding, of laat
+tekst staan) met × om weg te halen; eronder Hoeveel, de eenheid, de prijs (bij geld), houdbaar tot (bij toevoegen) en
+Gedeeld of Van <persoon>. Tekst zonder ding in een lijn die toevoegt of weghaalt krijgt **Nieuw in** (een lijst waarin
+je mag toevoegen, of Enkel tekst); iets nieuws staat standaard op de lijst waar je vandaan kwam (Aankoop vanuit Wijnen:
+Nieuw in Wijnen), behalve als het gepland is; wat je dan in Typ wat je weet zet en geen ding is ("Meursault 2019 32
+euro"), wordt zo'n lijn in plaats van de omschrijving. Onderaan "+ Lijn". Op gsm komt het ding onder de rol.
 
 ### Rechten in de app
 

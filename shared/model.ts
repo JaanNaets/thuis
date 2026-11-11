@@ -38,11 +38,12 @@ export const canManage = (r: Role | null | undefined): boolean => r === "beheerd
 
 /** Welke rol een lijn standaard heeft, en wat een soort kan. */
 export type LineRole = "in" | "uit" | "voor" | "bij";
-export const LINE_ROLES: Record<LineRole, { label: string; verb: string }> = {
-  in: { label: "Erbij", verb: "erbij" },
-  uit: { label: "Eraf", verb: "eraf" },
-  voor: { label: "Voor", verb: "voor" },
-  bij: { label: "Bij", verb: "bij" },
+/** `label`: wat je kiest in het formulier (Toevoegen: een fles erbij, of een nieuwe wijn); `done`: achteraf. */
+export const LINE_ROLES: Record<LineRole, { label: string; done: string }> = {
+  in: { label: "Toevoegen", done: "Toegevoegd" },
+  uit: { label: "Weghalen", done: "Weggehaald" },
+  voor: { label: "Voor", done: "Voor" },
+  bij: { label: "Bij", done: "Bij" },
 };
 export const isLineRole = (v: unknown): v is LineRole => typeof v === "string" && Object.hasOwn(LINE_ROLES, v);
 
