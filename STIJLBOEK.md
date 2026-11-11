@@ -834,7 +834,7 @@ typt, met hun lijst ernaast; een lijn gaat over één ding, de lijst zelf staat 
 geld, Houdbaar tot bij toevoegen, Van wie: Samen of een persoon), want een placeholder verdwijnt zodra er iets staat.
 Heet een lijn anders dan op het kasticket, dan staat eronder "Op het ticket: GO-TAN WOK" (`.line-ticket`): dat ding
 onthoudt die naam. Tekst zonder ding in een lijn die toevoegt of weghaalt krijgt **Nieuw in** (een lijst waarin je mag
-toevoegen, of Enkel tekst); iets nieuws staat standaard op de lijst waar je vandaan kwam (Aankoop vanuit Wijnen:
+toevoegen, of Geen lijst: dan blijft het enkel een regel op de aankoop); iets nieuws staat standaard op de lijst waar je vandaan kwam (Aankoop vanuit Wijnen:
 Nieuw in Wijnen), behalve als het gepland is; wat je dan in Typ wat je weet zet en geen ding is ("Meursault 2019 32
 euro"), wordt zo'n lijn in plaats van de omschrijving. Onderaan "+ Lijn". Op gsm komt het ding onder de rol.
 

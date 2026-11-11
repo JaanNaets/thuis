@@ -225,7 +225,7 @@ function LineRow({
         <label className="line-field">
           <span>Nieuw in</span>
           <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>
-            <option value="">Enkel tekst</option>
+            <option value="">Geen lijst</option>
             {targets.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
