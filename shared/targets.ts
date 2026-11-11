@@ -177,12 +177,16 @@ export function pricedFirst(forms: LogForm[], text: string): LogForm[] {
   return [...forms.filter(money), ...forms.filter((f) => !money(f))];
 }
 
-/** Het pad om met een formulier te loggen, eventueel met een ding als eerste lijn en je tekst. */
-export function logPath(form: Pick<LogForm, "kind" | "list_id">, thing?: string, text = ""): string {
+/**
+ * Het pad om met een formulier te loggen, eventueel met een ding als eerste lijn en je tekst. `newIn`: de lijst waar je
+ * vandaan komt; een nieuw ding in een lijn (een wijn die er nog niet staat) komt daar dan vanzelf in (`?nieuw=`).
+ */
+export function logPath(form: Pick<LogForm, "kind" | "list_id">, thing?: string, text = "", newIn?: string): string {
   const q = new URLSearchParams();
   if (form.kind) q.set("soort", form.kind.id);
   if (thing) q.set("ding", thing);
   if (text) q.set("tekst", text);
+  if (newIn && newIn !== form.list_id) q.set("nieuw", newIn);
   const query = q.toString();
   return `/lijsten/${form.list_id}/loggen${query ? `?${query}` : ""}`;
 }

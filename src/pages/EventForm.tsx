@@ -308,6 +308,9 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
   const shareWith = (people ?? []).filter((p) => shares.people.includes(p.id));
   const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
+  // Iets nieuws dat erbij komt (een wijn die er nog niet staat): in de lijst waar je vandaan kwam, anders in deze. Niet
+  // bij iets gepland: een wijn op de boodschappenlijst komt pas in Wijnen als je hem koopt.
+  const defaultNew = [params.get("nieuw"), list.stock ? list.id : ""].find((id) => id && targets.some((t) => t.id === id)) ?? "";
   const money = base.money;
 
   async function readPhoto(file: File) {
@@ -340,7 +343,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         const line = {
           ...emptyLine("in", l.thing),
           text: l.thing ? "" : niceName(l.name),
-          newIn: !l.thing && list.stock ? list.id : "",
+          newIn: l.thing ? "" : defaultNew,
           amount: String(l.amount).replace(".", ","),
           unit: l.unit ?? "",
           price: l.price !== null ? centsToInput(l.price) : "",
@@ -569,7 +572,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       )}
 
       <section className="card form-section">
-        <LinesEditor lines={lines} onChange={setLines} money={money} people={shareWith} targets={targets} />
+        <LinesEditor lines={lines} onChange={setLines} money={money} people={shareWith} targets={targets} defaultNew={status === "gepland" ? "" : defaultNew} />
       </section>
 
       {kind.fields.length > 0 && (

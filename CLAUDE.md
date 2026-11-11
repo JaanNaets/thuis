@@ -103,7 +103,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   formulieren van de lijst en, telt ze voorraad, de formulieren van lijsten zonder dingen die de voorraad veranderen
   (Aankoop in Uitgaven, Boodschap, Gegeten). Een aankoop logt in de lijst van wie meebetaalt (Uitgaven = met Jana), de
   lijnen bepalen welke voorraad stijgt (Chablis in Wijnen); een kasticket gaat naar een lijst met een eigen aankoop
-  (`receiptLists`).
+  (`receiptLists`). Een formulier van elders krijgt `?nieuw=<lijst>` (`logPath`): iets nieuws dat erbij komt (een wijn
+  die er nog niet staat) staat dan standaard op Nieuw in die lijst (`defaultNew` in `LinesEditor`), niet bij gepland.
 - **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (enkel na een
   tik of de schakelaar Lezen met AI in de fotokiezer, `PhotoButton`), per persoon aan of uit (`useAiBudget`: 25 per
   persoon per dag, 50 samen). Welke formulieren een foto lezen: per lijst (`lists.read_photo`, `shared/photoread.ts`;

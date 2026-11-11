@@ -16,7 +16,8 @@ export function LogButtons({ listId, thing, planned = false, row = false }: { li
   const forms = logForms(data, listId, (id) => shownIn(hidden, "add", id) || id === listId);
   if (!forms.length) return null;
   const links = forms.map((f) => {
-    const path = logPath(f, thing);
+    // Zonder ding (bovenaan het logboek): een nieuw ding in een lijn komt in deze lijst.
+    const path = logPath(f, thing, "", thing ? undefined : listId);
     return (
       <Link key={f.key} to={planned ? `${path}${path.includes("?") ? "&" : "?"}gepland=1` : path} className="btn btn-outline btn-sm" aria-label={f.hint ? `${f.label} (in ${f.hint})` : undefined}>
         <Icon name={f.icon as IconName} size={14} /> {f.label}

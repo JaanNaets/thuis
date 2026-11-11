@@ -73,6 +73,7 @@ export function LinesEditor({
   money,
   people,
   targets,
+  defaultNew,
 }: {
   lines: LineDraft[];
   onChange: (lines: LineDraft[]) => void;
@@ -82,14 +83,17 @@ export function LinesEditor({
   people: { id: string; name: string }[];
   /** Lijsten waarin een nieuw ding kan komen (waar je mag toevoegen). */
   targets: ListNode[];
+  /** Waar iets nieuws dat erbij komt standaard in komt (de lijst waar je vandaan kwam); leeg: enkel tekst. */
+  defaultNew?: string;
 }) {
   const set = (i: number, patch: Partial<LineDraft>) => onChange(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
+  const startIn = defaultNew && targets.some((t) => t.id === defaultNew) ? defaultNew : "";
   return (
     <div className="field">
       <span className="label">Lijnen</span>
       <ul className="line-rows">
         {lines.map((l, i) => (
-          <LineRow key={l.key} line={l} money={money} people={people} targets={targets} onChange={(p) => set(i, p)} onRemove={() => onChange(lines.filter((_, k) => k !== i))} />
+          <LineRow key={l.key} line={l} money={money} people={people} targets={targets} startIn={startIn} onChange={(p) => set(i, p)} onRemove={() => onChange(lines.filter((_, k) => k !== i))} />
         ))}
       </ul>
       <button
@@ -109,6 +113,7 @@ function LineRow({
   money,
   people,
   targets,
+  startIn,
   onChange,
   onRemove,
 }: {
@@ -116,6 +121,7 @@ function LineRow({
   money: boolean;
   people: { id: string; name: string }[];
   targets: ListNode[];
+  startIn: string;
   onChange: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
@@ -145,7 +151,9 @@ function LineRow({
           className="line-thing"
           onText={(t) => {
             setTyping(t);
-            onChange({ thing: null, text: t });
+            // Iets nieuws dat erbij komt: standaard in de lijst waar je vandaan kwam (een wijn in Wijnen).
+            const fresh = !line.text && !line.newIn && t.trim() && line.role === "in" && startIn;
+            onChange({ thing: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
           }}
           onPick={(o) => {
             setTyping(null);

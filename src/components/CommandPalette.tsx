@@ -182,7 +182,8 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
       label,
       hint: scope && target.list_id === scope.list ? undefined : (target.hint ?? undefined),
       icon: (target.icon ?? "plus") as IconName,
-      to: withExtras(targetPath(target, rest), extras(target.thing)),
+      // Op een lijst met een formulier van elders (Aankoop in Uitgaven, vanuit Wijnen): iets nieuws komt in deze lijst.
+      to: withExtras(targetPath(target, rest), { ...extras(target.thing), newIn: scope && !target.thing && target.list_id !== scope.list ? scope.list : undefined }),
     });
     const forms = matches.filter((m) => !m.target.thing).map((m) => entry(m, "Loggen", m.rest ? `${m.target.label}: ${m.rest}` : m.target.label));
     // Noemt je tekst een ding, dan staan de formulieren al bij dat ding; enkel een formulier dat je zelf noemde nog los.
@@ -579,9 +580,13 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
   );
 }
 
-/** Het pad van een plek, met plannen en de foto erbij (`foto=gedeeld`, `lezen=1` als de AI ze moet lezen). */
-function withExtras(path: string, extra: { planned: boolean; photo: { read: boolean } | null }): string {
+/**
+ * Het pad van een plek, met plannen en de foto erbij (`foto=gedeeld`, `lezen=1` als de AI ze moet lezen) en waar iets
+ * nieuws in een lijn komt (`nieuw=`, zie `logPath`).
+ */
+function withExtras(path: string, extra: { planned: boolean; photo: { read: boolean } | null; newIn?: string }): string {
   const q = new URLSearchParams();
+  if (extra.newIn) q.set("nieuw", extra.newIn);
   if (extra.planned) q.set("gepland", "1");
   if (extra.photo) q.set("foto", "gedeeld");
   if (extra.photo?.read) q.set("lezen", "1");

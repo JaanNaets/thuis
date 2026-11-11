@@ -67,6 +67,9 @@ test("het pad: de gebeurtenis komt in de lijst van het formulier, met het ding a
   const aankoop = logForms(t, "WIJNEN").find((f) => f.list_id === "UITGAVEN")!;
   assert.equal(logPath(aankoop, "CHABLIS", "54 euro"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&ding=CHABLIS&tekst=54+euro");
   assert.equal(logPath(logForms(t, "WINKELS")[0], "COLRUYT"), "/lijsten/WINKELS/loggen?ding=COLRUYT");
+  // Vanuit Wijnen een aankoop (in Uitgaven): een nieuwe wijn in een lijn komt in Wijnen.
+  assert.equal(logPath(aankoop, undefined, "", "WIJNEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&nieuw=WIJNEN");
+  assert.equal(logPath(aankoop, undefined, "", "UITGAVEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u");
 });
 
 test("met een bedrag eerst de formulieren met geld; een nieuwe naam zonder bedrag", () => {
