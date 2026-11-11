@@ -829,8 +829,8 @@ raakt, zonder bedrag. Gepland: met een vinkje vooraan.
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
 Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Toevoegen, Weghalen, Voor, Bij: een
-keuzelijst, `.line-role`; op de gebeurtenis Toegevoegd, Weggehaald) en met wat (`Combo`: typ of kies een ding, of laat
-tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven (`.line-field`: Hoeveel, Eenheid, Prijs bij
+keuzelijst, `.line-role`; op de gebeurtenis Toegevoegd, Weggehaald) en met wat (`Combo` met `typeFirst`: de dingen pas als je
+typt, met hun lijst ernaast; een lijn gaat over één ding, de lijst zelf staat bij Nieuw in; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven (`.line-field`: Hoeveel, Eenheid, Prijs bij
 geld, Houdbaar tot bij toevoegen, Van wie: Samen of een persoon), want een placeholder verdwijnt zodra er iets staat.
 Heet een lijn anders dan op het kasticket, dan staat eronder "Op het ticket: GO-TAN WOK" (`.line-ticket`): dat ding
 onthoudt die naam. Tekst zonder ding in een lijn die toevoegt of weghaalt krijgt **Nieuw in** (een lijst waarin je mag
@@ -1151,6 +1151,7 @@ gedeelde foto als kasticket ✨ of bij wat je toevoegt).
   icoon op wit. De kop en de onderbalk op de waas zijn bijna dekkend, ook als het toestel geen vervaging kan.
 - Het zoekpalet is een `listbox` met `aria-activedescendant`; dichtgeklapte boomtakken zijn `inert`.
 - Keuzes onder een veld (`Combo` in `ItemPicker.tsx`, het zoekpalet) zijn een `combobox` met `listbox` en `aria-activedescendant`.
+  Een keuze kies je met een tik (`click`), nooit al bij het aanraken: anders kies je iets terwijl je door de lijst scrolt.
 
 ---
 

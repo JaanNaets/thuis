@@ -158,8 +158,9 @@ function LineRow({
           options={options}
           placeOf={placeOf}
           disabled={false}
-          placeholder="Typ of kies…"
+          placeholder="Typ een naam…"
           className="line-thing"
+          typeFirst
           onText={(t) => {
             setTyping(t);
             // Iets nieuws dat erbij komt: standaard in de lijst waar je vandaan kwam (een wijn in Wijnen).

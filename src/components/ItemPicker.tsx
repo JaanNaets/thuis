@@ -52,7 +52,8 @@ export const useItemOptions = (def: FieldDef, text = "", chosen: string[] = []) 
 
 /**
  * Het zoekveld met de keuzes eronder. `text`: wat er in het veld staat; `onText`: bij typen; `onPick`: een item
- * gekozen. Pijltjes, Enter en Escape werken zoals in het zoekpalet.
+ * gekozen. Pijltjes, Enter en Escape werken zoals in het zoekpalet. `typeFirst`: keuzes pas als je iets typt (een lijn
+ * kan elk ding zijn; alles van A tot Z zegt dan niets).
  */
 export function Combo({
   label,
@@ -66,6 +67,7 @@ export function Combo({
   disabled,
   placeholder,
   className,
+  typeFirst = false,
 }: {
   label: string;
   text: string;
@@ -78,14 +80,15 @@ export function Combo({
   disabled: boolean;
   placeholder: string;
   className?: string;
+  typeFirst?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const matches = useMemo(
-    () => (options ?? []).filter((o) => !exclude.includes(o.id) && nameMatches(o.name, text)).slice(0, MAX_SHOWN),
-    [options, text, exclude],
+    () => (typeFirst && !text.trim() ? [] : (options ?? []).filter((o) => !exclude.includes(o.id) && nameMatches(o.name, text)).slice(0, MAX_SHOWN)),
+    [options, text, exclude, typeFirst],
   );
   const current = Math.min(active, matches.length - 1);
 
@@ -145,11 +148,9 @@ export function Combo({
               role="option"
               aria-selected={i === current}
               className="picker-option"
-              // Kiezen vóór het veld de focus verliest.
-              onPointerDown={(e) => {
-                e.preventDefault();
-                pick(o);
-              }}
+              // Het veld houdt de focus (anders sluit de lijst); kiezen pas bij een tik, niet als je door de lijst scrolt.
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => pick(o)}
               onPointerEnter={() => setActive(i)}
             >
               <span className="picker-name">{o.name}</span>
