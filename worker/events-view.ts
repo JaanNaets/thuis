@@ -6,6 +6,7 @@
 //   verdeling of andere lijnen.
 
 import { ADJUST } from "../shared/cells";
+import { eventRole as eventAccess } from "../shared/rights";
 import type { EventView, KindInfo, Line, Role, ItemRef } from "../shared/model";
 import type { Person } from "../shared/types";
 import { ids, kindOf, toEvent, toLine, type EventRowDb, type LineRowDb, type Seen } from "./access";
@@ -13,11 +14,25 @@ import { peopleByIds, itemRefs } from "./routes/items";
 
 export type EventPage = { events: EventView[]; items: ItemRef[]; people: Person[]; kinds: KindInfo[]; lists: { id: string; name: string }[]; more?: boolean };
 
-/** Je rol op een gebeurtenis: op haar formulier, of bij een Aanpassing op de lijst van haar item. */
-export function eventRole(seen: Seen, kind: string, itemLists: (string | null)[]): Role | null {
-  if (kind !== ADJUST) return seen.forms.get(kind) ?? null;
-  const roles = itemLists.map((l) => (l ? (seen.lists.get(l) ?? null) : null));
-  return roles.length && roles.every((r) => r !== null) ? roles[0] : null;
+/** Je rol op een gebeurtenis (zie `eventRole` in shared/rights.ts). */
+export const eventRole = (seen: Seen, kind: string, touched: string[]): Role | null => eventAccess(seen, kind === ADJUST, kind, touched);
+
+/**
+ * De lijsten die elke gebeurtenis raakt: met een lijn erbij, eraf of voor (niet `bij`: waar of bij wie) naar een van
+ * haar items, of met een cel die ze veranderde (een saldo, een kleur).
+ */
+export async function touchedLists(db: D1Database, eventIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!eventIds.length) return out;
+  const { results } = await db
+    .prepare(
+      `SELECT l.event_id, t.list_id FROM lines l JOIN items t ON t.id = l.item_id WHERE l.role != 'bij' AND l.event_id IN (SELECT value FROM json_each(?1))
+       UNION SELECT f.event_id, t.list_id FROM effects f JOIN items t ON t.id = f.item_id WHERE f.event_id IN (SELECT value FROM json_each(?1))`,
+    )
+    .bind(ids(eventIds))
+    .all<{ event_id: string; list_id: string }>();
+  for (const r of results) out.set(r.event_id, [...new Set([...(out.get(r.event_id) ?? []), r.list_id])]);
+  return out;
 }
 
 /** Van rijen (al gefilterd op wat je mag zien: je ziet het formulier, of een lijn erin) naar wat je ziet, met de namen erbij. */
@@ -44,7 +59,8 @@ export async function viewEvents(db: D1Database, seen: Seen, rows: EventRowDb[])
   for (const row of rows) {
     const e = toEvent(row);
     const all = linesOf.get(e.id) ?? [];
-    const full = eventRole(seen, e.kind, all.map((l) => l.item_list)) !== null;
+    const touched = [...new Set([...all.flatMap((l) => (l.role !== "bij" && l.item_list ? [l.item_list] : [])), ...(changed.get(e.id) ?? [])])];
+    const full = eventRole(seen, e.kind, touched) !== null;
     const lines = (full ? all : all.filter((l) => l.role !== "bij" && l.item_list !== null && seen.lists.has(l.item_list))).map(({ item_list: _t, ...l }) => l);
     const cells = (changed.get(e.id) ?? []).filter((l) => seen.lists.has(l));
     if (!full && !lines.length && !cells.length) continue;

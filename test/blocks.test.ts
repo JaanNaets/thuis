@@ -273,7 +273,12 @@ test("bladeren: een periode in woorden, en per maand, per venster of per periode
   // Een lijst met "wanneer in vandaag": per dag, ook vooruit.
   const eaten = view({ where: { match: "all", conditions: [{ field: "at", op: "in", value: { p: "today" } }] } });
   assert.deepEqual([viewSpan(eaten, today, 0)!.label, viewSpan(eaten, today, -1)!.label, viewSpan(eaten, today, 1)!.label], ["Vandaag", "Gisteren", "Morgen"]);
-  assert.equal(viewSpan(eaten, today, -2)!.label, "Wo 4 nov");
+  assert.equal(viewSpan(eaten, today, -2)!.label, "Eergisteren");
+  assert.equal(viewSpan(eaten, today, -3)!.label, "Di 3 nov");
+  // De laatste 3 maanden: per 3 maanden terug.
+  const months = view({ where: { match: "all", conditions: [{ field: "at", op: "in", value: { p: "last_days", n: 3, u: "month" } }] } });
+  assert.equal(viewSpan(months, today, 0)!.label, "De laatste 3 maanden");
+  assert.deepEqual([viewSpan(months, today, -1)!.from, viewSpan(months, today, -1)!.to], ["2026-05-07", "2026-08-06"]);
   // Zonder periode: niets om door te bladeren.
   assert.equal(viewSpan(view({}), today, 0), null);
   assert.equal(viewSpan(view({ show: "getal", tally: { agg: "count", step: "month", n: 0 } }), today, 0), null);
@@ -322,7 +327,7 @@ test("borden: met een naam en een icoon, nieuw of hernoemd", () => {
 });
 
 test("het formulier van een actie: het gekozen, of van vroeger dat van de lijst en het vertrekpunt", () => {
-  const groups = (list: string | null) => ({ money: false, to: false, duration: false, groups: [{ role: "voor" as const, label: "Voor", list }] });
+  const groups = (list: string | null) => ({ money: false, to: false, duration: false, groups: [{ role: "voor" as const, label: "Voor", lists: list ? [list] : [] }] });
   const kinds = [
     { id: "k1", base: "gebruik" as const, parts: groups(null), does: [] },
     { id: "L1-aankoop", base: "aankoop" as const, parts: groups(null), does: [] },

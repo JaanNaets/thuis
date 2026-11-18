@@ -116,9 +116,10 @@ export function LinesEditor({
         const op = stockOp(kind.does, g.role);
         // Hoeveel doet ertoe als de lijn de voorraad verandert of het formulier ermee iets invult.
         const counted = op !== null || kind.does.some((h) => h.rows.from === "lines" && h.rows.role === g.role && h.value.from === "qty");
-        const only = g.list ? targets.find((t) => t.id === g.list) : undefined;
-        // Iets nieuws: in de lijst van de groep, anders in de lijst waar je vandaan kwam (een wijn in Wijnen).
-        const startIn = g.list ? (only ? g.list : "") : defaultNew && targets.some((t) => t.id === defaultNew) ? defaultNew : "";
+        // Een groep uit bepaalde lijsten: iets nieuws komt in een van die lijsten (waar je vandaan kwam, anders de eerste
+        // waarin je mag toevoegen); uit elke lijst: waar je vandaan kwam (een wijn in Wijnen).
+        const into = g.lists.length ? targets.filter((t) => g.lists.includes(t.id)) : targets;
+        const startIn = defaultNew && into.some((t) => t.id === defaultNew) ? defaultNew : g.lists.length ? (into[0]?.id ?? "") : "";
         return (
           <div key={g.role} className="field">
             <span className="label">{g.label}</span>
@@ -133,7 +134,7 @@ export function LinesEditor({
                     counted={counted}
                     money={kind.parts.money}
                     people={people}
-                    targets={g.list ? targets.filter((t) => t.id === g.list) : targets}
+                    targets={into}
                     startIn={startIn}
                     onChange={(p) => set(l.key, p)}
                     onRemove={() => onChange(lines.filter((x) => x.key !== l.key))}
@@ -142,13 +143,19 @@ export function LinesEditor({
               </ul>
             )}
             <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...lines, emptyLine(g.role)])}>
-              <Icon name="plus" size={15} /> {only?.one ?? "Lijn"}
+              <Icon name="plus" size={15} /> {oneOf(into, g.lists) ?? "Lijn"}
             </button>
           </div>
         );
       })}
     </>
   );
+}
+
+/** Hoe één item heet in de lijsten van een groep (+ Ruimte, + Wijn), als die het allemaal hetzelfde noemen. */
+function oneOf(targets: ListNode[], lists: string[]): string | null {
+  const names = new Set(targets.filter((t) => lists.includes(t.id)).map((t) => t.one));
+  return lists.length && names.size === 1 ? ([...names][0] ?? null) : null;
 }
 
 function LineRow({
@@ -177,7 +184,7 @@ function LineRow({
   onRemove: () => void;
 }) {
   const [typing, setTyping] = useState<string | null>(null);
-  const { options, placeOf } = useListItems(group.list ? [group.list] : [], typing ?? "", line.item ? [line.item.id] : []);
+  const { options, placeOf } = useListItems(group.lists, typing ?? "", line.item ? [line.item.id] : []);
   const shown = typing ?? (line.item ? line.item.name : line.text);
   const units = [...new Set(["", ...(line.item?.unit ? [line.item.unit] : []), ...UNITS, ...(line.unit ? [line.unit] : [])])];
   const free = !line.item && line.text.trim();
@@ -197,7 +204,7 @@ function LineRow({
           onText={(t) => {
             setTyping(t);
             // Iets nieuws dat erbij komt: standaard in de lijst van de groep, of waar je vandaan kwam (een wijn in Wijnen).
-            const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.list) && startIn;
+            const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.lists.length) && startIn;
             onChange({ item: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
           }}
           onPick={(o) => {
@@ -258,7 +265,7 @@ function LineRow({
           )}
         </div>
       )}
-      {free && (op === "bij" || op === "af" || group.list) && targets.length > 0 && (
+      {free && (op === "bij" || op === "af" || group.lists.length > 0) && targets.length > 0 && (
         <label className="line-field">
           <span>Nieuw in</span>
           <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>

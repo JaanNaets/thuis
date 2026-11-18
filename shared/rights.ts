@@ -113,3 +113,19 @@ export function lineAllowed(role: LineRole, itemList: Role | null | "none"): boo
 
 /** De hoogste van twee rollen (of de enige). */
 export const maxRole = (a: Role | null, b: Role | null): Role | null => (b ? higher(a, b) : a);
+
+/**
+ * Je rol op een gebeurtenis, uit wat je ziet (`seen`: je rol per lijst en per formulier) en de lijsten die ze raakt
+ * (`touched`: een lijn erbij, eraf of voor naar een van hun items, of een cel die ze veranderde). Een Aanpassing
+ * (`adjust`): je rol op de lijst van haar item. Anders je rol op haar formulier, maar raakt ze lijsten, dan enkel als
+ * je er minstens één van ziet: wat Jaan uit zijn eigen Wijnen dronk, ziet Rik niet, ook al loggen ze met hetzelfde
+ * Gedronken; een aankoop die ook het saldo in Uitgaven raakt, ziet Jana wel.
+ */
+export function eventRole(seen: { lists: Map<string, Role>; forms: Map<string, Role> }, adjust: boolean, form: string, touched: string[]): Role | null {
+  if (adjust) {
+    const roles = touched.map((l) => seen.lists.get(l) ?? null);
+    return roles.length && roles.every((r) => r !== null) ? roles[0] : null;
+  }
+  const role = seen.forms.get(form) ?? null;
+  return role && (!touched.length || touched.some((l) => seen.lists.has(l))) ? role : null;
+}

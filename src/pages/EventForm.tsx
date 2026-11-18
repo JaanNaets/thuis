@@ -276,12 +276,12 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
         // anders wat het item meestal is (Colruyt: bij), als het formulier die groep heeft.
         const roleOf = (t: ItemRef): LineRole => {
           const groups = kind.parts.groups;
-          const listed = groups.find((g) => g.list === t.list_id);
+          const listed = groups.find((g) => g.lists.includes(t.list_id));
           if (listed) return listed.role;
-          const stocked = t.stock ? groups.find((g) => !g.list && stockOp(kind.does, g.role)) : undefined;
+          const stocked = t.stock ? groups.find((g) => !g.lists.length && stockOp(kind.does, g.role)) : undefined;
           if (stocked) return stocked.role;
-          const usual = t.usual ? groups.find((g) => !g.list && g.role === t.usual) : undefined;
-          return usual?.role ?? groups.find((g) => !g.list && !stockOp(kind.does, g.role))?.role ?? main;
+          const usual = t.usual ? groups.find((g) => !g.lists.length && g.role === t.usual) : undefined;
+          return usual?.role ?? groups.find((g) => !g.lists.length && !stockOp(kind.does, g.role))?.role ?? main;
         };
         const parsed = readEvent(text, {
           today: now.slice(0, 10),

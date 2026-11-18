@@ -161,9 +161,11 @@ export const VIEWS = {
 export type ViewKey = keyof typeof VIEWS;
 export const VIEW_ORDER = Object.keys(VIEWS) as ViewKey[];
 
-/** Een punt op de kaart: een lijst (haar id) of een weergave. */
+/** Een punt op de kaart: een lijst (haar id), een formulier (`form:<id>`) of een weergave (`view:<naam>`). */
 export const viewNode = (v: ViewKey) => `view:${v}`;
 export const viewOf = (node: string): ViewKey | null => (node.startsWith("view:") && Object.hasOwn(VIEWS, node.slice(5)) ? (node.slice(5) as ViewKey) : null);
+export const formNode = (id: string) => `form:${id}`;
+export const formOf = (node: string): string | null => (node.startsWith("form:") ? node.slice(5) : null);
 
 /** Dat zie je niet als lijn: elke gebeurtenis staat op haar dag in de agenda. */
 export const AGENDA_NOTE = "Elke gebeurtenis staat ook op haar dag in de agenda.";
@@ -303,53 +305,35 @@ export function buildLinks(input: LinkInput): LinkResult {
   for (const m of input.mirrors ?? []) {
     if (lists.has(m.list) && lists.has(m.source)) add("ref", m.list, m.source, m.fields.length ? `Gekoppeld: ${m.fields.join(", ")} lopen mee` : "Gekoppeld: de namen lopen mee");
   }
-  // Een formulier hoort bij geen lijst: het verbindt de lijsten die het raakt (wat het uitdrukkelijk invult, en waar
-  // zijn lijnen naartoe gingen). De eerste is waar het "vandaan" komt op de kaart; raakt het er één, dan is het een
-  // notitie bij die lijst.
-  const touched = new Map<string, string[]>();
-  const touch = (kind: string, list: string) => {
-    if (!lists.has(list)) return;
-    const had = touched.get(kind) ?? [];
-    if (!had.includes(list)) touched.set(kind, [...had, list]);
-  };
-  for (const k of input.kinds) {
-    for (const g of k.parts?.groups ?? []) if (g.list) touch(k.id, g.list);
-    for (const h of k.does ?? []) if (h.list) touch(k.id, h.list);
-  }
-  for (const s of input.lines) touch(s.kind, s.to);
-  const formLists = (kind: string) => touched.get(kind) ?? [];
-  const viaForm = (kind: string, to: string, text: string, count: number | null = null, last: string | null = null) => {
-    const from = formLists(kind)[0];
-    if (!from || from === to) ownNote(to, text);
-    else add("log", from, to, text, count, last);
-  };
+  // Een formulier is een eigen punt (`formNode`): het verbindt zich met de lijsten die het invult (een groep lijnen
+  // eruit, een kolom die het zet of telt) en waar zijn lijnen naartoe gingen, en met de weergaven waar zijn logboek in
+  // telt. Enkel formulieren die de lezer ziet.
   const toView = (kind: string, view: ViewKey, text: string, count: number | null = null, last: string | null = null) => {
-    for (const l of formLists(kind)) add("view", l, viewNode(view), text, count, last);
+    if (kinds.has(kind)) add("view", formNode(kind), viewNode(view), text, count, last);
   };
-
   for (const k of input.kinds) {
-    const home = formLists(k.id)[0];
-    if (home) fieldLinks(home, k.fields, `${k.name}: `);
-    if (k.goal) toView(k.id, "meldingen", `${k.name}: een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
-    if (k.notify) toView(k.id, "meldingen", k.notify.to === "all" ? `${k.name}: een melding aan iedereen bij het formulier` : `${k.name}: een melding aan wie erin staat`);
-    // Een groep lijnen uit één lijst (Ruimte uit Huis).
+    const node = formNode(k.id);
+    fieldLinks(node, k.fields, "");
+    if (k.goal) toView(k.id, "meldingen", `Een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
+    if (k.notify) toView(k.id, "meldingen", k.notify.to === "all" ? "Iets nieuws: een melding aan iedereen bij het formulier" : "Iets nieuws: een melding aan wie erin staat");
+    // Een groep lijnen uit bepaalde lijsten (Ruimte uit Huis).
     for (const g of k.parts?.groups ?? []) {
-      if (g.list && lists.has(g.list)) viaForm(k.id, g.list, `${k.name}: ${g.label} uit deze lijst`);
+      for (const l of g.lists) if (lists.has(l)) add("log", node, l, `${g.label} uit deze lijst`);
     }
     // Wat het formulier invult: een kolom van de items van een lijst (de voorraad van elke lijst staat bij de lijnen).
     for (const h of k.does ?? []) {
       const to = h.list ? lists.get(h.list) : undefined;
       if (!to) continue;
       if (h.rows.from !== "lines") {
-        viaForm(k.id, to.id, `${k.name} houdt het saldo bij in ${to.name}`);
+        add("log", node, to.id, "Houdt het saldo bij");
         continue;
       }
       const column = h.field === STOCK ? "de voorraad" : (to.fields.find((f) => f.key === h.field)?.label ?? h.field);
-      viaForm(k.id, to.id, `${k.name} ${h.op === "zet" ? "zet" : h.op === "bij" ? "telt bij" : "telt af van"} ${column}`);
+      add("log", node, to.id, `${h.op === "zet" ? "Zet" : h.op === "bij" ? "Telt bij" : "Telt af van"} ${column}`);
     }
   }
 
-  // Wat er gelogd is: bij de lijsten die het formulier raakt.
+  // Wat er gelogd is: bij het formulier.
   for (const s of input.log) {
     const name = kindName(kinds, s.kind, s.base);
     if (s.money) toView(s.kind, "geld", `${name}: ${times(s.money)} met een bedrag`, s.money, s.last);
@@ -363,16 +347,13 @@ export function buildLinks(input: LinkInput): LinkResult {
     if (s.repeats) toView(s.kind, "herhalen", `${name}: ${s.repeats} ${s.repeats === 1 ? "herhaalt" : "herhalen"}`, s.repeats, null);
     if (s.running) toView(s.kind, "timers", `${name}: ${s.running} ${s.running === 1 ? "loopt" : "lopen"} nu`, s.running, null);
   }
+  // Lijnen naar de items van een lijst: van het formulier naar die lijst, met hoe vaak en welke items.
   for (const s of input.lines) {
-    if (!lists.has(s.to)) continue;
-    const text = lineText(kindName(kinds, s.kind, s.base), s.role, lists.get(s.to)!);
-    const from = formLists(s.kind)[0];
-    if (!from || from === s.to) ownNote(s.to, `${text}, ${times(s.events)}`);
-    else add("log", from, s.to, text, s.events, s.last);
+    if (!lists.has(s.to) || !kinds.has(s.kind)) continue;
+    add("log", formNode(s.kind), s.to, lineText(kindName(kinds, s.kind, s.base), s.role, lists.get(s.to)!), s.events, s.last);
   }
   for (const t of input.items ?? []) {
-    const from = formLists(t.kind)[0];
-    const link = from && from !== t.to ? byKey.get(`log ${from} ${t.to}`) : undefined;
+    const link = byKey.get(`log ${formNode(t.kind)} ${t.to}`);
     if (link) (link.items ??= []).push({ name: t.name, count: t.events });
   }
   for (const link of byKey.values()) {
@@ -528,8 +509,8 @@ export function layoutLinks(columns: string[], nodes: LayoutNode[], links: Pick<
 /** Iemand bij een lijst op de kaart: met zijn rol, en via welke tag als het geen rechtstreekse rol is. */
 export type LinkPersonView = LinkPerson & { via: string | null; color: Tone | null };
 
-/** Een eigen soort van een lijst die de lezer ziet (om op te zoeken). */
-export type LinkKindName = { id: string; list: string; name: string };
+/** Een formulier dat de lezer ziet, zoals de kaart het als punt toont (`id`: `formNode`). */
+export type LinkForm = { id: string; name: string; icon: string; base: Base; role: Role };
 
 /** Wat GET /insights/links geeft. */
 export type LinksResponse = {
@@ -539,10 +520,11 @@ export type LinksResponse = {
   /** Per lijst: hoeveel items en gebeurtenissen, en de dag van de laatste die gebeurd is. */
   counts: Record<string, { items: number; events: number; last: string | null }>;
   people: Record<string, LinkPersonView[]>;
-  /** De lijsten die een melding sturen bij iets nieuws (`notify`), om ze per persoon stil te kunnen zetten. */
+  /** De formulieren die een melding sturen bij iets nieuws (`notify`). */
   alerts: string[];
   problems: LinkProblem[];
-  kinds: LinkKindName[];
+  /** De formulieren als punten op de kaart (hun tellingen staan bij `counts`, met `formNode`). */
+  forms: LinkForm[];
 };
 
 // ---------- zoeken ----------
@@ -573,8 +555,6 @@ export type LinkHit = {
   links: string[];
 };
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 /**
  * Zoeken in je verbanden: lijsten, soorten (en waar ze gebruikt worden), items die in een verband voorkomen, wat een
  * verband doet, en de weergaven. Elk woord moet erin staan (zonder hoofdletters of accenten). Enkel wat je ziet: `lists`
@@ -584,7 +564,7 @@ export function searchLinks(
   query: string,
   data: {
     lists: { id: string; name: string }[];
-    kinds: LinkKindName[];
+    forms: { id: string; name: string }[];
     links: Link[];
   },
 ): LinkHit[] {
@@ -594,7 +574,7 @@ export function searchLinks(
     const t = fold(text);
     return words.every((w) => t.includes(w));
   };
-  const names = new Map(data.lists.map((l) => [l.id, l.name]));
+  const names = new Map([...data.lists, ...data.forms].map((l) => [l.id, l.name]));
   const nameOf = (id: string) => {
     const v = viewOf(id);
     return v ? VIEWS[v].label : (names.get(id) ?? "");
@@ -616,18 +596,18 @@ export function searchLinks(
         links: [],
       });
 
-  for (const k of data.kinds) {
-    if (!names.has(k.list) || !matches(k.name)) continue;
-    const word = new RegExp(`(^|[^\\p{L}\\p{N}])${escape(fold(k.name))}($|[^\\p{L}\\p{N}])`, "u");
-    const used = known.filter((l) => (l.from === k.list || l.to === k.list) && l.texts.some((t) => word.test(fold(t))));
-    const ends = betweenLists(used).flatMap((l) => [l.from, l.to]);
+  // Een formulier: zijn punt en de lijsten die het raakt.
+  for (const k of data.forms) {
+    if (!matches(k.name)) continue;
+    const used = known.filter((l) => l.from === k.id || l.to === k.id);
+    const lists = betweenLists(used).map((l) => (l.from === k.id ? l.to : l.from));
     out.push({
       group: "soorten",
       key: `soort ${k.id}`,
-      select: k.list,
+      select: k.id,
       title: k.name,
-      detail: `Formulier bij ${names.get(k.list)}`,
-      nodes: [...new Set([k.list, ...ends])],
+      detail: lists.length ? `Formulier voor ${[...new Set(lists)].map(nameOf).join(", ")}` : "Formulier",
+      nodes: [...new Set([k.id, ...lists])],
       links: used.map(linkKey),
     });
   }

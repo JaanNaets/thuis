@@ -12,7 +12,7 @@ const from = (id: string, base: KindInfo["base"], name: string, role: LineRole, 
   ...baseKind(base),
   id,
   name,
-  parts: { ...baseParts(base), groups: [{ role, label: name, list: listId }] },
+  parts: { ...baseParts(base), groups: [{ role, label: name, lists: [listId] }] },
 });
 
 const t: Targets = {

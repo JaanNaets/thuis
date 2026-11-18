@@ -29,6 +29,8 @@ export function FormSettings() {
   const { id } = useParams();
   const { data: detail, error, reload } = useApi<FormDetail>(`/forms/${id}`);
   const [params, setParams] = useSearchParams();
+  // Na het samenvoegen begint de editor opnieuw met wat er nu is.
+  const [round, setRound] = useState(0);
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
   if (!canManage(detail.role)) return <p className="page muted">Enkel een beheerder kan dit formulier instellen.</p>;
@@ -42,7 +44,17 @@ export function FormSettings() {
     <div className="page form">
       <PageHead title="Instellen" back={{ to: `/formulieren/${detail.form.id}`, label: detail.form.name }} />
       <Tabs label="Onderwerp" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />
-      {tab === "formulier" && <FormEditor key={detail.form.id} detail={detail} onSaved={reload} />}
+      {tab === "formulier" && (
+        <FormEditor
+          key={`${detail.form.id}-${round}`}
+          detail={detail}
+          onSaved={reload}
+          onMerged={() => {
+            reload();
+            setRound((r) => r + 1);
+          }}
+        />
+      )}
       {tab === "mensen" && <PeopleEditor base={`/forms/${detail.form.id}`} people={detail.people} onSaved={reload} />}
     </div>
   );
@@ -62,15 +74,15 @@ export function FormNew() {
   );
 }
 
-function FormEditor({ detail, list, onSaved }: { detail: FormDetail | null; list?: string; onSaved: (id: string) => void }) {
+function FormEditor({ detail, list, onSaved, onMerged }: { detail: FormDetail | null; list?: string; onSaved: (id: string) => void; onMerged?: () => void }) {
   const kind = detail?.form ?? null;
-  const { person, lists, tags, reloadMe } = useSession();
+  const { person, lists, forms, tags, reloadMe } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const startParts = (b: Base): Parts => {
     const p = baseParts(b);
-    return list ? { ...p, groups: p.groups.map((g, i) => (i === 0 ? { ...g, list } : g)) } : p;
+    return list ? { ...p, groups: p.groups.map((g, i) => (i === 0 ? { ...g, lists: [list] } : g)) } : p;
   };
   const [base, setBase] = useState<Base>(kind?.base ?? "gebruik");
   const [parts, setParts] = useState<Parts>(() => kind?.parts ?? startParts("gebruik"));
@@ -150,6 +162,31 @@ function FormEditor({ detail, list, onSaved }: { detail: FormDetail | null; list
     reloadMe();
     onSaved(kind.id);
   }
+  /** Een ander formulier dat je beheert hierin samenvoegen (zijn logboek, mensen en tags komen hierbij). */
+  async function merge(fromId: string) {
+    const from = forms.find((f) => f.id === fromId);
+    if (!kind || !from) return;
+    if (
+      !(await confirm({
+        title: `${from.name} samenvoegen met ${kind.name}?`,
+        body: `Het logboek, de mensen, de tags, de velden en wat het doet komen bij ${kind.name}; het andere formulier verdwijnt.`,
+        confirmLabel: "Samenvoegen",
+      }))
+    )
+      return;
+    try {
+      await api.post(`/forms/${kind.id}/merge`, { from: from.id });
+      reloadMe();
+      toast(`${from.name} samengevoegd`);
+      onMerged?.();
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+  // Met dezelfde naam: de tags erbij, om ze uit elkaar te houden.
+  const others = forms.filter((f) => f.id !== kind?.id && f.role === "beheerder");
+  const formLabel = (f: (typeof forms)[number]) =>
+    others.filter((o) => o.name === f.name).length > 1 || f.name === kind?.name ? [f.name, ...f.tags.flatMap((t) => tags.find((x) => x.id === t)?.name ?? [])].join(" · ") : f.name;
   async function remove() {
     if (
       !kind ||
@@ -232,6 +269,21 @@ function FormEditor({ detail, list, onSaved }: { detail: FormDetail | null; list
       <button type="button" className="btn btn-primary btn-lg" disabled={busy || !name.trim()} onClick={save}>
         Opslaan
       </button>
+      {kind && others.length > 0 && (
+        <section className="card form-section">
+          <label className="field">
+            <span className="label">Samenvoegen met</span>
+            <select value="" onChange={(e) => e.target.value && merge(e.target.value)}>
+              <option value="">Kies een formulier…</option>
+              {others.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {formLabel(f)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      )}
       {kind && detail && (
         <div className="btn-row" style={{ justifySelf: "start" }}>
           <button type="button" className="btn btn-ghost" onClick={archive}>

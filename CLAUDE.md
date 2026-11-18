@@ -39,18 +39,20 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   Instellen: `FormSettings`), loggen op `/loggen?formulier=…`; het menu heeft onder Formulieren je formulieren.
 - Een formulier is velden plus
   **onderdelen** (`parts`: `money` = bedrag, wie betaalde, verdeling en een prijs per lijn; `to` = naar iemand, een
-  overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en
-  eventueel één lijst: Wat, Waar, "Ruimte uit Huis") plus **handelingen** (`does`, zie Cellen). Er is geen "Werkt als"
+  overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en de
+  lijsten waaruit ze kiezen, `lists` (leeg: uit elke lijst; van vroeger één `list`): Wat, Waar, "Ruimte uit Huis", "Fles
+  uit Wijnen of de Gedeelde wijnkelder") plus **handelingen** (`does`, zie Cellen). Er is geen "Werkt als"
   meer: de zes **vertrekpunten** (`BASES`: aankoop, gebruik, dienst, activiteit, meting, overdracht, met `baseParts` en
   `presetDoes`) zijn enkel waar een nieuw formulier mee begint. Een formulier zonder eigen onderdelen (`parts` NULL) volgt
   zijn vertrekpunt (`kindInfo`). **De code vraagt nooit "is dit
   een aankoop?"** maar wat het formulier vraagt of doet: `parts.money`, `parts.duration`, `buysWith` (kasticket,
   afvinken), `movesStock`, `formEats`, `stockOp`. Wat een formulier invult, zeggen zijn groepen en handelingen
   (`fillsLists`); kiezen gebeurt in `FormPicker`: de formulieren die de lijst invullen, de rest onder Ander formulier
-  (`formsOf`). **Lijnen** (`lines`) staan in de groep van hun rol
+  (`formsOf`). Twee formulieren voeg je samen in Instellen (`POST /forms/:id/merge`, `mergeKinds`: het logboek, de
+  mensen, de tags, de velden, groepen en handelingen komen bij het ene, het andere verdwijnt). **Lijnen** (`lines`) staan in de groep van hun rol
   (`in`, `uit`, `voor`, `bij`; `bij` = waar of bij wie, enkel met de hele gebeurtenis te zien), naar een item of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon); wat een lijn doet,
-  zeggen de handelingen, niet haar rol. Een groep uit één lijst kiest enkel daaruit (de server kijkt het na). Status:
+  zeggen de handelingen, niet haar rol. Een groep met lijsten kiest enkel daaruit (de server kijkt het na). Status:
   `gebeurd`, `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee). Een formulier
   kan gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschap een formulier dat op Gepland
   opent.
@@ -75,11 +77,15 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 - Elke route haalt eerst de toegang op: `requireList`, `requireItem`, `requireForm` (geen toegang = 404 "niet
   gevonden"), daarna `needEdit` of `needManage`. Bij twijfel: weigeren. Er blijft altijd een rechtstreekse beheerder
   (`keepsAdmin`).
-- **Gebeurtenissen zien**: wie het formulier ziet, ziet de gebeurtenis helemaal (een Aanpassing: wie de lijst van haar
-  item ziet, `eventRole`). Een lijn `in`/`uit`/`voor`, of een cel die ze veranderde, is ook zichtbaar voor wie de lijst
-  van het item ziet (in het logboek van die lijst, als "gedeeltelijk": zonder bedrag, naam of andere lijnen); een lijn
-  `bij` enkel met de hele gebeurtenis (anders ziet Jana via Dr. Peeters het doktersbezoek van Jaan). Zie
-  `lineVisible`, `viewEvents`.
+- **Gebeurtenissen zien** (`eventRole` in `shared/rights.ts`, getest; de geraakte lijsten met `touchedLists`): raakt
+  een gebeurtenis lijsten (een lijn `in`/`uit`/`voor` naar een item, of een cel die ze veranderde), dan zie je ze
+  helemaal als je het formulier ziet én minstens één van die lijsten; raakt ze geen lijst (Sport), dan volgt ze het
+  formulier. Wat Jaan uit zijn eigen Wijnen dronk, ziet Rik dus niet, ook al loggen ze met hetzelfde Gedronken; een
+  aankoop die het saldo in Uitgaven raakt, ziet Jana wel. Een Aanpassing: wie de lijst van haar item ziet. Zie je het
+  formulier niet, dan zie je enkel de lijnen en cellen van lijsten die je ziet (in het logboek van die lijst, als
+  "gedeeltelijk": zonder bedrag, naam of andere lijnen); een lijn `bij` enkel met de hele gebeurtenis (anders ziet Jana
+  via Dr. Peeters het doktersbezoek van Jaan). Dezelfde regel geldt voor meldingen en herinneringen. Zie `lineVisible`,
+  `viewEvents`.
 - Velden van een item of formulier gaan altijd door `prepareData` (`worker/prepare.ts`): `cleanAttributes`, enkel gekende
   personen, verwijzingen enkel naar items die de bewerker ziet. Lijstvelden door `cleanListFields`
   (`shared/listdef.ts`).
@@ -115,6 +121,12 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 - **Berekeningen** (veldsoort `calc`, `shared/calc.ts`) enkel binnen het item; geen verwijzende berekeningen meer.
 - Een **logboek als tabel** (`shared/logview.ts`: `logFields`, `logItem`) zodat filters, weergaven
   (`shared/views.ts`) en grafieken (`shared/charts.ts`) ook op gebeurtenissen werken.
+- **De items als tabel** (`ItemsView`, `shared/views.ts`, getest): filteren op elk veld (ook een getal tussen twee
+  waarden en datums: vandaag, gisteren, eergisteren, morgen, overmorgen, deze/vorige/volgende week, maand, kwartaal of
+  jaar, de laatste of komende … dagen/weken/maanden/jaren, … geleden, langer dan … geleden, op een datum, tussen twee
+  datums; `PERIODS`, `PERIOD_UNITS`, `periodRange`), sorteren op een kolomkop of op meer kolommen na elkaar (Filters),
+  kolommen tonen, verbergen en ordenen (`ColumnsEditor`, de pil Kolommen; met veel kolommen scrolt de tabel opzij),
+  groeperen, als agenda, en dat bewaren als weergave.
 
 ### Eén ingang
 
@@ -183,9 +195,10 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 - **App** (`shared/apps.ts`): eigen apps, snelkoppelingen (een bord, een lijst, loggen met een formulier, een nieuw
   item), wat een gedeelde foto doet (een kasticket met een formulier dat koopt); enkel naar wat je bereikt
   (`keepReachable`, dat ook een bestemming van vroeger omzet met `legacyForm`).
-- **Verbanden** (`shared/links.ts`, `GET /insights/links`, op `/lijsten`: Lijst of Kaart): hoe je lijsten samenhangen (verwijzingen,
-  de formulieren die ze samen invullen of met lijnen raken, met welke items, de weergaven), enkel wat de lezer ziet,
-  met wat voor iemand niet werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
+- **Verbanden** (`shared/links.ts`, `GET /insights/links`, op `/lijsten`: Lijst of Kaart): hoe je lijsten samenhangen
+  (verwijzingen, met welke items, de weergaven), met de formulieren als eigen punten (`formNode`: `form:<id>`, op de
+  kaart in de kolom Formulieren, in de lijst een groep; een spoor naar elke lijst die een formulier invult of met lijnen
+  raakt), enkel wat de lezer ziet, met wat voor iemand niet werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
   (getest); de keuze staat in het adres (`?lijst=`, `?keuze=`, `?groep=`, `?sort=`). **Een nieuwe
   eigenschap van een veld, lijst, formulier, gebeurtenis, lijn of blok beslis je in de `…_LINKS`-tabellen** (TypeScript
   dwingt het af; wat verbindt, krijgt een voorbeeld in `test/links.test.ts`).

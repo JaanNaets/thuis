@@ -316,10 +316,10 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     } catch {
       does = [];
     }
-    // De groepen lijnen: een lijst die niet terugkomt, valt weg (de groep blijft, uit elke lijst).
+    // De groepen lijnen: een lijst die niet terugkomt, valt weg (zonder lijsten: uit elke lijst).
     const parts = cleanParts(k.parts === undefined || k.parts === null ? null : remap(k.parts, map));
     const back = new Set(lists.map((l) => l.id));
-    if (parts) parts.groups = parts.groups.map((g) => (g.list && !back.has(g.list) ? { ...g, list: null } : g));
+    if (parts) parts.groups = parts.groups.map((g) => ({ ...g, lists: g.lists.filter((l) => back.has(l)) }));
     kinds.push({
       id,
       base: k.base,

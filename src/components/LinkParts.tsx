@@ -24,7 +24,7 @@ import { formatDay } from "../format";
 import { Link } from "../router";
 import { Avatar } from "./Controls";
 import { Icon } from "./Icon";
-import { byOther, cut, endOf, LinkSchema, LinkSwatch, total, VIEW_ICONS } from "./LinkMap";
+import { byOther, cut, endOf, LinkSchema, LinkSwatch, nodePath, total, VIEW_ICONS } from "./LinkMap";
 
 // ---------- zoeken ----------
 
@@ -314,7 +314,7 @@ export function LinkDetail({
   const { mine, incoming, outgoing, views, own } = linkParts(id, links, data);
   const people = list ? (data.people[id] ?? []) : [];
   const problems = data.problems.filter((p) => p.list === id || p.to === id);
-  const to = view ? VIEWS[view].to : list ? `/lijsten/${list.id}` : null;
+  const to = view ? VIEWS[view].to : list ? nodePath(list.id) : null;
 
   const rows = (entries: [string, LinkDef[]][]) => (
     <ul className="rows">

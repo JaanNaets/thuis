@@ -50,7 +50,7 @@ export function DoesEditor({ value, onChange, columns, fields, parts }: { value:
   function add() {
     const rows: Rows = choices[0]?.rows ?? { from: "lines", role: "voor" };
     const group = rows.from === "lines" ? parts.groups.find((g) => g.role === rows.role) : undefined;
-    const list = columns.find((l) => l.id === group?.list) ?? columns[0];
+    const list = columns.find((l) => group?.lists.includes(l.id)) ?? columns[0];
     const first = list?.fields.find((f) => f.type !== "calc");
     const same = first ? fields.find((f) => f.label.trim().toLowerCase() === first.label.toLowerCase()) : undefined;
     const h: Handeling =
@@ -261,8 +261,8 @@ const ROLE_CHOICES: Record<LineRole, string> = {
 };
 
 /**
- * De groepen lijnen van een formulier (Wat, Waar, Ruimte): per groep een kaartje met de naam, de rol en uit welke lijst
- * (of elke). Elke rol hoogstens één keer. Zie STIJLBOEK.md → Wat een formulier doet.
+ * De groepen lijnen van een formulier (Wat, Waar, Ruimte): per groep een kaartje met de naam, de rol en uit welke
+ * lijsten (aangevinkt; niets is uit elke lijst). Elke rol hoogstens één keer. Zie STIJLBOEK.md → Wat een formulier doet.
  */
 export function GroupsEditor({ value, onChange, lists }: { value: LineGroup[]; onChange: (v: LineGroup[]) => void; lists: { id: string; name: string }[] }) {
   const free = (Object.keys(ROLE_CHOICES) as LineRole[]).filter((r) => !value.some((g) => g.role === r));
@@ -291,25 +291,36 @@ export function GroupsEditor({ value, onChange, lists }: { value: LineGroup[]; o
                     ))}
                   </select>
                 </label>
-                <label className="line-field">
-                  <span>Uit</span>
-                  <select aria-label={`${g.label}: uit welke lijst`} value={g.list ?? ""} onChange={(e) => set(i, { list: e.target.value || null })}>
-                    <option value="">Elke lijst</option>
-                    {g.list && !lists.some((l) => l.id === g.list) && <option value={g.list}>Een lijst die je niet ziet</option>}
-                    {lists.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {/* Uit welke lijsten: aanvinken; niets aangevinkt is uit elke lijst. */}
+                <div className="line-field is-wide" role="group" aria-label={`${g.label}: uit welke lijsten`}>
+                  <span>{g.lists.length ? "Uit" : "Uit elke lijst"}</span>
+                  <div className="tag-picker">
+                    {lists.map((l) => {
+                      const on = g.lists.includes(l.id);
+                      return (
+                        <button key={l.id} type="button" className="tag" aria-pressed={on} onClick={() => set(i, { lists: on ? g.lists.filter((x) => x !== l.id) : [...g.lists, l.id] })}>
+                          <Icon name="check" size={14} className="check" />
+                          {!on && <span className="dot" />}
+                          {l.name}
+                        </button>
+                      );
+                    })}
+                    {g.lists
+                      .filter((x) => !lists.some((l) => l.id === x))
+                      .map((x) => (
+                        <span key={x} className="tag static">
+                          Een lijst die je niet ziet
+                        </span>
+                      ))}
+                  </div>
+                </div>
               </div>
             </li>
           ))}
         </ul>
       )}
       {free.length > 0 && (
-        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...value, { role: free[0], label: "", list: null }])}>
+        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...value, { role: free[0], label: "", lists: [] }])}>
           <Icon name="plus" size={15} /> Groep
         </button>
       )}

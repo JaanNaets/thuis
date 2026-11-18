@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { canSum, cleanView, conditionText, groupItems, matchesView, orderItems, periodRange, sortItems, sumOf, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
+import { canSum, cleanView, conditionText, groupItems, matchesView, orderItems, periodRange, periodText, sortItems, sumOf, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
 
 const names = { person: (id: string) => ({ a: "Jaan", b: "Ana" })[id] ?? "?", item: (id: string) => ({ c: "Colruyt", d: "Aldi" })[id] ?? "?" };
 const ctx = { today: "2026-10-30", me: "a", names };
@@ -33,6 +33,21 @@ test("periodes: vanaf vrijdag 30 oktober 2026", () => {
   assert.deepEqual(periodRange({ p: "next_month" }, "2026-12-15"), ["2027-01-01", "2027-01-31"]);
   assert.deepEqual(periodRange({ p: "last_month" }, "2026-03-31"), ["2026-02-01", "2026-02-28"]);
   assert.deepEqual(periodRange({ p: "last_days", n: 7 }, "2026-10-30"), ["2026-10-24", "2026-10-30"]);
+  // Meer dynamische datums: eergisteren, kwartalen, in weken, maanden of jaren, geleden, langer dan, op een datum.
+  assert.deepEqual(periodRange({ p: "day_before_yesterday" }, "2026-10-30"), ["2026-10-28", "2026-10-28"]);
+  assert.deepEqual(periodRange({ p: "day_after_tomorrow" }, "2026-10-30"), ["2026-11-01", "2026-11-01"]);
+  assert.deepEqual(periodRange({ p: "this_quarter" }, "2026-10-30"), ["2026-10-01", "2026-12-31"]);
+  assert.deepEqual(periodRange({ p: "last_quarter" }, "2026-02-10"), ["2025-10-01", "2025-12-31"]);
+  assert.deepEqual(periodRange({ p: "last_days", n: 3, u: "month" }, "2026-10-30"), ["2026-07-31", "2026-10-30"]);
+  assert.deepEqual(periodRange({ p: "next_days", n: 2, u: "week" }, "2026-10-30"), ["2026-10-30", "2026-11-12"]);
+  assert.deepEqual(periodRange({ p: "ago", n: 3, u: "day" }, "2026-10-30"), ["2026-10-27", "2026-10-27"]);
+  assert.deepEqual(periodRange({ p: "ago", n: 1, u: "month" }, "2026-10-30"), ["2026-09-01", "2026-09-30"]);
+  assert.deepEqual(periodRange({ p: "ago", n: 2, u: "week" }, "2026-10-30"), ["2026-10-12", "2026-10-18"]);
+  assert.deepEqual(periodRange({ p: "older", n: 30 }, "2026-10-30"), [null, "2026-09-29"]);
+  assert.deepEqual(periodRange({ p: "on", from: "2026-05-01" }, "2026-10-30"), ["2026-05-01", "2026-05-01"]);
+  assert.equal(periodText({ p: "last_days", n: 3, u: "month" }), "de laatste 3 maanden");
+  assert.equal(periodText({ p: "ago", n: 1, u: "week" }), "1 week geleden");
+  assert.equal(periodText({ p: "older", n: 2, u: "year" }), "langer dan 2 jaar geleden");
   assert.deepEqual(periodRange({ p: "before_today" }, "2026-10-30"), [null, "2026-10-29"]);
   assert.deepEqual(periodRange({ p: "range", from: "2026-01-01" }, "2026-10-30"), ["2026-01-01", null]);
   assert.equal(weekOfMonth("2026-10-07"), 1);

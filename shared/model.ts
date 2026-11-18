@@ -52,7 +52,8 @@ export const LINE_ROLES: Record<LineRole, { label: string; done: string }> = {
 export const isLineRole = (v: unknown): v is LineRole => typeof v === "string" && Object.hasOwn(LINE_ROLES, v);
 
 /** Een groep lijnen van een formulier (Wat, Waar, Ruimte): de rol van haar lijnen, hoe ze heet, en enkel uit deze lijst. */
-export type LineGroup = { role: LineRole; label: string; list: string | null };
+/** Een groep lijnen van een formulier: haar rol, haar naam en uit welke lijsten ze kiest (leeg: uit elke lijst). */
+export type LineGroup = { role: LineRole; label: string; lists: string[] };
 
 /**
  * Wat een formulier vraagt naast zijn velden: geld (bedrag, wie betaalde, de verdeling en een prijs per lijn), naar
@@ -72,18 +73,18 @@ export const BASES = {
     plural: "Aankopen",
     icon: "cart",
     hint: "Er komt iets bij, tegen geld",
-    parts: { money: true, to: false, duration: false, groups: [{ role: "in", label: "Wat", list: null }, { role: "bij", label: "Waar", list: null }] },
+    parts: { money: true, to: false, duration: false, groups: [{ role: "in", label: "Wat", lists: [] }, { role: "bij", label: "Waar", lists: [] }] },
   },
-  gebruik: { label: "Gebruik", plural: "Gebruik", icon: "package", hint: "Er gaat iets uit de voorraad", parts: { ...NO_PARTS, groups: [{ role: "uit", label: "Wat", list: null }] } },
+  gebruik: { label: "Gebruik", plural: "Gebruik", icon: "package", hint: "Er gaat iets uit de voorraad", parts: { ...NO_PARTS, groups: [{ role: "uit", label: "Wat", lists: [] }] } },
   dienst: {
     label: "Dienst",
     plural: "Diensten",
     icon: "wrench",
     hint: "Iemand doet iets voor jou of een item",
-    parts: { money: true, to: false, duration: false, groups: [{ role: "voor", label: "Voor", list: null }, { role: "bij", label: "Bij", list: null }] },
+    parts: { money: true, to: false, duration: false, groups: [{ role: "voor", label: "Voor", lists: [] }, { role: "bij", label: "Bij", lists: [] }] },
   },
-  activiteit: { label: "Activiteit", plural: "Activiteiten", icon: "clock", hint: "Wat je doet, met een duur", parts: { ...NO_PARTS, duration: true, groups: [{ role: "voor", label: "Voor", list: null }] } },
-  meting: { label: "Meting", plural: "Metingen", icon: "weight", hint: "Eén getal: gewicht, km-stand, telling", parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", list: null }] } },
+  activiteit: { label: "Activiteit", plural: "Activiteiten", icon: "clock", hint: "Wat je doet, met een duur", parts: { ...NO_PARTS, duration: true, groups: [{ role: "voor", label: "Voor", lists: [] }] } },
+  meting: { label: "Meting", plural: "Metingen", icon: "weight", hint: "Eén getal: gewicht, km-stand, telling", parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", lists: [] }] } },
   overdracht: { label: "Overdracht", plural: "Overdrachten", icon: "transfer", hint: "Geld naar iemand anders", parts: { money: true, to: true, duration: false, groups: [] } },
 } as const satisfies Record<string, { label: string; plural: string; icon: IconKey; hint: string; parts: Parts }>;
 export type Base = keyof typeof BASES;
@@ -98,7 +99,10 @@ export function cleanParts(raw: unknown): Parts | null {
     const x = (g ?? {}) as Record<string, unknown>;
     if (!isLineRole(x.role) || groups.some((h) => h.role === x.role)) continue;
     const label = typeof x.label === "string" && x.label.trim() ? x.label.trim().slice(0, 30) : LINE_ROLES[x.role].label;
-    groups.push({ role: x.role, label, list: typeof x.list === "string" && /^[A-Za-z0-9-]{1,64}$/.test(x.list) ? x.list : null });
+    // Uit welke lijsten; van vroeger één lijst (`list`).
+    const raw = Array.isArray(x.lists) ? x.lists : typeof x.list === "string" ? [x.list] : [];
+    const lists = [...new Set(raw.filter((l): l is string => typeof l === "string" && /^[A-Za-z0-9-]{1,64}$/.test(l)))].slice(0, 20);
+    groups.push({ role: x.role, label, lists });
   }
   const money = o.money === true;
   return { money, to: money && o.to === true, duration: o.duration === true, groups };
@@ -170,7 +174,7 @@ export const ADJUST_KIND: KindInfo = {
   fields: [],
   goal: null,
   planned: false,
-  parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", list: null }] },
+  parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", lists: [] }] },
   does: ADJUST_DOES,
   reads: false,
   system: true,
@@ -191,16 +195,41 @@ export function kindInfo(kind: Kind): KindInfo {
   };
 }
 
+/**
+ * Twee formulieren samen (`from` gaat op in `into`, zie POST /forms/:id/merge): de velden van beide (bij dezelfde sleutel
+ * die van `into`), de onderdelen samen (geld, naar iemand of een einde als een van beide het heeft; per rol één groep,
+ * met de lijsten van beide, of uit elke lijst als een van beide dat deed) en de handelingen van beide (één keer). Volgen
+ * beide hun vertrekpunt, dan blijft dat zo; anders worden de onderdelen uitdrukkelijk.
+ */
+export function mergeKinds(into: Kind, from: Kind): Pick<Kind, "fields" | "parts" | "does" | "goal" | "notify"> {
+  const fields = [...into.fields, ...from.fields.filter((f) => !into.fields.some((g) => g.key === f.key))];
+  const once = (does: Handeling[]) => [...new Map(does.map((h) => [JSON.stringify(h), h])).values()];
+  const goal = into.goal ?? from.goal;
+  const notify = into.notify ?? from.notify;
+  if (!into.parts && !from.parts && into.base === from.base) return { fields, parts: null, does: once([...into.does, ...from.does]), goal, notify };
+  const a = kindInfo(into);
+  const b = kindInfo(from);
+  const groups = [...a.parts.groups];
+  for (const g of b.parts.groups) {
+    const i = groups.findIndex((x) => x.role === g.role);
+    if (i < 0) groups.push(g);
+    else groups[i] = { ...groups[i], lists: groups[i].lists.length && g.lists.length ? [...new Set([...groups[i].lists, ...g.lists])] : [] };
+  }
+  const money = a.parts.money || b.parts.money;
+  const parts: Parts = { money, to: money && (a.parts.to || b.parts.to), duration: a.parts.duration || b.parts.duration, groups };
+  return { fields, parts, does: once([...a.does, ...b.does]), goal, notify };
+}
+
 /** De lijsten die een formulier uitdrukkelijk invult: een groep lijnen uit één lijst, of een handeling op een lijst. */
 export function fillsLists(kind: Pick<KindInfo, "parts" | "does">): string[] {
-  return [...new Set([...kind.parts.groups.flatMap((g) => (g.list ? [g.list] : [])), ...kind.does.flatMap((h) => (h.list ? [h.list] : []))])];
+  return [...new Set([...kind.parts.groups.flatMap((g) => g.lists), ...kind.does.flatMap((h) => (h.list ? [h.list] : []))])];
 }
 
 /** De eerste groep lijnen van een formulier (waar een item komt als je logt vanaf dat item). */
-export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? { role: "voor", label: LINE_ROLES.voor.label, list: null };
+export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? { role: "voor", label: LINE_ROLES.voor.label, lists: [] };
 
 /** De groep van een rol in een formulier (of hoe die rol heet als het formulier ze niet heeft). */
-export const groupOf = (kind: Pick<KindInfo, "parts">, role: LineRole): LineGroup => kind.parts.groups.find((g) => g.role === role) ?? { role, label: LINE_ROLES[role].label, list: null };
+export const groupOf = (kind: Pick<KindInfo, "parts">, role: LineRole): LineGroup => kind.parts.groups.find((g) => g.role === role) ?? { role, label: LINE_ROLES[role].label, lists: [] };
 
 /** Of een nieuwe gebeurtenis gepland begint: als je erom vroeg (Plannen, een geplande actie) of als haar formulier dat doet. */
 export const startsPlanned = (kind: Pick<KindInfo, "planned">, asked: boolean): boolean => asked || kind.planned;

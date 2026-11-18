@@ -499,9 +499,24 @@ const PERIOD_STEPS: Partial<Record<PeriodKind, { unit: "day" | "month"; n: numbe
   this_year: { unit: "month", n: 12 },
   last_year: { unit: "month", n: 12 },
   next_year: { unit: "month", n: 12 },
+  day_before_yesterday: { unit: "day", n: 1 },
+  day_after_tomorrow: { unit: "day", n: 1 },
+  this_quarter: { unit: "month", n: 3 },
+  last_quarter: { unit: "month", n: 3 },
+  next_quarter: { unit: "month", n: 3 },
   last_days: { unit: "day", n: 0 },
   next_days: { unit: "day", n: 0 },
+  ago: { unit: "day", n: 0 },
 };
+
+/** Hoe ver een periode per stap verschuift; met een aantal (de laatste 3 maanden): dat aantal in haar eenheid. */
+function stepOf(period: Period): { unit: "day" | "month"; n: number } {
+  const step = PERIOD_STEPS[period.p]!;
+  if (step.n) return step;
+  const n = Math.max(1, period.n ?? 7);
+  const u = period.u ?? "day";
+  return u === "day" ? { unit: "day", n } : u === "week" ? { unit: "day", n: 7 * n } : u === "month" ? { unit: "month", n } : { unit: "month", n: 12 * n };
+}
 
 /** De eerste voorwaarde met een periode die meeschuift ("wanneer in deze maand"). */
 function periodOf(block: ViewBlock): Period | null {
@@ -512,7 +527,25 @@ function periodOf(block: ViewBlock): Period | null {
   return null;
 }
 
-const NAMED: PeriodKind[] = ["today", "yesterday", "tomorrow", "this_week", "last_week", "next_week", "this_month", "last_month", "next_month", "this_year", "last_year", "next_year"];
+const NAMED: PeriodKind[] = [
+  "today",
+  "yesterday",
+  "day_before_yesterday",
+  "tomorrow",
+  "day_after_tomorrow",
+  "this_week",
+  "last_week",
+  "next_week",
+  "this_month",
+  "last_month",
+  "next_month",
+  "this_quarter",
+  "last_quarter",
+  "next_quarter",
+  "this_year",
+  "last_year",
+  "next_year",
+];
 
 /** Een periode in woorden: "Gisteren", "Vorige maand", "oktober 2026", "2025", "di 3 nov", "5/10 – 11/10". */
 export function rangeLabel(from: string, to: string, today: string): string {
@@ -565,9 +598,9 @@ export function viewSpan(block: ViewBlock, today: string, shift = 0): (Span & { 
   }
   const period = periodOf(block);
   if (period) {
-    const stepOf = PERIOD_STEPS[period.p]!;
-    const n = (stepOf.n || Math.max(1, period.n ?? 7)) * k;
-    const moved = stepOf.unit === "day" ? addDays(today, n) : addMonths(today, n);
+    const step = stepOf(period);
+    const n = step.n * k;
+    const moved = step.unit === "day" ? addDays(today, n) : addMonths(today, n);
     const [from, to] = periodRange(period, moved);
     const label = k === 0 ? cap(periodText(period)) : from && to ? rangeLabel(from, to, today) : cap(periodText(period));
     return { label, earlier: true, later: true, from, to, today: moved, load: [from, to] };

@@ -7,6 +7,7 @@ import {
   betweenLists,
   layoutLinks,
   linkKey,
+  formOf,
   viewOf,
   viewsOf,
   VIEWS,
@@ -98,7 +99,10 @@ export function LinkSwatch({ kind }: { kind: LinkKind }) {
 
 type End = { id: string; name: string; icon: IconName; tone: string | null };
 
-/** Hoe een lijst of weergave heet en eruitziet in een rij. */
+/** Waar een punt van de kaart naartoe gaat: een lijst, of een formulier (`form:<id>`). */
+export const nodePath = (id: string) => (formOf(id) ? `/formulieren/${formOf(id)}` : `/lijsten/${id}`);
+
+/** Hoe een lijst, formulier of weergave heet en eruitziet in een rij. */
 export function endOf(id: string, byId: Map<string, ListNode>): End | null {
   const view = viewOf(id);
   if (view) return { id, name: VIEWS[view].label, icon: VIEW_ICONS[view], tone: null };

@@ -35,7 +35,7 @@ import { actionForm } from "../../shared/blocks";
 import { CHART_STEPS, isGroupField, isNumberField, type ChartAgg, type ChartStep } from "../../shared/charts";
 import type { FieldDef, FieldValue } from "../../shared/fields";
 import type { Targets } from "../../shared/targets";
-import { kindOfKey, NAME, OPS, OPS_FOR, PERIODS, WEEKDAYS, type Condition, type Op, type Period, type PeriodKind } from "../../shared/views";
+import { COUNTED, kindOfKey, NAME, OPS, OPS_FOR, PERIOD_UNITS, PERIODS, WEEKDAYS, type Condition, type Op, type Period, type PeriodKind, type PeriodUnit } from "../../shared/views";
 import { useApi } from "../api";
 import { useSession } from "../session";
 import { ActionTile } from "./ActionBlock";
@@ -190,10 +190,20 @@ function ConditionLine({ cond, fields, choices, prefix, onChange, onRemove }: { 
         <Tok<PeriodKind>
           label="Periode"
           value={p.p}
-          options={(Object.keys(PERIODS) as PeriodKind[]).filter((k) => k !== "range").map((k) => ({ value: k, label: PERIODS[k].replace(" … ", " n ") }))}
-          onChange={(k) => setValue({ p: k, ...(k === "last_days" || k === "next_days" ? { n: p.n ?? 7 } : {}) })}
+          options={(Object.keys(PERIODS) as PeriodKind[]).filter((k) => k !== "range" && k !== "on").map((k) => ({ value: k, label: PERIODS[k].replace("…", "n").replace(/^de (laatste|komende) n$/, "de $1 n") }))}
+          onChange={(k) => setValue({ p: k, ...(COUNTED.includes(k) ? { n: p.n ?? 7, ...(p.u ? { u: p.u } : {}) } : {}) })}
         />
-        {(p.p === "last_days" || p.p === "next_days") && <TokInput label="Dagen" type="number" value={show(p.n ?? 7)} onChange={(s) => setValue({ ...p, n: Math.max(1, Math.round(num(s))) })} />}
+        {COUNTED.includes(p.p) && (
+          <>
+            <TokInput label="Hoeveel" type="number" value={show(p.n ?? 7)} onChange={(s) => setValue({ ...p, n: Math.max(1, Math.round(num(s))) })} />
+            <Tok<PeriodUnit>
+              label="Eenheid"
+              value={p.u ?? "day"}
+              options={(Object.keys(PERIOD_UNITS) as PeriodUnit[]).map((u) => ({ value: u, label: (p.n ?? 7) === 1 ? PERIOD_UNITS[u].one : PERIOD_UNITS[u].many }))}
+              onChange={(u) => setValue({ ...p, u })}
+            />
+          </>
+        )}
       </>
     );
   }

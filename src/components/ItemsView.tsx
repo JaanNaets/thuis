@@ -18,7 +18,7 @@ import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 import { CalendarMonth, gridRange, type CalendarEntry } from "./Calendar";
 import { FilterSelect, FilterToggle } from "./Controls";
-import { ConditionPills, ViewChips, ViewEditor, type Choices } from "./Filters";
+import { ColumnsEditor, ConditionPills, ViewChips, ViewEditor, type Choices } from "./Filters";
 import { namesFrom, ScoreStars } from "./Fields";
 import { Icon } from "./Icon";
 import { SkeletonRows, stagger } from "./Motion";
@@ -54,7 +54,7 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
   const navigate = useNavigate();
   const { person } = useSession();
   const [archived, setArchived] = useState(false);
-  const [sheet, setSheet] = useState<"more" | "filters">();
+  const [sheet, setSheet] = useState<"more" | "filters" | "columns">();
   const edit = canEdit(role) && !list.archived;
   const wideScreen = typeof window !== "undefined" && window.matchMedia("(min-width: 1100px)").matches;
   const { data, error, loading, reload } = useApi<ItemList>(`/lists/${list.id}/items${archived ? "?archived=1" : ""}`);
@@ -94,9 +94,8 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
   const vfields = useMemo(() => viewFields(fields, list.one ?? "Naam"), [fields, list.one]);
   // Vanzelf geen kolom met de eenheid of de verpakking van de voorraad: die staan al bij het aantal.
   const stockKeys = new Set([list.stock?.unit, list.stock?.piece, list.stock?.pack, list.stock?.pack_name, list.stock?.min]);
-  const columns = def.columns?.length
-    ? def.columns.flatMap((k) => fields.filter((f) => f.key === k))
-    : fields.filter((f) => f.column && !stockKeys.has(f.key)).slice(0, (wideScreen ? 3 : 2) - (list.stock ? 1 : 0));
+  const defaultColumns = fields.filter((f) => f.column && !stockKeys.has(f.key)).slice(0, (wideScreen ? 3 : 2) - (list.stock ? 1 : 0));
+  const columns = def.columns?.length ? def.columns.flatMap((k) => fields.filter((f) => f.key === k)) : defaultColumns;
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
   const items = useMemo(() => (data?.items ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [data]);
@@ -206,7 +205,12 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
   }
 
   const stockCol = Boolean(list.stock) && !archived;
-  const cols = ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(stockCol ? ["auto"] : [])].join(" ");
+  // Veel kolommen: elke kolom een vaste breedte en de tabel scrolt opzij (de kop scrolt mee).
+  const scroll = columns.length > 3;
+  const cols = scroll
+    ? ["minmax(200px, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "160px")), ...(stockCol ? ["auto"] : [])].join(" ")
+    : ["minmax(0, 1fr)", ...columns.map((c) => (isNumeric(c) ? "110px" : "minmax(0, 160px)")), ...(stockCol ? ["auto"] : [])].join(" ");
+  const tableMin = 200 + columns.reduce((w, c) => w + (isNumeric(c) ? 110 : 160) + 16, 0) + (stockCol ? 156 : 0) + 24;
   const groups = def.group ? groupItems(shown, def.group, vfields, names) : [{ key: "", label: "", items: shown }];
   const summed = columns.filter(canSum);
   const sumText = (items: typeof shown) =>
@@ -271,6 +275,9 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
         <button type="button" className={`filter ${def.conditions.length || def.sort || def.columns ? "active" : ""}`} aria-haspopup="dialog" onClick={() => setSheet("filters")}>
           <Icon name="sliders" size={14} /> Filters{def.conditions.length ? ` · ${def.conditions.length}` : ""}
         </button>
+        <button type="button" className={`filter ${def.columns ? "active" : ""}`} aria-haspopup="dialog" onClick={() => setSheet("columns")}>
+          <Icon name="table" size={14} /> Kolommen
+        </button>
         <ConditionPills def={def} fields={vfields} names={names} tags={[]} onRemove={(i) => setDef({ ...def, conditions: def.conditions.filter((_, k) => k !== i) })} />
         {rangeFields.map((f) => (
           <FilterToggle key={f.key} on={now[f.key] ?? false} onChange={(on) => setNow((n) => ({ ...n, [f.key]: on }))}>
@@ -325,7 +332,7 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
       )}
 
       {!agendaField && shown.length > 0 && (
-        <div className="card table table-items" style={{ "--cols": cols } as CSSProperties}>
+        <div className={`card table table-items${scroll ? " is-scroll" : ""}`} style={{ "--cols": cols, "--table-min": `${tableMin}px` } as CSSProperties}>
           <div className="table-head">
             <span>
               <SortButton field={NAME} label={list.one ?? "Naam"} def={def} onSort={setDef} />
@@ -368,6 +375,7 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
           <ViewEditor
             fields={vfields}
             columnsFrom={fields}
+            defaultColumns={defaultColumns.map((f) => f.key)}
             initial={def}
             active={active}
             choices={choices}
@@ -389,6 +397,17 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
               setSheet(undefined);
             }}
           />
+        )}
+      </Sheet>
+
+      <Sheet open={sheet === "columns"} title="Kolommen" onClose={() => setSheet(undefined)}>
+        {sheet === "columns" && (
+          <div className="form">
+            <ColumnsEditor fields={fields} value={def.columns} defaults={defaultColumns.map((f) => f.key)} onChange={(columns) => setDef({ ...def, columns })} />
+            <button type="button" className="btn btn-ghost" style={{ justifySelf: "start" }} disabled={!def.columns} onClick={() => setDef({ ...def, columns: undefined })}>
+              Zoals de lijst
+            </button>
+          </div>
         )}
       </Sheet>
 

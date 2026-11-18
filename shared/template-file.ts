@@ -51,8 +51,8 @@ export function templateFile(
   list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; ledger?: unknown; notify?: unknown },
   kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean; parts?: Parts; does?: Handeling[] }[],
 ): TemplateFile {
-  // De groepen lijnen: uit de lijst zelf wordt "self", uit een andere lijst uit elke lijst.
-  const ownParts = (p?: Parts) => (p ? { ...p, groups: p.groups.map((g) => ({ ...g, list: g.list === list.id ? SELF : null })) } : undefined);
+  // De groepen lijnen: uit de lijst zelf wordt "self", andere lijsten vallen weg (zonder lijsten: uit elke lijst).
+  const ownParts = (p?: Parts) => (p ? { ...p, groups: p.groups.map((g) => ({ ...g, lists: g.lists.includes(list.id) ? [SELF] : [] })) } : undefined);
   // Wat een formulier invult: in de lijst zelf, of de voorraad van elke lijst (niets van andere lijsten).
   const ownDoes = (does: Handeling[] = []) => does.filter((h) => h.list === list.id || (h.list === null && h.field === STOCK)).map((h) => ({ ...h, list: h.list ? SELF : null }));
   return {
@@ -113,7 +113,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
       does = [];
     }
     const raw = cleanParts((k as KindTemplate).parts);
-    const parts = raw ? { ...raw, groups: raw.groups.map((g) => (g.list === SELF ? g : { ...g, list: null })) } : null;
+    const parts = raw ? { ...raw, groups: raw.groups.map((g) => ({ ...g, lists: g.lists.filter((l) => l === SELF) })) } : null;
     kinds.push({
       base: k.base,
       name,

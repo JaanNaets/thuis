@@ -7,7 +7,7 @@ import { linkSummary, viewOf, type Link as LinkDef, type LinkHit, type LinksResp
 import type { ListNode } from "../../shared/model";
 import { Link } from "../router";
 import { Icon } from "./Icon";
-import { endOf, lastText, listMeta, plural } from "./LinkMap";
+import { endOf, lastText, listMeta, nodePath, plural } from "./LinkMap";
 import { LinkInline, Mark } from "./LinkParts";
 
 /** Een groep in de lijst: een tag, een soort verband, een weergave of de weergaven zelf. `tone`: het bolletje (null: grijs, undefined: geen). */
@@ -231,7 +231,7 @@ function LinkRow({
             {main}
           </button>
         ) : (
-          <Link to={`/lijsten/${id}`} className="lm-row-main">
+          <Link to={nodePath(id)} className="lm-row-main">
             {media}
             {main}
           </Link>

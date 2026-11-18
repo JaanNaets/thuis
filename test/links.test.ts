@@ -20,6 +20,7 @@ import {
   litBy,
   searchLinks,
   sortLinkLists,
+  formNode,
   viewNode,
   viewsOf,
   type Link,
@@ -60,29 +61,29 @@ test("altijd mee: lijsten, formulieren, gebeurtenissen, lijnen en blokken", () =
   const listed = buildLinks(input({ lists: [list("A", { stock: { unit: "u", min: "m" } }), list("B")] })).links;
   assert.ok(has(listed, "view", "A", viewNode("voorraad")) && LIST_LINKS.stock);
 
-  // Een formulier hoort bij geen lijst: het verbindt de lijsten die het raakt (een groep lijnen uit A, lijnen naar B).
-  const fromA = { money: false, to: false, duration: false, groups: [{ role: "uit" as const, label: "Uit", list: "A" }] };
+  // Een formulier is een eigen punt: een spoor naar elke lijst die het invult (een groep lijnen uit A) of raakt (lijnen
+  // naar B), en naar de weergaven.
+  const K = formNode("K");
+  const fromA = { money: false, to: false, duration: false, groups: [{ role: "uit" as const, label: "Wat", lists: ["A"] }] };
   const kinds = [{ id: "K", base: "gebruik" as const, name: "Gegeten", parts: fromA, fields: [{ key: "kcal", label: "Kcal", type: "number" as const, product: "kcal" as const }], goal: 960, notify: { to: "all" as const } }];
   const kinded = buildLinks(input({ kinds, log: [stat({ kind: "K", base: "gebruik", food: 2 })], lines: [{ kind: "K", base: "gebruik", role: "uit", to: "B", events: 2, last: null }] })).links;
-  assert.ok(KIND_LINKS.parts && EVENT_LINKS.kind && has(kinded, "log", "A", "B"), "een formulier dat A en B raakt");
-  assert.ok(KIND_LINKS.fields && has(kinded, "view", "A", viewNode("eten")), "kcal in het formulier");
-  assert.ok(KIND_LINKS.goal && has(kinded, "view", "B", viewNode("meldingen")), "een doel op het formulier");
-  assert.ok(KIND_LINKS.notify && kinded.some((l) => l.to === viewNode("meldingen") && l.texts.some((t) => t.includes("aan iedereen"))), "een melding bij iets nieuws");
-  assert.ok(has(kinded, "view", "B", viewNode("eten")), "een formulier dat eet");
-  // Wat een formulier invult: de kolom Kleur van B (Schilderwerk zet de kleur van een ruimte). Raakt het enkel B, dan is
-  // het een notitie bij B; met een groep uit A ook een verband A → B.
+  assert.ok(KIND_LINKS.parts && has(kinded, "log", K, "A"), "een groep lijnen uit A");
+  assert.ok(EVENT_LINKS.kind && has(kinded, "log", K, "B"), "lijnen naar B");
+  assert.ok(!has(kinded, "log", "A", "B"), "geen spoor meer van lijst naar lijst");
+  assert.ok(KIND_LINKS.fields && has(kinded, "view", K, viewNode("eten")), "kcal in het formulier");
+  assert.ok(KIND_LINKS.goal && has(kinded, "view", K, viewNode("meldingen")), "een doel op het formulier");
+  assert.ok(KIND_LINKS.notify && kinded.some((l) => l.from === K && l.to === viewNode("meldingen") && l.texts.some((t) => t.includes("aan iedereen"))), "een melding bij iets nieuws");
+  // Wat een formulier invult: de kolom Kleur van B (Schilderwerk zet de kleur van een ruimte).
   const zet = { rows: { from: "lines" as const, role: "voor" as const }, list: "B", field: "kleur", op: "zet" as const, value: { from: "field" as const, key: "kleur" } };
   const painting = { id: "S", base: "dienst" as const, name: "Schilderwerk", fields: [], goal: null, does: [zet] };
   const kleur = list("B", { fields: [{ key: "kleur", label: "Kleur", type: "text" }] });
-  const alone = buildLinks(input({ lists: [list("A"), kleur], kinds: [painting] }));
-  assert.ok(KIND_LINKS.does && alone.own.B?.includes("Schilderwerk zet Kleur"), "een formulier dat enkel B invult");
-  const done = buildLinks(input({ lists: [list("A"), kleur], kinds: [{ ...painting, parts: { ...fromA, groups: [{ role: "bij", label: "Bij", list: "A" }] } }] })).links;
-  assert.ok(has(done, "log", "A", "B") && done.some((l) => l.texts.includes("Schilderwerk zet Kleur")), "een formulier dat een kolom van B zet");
+  const done = buildLinks(input({ lists: [list("A"), kleur], kinds: [painting] })).links;
+  assert.ok(KIND_LINKS.does && has(done, "log", formNode("S"), "B") && done.some((l) => l.texts.includes("Zet Kleur")), "een formulier dat een kolom van B zet");
   // Een saldo per persoon (Wie moet wie).
   const ledgered = buildLinks(input({ lists: [list("A", { ledger: { person: "p", field: "s" } })] })).links;
   assert.ok(LIST_LINKS.ledger && has(ledgered, "view", "A", viewNode("balans")));
 
-  // Gebeurtenissen: bedrag, gedeeld, gepland, herhalen, loopt nog (bij de lijsten die hun formulier raakt).
+  // Gebeurtenissen: bedrag, gedeeld, gepland, herhalen, loopt nog (bij hun formulier).
   const logged = buildLinks(input({ kinds: [{ ...kinds[0], fields: [], goal: null, notify: undefined }], log: [stat({ kind: "K", money: 3, shared: 2, planned: 1, repeats: 1, running: 1 })] })).links;
   for (const [key, view] of [
     ["amount", "geld"],
@@ -93,13 +94,13 @@ test("altijd mee: lijsten, formulieren, gebeurtenissen, lijnen en blokken", () =
     ["repeat", "herhalen"],
     ["end_at", "timers"],
   ] as const) {
-    assert.ok(EVENT_LINKS[key] && has(logged, "view", "A", viewNode(view)), `${key} → ${view}`);
+    assert.ok(EVENT_LINKS[key] && has(logged, "view", K, viewNode(view)), `${key} → ${view}`);
   }
-  assert.ok(has(logged, "view", "A", viewNode("agenda")) && has(logged, "view", "A", viewNode("herinneringen")), "gepland staat ook in de agenda en herinnert");
+  assert.ok(has(logged, "view", K, viewNode("agenda")) && has(logged, "view", K, viewNode("herinneringen")), "gepland staat ook in de agenda en herinnert");
 
-  // Lijnen: rol en item naar een andere lijst; een lijn van één persoon telt als gedeeld (in `shared`).
-  const lined = buildLinks(input({ kinds: [{ id: "aankoop", base: "aankoop", name: "Aankoop", fields: [], goal: null, parts: fromA }], lines: [{ kind: "aankoop", base: "aankoop", role: "in", to: "B", events: 4, last: "2026-11-05" }] })).links;
-  const log = lined.find((l) => l.kind === "log" && l.from === "A" && l.to === "B");
+  // Lijnen: rol en item naar een lijst, met hoe vaak en wanneer laatst; een lijn van één persoon telt als gedeeld.
+  const lined = buildLinks(input({ kinds: [{ id: "aankoop", base: "aankoop", name: "Aankoop", fields: [], goal: null }], lines: [{ kind: "aankoop", base: "aankoop", role: "in", to: "B", events: 4, last: "2026-11-05" }] })).links;
+  const log = lined.find((l) => l.kind === "log" && l.from === formNode("aankoop") && l.to === "B");
   assert.ok(LINE_LINKS.role && LINE_LINKS.item_id && log);
   assert.equal(log!.count, 4);
   assert.equal(log!.last, "2026-11-05");
@@ -112,23 +113,21 @@ test("altijd mee: lijsten, formulieren, gebeurtenissen, lijnen en blokken", () =
   }
 });
 
-test("wat je niet ziet, bestaat niet; wat in de lijst zelf blijft, is geen lijn", () => {
-  const fromA = { money: false, to: false, duration: false, groups: [{ role: "bij" as const, label: "Bij", list: "A" }] };
-  const { links, own } = buildLinks(
+test("wat je niet ziet, bestaat niet; een formulier dat je niet ziet, geeft geen spoor", () => {
+  const { links } = buildLinks(
     input({
       lists: [list("A", { fields: [{ key: "w", label: "Winkel", type: "item", ref_type: "VERBORGEN" }] }), list("B", { stock: { unit: "u" } })],
-      kinds: [{ id: "eten", base: "gebruik", name: "Gebruik", fields: [], goal: null, parts: fromA }],
+      kinds: [{ id: "eten", base: "gebruik", name: "Gegeten", fields: [], goal: null }],
       lines: [
-        { kind: "aankoop", base: "aankoop", role: "bij", to: "VERBORGEN", events: 2, last: null },
-        { kind: "gebruik", base: "gebruik", role: "uit", to: "B", events: 3, last: null },
+        { kind: "eten", base: "gebruik", role: "bij", to: "VERBORGEN", events: 2, last: null },
+        { kind: "onzichtbaar", base: "gebruik", role: "uit", to: "B", events: 3, last: null },
         { kind: "eten", base: "gebruik", role: "uit", to: "B", events: 1, last: null },
       ],
     }),
   );
   assert.ok(!links.some((l) => l.to === "VERBORGEN" || l.from === "VERBORGEN"));
-  // Een formulier dat enkel B raakt: een notitie bij B; een dat ook A raakt: een verband A → B.
-  assert.deepEqual(own.B, ["Gebruik haalt eraf uit de voorraad, 3×"]);
-  assert.deepEqual(links.find((l) => l.kind === "log" && l.to === "B")?.texts, ["Gebruik haalt eraf uit de voorraad"]);
+  assert.ok(!links.some((l) => l.from === formNode("onzichtbaar")));
+  assert.deepEqual(links.find((l) => l.kind === "log" && l.to === "B")?.texts, ["Gegeten haalt eraf uit de voorraad"]);
 });
 
 test("een lijn als gewone zin, met hoe één item heet", () => {
@@ -142,7 +141,7 @@ test("een lijn als gewone zin, met hoe één item heet", () => {
 test("de items van een verband: de meeste eerst, enkel bij een verband dat bestaat", () => {
   const { links } = buildLinks(
     input({
-      kinds: [{ id: "gebruik", base: "gebruik", name: "Gebruik", fields: [], goal: null, parts: { money: false, to: false, duration: false, groups: [{ role: "voor", label: "Voor", list: "A" }] } }],
+      kinds: [{ id: "gebruik", base: "gebruik", name: "Gebruik", fields: [], goal: null }],
       lines: [
         {
           kind: "gebruik",
@@ -228,19 +227,22 @@ const sampleLists = [
   { id: "R", name: "Restaurants" },
   { id: "T", name: "Taken" },
 ];
-const sampleKinds = [
-  { id: "k1", list: "J", name: "Gegeten" },
-  { id: "k2", list: "ONZICHTBAAR", name: "Gegeten" },
+const sampleForms = [{ id: formNode("k1"), name: "Gegeten" }];
+/** Gegeten vult Jaan en Voorraad in. */
+const formLinks: Link[] = [
+  { kind: "log", from: formNode("k1"), to: "J", texts: ["Wie uit deze lijst"], count: null, last: null },
+  { kind: "log", from: formNode("k1"), to: "V", texts: ["Haalt eraf uit de voorraad"], count: 8, last: "2026-11-05" },
 ];
 
 test("zoeken: lijsten, formulieren, items, verbanden en weergaven; elk woord, zonder accenten", () => {
-  const find = (q: string) => searchLinks(q, { lists: sampleLists, kinds: sampleKinds, links: sample });
+  const find = (q: string) => searchLinks(q, { lists: sampleLists, forms: sampleForms, links: [...sample, ...formLinks] });
   assert.deepEqual(find("  "), []);
   assert.deepEqual(
     find("voorraad").map((h) => [h.group, h.title]),
     [
       ["lijsten", "Voorraad"],
       ["verbanden", "Jaan → Voorraad"],
+      ["verbanden", "Gegeten → Voorraad"],
     ],
   );
   const gegeten = find("GEGETEN");
@@ -253,11 +255,12 @@ test("zoeken: lijsten, formulieren, items, verbanden en weergaven; elk woord, zo
       ["weergaven", "Jaan → Eten"],
     ],
   );
-  // De soort van een lijst die je niet ziet, komt niet mee; de soort licht haar lijst en waar ze gebruikt wordt op.
+  // Een formulier licht zichzelf en de lijsten die het invult op.
   const soort = gegeten.find((h) => h.group === "soorten")!;
-  assert.deepEqual(soort.nodes, ["J", "V"]);
-  assert.ok(soort.links.includes(linkKey(sample[0])));
-  assert.equal(soort.detail, "Formulier bij Jaan");
+  assert.equal(soort.select, formNode("k1"));
+  assert.deepEqual(soort.nodes, [formNode("k1"), "J", "V"]);
+  assert.ok(soort.links.includes(linkKey(formLinks[1])));
+  assert.equal(soort.detail, "Formulier voor Jaan, Voorraad");
   // Een item in een verband: kiest de lijst van het item.
   const pasta = find("pasta");
   assert.deepEqual(

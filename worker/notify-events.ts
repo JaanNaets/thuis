@@ -1,13 +1,14 @@
 // Een melding bij een nieuwe gebeurtenis (zie shared/alerts.ts), op de achtergrond na het bewaren. Het formulier zegt
-// of en aan wie (`notify`): enkel wie het formulier nu ziet (rechtstreeks of via een regel), nooit wie het logde of
-// wie het formulier (of een tag ervan) stilzette.
+// of en aan wie (`notify`): enkel wie de gebeurtenis ziet (het formulier, en raakt ze lijsten, minstens één ervan: zie
+// `eventRole`), nooit wie het logde of wie het formulier (of een tag ervan) stilzette.
 
 import { eventPeople, isMuted, notifyMessage } from "../shared/alerts";
 import { cleanAppSettings } from "../shared/apps";
 import { eventTitle } from "../shared/model";
 import type { Person } from "../shared/types";
 import { formatEuro } from "../shared/euro";
-import { formRoles, ids, parseJson, toEvent, toKind, type EventRowDb, type KindRowDb } from "./access";
+import { formRoles, ids, parseJson, seenLists, toEvent, toKind, type EventRowDb, type KindRowDb } from "./access";
+import { touchedLists } from "./events-view";
 import { notify } from "./push";
 import type { AppEnv } from "./types";
 import { kindInfo } from "../shared/model";
@@ -26,11 +27,13 @@ export async function notifyNewEvent(env: AppEnv["Bindings"], author: Pick<Perso
   const event = toEvent(row);
   const { index, candidates } = await formRoles(db, form.id);
   const wanted = form.notify.to === "people" ? new Set(eventPeople(event)) : null;
-  const recipients = index
-    .people(form.id, candidates)
-    .filter((p) => p.role && p.person_id !== author.id && (!wanted || wanted.has(p.person_id)))
-    .map((p) => p.person_id)
-    .slice(0, MAX_RECIPIENTS);
+  const touched = (await touchedLists(db, [event.id])).get(event.id) ?? [];
+  const sees = async (person: string) => !touched.length || [...(await seenLists(db, person)).keys()].some((l) => touched.includes(l));
+  const recipients: string[] = [];
+  for (const p of index.people(form.id, candidates)) {
+    if (recipients.length >= MAX_RECIPIENTS) break;
+    if (p.role && p.person_id !== author.id && (!wanted || wanted.has(p.person_id)) && (await sees(p.person_id))) recipients.push(p.person_id);
+  }
   if (!recipients.length) return 0;
   const [people, tags, lines, count] = (await db.batch([
     db.prepare("SELECT id, app_settings FROM people WHERE id IN (SELECT value FROM json_each(?))").bind(ids(recipients)),

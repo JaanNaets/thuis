@@ -10,6 +10,8 @@ import {
   kindOfKey,
   OPS,
   OPS_FOR,
+  COUNTED,
+  PERIOD_UNITS,
   PERIODS,
   TAGS,
   WEEKDAYS,
@@ -17,6 +19,7 @@ import {
   type Op,
   type Period,
   type PeriodKind,
+  type PeriodUnit,
   type SavedView,
   type SortKey,
   type ViewDef,
@@ -24,7 +27,63 @@ import {
 import { api } from "../api";
 import { Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { useSortable } from "./Sortable";
 import { useToast } from "./Toast";
+
+/** Zoveel kolommen hoogstens (zie `cleanView`). */
+export const MAX_COLUMNS = 20;
+
+/**
+ * Welke velden als kolom staan en in welke volgorde: per veld een rij met een greep (slepen) en een schakelaar. `value`
+ * leeg: zoals de lijst het instelt (`defaults`).
+ */
+export function ColumnsEditor({ fields, value, defaults, onChange }: { fields: FieldDef[]; value: string[] | undefined; defaults: string[]; onChange: (columns: string[] | undefined) => void }) {
+  const shown = (value?.length ? value : defaults).filter((k) => fields.some((f) => f.key === k));
+  const [order, setOrder] = useState(() => [...shown, ...fields.map((f) => f.key).filter((k) => !shown.includes(k))]);
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  const pick = (next: string[], on: Set<string>) => onChange(next.filter((k) => on.has(k)).slice(0, MAX_COLUMNS));
+  const sortable = useSortable(
+    order,
+    (next) => {
+      setOrder(next);
+      pick(next, new Set(shown));
+    },
+    (k) => byKey.get(k)?.label ?? "Kolom",
+  );
+  return (
+    <>
+      <ul className="rows sort-list">
+        {order.map((k) => {
+          const f = byKey.get(k);
+          if (!f) return null;
+          const on = shown.includes(k);
+          return (
+            <li key={k} {...sortable.itemProps(k)}>
+              <div className="row">
+                <button {...sortable.handleProps(k)}>
+                  <Icon name="grip" size={16} />
+                </button>
+                <span className="cell-main">
+                  <Switch
+                    checked={on}
+                    label={f.label}
+                    onChange={(yes) => {
+                      const next = new Set(shown);
+                      if (yes) next.add(k);
+                      else next.delete(k);
+                      pick(order, next);
+                    }}
+                  />
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {sortable.status}
+    </>
+  );
+}
 
 /** Waaruit je kiest bij een voorwaarde "is een van": keuzes, mensen (met jij), verwijzingen, tags. */
 export type Choices = (def: FieldDef) => { value: string; label: string }[];
@@ -132,18 +191,36 @@ function NumberInput({ field, value, onChange, label }: { field: FieldDef; value
 }
 
 function PeriodInput({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+  const counted = COUNTED.includes(value.p);
   return (
     <div className="condition-value">
-      <select aria-label="Periode" value={value.p} onChange={(e) => onChange({ p: e.target.value as PeriodKind, ...(e.target.value.endsWith("_days") ? { n: 7 } : {}) })}>
+      <select
+        aria-label="Periode"
+        value={value.p}
+        onChange={(e) => {
+          const p = e.target.value as PeriodKind;
+          onChange({ p, ...(COUNTED.includes(p) ? { n: value.n ?? 7, ...(value.u ? { u: value.u } : {}) } : {}) });
+        }}
+      >
         {Object.entries(PERIODS).map(([k, label]) => (
           <option key={k} value={k}>
             {label}
           </option>
         ))}
       </select>
-      {(value.p === "last_days" || value.p === "next_days") && (
-        <input inputMode="numeric" aria-label="Hoeveel dagen" value={value.n ?? 7} onChange={(e) => onChange({ ...value, n: Math.max(1, Number(e.target.value) || 1) })} />
+      {counted && (
+        <>
+          <input inputMode="numeric" aria-label="Hoeveel" value={value.n ?? 7} onChange={(e) => onChange({ ...value, n: Math.max(1, Number(e.target.value) || 1) })} />
+          <select aria-label="Eenheid" value={value.u ?? "day"} onChange={(e) => onChange({ ...value, u: e.target.value as PeriodUnit })}>
+            {(Object.entries(PERIOD_UNITS) as [PeriodUnit, (typeof PERIOD_UNITS)[PeriodUnit]][]).map(([k, u]) => (
+              <option key={k} value={k}>
+                {(value.n ?? 7) === 1 ? u.one : u.many}
+              </option>
+            ))}
+          </select>
+        </>
       )}
+      {value.p === "on" && <input type="date" aria-label="Datum" value={value.from ?? ""} onChange={(e) => onChange({ ...value, from: e.target.value || undefined })} />}
       {value.p === "range" && (
         <>
           <input type="date" aria-label="Van" value={value.from ?? ""} onChange={(e) => onChange({ ...value, from: e.target.value || undefined })} />
@@ -320,6 +397,7 @@ export function ConditionsEditor({
 export function ViewEditor({
   fields,
   columnsFrom,
+  defaultColumns = [],
   initial,
   active,
   choices,
@@ -334,6 +412,8 @@ export function ViewEditor({
   fields: FieldDef[];
   /** Velden die een kolom kunnen zijn. */
   columnsFrom: FieldDef[];
+  /** De kolommen zoals de lijst ze instelt (zonder eigen keuze). */
+  defaultColumns?: string[];
   initial: ViewDef;
   active: SavedView | null;
   choices: Choices;
@@ -352,7 +432,8 @@ export function ViewEditor({
   const [busy, setBusy] = useState(false);
   const sortable = fields.filter((f) => f.key !== TAGS);
   const groupable = fields.filter((f) => canGroup(f.key, f));
-  const sort = def.sort?.[0];
+  const sorts = def.sort ?? [];
+  const setSort = (next: SortKey[]) => setDef((d) => ({ ...d, sort: next.length ? next : undefined }));
   const dateFields = fields.filter((f) => kindOf(f) === "date" && !f.key.startsWith("_"));
 
   async function save(asNew: boolean) {
@@ -390,28 +471,39 @@ export function ViewEditor({
     <div className="form">
       <ConditionsEditor label="Toon wat" def={def} fields={fields} choices={choices} onChange={(next) => setDef((d) => ({ ...d, match: next.match, conditions: next.conditions }))} />
 
+      {/* Sorteren op een kolom, dan bij gelijke waarden op de volgende. */}
       <div className="field">
         <span className="label">Sorteren op</span>
-        <div className="condition-value">
-          <select
-            aria-label="Sorteren op"
-            value={sort?.field ?? ""}
-            onChange={(e) => setDef((d) => ({ ...d, sort: e.target.value ? [{ field: e.target.value, dir: sort?.dir ?? "asc" } satisfies SortKey] : undefined }))}
-          >
-            <option value="">Zoals de lijst het doet</option>
-            {sortable.map((f) => (
-              <option key={f.key} value={f.key}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-          {sort && (
-            <select aria-label="Richting" value={sort.dir} onChange={(e) => setDef((d) => ({ ...d, sort: [{ field: sort.field, dir: e.target.value as SortKey["dir"] }] }))}>
+        {sorts.map((sort, i) => (
+          <div key={i} className="condition-value">
+            <select aria-label={i ? "Dan op" : "Sorteren op"} value={sort.field} onChange={(e) => setSort(sorts.map((x, k) => (k === i ? { ...x, field: e.target.value } : x)))}>
+              {sortable
+                .filter((f) => f.key === sort.field || !sorts.some((x) => x.field === f.key))
+                .map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+            </select>
+            <select aria-label="Richting" value={sort.dir} onChange={(e) => setSort(sorts.map((x, k) => (k === i ? { ...x, dir: e.target.value as SortKey["dir"] } : x)))}>
               <option value="asc">oplopend (A–Z, klein–groot, oud–nieuw)</option>
               <option value="desc">aflopend (Z–A, groot–klein, nieuw–oud)</option>
             </select>
-          )}
-        </div>
+            <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Sortering weghalen" onClick={() => setSort(sorts.filter((_, k) => k !== i))}>
+              <Icon name="close" size={15} />
+            </button>
+          </div>
+        ))}
+        {sorts.length < 3 && sortable.some((f) => !sorts.some((x) => x.field === f.key)) && (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ justifySelf: "start" }}
+            onClick={() => setSort([...sorts, { field: sortable.find((f) => !sorts.some((x) => x.field === f.key))!.key, dir: "asc" }])}
+          >
+            <Icon name="plus" size={15} /> {sorts.length ? "Dan op" : "Sortering"}
+          </button>
+        )}
       </div>
 
       {groupable.length > 0 && (
@@ -429,15 +521,8 @@ export function ViewEditor({
       )}
 
       <div className="field">
-        <span className="label">
-          Kolommen
-        </span>
-        <Toggles
-          label="Kolommen"
-          options={columnsFrom.map((f) => ({ value: f.key, label: f.label }))}
-          value={def.columns ?? []}
-          onChange={(columns) => setDef((d) => ({ ...d, columns: columns.length ? columns.slice(0, 6) : undefined }))}
-        />
+        <span className="label">Kolommen</span>
+        <ColumnsEditor fields={columnsFrom} value={def.columns} defaults={defaultColumns} onChange={(columns) => setDef((d) => ({ ...d, columns }))} />
       </div>
 
       {dateFields.length > 0 && (
@@ -471,7 +556,7 @@ export function ViewEditor({
           <input maxLength={40} placeholder="bv. Deze week, Te kopen, Van mij" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         {canShare && !active && (
-          <Switch checked={shared} onChange={setShared} label="Voor iedereen in dit project" />
+          <Switch checked={shared} onChange={setShared} label="Voor iedereen bij deze lijst" />
         )}
         <div className="btn-row">
           {active?.can_edit && (

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { LIST_PLACES, type ListPlace } from "../../shared/apps";
 import {
   betweenLists,
+  formOf,
   groupLinkLists,
   LINK_GROUPS,
   LINK_KINDS,
@@ -21,7 +22,9 @@ import {
   type LinkSort,
   type LinksResponse,
 } from "../../shared/links";
+import { isIconKey } from "../../shared/icons";
 import { canManage, type ListNode, type Tag } from "../../shared/model";
+import { BASE_TONES } from "../components/Log";
 import { fold } from "../../shared/targets";
 import { api, useApi } from "../api";
 import { Avatar, FilterSelect, FilterToggle, Segmented, Switch } from "../components/Controls";
@@ -41,6 +44,9 @@ import { Link } from "../router";
 import { useSession } from "../session";
 
 type View = "kaart" | "lijst";
+
+/** De kolom (en groep) van de formulieren. */
+const FORMS_COLUMN = "formulieren";
 
 /** Zoveel mensen naast een lijst; de rest wordt "+2". */
 const PEOPLE_SHOWN = 3;
@@ -88,7 +94,20 @@ export function ListsPage() {
   const groupBy: LinkGroupBy = Object.hasOwn(LINK_GROUPS, params.get("groep") ?? "") ? (params.get("groep") as LinkGroupBy) : "tag";
   const sort: LinkSort = Object.hasOwn(LINK_SORTS, params.get("sort") ?? "") ? (params.get("sort") as LinkSort) : "eigen";
 
-  const byId = new Map(lists.map((l) => [l.id, l]));
+  // De formulieren als punten (zoals een lijst zonder items): hun icoon, de toon van hun vertrekpunt.
+  const formNodes: ListNode[] = (data?.forms ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    one: null,
+    icon: (isIconKey(f.icon) ? f.icon : null) as ListNode["icon"],
+    color: BASE_TONES[f.base],
+    archived: 0,
+    role: f.role,
+    tags: [],
+    stock: false,
+    position: 0,
+  }));
+  const byId = new Map([...lists, ...formNodes].map((l) => [l.id, l]));
   const tagById = new Map(tags.map((t) => [t.id, t]));
   const chosen = (params.get("keuze") ?? "").split(",").filter((id) => byId.has(id));
   const only = params.get("enkel") === "1" && chosen.length > 0;
@@ -96,15 +115,17 @@ export function ListsPage() {
 
   // Elke lijst één keer: in de kolom van haar eerste tag (met "Enkel deze tonen" enkel je selectie).
   const placed = new Set<string>();
-  const columns: MapColumn[] = groupByTag(lists, tags)
-    .map((g) => ({
+  // Eerst de formulieren (ze vullen de lijsten in), dan de lijsten per tag.
+  const columns: MapColumn[] = [
+    { key: FORMS_COLUMN, name: "Formulieren", tone: null, lists: formNodes.filter((f) => !scope || scope.has(f.id)) },
+    ...groupByTag(lists, tags).map((g) => ({
       key: g.tag?.id ?? "zonder",
       name: g.tag?.name ?? "Zonder tag",
       tone: g.tag ? (g.tag.color ?? "sky") : null,
       lists: g.lists.filter((l) => !placed.has(l.id) && (!scope || scope.has(l.id)) && (placed.add(l.id), true)),
-    }))
-    .filter((c) => c.lists.length);
-  const shownLists = columns.flatMap((c) => c.lists);
+    })),
+  ].filter((c) => c.lists.length);
+  const shownLists = columns.flatMap((c) => c.lists).filter((l) => !formOf(l.id));
   const columnOf = new Map(columns.flatMap((c) => c.lists.map((l) => [l.id, c.name])));
   const archived = lists.filter((l) => l.archived);
   const live = lists.filter((l) => !l.archived);
@@ -113,7 +134,7 @@ export function ListsPage() {
   const inScope = (id: string) => !scope || scope.has(id) || viewOf(id) !== null;
   const links = all.filter((l) => !off.has(l.kind) && inScope(l.from) && inScope(l.to));
   const kinds = LINK_ORDER.filter((k) => all.some((l) => l.kind === k));
-  const hits = data && query.trim() ? searchLinks(query, { lists: shownLists, kinds: data.kinds, links }) : [];
+  const hits = data && query.trim() ? searchLinks(query, { lists: shownLists, forms: formNodes, links }) : [];
   const lit = query.trim() ? litBy(hits) : chosen.length ? selectionLit(links, chosen) : null;
   const selected = asked && (byId.has(asked) || (viewOf(asked) && links.some((l) => l.from === asked || l.to === asked))) ? asked : null;
   // Op gsm is een gekozen lijst een eigen scherm: terug is dan echt terug.
@@ -128,7 +149,7 @@ export function ListsPage() {
   };
 
   // De groepen van de lijst.
-  const sorted = sortLinkLists(shownLists, sort, links, last);
+  const sorted = sortLinkLists([...formNodes.filter((f) => !scope || scope.has(f.id)), ...shownLists], sort, links, last);
   const order = new Map(sorted.map((l, i) => [l.id, i]));
   const bySort = (ids: string[]) => [...ids].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
   const shown = query.trim() ? litBy(hits).nodes : null;
@@ -142,7 +163,7 @@ export function ListsPage() {
             name: c.name,
             tone: c.tone,
             ids: bySort(c.lists.map((l) => l.id)),
-            to: c.key === "zonder" ? undefined : `/tags/${c.key}`,
+            to: c.key === "zonder" || c.key === FORMS_COLUMN ? undefined : `/tags/${c.key}`,
           })),
           ...(viewIds.length ? [{ key: "weergaven", name: "Weergaven", ids: viewIds }] : []),
         ]
@@ -202,7 +223,7 @@ export function ListsPage() {
   // Waar een lijst voor jou niet staat (in de grijze regel; op een brede tablet tonen de pillen het).
   const states = (id: string) => {
     const l = byId.get(id);
-    if (!l) return [];
+    if (!l || formOf(id)) return [];
     const menuOn = places.shown(id, "menu");
     const addOn = places.shown(id, "add");
     return [
@@ -212,7 +233,7 @@ export function ListsPage() {
   };
   const end = (id: string, group: ListGroup) => {
     const l = byId.get(id);
-    if (!l || !data) return null;
+    if (!l || !data || formOf(id)) return null;
     const others = l.tags.filter((t) => t !== group.key).flatMap((t) => tagById.get(t) ?? []);
     return <RowEnd list={l} others={others} data={data} me={me.id} places={places} onMore={() => setOpened(id)} />;
   };

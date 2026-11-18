@@ -10,7 +10,7 @@ import { lineAllowed } from "../../shared/rights";
 import { normalizeUnit } from "../../shared/units";
 import { ids, kindOf, needEdit, requireForm, requireList, seenAll, toEvent, toLine, type EventRowDb, type LineRowDb, type Seen } from "../access";
 import { rebuildEffects } from "../cells";
-import { eventRole, logbookRows, viewEvents, type LogOptions } from "../events-view";
+import { eventRole, logbookRows, touchedLists, viewEvents, type LogOptions } from "../events-view";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { prepareData } from "../prepare";
 import { knownPeople } from "./lists";
@@ -74,8 +74,8 @@ async function findEvent(c: Context<AppEnv>, id: string): Promise<Found> {
   const row = await db.prepare("SELECT * FROM events WHERE id = ?").bind(id).first<EventRowDb>();
   if (!row) throw new NotFoundError("Dat bestaat niet (meer), of je kan er niet bij.");
   const seen = await seenAll(db, c.get("person").id);
-  const { results: lists } = await db.prepare("SELECT t.list_id FROM lines l JOIN items t ON t.id = l.item_id WHERE l.event_id = ?").bind(id).all<{ list_id: string }>();
-  return { event: toEvent(row), role: eventRole(seen, row.kind, lists.map((l) => l.list_id)), seen };
+  const touched = (await touchedLists(db, [id])).get(id) ?? [];
+  return { event: toEvent(row), role: eventRole(seen, row.kind, touched), seen };
 }
 
 /** Om te wijzigen: je moet het formulier van de gebeurtenis mogen gebruiken (een Aanpassing: de lijst van haar item). */
@@ -258,11 +258,11 @@ async function cleanEvent(
     }
     if (l.text) lines.push(l);
   }
-  // Een groep lijnen uit één lijst (Ruimte uit Huis): enkel items van die lijst.
+  // Een groep lijnen uit bepaalde lijsten (Ruimte uit Huis, een fles uit Wijnen of de kelder): enkel items daaruit.
   for (const l of lines) {
-    const group = kind.parts.groups.find((g) => g.role === l.role && g.list);
+    const group = kind.parts.groups.find((g) => g.role === l.role && g.lists.length);
     const list = l.new_item ? l.new_item.list_id : l.item_id ? listOf.get(l.item_id) : null;
-    if (group && list && list !== group.list) throw new ValidationError(`Bij ${group.label} hoort een item uit een andere lijst`);
+    if (group && list && !group.lists.includes(list)) throw new ValidationError(`Bij ${group.label} hoort een item uit een andere lijst`);
   }
   const amount = cents(raw.amount, "Het bedrag");
   const every = raw.repeat && typeof raw.repeat === "object" ? (asObject(raw.repeat).every as Interval | undefined) : undefined;

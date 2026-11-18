@@ -101,7 +101,7 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
     ["Gegeten", false, ["Huis"], { to: "all" }, true],
     ["Boodschap", true, [], null, null],
   ]);
-  assert.equal(plan.kinds[0].parts?.groups[0].list, list.id);
+  assert.equal(plan.kinds[0].parts?.groups[0].lists[0], list.id, "een groep van vroeger (één lijst) leest als lijsten");
   const pasta = plan.items.find((t) => t.old === PASTA)!;
   const saus = plan.items.find((t) => t.old === SAUS)!;
   // Pasta: met = de nieuwe saus; een persoon die je niet kent valt weg.

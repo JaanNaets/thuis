@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, brusselsNow, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
-import { keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
+import { baseKind, brusselsNow, cleanParts, mergeKinds, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
+import { eventRole, keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
 const JANA = "jana";
@@ -112,7 +112,7 @@ test("een nieuwe gebeurtenis begint gepland als je erom vraagt of als haar formu
 });
 
 test("de formulieren van een lijst: die haar invullen, anders alle; de rest onder Ander formulier", () => {
-  const form = (id: string, name: string, list: string): KindInfo => ({ ...baseKind("gebruik"), id, name, parts: { ...baseKind("gebruik").parts, groups: [{ role: "uit", label: "Uit", list }] } });
+  const form = (id: string, name: string, list: string): KindInfo => ({ ...baseKind("gebruik"), id, name, parts: { ...baseKind("gebruik").parts, groups: [{ role: "uit", label: "Uit", lists: [list] }] } });
   const kinds = [baseKind("aankoop"), form("k1", "Gegeten", "VOORRAAD"), form("k2", "Gewicht", "VOORRAAD"), form("k3", "Proeverij", "WIJN")];
   const ids = (xs: KindInfo[]) => xs.map((k) => k.id);
   const fills = (list: string) => (k: KindInfo) => fillsLists(k).includes(list);
@@ -126,4 +126,47 @@ test("de formulieren van een lijst: die haar invullen, anders alle; de rest onde
   assert.deepEqual(ids(chosen.shown), ["k1", "k2", "aankoop"]);
   assert.ok(!ids(chosen.more).includes("aankoop"));
   assert.deepEqual(ids(formsOf(kinds, fills("VOORRAAD"), "k1").shown), ["k1", "k2"]);
+});
+
+test("een gebeurtenis zien: het formulier, en raakt ze lijsten, minstens één ervan", () => {
+  // Rik is lid van Gedronken en van de gedeelde kelder, niet van Jaans Wijnen; Jana ziet Uitgaven.
+  const rik = { lists: new Map([["kelder", "lid" as const]]), forms: new Map([["gedronken", "lid" as const]]) };
+  assert.equal(eventRole(rik, false, "gedronken", ["kelder"]), "lid");
+  assert.equal(eventRole(rik, false, "gedronken", ["wijnen"]), null, "een fles uit Jaans Wijnen ziet Rik niet");
+  assert.equal(eventRole(rik, false, "gedronken", ["wijnen", "kelder"]), "lid");
+  assert.equal(eventRole(rik, false, "gedronken", []), "lid", "zonder lijst volgt het het formulier");
+  assert.equal(eventRole(rik, false, "sport", []), null, "zonder het formulier niets");
+  const jana = { lists: new Map([["uitgaven", "lid" as const]]), forms: new Map([["aankoop", "lid" as const]]) };
+  assert.equal(eventRole(jana, false, "aankoop", ["wijnen", "uitgaven"]), "lid", "een aankoop die haar saldo raakt");
+  // Een Aanpassing: de lijst van haar item.
+  assert.equal(eventRole(rik, true, "aanpassing", ["kelder"]), "lid");
+  assert.equal(eventRole(rik, true, "aanpassing", ["wijnen"]), null);
+});
+
+test("een groep lijnen kiest uit bepaalde lijsten (leeg: elke); van vroeger één lijst", () => {
+  const parts = cleanParts({ groups: [{ role: "uit", label: "Fles", lists: ["wijnen", "kelder", "wijnen", "../x"] }, { role: "bij", label: "Waar", list: "winkels" }, { role: "voor", label: "Voor" }] })!;
+  assert.deepEqual(
+    parts.groups.map((g) => [g.role, g.lists]),
+    [
+      ["uit", ["wijnen", "kelder"]],
+      ["bij", ["winkels"]],
+      ["voor", []],
+    ],
+  );
+  assert.deepEqual(fillsLists({ parts, does: [] }), ["wijnen", "kelder", "winkels"]);
+});
+
+test("formulieren samenvoegen: velden, groepen en handelingen van beide", () => {
+  const kind = (id: string, extra: object = {}) => ({ id, base: "gebruik" as const, name: id, icon: null, fields: [{ key: "score", label: "Score", type: "score" as const }], goal: null, planned: false, parts: null, does: [], notify: null, reads: null, archived: 0 as const, created_by: "jaan", created_at: "", ...extra });
+  // Twee Gedronken die hun vertrekpunt volgen: blijft zo.
+  const same = mergeKinds(kind("a"), kind("b", { fields: [{ key: "score", label: "Punten", type: "score" }, { key: "notitie", label: "Notitie", type: "longtext" }] }));
+  assert.equal(same.parts, null);
+  assert.deepEqual(same.fields.map((f) => f.label), ["Score", "Notitie"]);
+  // Een fles uit Wijnen en een uit de kelder: één groep uit beide lijsten; uit elke lijst wint.
+  const uit = (lists: string[]) => ({ money: false, to: false, duration: false, groups: [{ role: "uit" as const, label: "Fles", lists }] });
+  assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b", { parts: uit(["kelder"]) })).parts?.groups, [{ role: "uit", label: "Fles", lists: ["wijnen", "kelder"] }]);
+  assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b")).parts?.groups[0].lists, []);
+  // Handelingen één keer.
+  const zet = { rows: { from: "lines" as const, role: "uit" as const }, list: "geproefd", field: "score", op: "zet" as const, value: { from: "field" as const, key: "score" } };
+  assert.equal(mergeKinds(kind("a", { does: [zet] }), kind("b", { does: [zet] })).does.length, 1);
 });

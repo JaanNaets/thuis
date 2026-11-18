@@ -10,7 +10,7 @@ import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
 import { eatenRoles, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
-import { buildLinks, linkProblems, type BoardUse, type LineItem, type LinkKindDef, type LinkPersonView, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
+import { buildLinks, formNode, linkProblems, type BoardUse, type LineItem, type LinkForm, type LinkKindDef, type LinkPersonView, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
 import { canEdit, dayOf, fillsLists, kindInfo, STATUSES, type KindInfo, type List, type Role, type Status } from "../../shared/model";
@@ -507,12 +507,14 @@ insights.get("/links", async (c) => {
   for (const l of lists) counts[l.id] = { items: 0, events: 0, last: null };
   for (const r of itemRows.results) counts[r.list_id].items = r.n;
   for (const r of touchRows.results) counts[r.list] = { ...counts[r.list], events: r.events, last: r.last };
-  // De formulieren die je ziet, bij de eerste lijst die ze raken (om op te zoeken).
-  const seenKinds = infos.flatMap((k) => {
-    const list = formLists(k)[0];
-    return list ? [{ id: k.id, list, name: k.name }] : [];
-  });
-  // De formulieren die een melding sturen bij iets nieuws (om ze per persoon stil te kunnen zetten).
+  // De formulieren als punten op de kaart, met hun logboek (hoeveel gebeurtenissen, de laatste dag).
+  const forms: LinkForm[] = infos.map((k) => ({ id: formNode(k.id), name: k.name, icon: k.icon, base: k.base, role: seenBoth.forms.get(k.id)! }));
+  for (const r of logRows.results) {
+    const count = (counts[formNode(r.kind)] ??= { items: 0, events: 0, last: null });
+    count.events += r.events;
+    if (r.last && (!count.last || r.last > count.last)) count.last = r.last;
+  }
+  // De formulieren die een melding sturen bij iets nieuws.
   const alerts = full.filter((k) => k.notify).map((k) => k.id);
-  return c.json({ links, own, counts, people, alerts, problems, kinds: seenKinds } satisfies LinksResponse);
+  return c.json({ links, own, counts, people, alerts, problems, forms } satisfies LinksResponse);
 });

@@ -13,24 +13,44 @@ import { formatFieldValue } from "./fields.ts";
 export const PERIODS = {
   today: "vandaag",
   yesterday: "gisteren",
+  day_before_yesterday: "eergisteren",
   tomorrow: "morgen",
+  day_after_tomorrow: "overmorgen",
   this_week: "deze week",
   last_week: "vorige week",
   next_week: "volgende week",
   this_month: "deze maand",
   last_month: "vorige maand",
   next_month: "volgende maand",
+  this_quarter: "dit kwartaal",
+  last_quarter: "vorig kwartaal",
+  next_quarter: "volgend kwartaal",
   this_year: "dit jaar",
   last_year: "vorig jaar",
   next_year: "volgend jaar",
   before_today: "voor vandaag",
   from_today: "vanaf vandaag",
-  last_days: "de laatste … dagen",
-  next_days: "de komende … dagen",
+  last_days: "de laatste …",
+  next_days: "de komende …",
+  ago: "… geleden",
+  older: "langer dan … geleden",
+  on: "op een datum",
   range: "tussen twee datums",
 } as const;
 export type PeriodKind = keyof typeof PERIODS;
-export type Period = { p: PeriodKind; n?: number; from?: string; to?: string };
+
+/** De eenheid van "de laatste …", "de komende …", "… geleden" en "langer dan … geleden". */
+export const PERIOD_UNITS = {
+  day: { one: "dag", many: "dagen" },
+  week: { one: "week", many: "weken" },
+  month: { one: "maand", many: "maanden" },
+  year: { one: "jaar", many: "jaar" },
+} as const;
+export type PeriodUnit = keyof typeof PERIOD_UNITS;
+/** De periodes met een aantal (`n`) in een eenheid (`u`, standaard dagen). */
+export const COUNTED: readonly PeriodKind[] = ["last_days", "next_days", "ago", "older"];
+
+export type Period = { p: PeriodKind; n?: number; u?: PeriodUnit; from?: string; to?: string };
 
 const DAY = 86_400_000;
 const toDay = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
@@ -49,17 +69,51 @@ const monthEnd = (d: string, shift = 0) => {
   return iso(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + shift + 1, 0));
 };
 
+/** Een dag zoveel eenheden verder of terug (een maand of jaar: dezelfde dag, of de laatste van die maand). */
+function addUnits(d: string, n: number, u: PeriodUnit): string {
+  if (u === "day") return addDays(d, n);
+  if (u === "week") return addDays(d, 7 * n);
+  const x = new Date(toDay(d));
+  const target = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + (u === "month" ? n : 12 * n), 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  return iso(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(x.getUTCDate(), last)));
+}
+/** Het eerste en laatste van de dag, week, maand of het jaar waarin een dag valt. */
+function unitRange(d: string, u: PeriodUnit): [string, string] {
+  if (u === "day") return [d, d];
+  if (u === "week") return [monday(d), addDays(monday(d), 6)];
+  if (u === "month") return [monthStart(d), monthEnd(d)];
+  return [`${d.slice(0, 4)}-01-01`, `${d.slice(0, 4)}-12-31`];
+}
+/** Het kwartaal van een dag, zoveel kwartalen verder of terug. */
+function quarter(d: string, shift: number): [string, string] {
+  const x = new Date(toDay(d));
+  const first = Math.floor(x.getUTCMonth() / 3) * 3 + 3 * shift;
+  return [iso(Date.UTC(x.getUTCFullYear(), first, 1)), iso(Date.UTC(x.getUTCFullYear(), first + 3, 0))];
+}
+
 /** Van en tot (beide inbegrepen, null = open) voor een periode, gezien vanaf `today`. */
 export function periodRange(period: Period, today: string): [string | null, string | null] {
   const year = Number(today.slice(0, 4));
   const n = Math.max(1, period.n ?? 7);
+  const u = period.u ?? "day";
   switch (period.p) {
     case "today":
       return [today, today];
     case "yesterday":
       return [addDays(today, -1), addDays(today, -1)];
+    case "day_before_yesterday":
+      return [addDays(today, -2), addDays(today, -2)];
     case "tomorrow":
       return [addDays(today, 1), addDays(today, 1)];
+    case "day_after_tomorrow":
+      return [addDays(today, 2), addDays(today, 2)];
+    case "this_quarter":
+      return quarter(today, 0);
+    case "last_quarter":
+      return quarter(today, -1);
+    case "next_quarter":
+      return quarter(today, 1);
     case "this_week":
       return [monday(today), addDays(monday(today), 6)];
     case "last_week":
@@ -82,18 +136,37 @@ export function periodRange(period: Period, today: string): [string | null, stri
       return [null, addDays(today, -1)];
     case "from_today":
       return [today, null];
+    // De laatste 3 maanden: tot en met vandaag, vanaf de dag na dezelfde dag 3 maanden terug.
     case "last_days":
-      return [addDays(today, -(n - 1)), today];
+      return [addDays(addUnits(today, -n, u), 1), today];
     case "next_days":
-      return [today, addDays(today, n - 1)];
+      return [today, addDays(addUnits(today, n, u), -1)];
+    // 2 weken geleden: die hele week; 3 dagen geleden: die dag.
+    case "ago":
+      return unitRange(addUnits(today, -n, u), u);
+    // Langer dan 30 dagen geleden: voor de dag 30 dagen terug.
+    case "older":
+      return [null, addDays(addUnits(today, -n, u), -1)];
+    case "on":
+      return [period.from ?? null, period.from ?? null];
     case "range":
       return [period.from ?? null, period.to ?? null];
   }
 }
 
+/** "3 maanden", "1 week", "7 dagen". */
+const counted = (period: Period) => {
+  const n = period.n ?? 7;
+  const unit = PERIOD_UNITS[period.u ?? "day"];
+  return `${n} ${n === 1 ? unit.one : unit.many}`;
+};
+
 export function periodText(period: Period): string {
-  if (period.p === "last_days") return `de laatste ${period.n ?? 7} dagen`;
-  if (period.p === "next_days") return `de komende ${period.n ?? 7} dagen`;
+  if (period.p === "last_days") return `de laatste ${counted(period)}`;
+  if (period.p === "next_days") return `de komende ${counted(period)}`;
+  if (period.p === "ago") return `${counted(period)} geleden`;
+  if (period.p === "older") return `langer dan ${counted(period)} geleden`;
+  if (period.p === "on") return period.from ? `op ${period.from.split("-").reverse().join("/")}` : PERIODS.on;
   if (period.p === "range") {
     const d = (x?: string) => (x ? x.split("-").reverse().join("/") : "");
     return period.from && period.to ? `${d(period.from)} – ${d(period.to)}` : period.from ? `vanaf ${d(period.from)}` : `tot ${d(period.to)}`;
@@ -499,6 +572,8 @@ const isPeriod = (v: unknown): v is Period => {
   const p = v as Period;
   if (typeof p.p !== "string" || !Object.hasOwn(PERIODS, p.p)) return false;
   if (p.n !== undefined && (!Number.isInteger(p.n) || p.n < 1 || p.n > 3650)) return false;
+  if (p.u !== undefined && !Object.hasOwn(PERIOD_UNITS, p.u)) return false;
+  if (p.p === "on") return isDate(p.from);
   if (p.p === "range") return (p.from === undefined || isDate(p.from)) && (p.to === undefined || isDate(p.to)) && Boolean(p.from || p.to);
   return true;
 };
@@ -518,7 +593,12 @@ function cleanValue(op: Op, value: unknown): unknown {
       return value;
     case "period":
       if (!isPeriod(value)) throw new Error("Kies een periode");
-      return { p: value.p, ...(value.n !== undefined ? { n: value.n } : {}), ...(value.p === "range" ? { from: value.from, to: value.to } : {}) };
+      return {
+        p: value.p,
+        ...(value.n !== undefined ? { n: value.n } : {}),
+        ...(COUNTED.includes(value.p) && value.u && value.u !== "day" ? { u: value.u } : {}),
+        ...(value.p === "range" ? { from: value.from, to: value.to } : value.p === "on" ? { from: value.from } : {}),
+      };
     case "week":
       if (value !== -1 && !(Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 5)) throw new Error("Kies een week van de maand");
       return value;
@@ -589,7 +669,7 @@ export function cleanView(raw: unknown, fields: FieldDef[]): ViewDef {
     .filter((s): s is SortKey => !!s && typeof s === "object" && byKey.has((s as SortKey).field) && ["asc", "desc"].includes((s as SortKey).dir))
     .slice(0, 3)
     .map((s) => ({ field: s.field, dir: s.dir }));
-  const columns = (Array.isArray(o.columns) ? o.columns : []).filter((k): k is string => typeof k === "string" && byKey.has(k) && !k.startsWith("_")).slice(0, 6);
+  const columns = (Array.isArray(o.columns) ? o.columns : []).filter((k): k is string => typeof k === "string" && byKey.has(k) && !k.startsWith("_")).slice(0, 20);
   const date = typeof o.date === "string" && byKey.has(o.date) && kindOf(byKey.get(o.date)!) === "date" ? o.date : undefined;
   const group = typeof o.group === "string" && byKey.has(o.group) && canGroup(o.group, byKey.get(o.group)!) ? o.group : undefined;
   return {

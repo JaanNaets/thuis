@@ -5268,9 +5268,24 @@ dialog.palette[open]::backdrop {
   letter-spacing: 0.06em;
 }
 
-/* De lijst van een soort: kolommen komen van de velden (`--cols` staat op de tabel zelf). */
+/* De items van een lijst: kolommen komen van de velden (`--cols` staat op de tabel zelf). Met veel kolommen
+   (`is-scroll`) heeft elke kolom een vaste breedte en scrolt de tabel opzij, de kop mee (`--table-min`). */
 .table-items {
   --cols: minmax(0, 1fr);
+}
+
+.table-items.is-scroll {
+  overflow-x: auto;
+}
+
+/* Een schakelaar die de hele rij vult (Kolommen: naam links, schakelaar rechts). */
+.cell-main > .switch-field {
+  flex: 1;
+}
+
+.table-items.is-scroll > .table-head,
+.table-items.is-scroll > .rows {
+  min-width: var(--table-min);
 }
 
 .table .col.col-end {
@@ -8529,6 +8544,11 @@ dialog.sheet.builder-sheet {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+/* Een veld van een lijn over de hele breedte (Uit welke lijsten, bij een groep). */
+.line-field.is-wide {
+  grid-column: 1 / -1;
 }
 
 .line-field > span,

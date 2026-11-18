@@ -11,7 +11,7 @@ import { canEdit, eventTitle, type Role } from "../shared/model";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
 import { lineAllowed } from "../shared/rights";
 import { ids, kindOf, listRoles, parseJson, seenAll, seenForms, toEvent, toList, toItem, type EventRowDb, type ListRow, type ItemRowDb } from "./access";
-import { eventRole } from "./events-view";
+import { eventRole, touchedLists } from "./events-view";
 import { ensureEffects, rebuildEffects, withCells } from "./cells";
 import { syncAll } from "./mirrors";
 import { notify } from "./push";
@@ -62,7 +62,7 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
       .bind(e.id)
       .all<{ id: string; role: "in" | "uit" | "voor" | "bij"; item_id: string | null; item_list: string | null }>();
     const allowed =
-      canEdit(eventRole(seen, e.kind, lines.map((l) => l.item_list))) && lines.every((l) => !l.item_id || lineAllowed(l.role, l.item_list ? (seen.lists.get(l.item_list) ?? null) : null));
+      canEdit(eventRole(seen, e.kind, (await touchedLists(db, [e.id])).get(e.id) ?? [])) && lines.every((l) => !l.item_id || lineAllowed(l.role, l.item_list ? (seen.lists.get(l.item_list) ?? null) : null));
     if (!allowed) {
       await db.prepare("UPDATE events SET repeat = NULL WHERE id = ?").bind(e.id).run();
       continue;
@@ -135,7 +135,7 @@ async function collectItems(db: D1Database, people: Map<string, string[]>, pick:
   return due;
 }
 
-/** Geplande gebeurtenissen die nu vallen: naar wie ze logde en wie erin staat, als die het formulier nog ziet. */
+/** Geplande gebeurtenissen die nu vallen: naar wie ze logde en wie erin staat, als die ze nog ziet (`eventRole`). */
 async function collectPlanned(db: D1Database, people: Map<string, string[]>, due: Map<string, Due[]>, where: string, binds: unknown[]) {
   const { results } = await db.prepare(`SELECT * FROM events WHERE status = 'gepland' AND ${where}`).bind(...binds).all<EventRowDb>();
   for (const e of results.map(toEvent)) {
@@ -147,9 +147,10 @@ async function collectPlanned(db: D1Database, people: Map<string, string[]>, due
     const names = new Map(lines.flatMap((l) => (l.item_id && l.item ? [[l.item_id, l.item] as const] : [])));
     const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
     const wanted = new Set([e.created_by, e.paid_by, e.to_person, ...(e.split ?? []).map((s) => s.person_id)].filter((x): x is string => Boolean(x)));
+    const touched = (await touchedLists(db, [e.id])).get(e.id) ?? [];
     for (const person of wanted) {
       if (!people.has(person) || isMuted(people.get(person)!, e.kind)) continue;
-      const role: Role | undefined = (await seenForms(db, person, e.kind)).get(e.kind);
+      const role: Role | null = eventRole(await seenAll(db, person), e.kind, touched);
       if (!role) continue;
       const time = e.at.length > 10 ? ` om ${e.at.slice(11, 16)}` : "";
       due.set(person, [...(due.get(person) ?? []), { title, body: `Gepland: vandaag${time}`, url: `/gebeurtenissen/${e.id}`, tag: `plan:${e.id}:${e.at}` }]);

@@ -9,7 +9,7 @@ import { cleanDoes, type Handeling, type ListColumns } from "../../shared/cells"
 import type { FieldDef } from "../../shared/fields";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields } from "../../shared/listdef";
-import { baseParts, canEdit, cleanParts, isBase, type Base, type FormDetail, type Parts, type Role } from "../../shared/model";
+import { baseParts, canEdit, cleanParts, isBase, mergeKinds, type Base, type FormDetail, type Parts, type Role } from "../../shared/model";
 import { ids, needManage, parseJson, requireForm, seenLists } from "../access";
 import { rebuildEffects } from "../cells";
 import { addPerson, peopleOf, setPerson, tagsOn, tagStatements } from "../members";
@@ -23,14 +23,14 @@ export const goalOf = (o: Record<string, unknown>, parts: Parts): number | null 
   parts.duration && typeof o.goal === "number" && Number.isInteger(o.goal) && o.goal > 0 && o.goal < 100_000 ? o.goal : null;
 
 /**
- * De onderdelen van een formulier: wat binnenkomt (nagekeken; een groep uit een lijst enkel uit een lijst die je ziet),
- * anders die van het vertrekpunt. `self`: een nieuwe lijst uit een sjabloon, waarnaar "self" verwijst.
+ * De onderdelen van een formulier: wat binnenkomt (nagekeken; een groep kiest enkel uit lijsten die je ziet), anders
+ * die van het vertrekpunt. `self`: een nieuwe lijst uit een sjabloon, waarnaar "self" verwijst.
  */
 export function partsOf(raw: unknown, base: Base, seen: Map<string, Role>, self?: string): Parts {
   const parts = cleanParts(raw) ?? baseParts(base);
   return {
     ...parts,
-    groups: parts.groups.map((g) => (self && g.list === "self" ? { ...g, list: self } : g)).filter((g) => !g.list || g.list === self || seen.has(g.list)),
+    groups: parts.groups.map((g) => ({ ...g, lists: g.lists.map((l) => (self && l === "self" ? self : l)).filter((l) => l === self || seen.has(l)) })),
   };
 }
 
@@ -166,10 +166,18 @@ forms.put("/:id", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Groepen uit een lijst die de bewerker niet ziet, gaan niet verloren: ze blijven op hun plaats van voordien. */
+/**
+ * Lijsten van een groep die de bewerker niet ziet, gaan niet verloren: ze blijven bij die groep (of de groep blijft,
+ * als hij ze weghaalde zonder ze te zien).
+ */
 function keepUnseen(before: Parts | null, after: Parts, seen: Map<string, Role>): Parts {
-  const hidden = (before?.groups ?? []).filter((g) => g.list && !seen.has(g.list) && !after.groups.some((a) => a.role === g.role));
-  return hidden.length ? { ...after, groups: [...after.groups, ...hidden] } : after;
+  const unseen = (g: Parts["groups"][number]) => g.lists.filter((l) => !seen.has(l));
+  const groups = after.groups.map((g) => {
+    const had = before?.groups.find((b) => b.role === g.role);
+    return had && unseen(had).length ? { ...g, lists: [...new Set([...g.lists, ...unseen(had)])] } : g;
+  });
+  const gone = (before?.groups ?? []).filter((g) => unseen(g).length && !groups.some((a) => a.role === g.role));
+  return { ...after, groups: [...groups, ...gone] };
 }
 
 forms.put("/:id/archived", async (c) => {
@@ -192,6 +200,40 @@ forms.delete("/:id", async (c) => {
     db.prepare("DELETE FROM kinds WHERE id = ?").bind(kind.id),
   ]);
   return c.body(null, 204);
+});
+
+/**
+ * Een ander formulier (`from`, dat je ook beheert) hierin samenvoegen: zijn logboek, mensen (wie hier al staat, houdt
+ * zijn rol) en tags komen hierbij, de velden, groepen en handelingen samen (`mergeKinds`); daarna verdwijnt het.
+ */
+forms.post("/:id/merge", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const into = await requireForm(db, me.id, c.req.param("id"));
+  needManage(into.role, "Enkel een beheerder voegt formulieren samen.");
+  const fromId = requiredString(asObject(await c.req.json()), "from", 64);
+  if (fromId === into.kind.id) throw new ValidationError("Kies een ander formulier.");
+  const from = await requireForm(db, me.id, fromId);
+  needManage(from.role, "Je moet ook dat formulier beheren.");
+  const merged = mergeKinds(into.kind, from.kind);
+  await db.batch([
+    db
+      .prepare("UPDATE kinds SET fields = ?, parts = ?, does = ?, goal = ?, notify = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(
+        JSON.stringify(merged.fields),
+        merged.parts ? JSON.stringify(merged.parts) : null,
+        merged.does.length ? JSON.stringify(merged.does) : null,
+        merged.goal,
+        merged.notify ? JSON.stringify(merged.notify) : null,
+        into.kind.id,
+      ),
+    db.prepare("UPDATE events SET kind = ?1 WHERE kind = ?2").bind(into.kind.id, fromId),
+    db.prepare("INSERT INTO form_people (form_id, person_id, role) SELECT ?1, person_id, role FROM form_people WHERE form_id = ?2 ON CONFLICT (form_id, person_id) DO NOTHING").bind(into.kind.id, fromId),
+    db.prepare("INSERT INTO form_tag_links (form_id, tag_id) SELECT ?1, tag_id FROM form_tag_links WHERE form_id = ?2 ON CONFLICT (form_id, tag_id) DO NOTHING").bind(into.kind.id, fromId),
+    db.prepare("DELETE FROM kinds WHERE id = ?").bind(fromId),
+  ]);
+  await rebuildForm(db, into.kind.id);
+  return c.json({ ok: true });
 });
 
 forms.put("/:id/tags", async (c) => {

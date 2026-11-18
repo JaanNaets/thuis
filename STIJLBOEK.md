@@ -396,8 +396,10 @@ navigatie naar een ander scherm. Zet de gekozen tab in het adres (`?lijst=`, `?t
 
 Een grijze pil zonder rand (32px): grijs label, donkere waarde. Een actieve filter wordt het **witte vlak**. Filters
 staan onder het zoekveld.
-In `ItemsView` komen ze vanzelf uit de velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode
-wordt een schakelaar "Label: nu"), plus Archief. Toon een filter pas als er iets te kiezen valt.
+In `ItemsView` staan eerst **Filters** (het onderblad met voorwaarden, sorteren en kolommen) en **Kolommen** (een
+onderblad met `ColumnsEditor`, meteen toegepast, en "Zoals de lijst"), dan de voorwaarden als pillen, en vanzelf de
+velden met `filter` (een keuzelijst met de waarden die voorkomen; een periode wordt een schakelaar "Label: nu"), plus
+Archief. Met meer dan drie kolommen heeft elke kolom een vaste breedte en scrolt de tabel opzij (`.table-items.is-scroll`). Toon een filter pas als er iets te kiezen valt.
 
 ### Segmenten: `Segmented`
 
@@ -708,7 +710,7 @@ relatief (vandaag, deze week, vorige maand, de laatste 7 dagen, …) of tussen t
 | Waar | Hoe |
 | --- | --- |
 | Boven de lijst | Bewaarde weergaven als pillen (`ViewChips`: Alles, dan elke weergave; een persoonlijke met icoon `user`). Daaronder in `.filters` eerst de pil "Filters · 2" (icoon `sliders`, `active` als er iets geldt), dan elke voorwaarde als pil met een kruisje (`ConditionPills`, `.condition-pill`: "Datum valt in deze week ×"), dan de snelle filters van de velden en Archief |
-| Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting), Kolommen (`tag-picker`, leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen in deze lijst, Bijwerken / Als nieuwe bewaren / Verwijderen) |
+| Onderblad "Filters" (of de naam van de weergave) | `ViewEditor`: Toon wat (`Segmented`: aan alles / aan één ervan), per voorwaarde een wit kaartje (`.condition`: veld, vergelijking, waarde; keuzes als `tag-picker` met vinkje), "+ Voorwaarde" (`btn-outline btn-sm`), Sorteren op (veld + richting, met "+ Dan op" nog twee kolommen na elkaar), Kolommen (`ColumnsEditor`: per veld een rij met greep en `Switch`, slepen om te ordenen; leeg = zoals de lijst), Als agenda (`Switch`), Toepassen (`btn-primary btn-lg`), en onder een lijn Bewaren als weergave (naam, Voor iedereen bij deze lijst, Bijwerken / Als nieuwe bewaren / Verwijderen). Een periode: vandaag, gisteren, eergisteren, morgen, overmorgen, deze/vorige/volgende week, maand, kwartaal of jaar, de laatste of komende … (een getal en Dagen, Weken, Maanden of Jaar), … geleden, langer dan … geleden, op een datum, tussen twee datums |
 | Kolomkoppen (tablet) | Een kop sorteert (`.table-sort`): oplopend, aflopend, weer zoals de lijst; een pijltje `up`/`down` toont welke |
 
 - Wat je koos, blijft staan zolang de app openstaat (per lijst, `sessionStorage`). Exporteren volgt het filter.
@@ -842,7 +844,11 @@ de tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is g
 
 - **Lijnen** (`GroupsEditor`): per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan `.line-main.is-plain`:
   de naam van de groep, "bv. Ruimte, Winkel", met ×), eronder **Rol** (Wat erbij komt, Wat eraf gaat, Waarover, Waar of
-  bij wie; elke rol één keer) en **Uit** (Elke lijst, of één lijst). Onderaan "+ Groep".
+  bij wie; elke rol één keer) en **Uit** over de hele breedte (`.line-field.is-wide`): de lijsten als `tag` om aan te
+  vinken (Wijnen én de Gedeelde wijnkelder); niets aangevinkt heet "Uit elke lijst". Onderaan "+ Groep".
+- **Samenvoegen met** (een `select` met de andere formulieren die je beheert; met dezelfde naam hun tags erbij): na
+  een bevestiging komen het logboek, de mensen, de tags, de velden en wat het doet bij dit formulier, en verdwijnt het
+  andere.
 - **Wat het doet** (`DoesEditor`): per handeling zo'n kaartje met de kolom (een keuzelijst per lijst, "Huis · Kleur",
   Voorraad; bij een persoon Saldo) en ×; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal, de
   voorraad of een saldo), **Met** (een veld van het formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde,
@@ -857,14 +863,14 @@ er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
 De lijnen staan per **groep van het formulier** (`shownGroups`): de naam van de groep als label (Wat, Waar, Ruimte),
-eronder haar lijnen en "+ Lijn" (bij een groep uit één lijst: "+ Ruimte", hoe één item van die lijst heet). Een rol
+eronder haar lijnen en "+ Lijn" (bij een groep uit lijsten die één item hetzelfde noemen: "+ Ruimte", "+ Wijn"). Een rol
 die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij. Elke lijn is een wit kaartje in
 de groep (`.line-row`): bovenaan met wat (`Combo` met `typeFirst`: de items pas als je typt, met hun lijst ernaast;
-uit één lijst als de groep dat zegt; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven
+uit de lijsten van de groep, met de lijst ernaast als het er meer zijn; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven
 (`.line-field`): Hoeveel en Eenheid als de lijn de voorraad verandert of het formulier ermee iets invult, Prijs bij geld,
 Houdbaar tot bij wat erbij komt, Van wie (Samen of een persoon), want een placeholder verdwijnt zodra er iets staat. Heet
 een lijn anders dan op het kasticket, dan staat eronder "Op het ticket: GO-TAN WOK" (`.line-ticket`): dat item onthoudt
-die naam. Tekst zonder item in een groep die de voorraad verandert of uit één lijst komt, krijgt **Nieuw in** (een lijst
+die naam. Tekst zonder item in een groep die de voorraad verandert of uit bepaalde lijsten komt, krijgt **Nieuw in** (een lijst
 waarin je mag toevoegen, of Geen lijst: dan blijft het enkel een regel); iets nieuws staat standaard op de lijst van de
 groep, of waar je vandaan kwam (Aankoop vanuit Wijnen: Nieuw in Wijnen), behalve als het gepland is; wat je dan in Typ
 wat je weet zet en geen item is ("Meursault 2019 32 euro"), wordt zo'n lijn in plaats van de omschrijving.
@@ -959,8 +965,9 @@ bereikt is.
 ### Verbanden: `LinkMapView`, `LinkSchema` (`LinkMap.tsx`), `LinkSearch`, `LinkDetail`, `LinkInline`, `LinkProblems`, `SelectionCard` (`LinkParts.tsx`), `LinkList` (`LinkList.tsx`) en `ListsPage`
 
 Hoe al je lijsten met elkaar en met de weergaven samenhangen, uit `shared/links.ts` (`GET /insights/links`): enkel
-wat jij ziet. Drie soorten, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
-(doorlopend, de eerste grafiekkleur: gebeurtenissen in de ene lijst met items of soorten van de andere),
+wat jij ziet. De punten zijn je lijsten, je **formulieren** (elk een eigen punt, met de toon van zijn vertrekpunt) en de
+weergaven. Drie soorten verbanden, elk met een eigen kleur **en** patroon, zodat kleur nooit alleen draagt: **Logboek**
+(doorlopend, de eerste grafiekkleur: een formulier dat een lijst invult of er lijnen naar heeft),
 **Verwijzingen** (streepjes, de tweede: een veld dat naar een andere lijst wijst) en **Weergaven** (puntjes, de derde:
 wat de app uitrekent: Geld, Wie moet wie, Voorraad, Eten, Te doen, Agenda, Loopt nu, en verder Herinneringen,
 Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband doet, staat er als gewone zin (`lineText`: "Tankbeurt voor een wagen",
@@ -973,13 +980,15 @@ Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband d
   diensten niet") met de knop die het oplost ("Rik toevoegen" als je de ontbrekende lijst beheert, anders Mensen van de
   andere lijst). Enkel als je een van beide lijsten beheert.
 - **Zoeken** (`searchLinks`): elk woord moet erin staan, zonder hoofdletters of accenten; het zoekt in lijsten,
-  soorten (en waar ze gebruikt worden), de items in een verband, wat een verband doet en de weergaven. Rechts in het
+  formulieren (en de lijsten die ze invullen), de items in een verband, wat een verband doet en de weergaven. Rechts in het
   veld hoeveel treffers en een kruisje. Op de kaart liggen de treffers onder het veld per groep (Lijsten, Soorten,
   Items, Verbanden, Weergaven, hooguit vijf per groep), met de woorden gemarkeerd (`Mark`, zacht geel); pijltjes
   kiezen, Enter opent, Escape sluit en wist bij een tweede keer. Wat niet overeenkomt, wordt dof; wat overeenkomt, krijgt
   de gele halo. In de lijst filtert zoeken de lijst zelf, en zegt elke rij waarom ze er staat.
-- **De kaart** is een metrokaart (`layoutLinks`): per tag een zachte grijze kolom (een lijst staat bij haar eerste
-  tag), de lijsten als stations, de verbanden tussen lijsten als sporen. Elke lijst waar iets in toekomt, krijgt een
+- **De kaart** is een metrokaart (`layoutLinks`): eerst een kolom **Formulieren**, dan per tag een zachte grijze kolom
+  (een lijst staat bij haar eerste tag), de formulieren en lijsten als stations, de verbanden als sporen (van een
+  formulier naar elke lijst die het invult). In de lijst staan de formulieren als eerste groep; hun naam opent het
+  formulier. Elke lijst waar iets in toekomt, krijgt een
   eigen rij (wie het meest binnenkrijgt bovenaan, een groter station); een spoor loopt eerst verticaal bij de lijst
   waar het vertrekt en dan horizontaal naar zijn doel, op een eigen baan per soort. Twee stations in een kolom
   krijgen elk een eigen plaats als hun verticale sporen elkaar zouden raken. Onder de naam en het aantal items
