@@ -190,12 +190,12 @@ export async function sendTimed(db: D1Database, from: string, to: string): Promi
   return send(db, due, from);
 }
 
-/** Een activiteit die loopt en het doel van haar soort haalde (16 u vasten): een melding aan wie ze startte. */
+/** Iets dat loopt (een formulier met een einde) en het doel van zijn formulier haalde (16 u vasten): een melding aan wie het startte. */
 export async function sendTimerGoals(db: D1Database, from: string, to: string): Promise<number> {
   const { results } = await db
     .prepare(
       `SELECT e.*, k.goal, k.name AS kind_name FROM events e JOIN kinds k ON k.id = e.kind
-       WHERE e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND k.goal IS NOT NULL AND e.status = 'gebeurd'`,
+       WHERE e.end_at IS NULL AND length(e.at) > 10 AND k.goal IS NOT NULL AND e.status = 'gebeurd'`,
     )
     .all<EventRowDb & { goal: number; kind_name: string }>();
   let sent = 0;

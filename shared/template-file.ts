@@ -10,7 +10,8 @@ import type { ListTemplate, KindTemplate } from "./catalog.ts";
 import type { FieldDef } from "./fields.ts";
 import { isIconKey } from "./icons.ts";
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
-import { BASES, type Base } from "./model.ts";
+import { cleanLedger } from "./ledger.ts";
+import { BASES, cleanParts, type Base, type Parts } from "./model.ts";
 import { cleanStock } from "./stock.ts";
 
 export const TEMPLATE_KIND = "thuis-sjabloon";
@@ -26,6 +27,8 @@ export type TemplateFile = {
   icon: string | null;
   fields: FieldDef[];
   stock: unknown;
+  /** Een saldo per persoon (ontbreekt het, dan geen). */
+  ledger?: unknown;
   kinds: KindTemplate[];
   /** Wie een melding krijgt (sinds deze versie; ontbreekt het, dan geen). */
   notify?: unknown;
@@ -45,9 +48,11 @@ function refsTo(fields: FieldDef[], from: string, to: string): FieldDef[] {
 
 /** Het bestand voor een lijst en haar eigen soorten. */
 export function templateFile(
-  list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown },
-  kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean; does?: Handeling[] }[],
+  list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; ledger?: unknown; notify?: unknown },
+  kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean; parts?: Parts; does?: Handeling[] }[],
 ): TemplateFile {
+  // De groepen lijnen: uit de lijst zelf wordt "self", uit een andere lijst uit elke lijst.
+  const ownParts = (p?: Parts) => (p ? { ...p, groups: p.groups.map((g) => ({ ...g, list: g.list === list.id ? SELF : null })) } : undefined);
   // Wat een formulier invult: in de lijst zelf, of de voorraad van elke lijst (niets van andere lijsten).
   const ownDoes = (does: Handeling[] = []) => does.filter((h) => h.list === list.id || (h.list === null && h.field === STOCK)).map((h) => ({ ...h, list: h.list ? SELF : null }));
   return {
@@ -58,9 +63,20 @@ export function templateFile(
     icon: list.icon,
     fields: refsTo(list.fields, list.id, SELF),
     stock: list.stock,
+    ...(list.ledger ? { ledger: list.ledger } : {}),
     kinds: kinds.map((k) => {
       const does = ownDoes(k.does);
-      return { base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}), ...(k.planned ? { planned: true as const } : {}), ...(does.length ? { does } : {}) };
+      const parts = ownParts(k.parts);
+      return {
+        base: k.base,
+        name: k.name,
+        ...(isIconKey(k.icon) ? { icon: k.icon } : {}),
+        fields: refsTo(k.fields, list.id, SELF),
+        ...(k.goal ? { goal: k.goal } : {}),
+        ...(k.planned ? { planned: true as const } : {}),
+        ...(parts ? { parts } : {}),
+        ...(does.length ? { does } : {}),
+      };
     }),
     ...(list.notify ? { notify: list.notify } : {}),
   };
@@ -92,14 +108,26 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
     const name = typeof k.name === "string" && k.name.trim() ? k.name.trim().slice(0, 40) : BASES[k.base].label;
     let does: Handeling[] = [];
     try {
-      does = cleanDoes((k as KindTemplate).does ?? [], [{ id: SELF, name: "deze lijst", stock: Boolean(stock), fields }], kf);
+      does = cleanDoes((k as KindTemplate).does ?? [], [{ id: SELF, name: "deze lijst", stock: Boolean(stock), ledger: Boolean(cleanLedger(t.ledger, fields)), fields }], kf);
     } catch {
       does = [];
     }
-    kinds.push({ base: k.base, name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: kf, ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}), ...(k.planned === true ? { planned: true as const } : {}), ...(does.length ? { does } : {}) });
+    const raw = cleanParts((k as KindTemplate).parts);
+    const parts = raw ? { ...raw, groups: raw.groups.map((g) => (g.list === SELF ? g : { ...g, list: null })) } : null;
+    kinds.push({
+      base: k.base,
+      name,
+      ...(isIconKey(k.icon) ? { icon: k.icon } : {}),
+      fields: kf,
+      ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}),
+      ...(k.planned === true ? { planned: true as const } : {}),
+      ...(parts ? { parts } : {}),
+      ...(does.length ? { does } : {}),
+    });
   }
   const name = typeof t.name === "string" && t.name.trim() ? t.name.trim().slice(0, 60) : "Lijst";
   const notify = cleanNotify(t.notify);
+  const ledger = cleanLedger(t.ledger, fields);
   return {
     key: "bestand",
     name,
@@ -107,6 +135,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
     icon: isIconKey(t.icon) ? t.icon : "folder",
     fields,
     ...(stock ? { stock } : {}),
+    ...(ledger ? { ledger } : {}),
     kinds,
     ...(notify ? { notify } : {}),
   };

@@ -10,6 +10,7 @@ import { cleanReadPhoto } from "../shared/photoread";
 import { ADJUST, type Handeling } from "../shared/cells";
 import {
   ADJUST_KIND,
+  cleanParts,
   baseKind,
   canEdit,
   canManage,
@@ -27,6 +28,7 @@ import {
   type Thing,
 } from "../shared/model";
 import { Roles, type DirectRow, type RuleRow, type TagLink } from "../shared/rights";
+import { cleanLedger } from "../shared/ledger";
 import { cleanStock } from "../shared/stock";
 import { isTone } from "../shared/types";
 import { ForbiddenError, NotFoundError } from "./validate";
@@ -45,9 +47,10 @@ export const ids = (values: Iterable<string>) => JSON.stringify([...new Set(valu
 
 // ---------- rijen ----------
 
-export type ListRow = Omit<List, "fields" | "stock" | "notify" | "read_photo" | "icon" | "color"> & {
+export type ListRow = Omit<List, "fields" | "stock" | "ledger" | "notify" | "read_photo" | "icon" | "color"> & {
   fields: string;
   stock: string | null;
+  ledger: string | null;
   notify: string | null;
   read_photo: string | null;
   icon: string | null;
@@ -65,6 +68,7 @@ export function toList(row: ListRow): List {
     color: isTone(row.color) ? row.color : null,
     fields,
     stock: row.stock ? cleanStock(parseJson(row.stock, null), fields) : null,
+    ledger: cleanLedger(parseJson(row.ledger, null), fields),
     notify: cleanNotify(parseJson(row.notify, null)),
     read_photo: cleanReadPhoto(parseJson(row.read_photo, null)),
     archived: row.archived ? 1 : 0,
@@ -86,13 +90,14 @@ export const toEvent = (row: EventRowDb): Event => ({
 export type LineRowDb = Line & { event_id: string };
 export const toLine = ({ event_id: _e, ...l }: LineRowDb): Line => l;
 
-export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned" | "does"> & { fields: string; icon: string | null; planned: number; does: string | null };
+export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned" | "does" | "parts"> & { fields: string; icon: string | null; planned: number; does: string | null; parts: string | null };
 export const toKind = (row: KindRowDb): Kind => ({
   ...row,
   base: row.base as Base,
   icon: isIconKey(row.icon) ? row.icon : null,
   fields: parseJson<FieldDef[]>(row.fields, []),
   planned: row.planned === 1,
+  parts: row.parts ? cleanParts(parseJson(row.parts, null)) : null,
   does: parseJson<Handeling[]>(row.does, []),
 });
 

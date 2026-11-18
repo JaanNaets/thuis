@@ -1,13 +1,14 @@
 import { Hono, type Context } from "hono";
 import { normalizeShares, type Attributes, type Interval, type Share } from "../../shared/fields";
 import { addToDate } from "../../shared/calc";
-import { allDoes, touchesCell } from "../../shared/cells";
-import { BASES, brusselsNow, canEdit, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
+import { ledgerLists, touchesCell } from "../../shared/cells";
+import { brusselsNow, canEdit, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
+import { buysWith } from "../../shared/targets";
 import { fold } from "../../shared/parse";
 import { withAlias } from "../../shared/receipt";
 import { lineAllowed } from "../../shared/rights";
 import { normalizeUnit } from "../../shared/units";
-import { ids, kindsFor, needEdit, requireList, seenLists, toEvent, toLine, type EventRowDb, type LineRowDb } from "../access";
+import { ids, kindOf, kindsFor, needEdit, requireList, seenLists, toEvent, toLine, type EventRowDb, type LineRowDb } from "../access";
 import { rebuildEffects } from "../cells";
 import { logbookRows, viewEvents } from "../events-view";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
@@ -138,13 +139,14 @@ async function cleanEvent(
   db: D1Database,
   meId: string,
   seen: Map<string, Role>,
+  listId: string,
   raw: Record<string, unknown>,
   before: { data: Attributes; lines: CleanLine[] } | null,
 ): Promise<CleanEvent> {
   const kinds = await kindsFor(db, seen.keys());
   const kind = kinds.find((k) => k.id === raw.kind);
   if (!kind) throw new ValidationError("Kies een formulier");
-  const does = allDoes(kind);
+  const does = kind.does;
   const status = isStatus(raw.status) ? raw.status : "gebeurd";
   const at = typeof raw.at === "string" && isAt(raw.at) ? raw.at : null;
   if (!at) throw new ValidationError("Kies een datum");
@@ -239,22 +241,32 @@ async function cleanEvent(
     }
     if (l.text) lines.push(l);
   }
+  // Een groep lijnen uit één lijst (Ruimte uit Huis): enkel dingen van die lijst.
+  for (const l of lines) {
+    const group = kind.parts.groups.find((g) => g.role === l.role && g.list);
+    const list = l.new_thing ? l.new_thing.list_id : l.thing_id ? listOf.get(l.thing_id) : null;
+    if (group && list && list !== group.list) throw new ValidationError(`Bij ${group.label} hoort een ding uit een andere lijst`);
+  }
   const amount = cents(raw.amount, "Het bedrag");
   const every = raw.repeat && typeof raw.repeat === "object" ? (asObject(raw.repeat).every as Interval | undefined) : undefined;
   const repeat =
     every && Number.isInteger(every.n) && every.n > 0 && every.n <= 365 && ["day", "week", "month", "year"].includes(every.unit)
       ? { every: { n: every.n, unit: every.unit }, next_on: addToDate(at.slice(0, 10), every.n, every.unit) }
       : null;
+  // Houdt het formulier een saldo bij in een andere lijst, dan moet je die lijst mogen wijzigen.
+  for (const l of ledgerLists(does, listId)) {
+    if (l !== listId && !canEdit(seen.get(l))) throw new ValidationError("Dit formulier houdt een saldo bij in een lijst die je niet mag wijzigen");
+  }
   return {
     kind,
     name: optionalString(raw, "name", 200) ?? "",
     status,
     at,
-    end_at: kind.base === "activiteit" ? endAt : null,
-    amount: BASES[kind.base].money || amount !== null ? amount : null,
+    end_at: kind.parts.duration ? endAt : null,
+    amount: kind.parts.money || amount !== null ? amount : null,
     paid_by: person(raw.paid_by, "Betaald door"),
     split,
-    to_person: kind.base === "overdracht" ? person(raw.to_person, "Naar") : null,
+    to_person: kind.parts.to ? person(raw.to_person, "Naar") : null,
     data,
     lines,
     repeat,
@@ -291,21 +303,23 @@ async function newThingStatements(db: D1Database, meId: string, seen: Map<string
 }
 
 /**
- * Een aankoop vinkt open boodschappen af: geplande aankopen in lijsten die je mag wijzigen, met een lijn erbij voor
- * hetzelfde ding (of een tekst met dezelfde naam).
+ * Een aankoop vinkt open boodschappen af: geplande gebeurtenissen in lijsten die je mag wijzigen, met een formulier dat
+ * koopt (`buysWith`) en een lijn erbij voor hetzelfde ding (of een tekst met dezelfde naam).
  */
 async function tickShopping(db: D1Database, seen: Map<string, Role>, eventId: string, thingIds: string[]): Promise<{ id: string; name: string }[]> {
   if (!thingIds.length) return [];
   const { results: names } = await db.prepare("SELECT lower(name) AS name FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(thingIds)).all<{ name: string }>();
   const editable = [...seen].filter(([, r]) => canEdit(r)).map(([id]) => id);
-  const { results } = await db
+  const { results: found } = await db
     .prepare(
-      `SELECT DISTINCT e.id, e.name FROM events e JOIN lines l ON l.event_id = e.id
-       WHERE e.status = 'gepland' AND e.base = 'aankoop' AND e.id != ?1 AND e.list_id IN (SELECT value FROM json_each(?2)) AND l.role = 'in'
+      `SELECT DISTINCT e.id, e.name, e.kind, e.base FROM events e JOIN lines l ON l.event_id = e.id
+       WHERE e.status = 'gepland' AND e.id != ?1 AND e.list_id IN (SELECT value FROM json_each(?2)) AND l.role = 'in'
          AND (l.thing_id IN (SELECT value FROM json_each(?3)) OR (l.thing_id IS NULL AND lower(l.text) IN (SELECT value FROM json_each(?4))))`,
     )
     .bind(eventId, ids(editable), ids(thingIds), ids(names.map((n) => n.name)))
-    .all<{ id: string; name: string }>();
+    .all<{ id: string; name: string; kind: string; base: Base }>();
+  const results: { id: string; name: string }[] = [];
+  for (const r of found) if (buysWith(await kindOf(db, r.kind, r.base))) results.push({ id: r.id, name: r.name });
   if (results.length)
     await db.prepare("UPDATE events SET status = 'afgevinkt', done_by = ?, updated_at = datetime('now') WHERE id IN (SELECT value FROM json_each(?))").bind(eventId, ids(results.map((r) => r.id))).run();
   return results;
@@ -319,7 +333,7 @@ listEvents.post("/:id/events", async (c) => {
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needEdit(role);
   const seen = await seenLists(db, me.id);
-  const input = await cleanEvent(db, me.id, seen, asObject(await c.req.json()), null);
+  const input = await cleanEvent(db, me.id, seen, list.id, asObject(await c.req.json()), null);
   const id = crypto.randomUUID();
   const fresh = await newThingStatements(db, me.id, seen, input.lines);
   await db.batch([
@@ -350,7 +364,7 @@ listEvents.post("/:id/events", async (c) => {
   ]);
   await rebuildEffects(db, [id]);
   const bought = input.lines.flatMap((l, i) => (l.role === "in" ? [fresh.newIds.get(i) ?? l.thing_id].filter((x): x is string => Boolean(x)) : []));
-  const ticked = input.kind.base === "aankoop" && input.status === "gebeurd" ? await tickShopping(db, seen, id, bought) : [];
+  const ticked = buysWith(input.kind) && input.status === "gebeurd" ? await tickShopping(db, seen, id, bought) : [];
   if (input.status !== "gepland") c.executionCtx.waitUntil(notifyNewEvent(c.env, me, list, id).catch((err) => console.error("melding", err)));
   return c.json({ id, made: fresh.made, ticked }, 201);
 });
@@ -364,7 +378,7 @@ events.put("/:id", async (c) => {
     .bind(event.id)
     .all<LineRowDb & { thing_list: string | null }>();
   const old = oldRows.map((r) => ({ ...toLine(r), thing_list: r.thing_list, new_thing: null }));
-  const input = await cleanEvent(db, me.id, seen, asObject(await c.req.json()), { data: event.data, lines: old });
+  const input = await cleanEvent(db, me.id, seen, event.list_id, asObject(await c.req.json()), { data: event.data, lines: old });
   // Lijnen naar dingen die jij niet ziet, blijven staan zoals ze waren.
   const hidden = old.filter((l) => l.thing_list && !seen.has(l.thing_list)).map(({ thing_list: _t, id: _i, position: _p, ...l }) => ({ ...l, new_thing: null }));
   const fresh = await newThingStatements(db, me.id, seen, input.lines);
@@ -432,7 +446,7 @@ events.post("/:id/tick", async (c) => {
   }
   if (event.status !== "gepland") throw new ConflictError("Dit staat niet meer open.");
   const now = brusselsNow();
-  const status: Status = event.base === "aankoop" ? "afgevinkt" : "gebeurd";
+  const status: Status = buysWith(await kindOf(db, event.kind, event.base)) ? "afgevinkt" : "gebeurd";
   const at = status === "gebeurd" ? (event.at.length > 10 ? now : now.slice(0, 10)) : event.at;
   const statements = [db.prepare("UPDATE events SET status = ?, at = ?, repeat = NULL, updated_at = datetime('now') WHERE id = ?").bind(status, at, event.id)];
   let next: string | null = null;
@@ -464,7 +478,7 @@ events.post("/:id/tick", async (c) => {
 events.post("/:id/stop", async (c) => {
   const db = c.env.DB;
   const { event } = await editableEvent(c, c.req.param("id"));
-  if (event.base !== "activiteit" || event.end_at || event.at.length <= 10) throw new ConflictError("Deze timer loopt niet.");
+  if (!(await kindOf(db, event.kind, event.base)).parts.duration || event.end_at || event.at.length <= 10) throw new ConflictError("Deze timer loopt niet.");
   const end = brusselsNow();
   await db.prepare("UPDATE events SET end_at = ?, updated_at = datetime('now') WHERE id = ?").bind(end < event.at ? event.at : end, event.id).run();
   return c.json({ end_at: end });

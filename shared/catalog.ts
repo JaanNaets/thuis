@@ -6,11 +6,15 @@ import type { Handeling } from "./cells.ts";
 import type { NotifyDef } from "./alerts.ts";
 import type { FieldDef } from "./fields.ts";
 import type { IconKey } from "./icons.ts";
-import type { Base } from "./model.ts";
+import type { LedgerDef } from "./ledger.ts";
+import type { Base, Parts } from "./model.ts";
 import type { StockDef } from "./stock.ts";
 
-/** `does`: wat het formulier invult, enkel in de lijst zelf ("self") of de voorraad van elke lijst (shared/cells.ts). */
-export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number; planned?: true; does?: Handeling[] };
+/**
+ * Een formulier: zijn vertrekpunt, naam, velden, onderdelen (`parts`, een groep uit een lijst enkel uit de lijst zelf:
+ * "self"; leeg = die van het vertrekpunt) en wat het invult (`does`, enkel in de lijst zelf of de voorraad van elke lijst).
+ */
+export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number; planned?: true; parts?: Parts; does?: Handeling[] };
 
 export type ListTemplate = {
   key: string;
@@ -23,6 +27,8 @@ export type ListTemplate = {
   icon: IconKey;
   fields: FieldDef[];
   stock?: StockDef;
+  /** Een saldo per persoon (Wie moet wie). */
+  ledger?: LedgerDef;
   kinds?: KindTemplate[];
   notify?: NotifyDef;
 };
@@ -39,14 +45,21 @@ export const TEMPLATES: ListTemplate[] = [
     fields: [note],
   },
   {
-    // Zoals Splitwise: wie betaalde, gelijk verdeeld over wie erbij is (`defaultSharers`), Wie moet wie en Terugbetaald;
-    // een melding aan wie in de verdeling staat.
+    // Zoals Splitwise: een rij per persoon met zijn saldo (wie betaalde krijgt erbij, wie deelt zijn deel eraf), gelijk
+    // verdeeld over wie erbij is (`defaultSharers`), Wie moet wie en Terugbetaald; een melding aan wie in de verdeling staat.
     key: "uitgaven",
     name: "Uitgaven",
-    one: null,
+    one: "Persoon",
     icon: "wallet",
-    fields: [],
-    kinds: [{ base: "aankoop", name: "Aankoop", icon: "cart" }],
+    fields: [
+      { key: "persoon", label: "Persoon", type: "person" },
+      { key: "saldo", label: "Saldo", type: "money", column: true },
+    ],
+    ledger: { person: "persoon", field: "saldo" },
+    kinds: [
+      { base: "aankoop", name: "Aankoop", icon: "cart" },
+      { base: "overdracht", name: "Terugbetaling", icon: "transfer" },
+    ],
     notify: { to: "people" },
   },
   {

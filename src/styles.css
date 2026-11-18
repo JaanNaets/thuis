@@ -8518,8 +8518,8 @@ dialog.sheet.builder-sheet {
   gap: 8px;
 }
 
-/* Wat een formulier doet (DoesEditor): bovenaan de kolom, eronder hoe, met wat en welke lijn. */
-.does-main {
+/* Een lijn zonder keuze vooraan (de groep staat erboven) en wat een formulier doet (DoesEditor): de keuze en ×. */
+.line-main.is-plain {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -8550,6 +8550,11 @@ dialog.sheet.builder-sheet {
   .line-main > .picker {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+
+  .line-main.is-plain > .picker {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 

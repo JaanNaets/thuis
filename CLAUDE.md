@@ -32,14 +32,22 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   (`events`), **mensen** (`list_people`) en **tags** (`list_tags`, `list_tag_links`). Geen projecten, geen lijsten in
   lijsten: tags groeperen, een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "ding", "logboek" en
   "formulier" (een soort; het woord "soort" staat nergens in de interface).
-- Een gebeurtenis heeft een **soort**: één van zes basissoorten (`BASES`: aankoop, gebruik, dienst, activiteit, meting,
-  overdracht) of een eigen soort van een lijst (`kinds`, met eigen velden; Gegeten, Tankbeurt). Kiezen gebeurt in
-  `FormPicker`: de formulieren van de lijst, zonder eigen de basissoorten, de rest onder Ander formulier (`formsOf`). Ze heeft **lijnen**
-  (`lines`): `in` (erbij), `uit` (eraf), `voor` (waarvoor, de wagen) en `bij` (waar, de winkel), naar een ding of als
-  tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon). Status: `gebeurd`,
-  `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee). Een formulier kan
-  gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschappen een lijst zonder dingen met een
-  formulier Boodschap, die op Gepland opent.
+- Een gebeurtenis heeft een **formulier** (`kinds`; in de code soms nog "soort"). Een formulier is velden plus
+  **onderdelen** (`parts`: `money` = bedrag, wie betaalde, verdeling en een prijs per lijn; `to` = naar iemand, een
+  overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en
+  eventueel één lijst: Wat, Waar, "Ruimte uit Huis") plus **handelingen** (`does`, zie Cellen). Er is geen "Werkt als"
+  meer: de zes **vertrekpunten** (`BASES`: aankoop, gebruik, dienst, activiteit, meting, overdracht, met `baseParts` en
+  `presetDoes`) zijn enkel waar een nieuw formulier mee begint, en de formulieren van een lijst zonder eigen formulieren.
+  Een formulier zonder eigen onderdelen (`parts` NULL) volgt zijn vertrekpunt (`kindInfo`). **De code vraagt nooit "is dit
+  een aankoop?"** maar wat het formulier vraagt of doet: `parts.money`, `parts.duration`, `buysWith` (kasticket,
+  afvinken), `movesStock`, `formEats`, `stockOp`. Kiezen gebeurt in `FormPicker`: de formulieren van de lijst, zonder
+  eigen de vertrekpunten, de rest onder Ander formulier (`formsOf`). **Lijnen** (`lines`) staan in de groep van hun rol
+  (`in`, `uit`, `voor`, `bij`; `bij` = waar of bij wie, enkel met de hele gebeurtenis te zien), naar een ding of als
+  tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon); wat een lijn doet,
+  zeggen de handelingen, niet haar rol. Een groep uit één lijst kiest enkel daaruit (de server kijkt het na). Status:
+  `gebeurd`, `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee). Een formulier
+  kan gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschappen een lijst zonder dingen met
+  een formulier Boodschap, die op Gepland opent.
 - Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen. Er zijn ook geen vaste
   pagina's (Geld, Voorraad, Eten, Te doen, Agenda): dat zijn **borden** met weergaven (bronnen: logboek, dingen,
   voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan
@@ -77,15 +85,20 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   het logboek invult en die je in het ding aanpast, wordt een **Aanpassing** (`ADJUST`: een gebeurtenis die zet). Wie
   bewaart, moet de lijst van wat het formulier invult mogen wijzigen (`touchesCell`). **Een nieuwe plek die
   gebeurtenissen of lijnen schrijft, roept `rebuildEffects` op.**
-- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): een cel (`STOCK`) zoals de andere: Toevoegen telt bij,
-  Weghalen telt af en een telling (een meting `voor` het ding) zet (`roleDoes`), enkel `gebeurd`, omgerekend met
+- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): een cel (`STOCK`) zoals de andere: een aankoop telt bij,
+  gebruik telt af en een telling (een meting `voor` het ding) zet (`presetDoes`), enkel `gebeurd`, omgerekend met
   `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op onder het minimum; zonder minimum enkel in een
   lijst met een minimumveld en als er ooit iets was.
-- **Geld** (`shared/ledger.ts`): `sharesOf` (lijnen met `owner` zijn van die persoon, de rest volgens `split`, anders
-  van wie betaalde), `netBalance` en `settleUp` voor Wie moet wie; een overdracht verrekent. Een nieuwe uitgave
-  (aankoop, dienst) in een lijst waar meer mensen loggen, is standaard gelijk verdeeld over hen (`defaultSharers`), zoals
-  in Splitwise; eten en een overdracht nooit vanzelf.
-- **Eten** (`shared/food.ts`): een gebruik met kcal (in de soort, of uit een ding met kcal per 100 g × gram; `isFood`).
+- **Geld** (`shared/ledger.ts`, `shared/cells.ts`): ook een cel. Een lijst met een **saldo per persoon** (`ledger`:
+  welke kolom de persoon is en welke het saldo; Instellen → Tellen) heeft een rij per persoon; ontbreekt die, dan maakt
+  `rebuildEffects` ze. Handelingen op personen (`rows`: `payer`, `sharers`, `to`; `BALANCE` = het saldo van de lijst van
+  de gebeurtenis): wie betaalde telt het bedrag bij, wie deelt zijn deel af (`sharesOf`: lijnen met `owner` zijn van die
+  persoon, de rest volgens `split`, tot op de cent), naar wie een overdracht gaat telt het af. Wie moet wie telt de
+  saldo's van alle lijsten met een saldo die je ziet samen (`balanceOf`, `settleUp`); Terugbetaald logt een overdracht in
+  zo'n lijst. Een nieuwe uitgave in een lijst waar meer mensen loggen, is standaard gelijk verdeeld over hen
+  (`defaultSharers`), zoals in Splitwise; eten en een overdracht nooit vanzelf.
+- **Eten** (`shared/food.ts`): een formulier dat eet (`formEats`: zonder geld, en het trekt af van de voorraad of heeft
+  kcal) met kcal (in het formulier, of uit een ding met kcal per 100 g × gram van de lijnen die eraf gaan; `isFood`).
 - **Berekeningen** (veldsoort `calc`, `shared/calc.ts`) enkel binnen het ding; geen verwijzende berekeningen meer.
 - Een **logboek als tabel** (`shared/logview.ts`: `logFields`, `logItem`) zodat filters, weergaven
   (`shared/views.ts`) en grafieken (`shared/charts.ts`) ook op gebeurtenissen werken.
@@ -112,8 +125,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Dingen komen van
   `GET /things?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
 - **Waarmee je logt** (`logForms`, getest; `LogButtons` op een ding en bovenaan het logboek, en in het palet): de eigen
-  formulieren van de lijst en, telt ze voorraad, de formulieren van lijsten zonder dingen die de voorraad veranderen
-  (Aankoop in Uitgaven, Boodschap, Gegeten). Een aankoop logt in de lijst van wie meebetaalt (Uitgaven = met Jana), de
+  formulieren van de lijst en, telt ze voorraad, de formulieren die de voorraad veranderen van lijsten die zelf geen
+  voorraad tellen (Aankoop in Uitgaven, Boodschap, Gegeten). Een aankoop logt in de lijst van wie meebetaalt (Uitgaven = met Jana), de
   lijnen bepalen welke voorraad stijgt (Chablis in Wijnen); een kasticket gaat naar een lijst met een eigen aankoop
   (`receiptLists`). Een formulier van elders krijgt `?nieuw=<lijst>` (`logPath`): iets nieuws dat erbij komt (een wijn
   die er nog niet staat) staat dan standaard op Nieuw in die lijst (`defaultNew` in `LinesEditor`), niet bij gepland;
@@ -172,7 +185,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   is een eigen ding; de naam en de gekoppelde velden volgen de bron (`syncChanges`, `linkedKeys`) en zijn in de
   doellijst niet te wijzigen of te verwijderen; wat niet meer voldoet, gaat naar het archief. De server rekent elk plan
   opnieuw uit (`cleanPlan`) en elke waarde gaat door `prepareData`.
-- **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise) en Dieet (Yazio), zo eenvoudig mogelijk;
+- **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise: een rij per persoon met een saldo,
+  Aankoop en Terugbetaling) en Dieet (Yazio), zo eenvoudig mogelijk;
   geen sjabloon per geval. **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst (ook
   wie een melding krijgt), zonder dingen of mensen.
 - De oude tabellen (projecten, items, …) staan er nog maar worden niet meer gebruikt; ze gaan weg in een latere

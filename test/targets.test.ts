@@ -42,7 +42,7 @@ test("de +: geen Loggen in een lijst die eigen formulieren heeft, wel in een lij
   assert.equal(buildTargets(t).find((x) => x.key === "ding:RESTAURANTS")?.name, "Restaurant");
 });
 
-test("bij een ding: de eigen formulieren, en met voorraad die van lijsten zonder dingen die de voorraad veranderen", () => {
+test("bij een ding: de eigen formulieren, en met voorraad die van lijsten zonder eigen voorraad die de voorraad veranderen", () => {
   const wijn = logForms(t, "WIJNEN");
   // Eerst het eigen formulier, dan wat je het meest gebruikt (Boodschap), niet de Aankoop van de gedeelde wijnkelder.
   assert.deepEqual(
@@ -61,6 +61,9 @@ test("bij een ding: de eigen formulieren, en met voorraad die van lijsten zonder
   // Wat je bij de + verborg niet, en een lijst waar je niet logt heeft niets.
   assert.deepEqual(logForms(t, "VOORRAAD", (id) => id !== "BOODSCHAPPEN").map((f) => f.label), ["Weggegooid", "Aankoop"]);
   assert.deepEqual(logForms(t, "ANDERE"), []);
+  // Uitgaven met een rij per persoon (een saldo, geen voorraad): haar Aankoop blijft erbij.
+  const withPeople = { ...t, lists: t.lists.map((l) => (l.id === "UITGAVEN" ? { ...l, one: "Persoon" } : l)) };
+  assert.ok(logForms(withPeople, "WIJNEN").some((f) => f.list_id === "UITGAVEN"));
 });
 
 test("het pad: de gebeurtenis komt in de lijst van het formulier, met het ding als lijn en je tekst", () => {

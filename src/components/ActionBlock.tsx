@@ -38,7 +38,7 @@ export function actionKind(block: Pick<ActionBlock, "type" | "list">, detail: Li
 function eventOf(kind: KindInfo, values: Attributes, running = false, planned = false) {
   const { name, ...data } = values as Attributes & { name?: string };
   const now = brusselsNow();
-  const at = running || (kind.base === "activiteit" && !planned) ? now : now.slice(0, 10);
+  const at = running || (kind.parts.duration && !planned) ? now : now.slice(0, 10);
   return { kind: kind.id, name: typeof name === "string" ? name : "", status: planned ? "gepland" : "gebeurd", at, data, lines: [] };
 }
 
@@ -78,7 +78,7 @@ export function ActionTile({ block, preview = false }: { block: ActionBlock; pre
       <Icon name={(kind.icon ?? listIcon(detail.list)) as IconName} size={16} />
     </span>
   );
-  if (block.does === "form" || (block.does === "timer" && kind.base !== "activiteit")) {
+  if (block.does === "form" || (block.does === "timer" && !kind.parts.duration)) {
     const values = Object.keys(block.values).length ? `&vooraf=${encodeURIComponent(JSON.stringify(block.values))}` : "";
     const planned = actionPlans(block, kind);
     const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${planned ? "&gepland=1" : ""}${values}`;

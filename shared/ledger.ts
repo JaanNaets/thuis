@@ -1,41 +1,47 @@
-// Geld: uitgaven, jouw deel en wie wie nog hoeveel moet, uitgerekend uit de gebeurtenissen (nooit bewaard).
+// Geld: jouw deel van een uitgave en wie wie nog hoeveel moet.
 //
-// - Een gebeurtenis met een bedrag (een aankoop of een dienst) kost dat bedrag. Wie betaalde, staat in `paid_by`;
-//   wie de kost deelt in `split` (procenten). Een lijn met een eigenaar (`owner`, "enkel van mij") is helemaal van die
-//   persoon; de rest wordt verdeeld. Zonder verdeling is alles van wie betaalde (of van wie het logde).
-// - Een overdracht (Jana betaalt Jaan terug) verschuift geld van `paid_by` naar `to_person`.
-// - Wie moet wie: per persoon wat hij betaalde min zijn deel; zo weinig mogelijk overschrijvingen om dat recht te
-//   zetten (`settleUp`). Bedragen tot op de cent: samen altijd precies het bedrag (`splitCents`).
+// - Een gebeurtenis met een bedrag kost dat bedrag. Wie betaalde, staat in `paid_by`; wie de kost deelt in `split`
+//   (procenten). Een lijn met een eigenaar (`owner`, "enkel van mij") is helemaal van die persoon; de rest wordt
+//   verdeeld. Zonder verdeling is alles van wie betaalde (of van wie het logde). Bedragen tot op de cent: samen altijd
+//   precies het bedrag (`splitCents`).
+// - Wie moet wie is het saldo per persoon: een cel (shared/cells.ts, `BALANCE`) in een lijst met een saldo per persoon.
+//   Wie betaalde krijgt het bedrag erbij, wie deelt zijn deel eraf, wie een overdracht krijgt het bedrag eraf. Zo
+//   weinig mogelijk overschrijvingen om dat recht te zetten: `settleUp`.
 
-import type { Share } from "./fields.ts";
-import type { Base, Role, Status } from "./model.ts";
+import type { FieldDef, Share } from "./fields.ts";
+import type { Parts, Role } from "./model.ts";
 
-/** Wat nodig is om te rekenen met het geld van een gebeurtenis. */
-export type MoneyEvent = {
-  id: string;
-  base: Base;
-  status: Status;
+/** Een lijst met een saldo per persoon: in welke kolom de persoon van een rij staat, en in welke zijn saldo. */
+export type LedgerDef = { person: string; field: string };
+
+/** Nakijken: een persoonveld en een bedrag (of getal) van de lijst; anders null (geen saldo). */
+export function cleanLedger(raw: unknown, fields: Pick<FieldDef, "key" | "type">[]): LedgerDef | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const person = fields.find((f) => f.key === o.person && f.type === "person");
+  const field = fields.find((f) => f.key === o.field && (f.type === "money" || f.type === "number"));
+  return person && field ? { person: person.key, field: field.key } : null;
+}
+
+/** Wat nodig is om een bedrag te verdelen. */
+export type Money = {
   amount: number | null;
   paid_by: string | null;
   split: Share[] | null;
-  to_person: string | null;
   created_by: string;
   lines: { price: number | null; owner: string | null }[];
 };
 
-/** Telt deze gebeurtenis als uitgave? Gebeurd, met een bedrag, en geen overdracht. */
 /**
- * Met wie een nieuwe uitgave (aankoop of dienst) standaard gedeeld wordt: in een lijst waar meer mensen loggen, gelijk
- * over hen, zoals in Splitwise; anders niemand, en dan is ze van wie betaalde. Eten (gebruik: "wie at") en een
- * overdracht krijgen nooit vanzelf een verdeling. Per uitgave kan je het altijd aanpassen.
+ * Met wie een nieuwe uitgave standaard gedeeld wordt: met een formulier met geld (geen overdracht) in een lijst waar
+ * meer mensen loggen, gelijk over hen, zoals in Splitwise; anders niemand, en dan is ze van wie betaalde. Per uitgave
+ * kan je het altijd aanpassen.
  */
-export function defaultSharers(base: Base, people: { id: string; role: Role }[]): string[] {
-  if (base !== "aankoop" && base !== "dienst") return [];
+export function defaultSharers(parts: Pick<Parts, "money" | "to">, people: { id: string; role: Role }[]): string[] {
+  if (!parts.money || parts.to) return [];
   const loggers = people.filter((p) => p.role === "beheerder" || p.role === "lid").map((p) => p.id);
   return loggers.length > 1 ? loggers : [];
 }
-
-export const isExpense = (e: Pick<MoneyEvent, "status" | "amount" | "base">) => e.status === "gebeurd" && e.amount !== null && e.amount !== 0 && e.base !== "overdracht";
 
 /**
  * Een bedrag (in cent) verdelen volgens aandelen. Samen altijd precies het bedrag: een cent die niet deelbaar is,
@@ -60,7 +66,7 @@ export function splitCents(amount: number, shares: Share[], payer?: string | nul
 }
 
 /** Van wie hoeveel (in cent) van een uitgave is: lijnen met een eigenaar, en de rest volgens de verdeling. */
-export function sharesOf(e: MoneyEvent): Map<string, number> {
+export function sharesOf(e: Money): Map<string, number> {
   const out = new Map<string, number>();
   if (e.amount === null) return out;
   const add = (id: string, cents: number) => out.set(id, (out.get(id) ?? 0) + cents);
@@ -78,31 +84,6 @@ export function sharesOf(e: MoneyEvent): Map<string, number> {
     else add(e.paid_by ?? e.created_by, rest);
   }
   return out;
-}
-
-/** Jouw deel van een uitgave (in cent). */
-export const mineOf = (e: MoneyEvent, me: string): number => (isExpense(e) ? (sharesOf(e).get(me) ?? 0) : 0);
-
-/** Per persoon: + = krijgt nog, − = moet nog. Uit uitgaven met een betaler en overdrachten. */
-export function netBalance(events: MoneyEvent[]): Map<string, number> {
-  const net = new Map<string, number>();
-  const add = (id: string, cents: number) => net.set(id, (net.get(id) ?? 0) + cents);
-  for (const e of events) {
-    if (e.status !== "gebeurd" || e.amount === null || !e.paid_by) continue;
-    if (e.base === "overdracht") {
-      if (!e.to_person || e.to_person === e.paid_by) continue;
-      add(e.paid_by, e.amount);
-      add(e.to_person, -e.amount);
-      continue;
-    }
-    // Enkel als iemand anders meedeelt, valt er iets te verrekenen.
-    const shares = sharesOf(e);
-    if ([...shares.keys()].every((id) => id === e.paid_by)) continue;
-    add(e.paid_by, e.amount);
-    for (const [id, cents] of shares) add(id, -cents);
-  }
-  for (const [id, v] of net) if (v === 0) net.delete(id);
-  return net;
 }
 
 export type Transfer = { from: string; to: string; amount: number };

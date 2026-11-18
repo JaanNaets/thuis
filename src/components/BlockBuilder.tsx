@@ -725,7 +725,7 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
             listId={draft.list}
             value={kind?.id ?? ""}
             wrap
-            onChange={(k) => set({ type: k.id, values: {}, ...(draft.does === "timer" && k.base !== "activiteit" ? { does: "save" as const } : {}) })}
+            onChange={(k) => set({ type: k.id, values: {}, ...(draft.does === "timer" && !k.parts.duration ? { does: "save" as const } : {}) })}
           />
         )}
 
@@ -733,7 +733,7 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
           <span className="label">Een tik</span>
           <div className="does-grid">
             {(Object.keys(ACTION_DOES) as ActionDoes[]).map((d) => (
-              <button key={d} type="button" className="show-tile does-tile" aria-pressed={draft.does === d} disabled={d === "timer" && kind?.base !== "activiteit"} onClick={() => set({ does: d, planned: canPlan(d) ? draft.planned : undefined })}>
+              <button key={d} type="button" className="show-tile does-tile" aria-pressed={draft.does === d} disabled={d === "timer" && !kind?.parts.duration} onClick={() => set({ does: d, planned: canPlan(d) ? draft.planned : undefined })}>
                 <Icon name={DOES_ICONS[d]} size={16} />
                 {ACTION_DOES[d]}
               </button>

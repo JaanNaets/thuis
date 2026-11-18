@@ -67,12 +67,18 @@ test("altijd mee: lijsten, soorten, gebeurtenissen, lijnen en blokken", () => {
   assert.ok(KIND_LINKS.list_id && has(kinded, "log", "A", "B"), "een soort van B gebruikt in A");
   assert.ok(KIND_LINKS.fields && has(kinded, "view", "B", viewNode("eten")), "kcal in de soort");
   assert.ok(KIND_LINKS.goal && has(kinded, "view", "B", viewNode("meldingen")), "een doel op de soort");
-  assert.ok(EVENT_LINKS.base && has(kinded, "view", "A", viewNode("eten")), "gebruik dat als eten telt");
+  assert.ok(EVENT_LINKS.kind && has(kinded, "view", "A", viewNode("eten")), "een formulier dat eet");
   // Wat een formulier invult: de kolom Kleur van B (Schilderwerk van A zet de kleur van een ruimte).
   const painting = { id: "S", list_id: "A", base: "dienst" as const, name: "Schilderwerk", fields: [], goal: null, does: [{ rows: { from: "lines" as const, role: "voor" as const }, list: "B", field: "kleur", op: "zet" as const, value: { from: "field" as const, key: "kleur" } }] };
   const done = buildLinks(input({ lists: [list("A"), list("B", { fields: [{ key: "kleur", label: "Kleur", type: "text" }] })], kinds: [painting] })).links;
   assert.ok(KIND_LINKS.does && has(done, "log", "A", "B"), "een formulier dat een kolom van B zet");
   assert.ok(done.some((l) => l.texts.includes("Schilderwerk zet Kleur")));
+  // Onderdelen: een groep lijnen uit B (Ruimte uit Huis).
+  const grouped = buildLinks(input({ lists: [list("A"), list("B")], kinds: [{ ...painting, does: [], parts: { money: false, to: false, duration: false, groups: [{ role: "voor", label: "Ruimte", list: "B" }] } }] })).links;
+  assert.ok(KIND_LINKS.parts && has(grouped, "log", "A", "B"), "een groep lijnen uit B");
+  // Een saldo per persoon (Wie moet wie).
+  const ledgered = buildLinks(input({ lists: [list("A", { ledger: { person: "p", field: "s" } })] })).links;
+  assert.ok(LIST_LINKS.ledger && has(ledgered, "view", "A", viewNode("balans")));
 
   // Gebeurtenissen: bedrag, gedeeld, gepland, herhalen, loopt nog.
   const logged = buildLinks(input({ log: [stat({ money: 3, shared: 2, planned: 1, repeats: 1, running: 1 })] })).links;

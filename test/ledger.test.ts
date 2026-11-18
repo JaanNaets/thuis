@@ -1,19 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { defaultSharers, isExpense, mineOf, type MoneyEvent, netBalance, settleUp, sharesOf, splitCents } from "../shared/ledger.ts";
+import { cleanLedger, defaultSharers, type Money, settleUp, sharesOf, splitCents } from "../shared/ledger.ts";
+import { baseParts } from "../shared/model.ts";
 
-const ev = (o: Partial<MoneyEvent>): MoneyEvent => ({
-  id: "e",
-  base: "aankoop",
-  status: "gebeurd",
-  amount: null,
-  paid_by: null,
-  split: null,
-  to_person: null,
-  created_by: "jaan",
-  lines: [],
-  ...o,
-});
+const ev = (o: Partial<Money>): Money => ({ amount: null, paid_by: null, split: null, created_by: "jaan", lines: [], ...o });
 const half = [
   { person_id: "jaan", share: 50 },
   { person_id: "jana", share: 50 },
@@ -40,31 +30,28 @@ test("jouw deel: lijnen van jou, en de rest volgens de verdeling", () => {
   const shares = sharesOf(ticket);
   assert.equal(shares.get("jaan"), 450 + 2091);
   assert.equal(shares.get("jana"), 2090);
-  assert.equal(mineOf(ticket, "jana"), 2090);
   // Zonder verdeling is alles van wie betaalde, en anders van wie het logde.
-  assert.equal(mineOf(ev({ amount: 1000, paid_by: "jana" }), "jana"), 1000);
-  assert.equal(mineOf(ev({ amount: 1000 }), "jaan"), 1000);
-  // Gepland of een overdracht is geen uitgave.
-  assert.ok(!isExpense(ev({ amount: 1000, status: "gepland" })));
-  assert.ok(!isExpense(ev({ amount: 1000, base: "overdracht" })));
+  assert.deepEqual([...sharesOf(ev({ amount: 1000, paid_by: "jana" }))], [["jana", 1000]]);
+  assert.deepEqual([...sharesOf(ev({ amount: 1000 }))], [["jaan", 1000]]);
 });
 
-test("wie moet wie: uitgaven en een terugbetaling", () => {
-  const events = [
-    ev({ id: "1", amount: 4600, paid_by: "jaan", split: half }),
-    ev({ id: "2", amount: 2000, paid_by: "jana", split: half }),
-    // Iets van Jaan alleen telt niet mee.
-    ev({ id: "3", amount: 9900, paid_by: "jaan" }),
-  ];
-  const net = netBalance(events);
-  assert.deepEqual([...net], [
-    ["jaan", 1300],
-    ["jana", -1300],
+test("wie moet wie: zo weinig mogelijk overschrijvingen", () => {
+  assert.deepEqual(settleUp(new Map([["jaan", 1300], ["jana", -1300]])), [{ from: "jana", to: "jaan", amount: 1300 }]);
+  assert.deepEqual(settleUp(new Map([["a", 500], ["b", -300], ["c", -200]])), [
+    { from: "b", to: "a", amount: 300 },
+    { from: "c", to: "a", amount: 200 },
   ]);
-  assert.deepEqual(settleUp(net), [{ from: "jana", to: "jaan", amount: 1300 }]);
-  // Jana betaalt terug: alles in orde.
-  const after = netBalance([...events, ev({ id: "4", base: "overdracht", amount: 1300, paid_by: "jana", to_person: "jaan" })]);
-  assert.equal(after.size, 0);
+});
+
+test("een saldo per persoon: een persoonveld en een bedrag", () => {
+  const fields = [
+    { key: "persoon", type: "person" as const },
+    { key: "saldo", type: "money" as const },
+    { key: "naam", type: "text" as const },
+  ];
+  assert.deepEqual(cleanLedger({ person: "persoon", field: "saldo" }, fields), { person: "persoon", field: "saldo" });
+  assert.equal(cleanLedger({ person: "naam", field: "saldo" }, fields), null);
+  assert.equal(cleanLedger(null, fields), null);
 });
 
 test("standaard delen: een uitgave in een gedeelde lijst gelijk over wie logt, zoals Splitwise", () => {
@@ -73,9 +60,9 @@ test("standaard delen: een uitgave in een gedeelde lijst gelijk over wie logt, z
     { id: "jana", role: "beheerder" as const },
     { id: "kijker", role: "gast" as const },
   ];
-  assert.deepEqual(defaultSharers("aankoop", samen), ["jaan", "jana"]);
-  assert.deepEqual(defaultSharers("dienst", samen), ["jaan", "jana"]);
-  assert.deepEqual(defaultSharers("gebruik", samen), [], "eten: wie at kies je zelf");
-  assert.deepEqual(defaultSharers("overdracht", samen), []);
-  assert.deepEqual(defaultSharers("aankoop", [{ id: "jaan", role: "beheerder" }]), [], "alleen: van wie betaalde");
+  assert.deepEqual(defaultSharers(baseParts("aankoop"), samen), ["jaan", "jana"]);
+  assert.deepEqual(defaultSharers(baseParts("dienst"), samen), ["jaan", "jana"]);
+  assert.deepEqual(defaultSharers(baseParts("gebruik"), samen), [], "eten: wie at kies je zelf");
+  assert.deepEqual(defaultSharers(baseParts("overdracht"), samen), []);
+  assert.deepEqual(defaultSharers(baseParts("aankoop"), [{ id: "jaan", role: "beheerder" }]), [], "alleen: van wie betaalde");
 });

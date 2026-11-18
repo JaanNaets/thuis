@@ -9,11 +9,13 @@ import { cleanViewBlock, evaluateView, LIST_KEY, MAX_SHIFT, sourceFields, viewSp
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { foodPerPerson, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
+import { eatenRoles, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
-import { netBalance, settleUp, type MoneyEvent } from "../../shared/ledger";
+import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
-import { canEdit, dayOf, STATUSES, type EventView, type List, type Role, type Status } from "../../shared/model";
+import { baseKind, BASES, canEdit, dayOf, kindInfo, STATUSES, type Base, type KindInfo, type List, type Role, type Status } from "../../shared/model";
+
+const BASE_IDS = Object.keys(BASES) as Base[];
 import { formatAmount } from "../../shared/units";
 import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
 import { withCells } from "../cells";
@@ -36,21 +38,38 @@ async function fullRows(db: D1Database, seen: Map<string, Role>, where: string, 
   return results;
 }
 
-const money = (e: EventView): MoneyEvent => ({ ...e, lines: e.lines.map((l) => ({ price: l.price, owner: l.owner })) });
-
 /**
- * Wie moet wie: over alle uitgaven met een betaler en alle overdrachten die je ziet. Per overschrijving een lijst om
- * de terugbetaling in te loggen: waar jullie het laatst samen iets in logden en jij mag loggen.
+ * Wie moet wie: het saldo van elke persoon (een cel, shared/cells.ts) in de lijsten met een saldo per persoon die je
+ * ziet, samengeteld. Per overschrijving een lijst om de terugbetaling in te loggen: een lijst met een saldo waar beiden
+ * een rij hebben en jij mag loggen.
  */
 async function balanceOf(db: D1Database, seen: Map<string, Role>) {
-  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL", [], "e.at DESC", 5000);
-  const page = await viewEvents(db, seen, rows);
-  const net = netBalance(page.events.map(money));
+  const { results: listRows } = await db
+    .prepare("SELECT * FROM lists WHERE ledger IS NOT NULL AND archived = 0 AND id IN (SELECT value FROM json_each(?))")
+    .bind(ids(seen.keys()))
+    .all<ListRow>();
+  const net = new Map<string, number>();
+  const members = new Map<string, Set<string>>();
+  for (const list of listRows.map(toList)) {
+    if (!list.ledger) continue;
+    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
+    const { rows } = await withCells(db, list, results.map(toThing));
+    const here = new Set<string>();
+    for (const t of rows) {
+      const who = t.data[list.ledger.person];
+      const cents = t.data[list.ledger.field];
+      if (typeof who !== "string") continue;
+      here.add(who);
+      if (typeof cents === "number" && cents !== 0) net.set(who, (net.get(who) ?? 0) + Math.round(cents));
+    }
+    members.set(list.id, here);
+  }
+  for (const [id, v] of net) if (v === 0) net.delete(id);
   const transfers = settleUp(net).map((t) => {
-    const both = page.events.find((e) => canEdit(seen.get(e.list_id)) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.from) && [e.paid_by, ...(e.split ?? []).map((s) => s.person_id)].includes(t.to));
-    return { ...t, list_id: both?.list_id ?? null };
+    const both = [...members].find(([id, here]) => canEdit(seen.get(id)) && here.has(t.from) && here.has(t.to));
+    return { ...t, list_id: both?.[0] ?? null };
   });
-  return { page, net, transfers };
+  return { net, transfers };
 }
 
 /** Rekeningnummers van wie iets krijgt (om te betalen met een QR). */
@@ -88,7 +107,8 @@ async function stockThings(db: D1Database, listIds: Iterable<string>): Promise<S
 
 /** Wat er gegeten werd van `from` tot `to` in de lijsten die je ziet: per dag en per persoon. */
 async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string, to: string) {
-  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.base = 'gebruik' AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
+  // Zonder bedrag: een formulier met geld eet niet (shared/food.ts, `formEats`).
+  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NULL AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
   const page = await viewEvents(db, seen, rows);
   // De dingen met hun velden (productinfo) en voorraad-eenheden, ook uit lijsten die je niet ziet (enkel de getallen).
   const thingIds = [...new Set(page.events.flatMap((e) => e.lines.flatMap((l) => (l.thing_id ? [l.thing_id] : []))))];
@@ -101,14 +121,17 @@ async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string,
   const byDay = new Map<string, FoodEvent[]>();
   const food = new Set<string>();
   for (const e of page.events) {
+    const kind = kinds.get(e.kind);
+    if (!kind) continue;
+    const eaten = eatenRoles(kind);
     const fe: FoodEvent = {
-      base: e.base,
+      eats: formEats(kind),
       status: e.status,
       split: e.split,
       created_by: e.created_by,
-      fields: kinds.get(e.kind)?.fields ?? [],
+      fields: kind.fields,
       data: e.data,
-      lines: e.lines.map((l) => ({ role: l.role, amount: l.amount, unit: l.unit, thing: l.thing_id ? (things.get(l.thing_id) ?? null) : null })),
+      lines: e.lines.filter((l) => eaten.includes(l.role)).map((l) => ({ amount: l.amount, unit: l.unit, thing: l.thing_id ? (things.get(l.thing_id) ?? null) : null })),
     };
     if (!isFood(fe)) continue;
     food.add(e.id);
@@ -192,7 +215,7 @@ insights.get("/view", async (c) => {
     items = page.events.map((e) => {
       const kind = kindName.get(e.kind) ?? e.kind;
       const row = logItem(e, { kind, list: listName.get(e.list_id) ?? "", me: me.id, title: e.name || kind });
-      const running = e.base === "activiteit" && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+      const running = Boolean(kinds.find((k) => k.id === e.kind)?.parts.duration) && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
       const own = Object.fromEntries(Object.entries(e.data).filter(([k]) => !fixed.has(k)));
       return { ...row, id: e.id, data: { ...own, ...row.data, ...(running ? { running: true } : {}) }, link: `/gebeurtenissen/${e.id}`, event: { status: e.status, running, at: e.at } };
     });
@@ -258,7 +281,7 @@ insights.get("/view", async (c) => {
     items = [
       ...page.events.map((e) => {
         const kind = kindName.get(e.kind) ?? e.kind;
-        const running = e.base === "activiteit" && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+        const running = Boolean(page.kinds.find((k) => k.id === e.kind)?.parts.duration) && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
         return {
           id: e.id,
           name: e.name || kind,
@@ -353,7 +376,10 @@ insights.get("/links", async (c) => {
     db.prepare(`SELECT id, fields FROM lists WHERE fields LIKE '%"product":"kcal"%'`),
   ])) as [D1Result<KindRowDb>, D1Result<{ id: string; fields: string }>];
   const kinds: LinkKindDef[] = kindRows.results.map(toKind);
-  const kcalKinds = kinds.filter((k) => hasKcal(k.fields)).map((k) => k.id);
+  // Wat een formulier vraagt en doet (de vertrekpunten erbij): naar iemand, met een einde, eten.
+  const infos = [...BASE_IDS.map(baseKind), ...kindRows.results.map((r) => kindInfo(toKind(r)))];
+  const idsOf = (pick: (k: KindInfo) => boolean) => JSON.stringify(infos.filter(pick).map((k) => k.id));
+  const kcalKinds = infos.filter((k) => hasKcal(k.fields)).map((k) => k.id);
   const kcalLists = kcalRows.results.filter((r) => hasKcal(parseJson<FieldDef[]>(r.fields, []))).map((r) => r.id);
 
   const done = "MAX(CASE WHEN e.status != 'gepland' THEN substr(e.at, 1, 10) END)";
@@ -362,19 +388,26 @@ insights.get("/links", async (c) => {
     db
       .prepare(
         `SELECT e.list_id AS list, e.kind, e.base, COUNT(*) AS events,
-           SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.base != 'overdracht') AS money,
+           SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.kind NOT IN (SELECT value FROM json_each(?4))) AS money,
            SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL
-               AND (e.split IS NOT NULL OR e.base = 'overdracht' OR EXISTS (SELECT 1 FROM lines o WHERE o.event_id = e.id AND o.owner IS NOT NULL))) AS shared,
+               AND (e.split IS NOT NULL OR e.kind IN (SELECT value FROM json_each(?4)) OR EXISTS (SELECT 1 FROM lines o WHERE o.event_id = e.id AND o.owner IS NOT NULL))) AS shared,
            SUM(e.status = 'gepland') AS planned,
            SUM(e.repeat IS NOT NULL) AS repeats,
-           SUM(e.base = 'activiteit' AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd') AS running,
-           SUM(e.base = 'gebruik' AND e.status = 'gebeurd' AND (e.kind IN (SELECT value FROM json_each(?2))
+           SUM(e.kind IN (SELECT value FROM json_each(?5)) AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd') AS running,
+           SUM(e.kind IN (SELECT value FROM json_each(?6)) AND e.status = 'gebeurd' AND (e.kind IN (SELECT value FROM json_each(?2))
                OR EXISTS (SELECT 1 FROM lines f JOIN things ft ON ft.id = f.thing_id
-                          WHERE f.event_id = e.id AND f.role = 'uit' AND ft.list_id IN (SELECT value FROM json_each(?3))))) AS food,
+                          WHERE f.event_id = e.id AND f.role != 'bij' AND ft.list_id IN (SELECT value FROM json_each(?3))))) AS food,
            ${done} AS last
          FROM events e WHERE e.list_id IN ${inLists} GROUP BY e.list_id, e.kind, e.base`,
       )
-      .bind(listIds, JSON.stringify(kcalKinds), JSON.stringify(kcalLists)),
+      .bind(
+        listIds,
+        JSON.stringify(kcalKinds),
+        JSON.stringify(kcalLists),
+        idsOf((k) => k.parts.to),
+        idsOf((k) => k.parts.duration),
+        idsOf(formEats),
+      ),
     db
       .prepare(
         `SELECT e.list_id AS list, e.kind, e.base, l.role, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last

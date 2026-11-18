@@ -51,6 +51,7 @@ export function ListNew() {
         icon: template.icon,
         fields: template.fields,
         stock: template.stock ?? null,
+        ledger: template.ledger ?? null,
         kinds: template.kinds ?? [],
         notify: template.notify ?? null,
         tag_ids: tagIds,

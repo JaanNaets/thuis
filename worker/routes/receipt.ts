@@ -6,10 +6,11 @@
 // te kijken. POST /things/:id/alias onthoudt de naam op het ticket bij het ding (een tekstveld met `aliases`, enkel als
 // je in die lijst mag wijzigen).
 
+import { buysWith } from "../../shared/targets";
 import { syncFrom } from "../mirrors";
 import { Hono } from "hono";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { BASES, baseKind, canEdit, isBase, type KindInfo, type ThingRef } from "../../shared/model";
+import { baseKind, canEdit, isBase, type KindInfo, type ThingRef } from "../../shared/model";
 import { cleanAttributes } from "../../shared/fields";
 import { isFoodKind, readsPhoto } from "../../shared/photoread";
 import { aliasesOf, matchName, readLines, validDate, cents, withAlias, type Candidate } from "../../shared/receipt";
@@ -65,13 +66,14 @@ listReceipt.post("/:id/events/read-photo", async (c) => {
   const form = await c.req.formData();
   const image = form.get("image");
   const wanted = String(form.get("kind") ?? "aankoop");
-  // De soort: een basissoort, of een eigen soort van een lijst die je ziet.
+  // Het formulier: een vertrekpunt, of een eigen formulier van een lijst die je ziet.
   const seen = await seenLists(db, me);
   const kind: KindInfo | undefined = isBase(wanted) ? baseKind(wanted) : (await kindsFor(db, seen.keys())).find((k) => k.id === wanted);
-  if (!kind) throw new ValidationError("Onbekende soort");
+  if (!kind) throw new ValidationError("Onbekend formulier");
   if (!readsPhoto(list.read_photo, kind.id, kind)) throw new ValidationError("Dit formulier leest geen foto's.");
   if (!(image instanceof File)) throw new ValidationError("Geen foto ontvangen");
-  const receipt = kind.base === "aankoop";
+  // Een kasticket: een formulier met geld waarvan wat erop staat bijtelt in een voorraad (Aankoop).
+  const receipt = buysWith(kind);
   const none: Read | FormRead = receipt
     ? { kind: "receipt", store: null, store_text: null, date: null, total: null, lines: [] }
     : { kind: "form", name: null, date: null, amount: null, data: {}, estimate: false };
@@ -139,7 +141,7 @@ listReceipt.post("/:id/events/read-photo", async (c) => {
 async function readForm(env: Env, image: File, kind: KindInfo, listName: string): Promise<FormRead> {
   const fields = kind.fields.filter((f) => READABLE.includes(f.type));
   const food = isFoodKind(kind);
-  const money = BASES[kind.base].money;
+  const money = kind.parts.money;
   const estimated = food ? fields.filter((f) => f.type === "number" && f.product) : [];
   const schema = labelSchema(fields);
   Object.assign(schema.properties, {

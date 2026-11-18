@@ -777,10 +777,12 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
 
 ### Kosten verdelen: Wie moet wie en `SettleForm`
 
-Kosten verdelen is geen lijst: elke aankoop of dienst heeft Bedrag, Betaald door (begint met jou) en Gedeeld met
-(`SharesField`; in een lijst waar meer mensen loggen begint dat op Gelijk over hen, `defaultSharers`, zoals Splitwise),
-en een lijn kan enkel van één persoon zijn. Wie moet wie rekent de app uit over alles wat je ziet
-(`shared/ledger.ts`); een terugbetaling is een overdracht.
+Een formulier met een bedrag heeft Bedrag, Betaald door (begint met jou) en Gedeeld met (`SharesField`; in een lijst
+waar meer mensen loggen begint dat op Gelijk over hen, `defaultSharers`, zoals Splitwise), en een lijn kan enkel van één
+persoon zijn. Wie moet wie volgt uit een **saldo per persoon**: een lijst (zoals Uitgaven) met een rij per persoon en een
+kolom Saldo (Instellen → Tellen → Saldo per persoon); wie betaalde krijgt het bedrag erbij, wie deelt zijn deel eraf. Een
+persoon zonder rij krijgt er vanzelf een. De app telt de saldo's van alles wat je ziet samen; een terugbetaling is een
+overdracht.
 
 - Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde.
 - Wie moet wie is een weergave ("Toon wie moet wie", bron `saldo`). Per overschrijving één rij: "Jana → Jij", rechts
@@ -803,7 +805,8 @@ logboek met een vinkje (`.row-check`, 44px); afgevinkt is doorstreept en stil (`
 ### Foto lezen in een gebeurtenis (`EventForm.tsx`)
 
 Onder "Typ wat je weet" staat de [fotokiezer](#fotokiezer-photobutton-photopickertsx). Wat de AI leest, hangt af van
-de soort (`POST /lists/:id/events/read-photo`): een **aankoop** leest een kasticket (de winkel als lijn **bij**, elk
+het formulier (`POST /lists/:id/events/read-photo`): een formulier dat **koopt** (`buysWith`: met een bedrag, en wat
+erop staat telt bij in een voorraad) leest een kasticket (de winkel als lijn **bij**, elk
 product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een ding dat je ziet; wat nieuw is, krijgt
 **Nieuw in**; het totaal in Bedrag, de datum in Wanneer). Een soort met voedingswaarden (Gegeten) herkent een
 **gerecht** en schat de portie ("Geschat met AI"). Elke andere soort vult haar eigen velden, de omschrijving, datum en
@@ -826,27 +829,40 @@ lijst (enkel als het elders gelogd werd), waar en wie, en rechts het bedrag, een
 waarde van een meting (82,4 kg). Een lijn van elders zonder de rest ("gedeeltelijk") toont enkel wat jouw dingen
 raakt, zonder bedrag. Gepland: met een vinkje vooraan.
 
-### Wat een formulier doet: `DoesEditor` (`Does.tsx`)
+### Een formulier instellen: `GroupsEditor` en `DoesEditor` (`Does.tsx`)
 
-In Instellen → Formulieren staat onder de velden **Wat het doet**: per handeling een wit kaartje zoals een lijn
-(`.line-row`, bovenaan `.does-main`): de kolom (een keuzelijst per lijst, "Huis · Kleur", en Voorraad), met × om weg te
-halen; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal of de voorraad), **Met** (een veld van het
-formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde, dan met **Waarde** erbij) en **Lijn** (welke lijnen:
-Voor, Bij, Toevoegen, Weghalen). Onderaan "+ Handeling". Enkel kolommen van lijsten waar je dingen mag aanpassen
-(`GET /me/columns`). Een kolom die het logboek invult, toont in de lijst en de fiche gewoon haar waarde; pas je ze in
-het ding aan, dan komt er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
+In Instellen → Formulieren (een `Sheet`): bij een nieuw formulier eerst **Begin van** (een vertrekpunt: Aankoop,
+Gebruik, Dienst, Activiteit, Meting, Overdracht; het vult de rest voor), dan Naam en Icoon, de schakelaars **Met een
+bedrag**, **Naar iemand** (enkel met een bedrag) en **Met een einde** (dan Melding na), de groepen lijnen, de velden,
+**Wat het doet**, Gepland en Foto lezen met AI. Er is geen "Werkt als".
+
+- **Lijnen** (`GroupsEditor`): per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan `.line-main.is-plain`:
+  de naam van de groep, "bv. Ruimte, Winkel", met ×), eronder **Rol** (Wat erbij komt, Wat eraf gaat, Waarover, Waar of
+  bij wie; elke rol één keer) en **Uit** (Elke lijst, of één lijst). Onderaan "+ Groep".
+- **Wat het doet** (`DoesEditor`): per handeling zo'n kaartje met de kolom (een keuzelijst per lijst, "Huis · Kleur",
+  Voorraad; bij een persoon Saldo) en ×; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal, de
+  voorraad of een saldo), **Met** (een veld van het formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde,
+  dan met **Waarde** erbij) en **Op** (een groep lijnen, of met een bedrag Wie betaalde, Wie deelt, Naar wie). Onderaan
+  "+ Handeling". Enkel kolommen van lijsten waar je dingen mag aanpassen (`GET /me/columns`). Met een bedrag aan- of
+  uitzetten neemt het saldo mee (wie betaalde telt bij, wie deelt of naar wie telt af).
+
+Een kolom die het logboek invult, toont in de lijst en de fiche gewoon haar waarde; pas je ze in het ding aan, dan komt
+er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
 
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
-Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Toevoegen, Weghalen, Voor, Bij: een
-keuzelijst, `.line-role`; op de gebeurtenis Toegevoegd, Weggehaald) en met wat (`Combo` met `typeFirst`: de dingen pas als je
-typt, met hun lijst ernaast; een lijn gaat over één ding, de lijst zelf staat bij Nieuw in; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven (`.line-field`: Hoeveel, Eenheid, Prijs bij
-geld, Houdbaar tot bij toevoegen, Van wie: Samen of een persoon), want een placeholder verdwijnt zodra er iets staat.
-Heet een lijn anders dan op het kasticket, dan staat eronder "Op het ticket: GO-TAN WOK" (`.line-ticket`): dat ding
-onthoudt die naam. Tekst zonder ding in een lijn die toevoegt of weghaalt krijgt **Nieuw in** (een lijst waarin je mag
-toevoegen, of Geen lijst: dan blijft het enkel een regel op de aankoop); iets nieuws staat standaard op de lijst waar je vandaan kwam (Aankoop vanuit Wijnen:
-Nieuw in Wijnen), behalve als het gepland is; wat je dan in Typ wat je weet zet en geen ding is ("Meursault 2019 32
-euro"), wordt zo'n lijn in plaats van de omschrijving. Onderaan "+ Lijn". Op gsm komt het ding onder de rol.
+De lijnen staan per **groep van het formulier** (`shownGroups`): de naam van de groep als label (Wat, Waar, Ruimte),
+eronder haar lijnen en "+ Lijn" (bij een groep uit één lijst: "+ Ruimte", hoe één ding van die lijst heet). Een rol
+die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij. Elke lijn is een wit kaartje in
+de groep (`.line-row`): bovenaan met wat (`Combo` met `typeFirst`: de dingen pas als je typt, met hun lijst ernaast;
+uit één lijst als de groep dat zegt; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven
+(`.line-field`): Hoeveel en Eenheid als de lijn de voorraad verandert of het formulier ermee iets invult, Prijs bij geld,
+Houdbaar tot bij wat erbij komt, Van wie (Samen of een persoon), want een placeholder verdwijnt zodra er iets staat. Heet
+een lijn anders dan op het kasticket, dan staat eronder "Op het ticket: GO-TAN WOK" (`.line-ticket`): dat ding onthoudt
+die naam. Tekst zonder ding in een groep die de voorraad verandert of uit één lijst komt, krijgt **Nieuw in** (een lijst
+waarin je mag toevoegen, of Geen lijst: dan blijft het enkel een regel); iets nieuws staat standaard op de lijst van de
+groep, of waar je vandaan kwam (Aankoop vanuit Wijnen: Nieuw in Wijnen), behalve als het gepland is; wat je dan in Typ
+wat je weet zet en geen ding is ("Meursault 2019 32 euro"), wordt zo'n lijn in plaats van de omschrijving.
 
 ### Rechten in de app
 

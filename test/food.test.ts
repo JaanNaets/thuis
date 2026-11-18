@@ -15,7 +15,7 @@ const pasta: FoodThing = { fields: PRODUCT, data: { eenheid: "kg", kcal: 350, ei
 const yoghurt: FoodThing = { fields: PRODUCT, data: { eenheid: "stuk", per_stuk: 125, kcal: 80 }, stock: STOCK };
 const KCAL: FieldDef[] = [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }];
 
-const eaten = (o: Partial<FoodEvent>): FoodEvent => ({ base: "gebruik", status: "gebeurd", split: null, created_by: "jana", fields: KCAL, data: {}, lines: [], ...o });
+const eaten = (o: Partial<FoodEvent>): FoodEvent => ({ eats: true, status: "gebeurd", split: null, created_by: "jana", fields: KCAL, data: {}, lines: [], ...o });
 
 test("gram van een lijn, met de eenheid van het ding", () => {
   assert.equal(gramsOf(300, "g", pasta), 300);
@@ -26,12 +26,12 @@ test("gram van een lijn, met de eenheid van het ding", () => {
 });
 
 test("kcal uit de dingen die eraf gingen, of zelf ingevuld", () => {
-  const meal = eaten({ lines: [{ role: "uit", amount: 300, unit: "g", thing: pasta }, { role: "uit", amount: 1, unit: null, thing: yoghurt }] });
+  const meal = eaten({ lines: [{ amount: 300, unit: "g", thing: pasta }, { amount: 1, unit: null, thing: yoghurt }] });
   assert.deepEqual(nutritionOf(meal), { kcal: 1150, protein: 36 });
   // Wat je zelf invult, wint.
   assert.deepEqual(nutritionOf(eaten({ data: { kcal: 450 } })), { kcal: 450 });
   // Een aankoop of iets gepland is geen eten.
-  assert.equal(nutritionOf(eaten({ base: "aankoop", data: { kcal: 450 } })), null);
+  assert.equal(nutritionOf(eaten({ eats: false, data: { kcal: 450 } })), null);
   assert.equal(nutritionOf(eaten({ status: "gepland", data: { kcal: 450 } })), null);
 });
 
@@ -41,7 +41,7 @@ test("per persoon: wie at, volgens de verdeling", () => {
       { person_id: "jana", share: 50 },
       { person_id: "jaan", share: 50 },
     ],
-    lines: [{ role: "uit", amount: 300, unit: "g", thing: pasta }],
+    lines: [{ amount: 300, unit: "g", thing: pasta }],
   });
   const per = foodPerPerson([meal, eaten({ data: { kcal: 200 } })]);
   assert.deepEqual(per.get("jaan"), { kcal: 525, protein: 18 });
@@ -52,8 +52,18 @@ test("eten is een gebruik met kcal (in de soort of in het ding), geen pellets", 
   const kcal: FieldDef = { key: "kcal", label: "Kcal", type: "number", product: "kcal" };
   const pellets = { fields: [], data: {}, stock: null };
   const pasta = { fields: [kcal], data: { kcal: 350 }, stock: null };
-  assert.equal(isFood({ base: "gebruik", fields: [], lines: [{ role: "uit", amount: 1, unit: "zak", thing: pellets }] }), false);
-  assert.equal(isFood({ base: "gebruik", fields: [], lines: [{ role: "uit", amount: 300, unit: "g", thing: pasta }] }), true);
-  assert.equal(isFood({ base: "gebruik", fields: [kcal], lines: [] }), true);
-  assert.equal(isFood({ base: "aankoop", fields: [kcal], lines: [] }), false);
+  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 1, unit: "zak", thing: pellets }] }), false);
+  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 300, unit: "g", thing: pasta }] }), true);
+  assert.equal(isFood({ eats: true, fields: [kcal], lines: [] }), true);
+  assert.equal(isFood({ eats: false, fields: [kcal], lines: [] }), false);
+});
+
+test("een formulier eet: zonder geld, en het trekt af van de voorraad of heeft kcal", async () => {
+  const { baseKind } = await import("../shared/model.ts");
+  const { formEats, eatenRoles } = await import("../shared/food.ts");
+  assert.equal(formEats(baseKind("gebruik")), true);
+  assert.deepEqual(eatenRoles(baseKind("gebruik")), ["uit"]);
+  assert.equal(formEats(baseKind("aankoop")), false);
+  assert.equal(formEats({ ...baseKind("meting"), fields: [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }] }), true);
+  assert.equal(formEats({ ...baseKind("aankoop"), fields: [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }] }), false);
 });

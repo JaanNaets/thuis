@@ -7,8 +7,9 @@
 // - Wat je ziet, hangt af van je rol per lijst (zie shared/rights.ts). Voorraad, uitgaven, wie moet wie en eten
 //   worden nooit bewaard maar uitgerekend uit de lijnen (shared/stock.ts, shared/ledger.ts, shared/food.ts).
 
-import { ADJUST, type Handeling } from "./cells.ts";
+import { ADJUST, ADJUST_DOES, presetDoes, type Handeling } from "./cells.ts";
 import type { Attributes, FieldDef, Interval, Share } from "./fields.ts";
+import type { LedgerDef } from "./ledger.ts";
 import type { IconKey } from "./icons.ts";
 import type { NotifyDef } from "./alerts.ts";
 import type { ReadPhoto } from "./photoread.ts";
@@ -35,11 +36,11 @@ export const canEdit = (r: Role | null | undefined): boolean => r === "lid" || r
 /** De lijst instellen: naam, velden, soorten, mensen, tags. */
 export const canManage = (r: Role | null | undefined): boolean => r === "beheerder";
 
-// ---------- soorten ----------
+// ---------- formulieren ----------
 
-/** Welke rol een lijn standaard heeft, en wat een soort kan. */
+/** De rol van een lijn: wat erbij komt, wat eraf gaat, waarover het gaat en waar of bij wie (enkel met de hele gebeurtenis te zien). */
 export type LineRole = "in" | "uit" | "voor" | "bij";
-/** `label`: wat je kiest in het formulier (Toevoegen: een fles erbij, of een nieuwe wijn); `done`: achteraf. */
+/** Hoe een groep lijnen heet als het formulier niets zegt; `done`: achteraf. */
 export const LINE_ROLES: Record<LineRole, { label: string; done: string }> = {
   in: { label: "Toevoegen", done: "Toegevoegd" },
   uit: { label: "Weghalen", done: "Weggehaald" },
@@ -48,21 +49,71 @@ export const LINE_ROLES: Record<LineRole, { label: string; done: string }> = {
 };
 export const isLineRole = (v: unknown): v is LineRole => typeof v === "string" && Object.hasOwn(LINE_ROLES, v);
 
+/** Een groep lijnen van een formulier (Wat, Waar, Ruimte): de rol van haar lijnen, hoe ze heet, en enkel uit deze lijst. */
+export type LineGroup = { role: LineRole; label: string; list: string | null };
+
+/**
+ * Wat een formulier vraagt naast zijn velden: geld (bedrag, wie betaalde, de verdeling en een prijs per lijn), naar
+ * iemand (een overdracht), een einde (een activiteit met een duur, of een timer) en zijn groepen lijnen.
+ */
+export type Parts = { money: boolean; to: boolean; duration: boolean; groups: LineGroup[] };
+export const NO_PARTS: Parts = { money: false, to: false, duration: false, groups: [] };
+
+/**
+ * De vertrekpunten van een formulier: wat een nieuw formulier al vraagt (`parts`) en doet (`presetDoes` in
+ * shared/cells.ts). Ze bepalen niets meer achteraf: wat een formulier doet, staat in zijn onderdelen en handelingen.
+ * Een lijst zonder eigen formulieren logt met deze zes.
+ */
 export const BASES = {
-  aankoop: { label: "Aankoop", plural: "Aankopen", icon: "cart", money: true, line: "in", hint: "Er komt iets bij, tegen geld" },
-  gebruik: { label: "Gebruik", plural: "Gebruik", icon: "package", money: false, line: "uit", hint: "Er gaat iets uit de voorraad" },
-  dienst: { label: "Dienst", plural: "Diensten", icon: "wrench", money: true, line: "voor", hint: "Iemand doet iets voor jou of een ding" },
-  activiteit: { label: "Activiteit", plural: "Activiteiten", icon: "clock", money: false, line: "voor", hint: "Wat je doet, met een duur" },
-  meting: { label: "Meting", plural: "Metingen", icon: "weight", money: false, line: "voor", hint: "Eén getal: gewicht, km-stand, telling" },
-  overdracht: { label: "Overdracht", plural: "Overdrachten", icon: "transfer", money: true, line: "voor", hint: "Geld of iets naar iemand anders" },
-} as const satisfies Record<string, { label: string; plural: string; icon: IconKey; money: boolean; line: LineRole; hint: string }>;
+  aankoop: {
+    label: "Aankoop",
+    plural: "Aankopen",
+    icon: "cart",
+    hint: "Er komt iets bij, tegen geld",
+    parts: { money: true, to: false, duration: false, groups: [{ role: "in", label: "Wat", list: null }, { role: "bij", label: "Waar", list: null }] },
+  },
+  gebruik: { label: "Gebruik", plural: "Gebruik", icon: "package", hint: "Er gaat iets uit de voorraad", parts: { ...NO_PARTS, groups: [{ role: "uit", label: "Wat", list: null }] } },
+  dienst: {
+    label: "Dienst",
+    plural: "Diensten",
+    icon: "wrench",
+    hint: "Iemand doet iets voor jou of een ding",
+    parts: { money: true, to: false, duration: false, groups: [{ role: "voor", label: "Voor", list: null }, { role: "bij", label: "Bij", list: null }] },
+  },
+  activiteit: { label: "Activiteit", plural: "Activiteiten", icon: "clock", hint: "Wat je doet, met een duur", parts: { ...NO_PARTS, duration: true, groups: [{ role: "voor", label: "Voor", list: null }] } },
+  meting: { label: "Meting", plural: "Metingen", icon: "weight", hint: "Eén getal: gewicht, km-stand, telling", parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", list: null }] } },
+  overdracht: { label: "Overdracht", plural: "Overdrachten", icon: "transfer", hint: "Geld naar iemand anders", parts: { money: true, to: true, duration: false, groups: [] } },
+} as const satisfies Record<string, { label: string; plural: string; icon: IconKey; hint: string; parts: Parts }>;
 export type Base = keyof typeof BASES;
 export const isBase = (v: unknown): v is Base => typeof v === "string" && Object.hasOwn(BASES, v);
 
-/** Een eigen soort: een basissoort met een naam en eigen velden (Gegeten, Carwash, Proeverij). */
-/** `goal`: een activiteit die loopt (een timer), geeft na zoveel minuten een melding (16 u vasten). */
-/** `planned`: een nieuwe gebeurtenis ermee begint gepland (een boodschap, een taak), tot je ze afvinkt. */
-/** `does`: wat het formulier met de kolommen van de dingen in zijn lijnen doet (shared/cells.ts). */
+/** Onderdelen van buiten nakijken: hoogstens één groep per rol, een naam van 30 tekens; null als het niet klopt. */
+export function cleanParts(raw: unknown): Parts | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const groups: LineGroup[] = [];
+  for (const g of Array.isArray(o.groups) ? o.groups : []) {
+    const x = (g ?? {}) as Record<string, unknown>;
+    if (!isLineRole(x.role) || groups.some((h) => h.role === x.role)) continue;
+    const label = typeof x.label === "string" && x.label.trim() ? x.label.trim().slice(0, 30) : LINE_ROLES[x.role].label;
+    groups.push({ role: x.role, label, list: typeof x.list === "string" && /^[A-Za-z0-9-]{1,64}$/.test(x.list) ? x.list : null });
+  }
+  const money = o.money === true;
+  return { money, to: money && o.to === true, duration: o.duration === true, groups };
+}
+
+/** De onderdelen van een vertrekpunt (een kopie, om aan te passen). */
+export const baseParts = (base: Base): Parts => {
+  const p = BASES[base].parts;
+  return { money: p.money, to: p.to, duration: p.duration, groups: p.groups.map((g) => ({ ...g })) };
+};
+
+/**
+ * Een eigen formulier (Gegeten, Tankbeurt, Schilderwerk): een naam, eigen velden, onderdelen (`parts`; null = die van
+ * het vertrekpunt `base`) en wat het doet (`does`: de handelingen, shared/cells.ts; zonder eigen onderdelen komen die
+ * van het vertrekpunt erbij). `goal`: een activiteit die loopt (een timer) geeft na zoveel minuten een melding (16 u
+ * vasten). `planned`: een nieuwe gebeurtenis ermee begint gepland (een boodschap, een taak), tot je ze afvinkt.
+ */
 export type Kind = {
   id: string;
   list_id: string;
@@ -72,11 +123,15 @@ export type Kind = {
   fields: FieldDef[];
   goal: number | null;
   planned: boolean;
+  parts: Parts | null;
   does: Handeling[];
   sort_order: number;
 };
 
-/** Een soort zoals een gebeurtenis ze gebruikt: een basissoort (id = de basissoort) of een eigen soort. */
+/**
+ * Een formulier zoals een gebeurtenis het gebruikt: een vertrekpunt (id = het vertrekpunt) of een eigen formulier, met
+ * zijn onderdelen en alles wat het doet.
+ */
 export type KindInfo = {
   id: string;
   base: Base;
@@ -86,18 +141,30 @@ export type KindInfo = {
   list_id: string | null;
   goal: number | null;
   planned: boolean;
+  parts: Parts;
   does: Handeling[];
 };
 
-/** De basissoort zelf als soort (zonder eigen velden, behalve een meting: een waarde). */
+/** Het vertrekpunt zelf als formulier (zonder eigen velden, behalve een meting: een waarde). */
 export function baseKind(base: Base): KindInfo {
   const b = BASES[base];
   const fields: FieldDef[] = base === "meting" ? [{ key: "waarde", label: "Waarde", type: "number" }] : [];
-  return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null, goal: null, planned: false, does: [] };
+  return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null, goal: null, planned: false, parts: baseParts(base), does: presetDoes(base) };
 }
 
 /** Een cel rechtstreeks aanpassen (in het ding): een gebeurtenis die de nieuwe waarde zet (shared/cells.ts). */
-export const ADJUST_KIND: KindInfo = { id: ADJUST, base: "meting", name: "Aanpassing", icon: "note", fields: [], list_id: null, goal: null, planned: false, does: [] };
+export const ADJUST_KIND: KindInfo = {
+  id: ADJUST,
+  base: "meting",
+  name: "Aanpassing",
+  icon: "note",
+  fields: [],
+  list_id: null,
+  goal: null,
+  planned: false,
+  parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", list: null }] },
+  does: ADJUST_DOES,
+};
 
 export function kindInfo(kind: Kind): KindInfo {
   return {
@@ -109,9 +176,16 @@ export function kindInfo(kind: Kind): KindInfo {
     list_id: kind.list_id,
     goal: kind.goal,
     planned: kind.planned,
-    does: kind.does,
+    parts: kind.parts ?? baseParts(kind.base),
+    does: kind.parts ? kind.does : [...presetDoes(kind.base), ...kind.does],
   };
 }
+
+/** De eerste groep lijnen van een formulier (waar een ding komt als je logt vanaf dat ding). */
+export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? { role: "voor", label: LINE_ROLES.voor.label, list: null };
+
+/** De groep van een rol in een formulier (of hoe die rol heet als het formulier ze niet heeft). */
+export const groupOf = (kind: Pick<KindInfo, "parts">, role: LineRole): LineGroup => kind.parts.groups.find((g) => g.role === role) ?? { role, label: LINE_ROLES[role].label, list: null };
 
 /** Of een nieuwe gebeurtenis gepland begint: als je erom vroeg (Plannen, een geplande actie) of als haar formulier dat doet. */
 export const startsPlanned = (kind: Pick<KindInfo, "planned">, asked: boolean): boolean => asked || kind.planned;
@@ -143,6 +217,8 @@ export type List = {
   color: Tone | null;
   fields: FieldDef[];
   stock: StockDef | null;
+  /** Een saldo per persoon (Wie moet wie): welke kolom de persoon is en welke het saldo (shared/ledger.ts). */
+  ledger: LedgerDef | null;
   notify: NotifyDef | null;
   /** Welke formulieren een foto lezen met de AI (shared/photoread.ts); null = de standaard. */
   read_photo: ReadPhoto | null;

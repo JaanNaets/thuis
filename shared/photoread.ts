@@ -1,11 +1,11 @@
 // Een foto lezen met de AI (✨), per formulier van een lijst: "dingen" (een ding toevoegen: een etiket, een product of
-// een gerecht) of een soort (een basissoort zoals Aankoop, of een eigen soort zoals Gegeten). Een beheerder zet het per
-// formulier aan of uit (Instellen); wat niemand koos, volgt de standaard: een ding, een soort met geld (een kasticket
-// of factuur) en een soort met voedingswaarden (een gerecht) lezen de foto. Bij elke foto kan je het lezen nog
+// een gerecht) of een formulier (een vertrekpunt zoals Aankoop, of een eigen formulier zoals Gegeten). Een beheerder zet het per
+// formulier aan of uit (Instellen); wat niemand koos, volgt de standaard: een ding, een formulier met geld (een kasticket
+// of factuur) en een formulier met voedingswaarden (een gerecht) lezen de foto. Bij elke foto kan je het lezen nog
 // uitzetten (de fotokiezer), en de AI start enkel na die keuze.
 
 import type { FieldDef } from "./fields.ts";
-import { BASES, type Base } from "./model.ts";
+import type { Parts } from "./model.ts";
 
 /** Het formulier om een ding toe te voegen; een soort heet naar haar id ("aankoop", of de id van een eigen soort). */
 export const THINGS_FORM = "dingen";
@@ -13,7 +13,7 @@ export const THINGS_FORM = "dingen";
 /** Wat een beheerder uitdrukkelijk aan of uit zette (de rest volgt `readsByDefault`). */
 export type ReadPhoto = { on: string[]; off: string[] };
 
-type KindLike = { base: Base; fields: FieldDef[] };
+type KindLike = { parts: Pick<Parts, "money">; fields: FieldDef[] };
 
 /** Een soort met voedingswaarden (een getal met productinfo: kcal, eiwit, …): een foto is dan een gerecht. */
 export const isFoodKind = (kind: KindLike): boolean => kind.fields.some((f) => f.type === "number" && f.product !== undefined);
@@ -22,7 +22,7 @@ export const isFoodKind = (kind: KindLike): boolean => kind.fields.some((f) => f
 export function readsByDefault(form: string, kind: KindLike | null): boolean {
   if (form === THINGS_FORM) return true;
   if (!kind) return false;
-  return BASES[kind.base].money || isFoodKind(kind);
+  return kind.parts.money || isFoodKind(kind);
 }
 
 /** Leest dit formulier een foto (de keuze van de beheerder, anders de standaard)? */

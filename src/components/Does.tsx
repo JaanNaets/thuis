@@ -1,6 +1,6 @@
-import { COUNTABLE, OPS, STOCK, VALUE_FROM, type Handeling, type ListColumns, type Op, type Value, type ValueFrom } from "../../shared/cells";
+import { BALANCE, COUNTABLE, OPS, PERSON_ROWS, PERSON_VALUES, STOCK, VALUE_FROM, type Handeling, type ListColumns, type Op, type PersonRows, type Rows, type Value, type ValueFrom } from "../../shared/cells";
 import type { FieldDef } from "../../shared/fields";
-import { LINE_ROLES, type LineRole } from "../../shared/model";
+import type { LineGroup, LineRole, Parts } from "../../shared/model";
 import { Icon } from "./Icon";
 
 /** Een handeling terwijl je ze invult (`key`: om te tekenen). */
@@ -22,27 +22,43 @@ const columnId = (h: Pick<Handeling, "list" | "field">) => `${h.list ?? ""}|${h.
 
 type Field = Pick<FieldDef, "key" | "label" | "type">;
 
-/** Het type van een kolom ("stock" voor de voorraad). */
+/** Het type van een kolom ("stock" voor de voorraad, een bedrag voor het saldo). */
 function columnType(columns: ListColumns[], h: Pick<Handeling, "list" | "field">): FieldDef["type"] | "stock" | null {
   if (h.field === STOCK) return "stock";
+  if (h.field === BALANCE) return "money";
   return columns.find((l) => l.id === h.list)?.fields.find((f) => f.key === h.field)?.type ?? null;
 }
 
 const countable = (t: FieldDef["type"] | "stock" | null) => t === "stock" || (t !== null && COUNTABLE.includes(t));
 
+/** Welke rijen een handeling kan raken: de groepen lijnen van het formulier, en met geld de mensen. */
+function rowChoices(parts: Parts): { id: string; label: string; rows: Rows }[] {
+  const lines = parts.groups.map((g: LineGroup) => ({ id: `lines:${g.role}`, label: g.label, rows: { from: "lines", role: g.role } as Rows }));
+  const people = parts.money ? (Object.keys(PERSON_ROWS) as PersonRows[]).filter((p) => (p === "to" ? parts.to : p === "sharers" ? !parts.to : true)) : [];
+  return [...lines, ...people.map((p) => ({ id: p, label: PERSON_ROWS[p].label, rows: { from: p } as Rows }))];
+}
+const rowsId = (r: Rows) => (r.from === "lines" ? `lines:${r.role}` : r.from);
+
 /**
- * Wat een formulier doet met de kolommen van de dingen in zijn lijnen (shared/cells.ts): per handeling een kaartje
- * zoals een lijn, met de kolom, hoe (Zet op, Tel bij, Tel af), met wat en welke lijnen. Zie STIJLBOEK.md → Formulier.
+ * Wat een formulier doet met de kolommen van de dingen in zijn lijnen, en met het saldo van mensen (shared/cells.ts):
+ * per handeling een kaartje zoals een lijn, met de kolom, hoe (Zet op, Tel bij, Tel af), met wat en op wie of welke
+ * lijn. Zie STIJLBOEK.md → Wat een formulier doet.
  */
-export function DoesEditor({ value, onChange, columns, fields }: { value: DoesDraft[]; onChange: (v: DoesDraft[]) => void; columns: ListColumns[]; fields: Field[] }) {
+export function DoesEditor({ value, onChange, columns, fields, parts }: { value: DoesDraft[]; onChange: (v: DoesDraft[]) => void; columns: ListColumns[]; fields: Field[]; parts: Parts }) {
   const set = (i: number, patch: Partial<Handeling>) => onChange(value.map((h, k) => (k === i ? fit({ ...h, ...patch }, columns, fields) : h)));
+  const choices = rowChoices(parts);
   function add() {
-    const list = columns[0];
+    const rows: Rows = choices[0]?.rows ?? { from: "lines", role: "voor" };
+    const group = rows.from === "lines" ? parts.groups.find((g) => g.role === rows.role) : undefined;
+    const list = columns.find((l) => l.id === group?.list) ?? columns[0];
     const first = list?.fields.find((f) => f.type !== "calc");
     const same = first ? fields.find((f) => f.label.trim().toLowerCase() === first.label.toLowerCase()) : undefined;
-    const h: Handeling = first
-      ? { rows: { from: "lines", role: "voor" }, list: list.id, field: first.key, op: "zet", value: same ? { from: "field", key: same.key } : { from: "at" } }
-      : { rows: { from: "lines", role: "voor" }, list: null, field: STOCK, op: "zet", value: { from: "qty" } };
+    const h: Handeling =
+      rows.from !== "lines"
+        ? { rows, list: null, field: BALANCE, op: "bij", value: { from: "amount" } }
+        : first
+          ? { rows, list: list.id, field: first.key, op: "zet", value: same ? { from: "field", key: same.key } : { from: "at" } }
+          : { rows, list: null, field: STOCK, op: "zet", value: { from: "qty" } };
     onChange([...value, { ...h, key: `h${counter++}` }]);
   }
   return (
@@ -51,7 +67,7 @@ export function DoesEditor({ value, onChange, columns, fields }: { value: DoesDr
       {value.length > 0 && (
         <ul className="line-rows">
           {value.map((h, i) => (
-            <DoesRow key={h.key} h={h} columns={columns} fields={fields} onChange={(p) => set(i, p)} onRemove={() => onChange(value.filter((_, k) => k !== i))} />
+            <DoesRow key={h.key} h={h} columns={columns} fields={fields} choices={choices} onChange={(p) => set(i, p)} onRemove={() => onChange(value.filter((_, k) => k !== i))} />
           ))}
         </ul>
       )}
@@ -74,18 +90,42 @@ function fit(h: DoesDraft, columns: ListColumns[], fields: Field[]): DoesDraft {
   return { ...h, op, value: v };
 }
 
-function DoesRow({ h, columns, fields, onChange, onRemove }: { h: DoesDraft; columns: ListColumns[]; fields: Field[]; onChange: (p: Partial<Handeling>) => void; onRemove: () => void }) {
+function DoesRow({
+  h,
+  columns,
+  fields,
+  choices,
+  onChange,
+  onRemove,
+}: {
+  h: DoesDraft;
+  columns: ListColumns[];
+  fields: Field[];
+  choices: { id: string; label: string; rows: Rows }[];
+  onChange: (p: Partial<Handeling>) => void;
+  onRemove: () => void;
+}) {
   const type = columnType(columns, h);
-  const column = h.field === STOCK ? "Voorraad" : (columns.find((l) => l.id === h.list)?.fields.find((f) => f.key === h.field)?.label ?? "Kolom");
+  const person = h.rows.from !== "lines";
+  const listName = columns.find((l) => l.id === h.list)?.name;
+  const column =
+    h.field === STOCK
+      ? "Voorraad"
+      : h.field === BALANCE
+        ? listName
+          ? `${listName} · Saldo`
+          : "Saldo"
+        : (columns.find((l) => l.id === h.list)?.fields.find((f) => f.key === h.field)?.label ?? "Kolom");
   const counts = h.op !== "zet";
   const usable = fields.filter((f) => f.type !== "calc" && (!counts || COUNTABLE.includes(f.type)));
-  const sources: ValueFrom[] = counts ? ["qty", "price", "amount", "fixed"] : ["at", "qty", "price", "amount", "fixed"];
+  const sources: ValueFrom[] = person ? PERSON_VALUES.filter((v) => v !== "field") : counts ? ["qty", "price", "amount", "fixed"] : ["at", "qty", "price", "amount", "fixed"];
   const valueId = h.value.from === "field" ? `field:${h.value.key}` : h.value.from;
   // Een kolom van een lijst die je niet (meer) mag aanpassen: ze blijft staan zoals ze was.
-  const known = h.field === STOCK || columns.some((l) => l.id === h.list && l.fields.some((f) => f.key === h.field));
+  const known = h.field === STOCK || (h.field === BALANCE && (!h.list || columns.some((l) => l.id === h.list))) || columns.some((l) => l.id === h.list && l.fields.some((f) => f.key === h.field));
+  const ledgers = columns.filter((l) => l.ledger);
   return (
     <li className="line-row">
-      <div className="line-main does-main">
+      <div className="line-main is-plain">
         <select
           aria-label="Kolom"
           value={columnId(h)}
@@ -95,21 +135,43 @@ function DoesRow({ h, columns, fields, onChange, onRemove }: { h: DoesDraft; col
           }}
         >
           {!known && <option value={columnId(h)}>{column}</option>}
-          <optgroup label="Elke lijst">
-            <option value={`|${STOCK}`}>Voorraad</option>
-          </optgroup>
-          {columns.map((l) => (
-            <optgroup key={l.id} label={l.name}>
-              {l.fields
-                .filter((f) => f.type !== "calc")
-                .map((f) => (
-                  <option key={f.key} value={`${l.id}|${f.key}`}>
-                    {l.name} · {f.label}
-                  </option>
-                ))}
-              {l.stock && <option value={`${l.id}|${STOCK}`}>{l.name} · Voorraad</option>}
-            </optgroup>
-          ))}
+          {person ? (
+            <>
+              <optgroup label="Deze lijst">
+                <option value={`|${BALANCE}`}>Saldo</option>
+              </optgroup>
+              {ledgers.map((l) => (
+                <optgroup key={l.id} label={l.name}>
+                  <option value={`${l.id}|${BALANCE}`}>{l.name} · Saldo</option>
+                  {l.fields
+                    .filter((f) => f.type === "money" || f.type === "number")
+                    .map((f) => (
+                      <option key={f.key} value={`${l.id}|${f.key}`}>
+                        {l.name} · {f.label}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </>
+          ) : (
+            <>
+              <optgroup label="Elke lijst">
+                <option value={`|${STOCK}`}>Voorraad</option>
+              </optgroup>
+              {columns.map((l) => (
+                <optgroup key={l.id} label={l.name}>
+                  {l.fields
+                    .filter((f) => f.type !== "calc")
+                    .map((f) => (
+                      <option key={f.key} value={`${l.id}|${f.key}`}>
+                        {l.name} · {f.label}
+                      </option>
+                    ))}
+                  {l.stock && <option value={`${l.id}|${STOCK}`}>{l.name} · Voorraad</option>}
+                </optgroup>
+              ))}
+            </>
+          )}
         </select>
         <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${column} weghalen`} onClick={onRemove}>
           <Icon name="close" size={15} />
@@ -140,7 +202,7 @@ function DoesRow({ h, columns, fields, onChange, onRemove }: { h: DoesDraft; col
               else onChange({ value: { from: v as Exclude<ValueFrom, "field" | "fixed"> } as Value });
             }}
           >
-            {usable.map((f) => (
+            {usable.filter((f) => !person || COUNTABLE.includes(f.type)).map((f) => (
               <option key={f.key} value={`field:${f.key}`}>
                 {f.label.trim() || "Naamloos veld"}
               </option>
@@ -165,16 +227,92 @@ function DoesRow({ h, columns, fields, onChange, onRemove }: { h: DoesDraft; col
           </label>
         )}
         <label className="line-field">
-          <span>Lijn</span>
-          <select aria-label={`${column}: van de lijn`} value={h.rows.role} onChange={(e) => onChange({ rows: { from: "lines", role: e.target.value as LineRole } })}>
-            {(Object.keys(LINE_ROLES) as LineRole[]).map((r) => (
-              <option key={r} value={r}>
-                {LINE_ROLES[r].label}
+          <span>Op</span>
+          <select
+            aria-label={`${column}: op wie of welke lijn`}
+            value={rowsId(h.rows)}
+            onChange={(e) => {
+              const rows = choices.find((c) => c.id === e.target.value)?.rows;
+              if (!rows) return;
+              // Van een lijn naar een persoon (of terug): een kolom die daarbij past.
+              const switched = (rows.from === "lines") !== (h.rows.from === "lines");
+              onChange(switched ? (rows.from === "lines" ? { rows, list: null, field: STOCK, value: { from: "qty" } } : { rows, list: null, field: BALANCE, op: "bij", value: { from: "amount" } }) : { rows });
+            }}
+          >
+            {!choices.some((c) => c.id === rowsId(h.rows)) && <option value={rowsId(h.rows)}>{h.rows.from === "lines" ? "Een lijn die het formulier niet meer heeft" : PERSON_ROWS[h.rows.from].label}</option>}
+            {choices.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
               </option>
             ))}
           </select>
         </label>
       </div>
     </li>
+  );
+}
+
+/** Hoe je de rol van een groep lijnen kiest (ze bepaalt ook wie ze ziet: Waar of bij wie enkel met de hele gebeurtenis). */
+const ROLE_CHOICES: Record<LineRole, string> = {
+  in: "Wat erbij komt",
+  uit: "Wat eraf gaat",
+  voor: "Waarover",
+  bij: "Waar of bij wie",
+};
+
+/**
+ * De groepen lijnen van een formulier (Wat, Waar, Ruimte): per groep een kaartje met de naam, de rol en uit welke lijst
+ * (of elke). Elke rol hoogstens één keer. Zie STIJLBOEK.md → Wat een formulier doet.
+ */
+export function GroupsEditor({ value, onChange, lists }: { value: LineGroup[]; onChange: (v: LineGroup[]) => void; lists: { id: string; name: string }[] }) {
+  const free = (Object.keys(ROLE_CHOICES) as LineRole[]).filter((r) => !value.some((g) => g.role === r));
+  const set = (i: number, patch: Partial<LineGroup>) => onChange(value.map((g, k) => (k === i ? { ...g, ...patch } : g)));
+  return (
+    <div className="field">
+      <span className="label">Lijnen</span>
+      {value.length > 0 && (
+        <ul className="line-rows">
+          {value.map((g, i) => (
+            <li key={g.role} className="line-row">
+              <div className="line-main is-plain">
+                <input aria-label="Naam van de groep" value={g.label} maxLength={30} placeholder="bv. Ruimte, Winkel" onChange={(e) => set(i, { label: e.target.value })} />
+                <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${g.label || "Groep"} weghalen`} onClick={() => onChange(value.filter((_, k) => k !== i))}>
+                  <Icon name="close" size={15} />
+                </button>
+              </div>
+              <div className="line-details">
+                <label className="line-field">
+                  <span>Rol</span>
+                  <select aria-label={`${g.label}: rol`} value={g.role} onChange={(e) => set(i, { role: e.target.value as LineRole })}>
+                    {[g.role, ...free].map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_CHOICES[r]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="line-field">
+                  <span>Uit</span>
+                  <select aria-label={`${g.label}: uit welke lijst`} value={g.list ?? ""} onChange={(e) => set(i, { list: e.target.value || null })}>
+                    <option value="">Elke lijst</option>
+                    {g.list && !lists.some((l) => l.id === g.list) && <option value={g.list}>Een lijst die je niet ziet</option>}
+                    {lists.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {free.length > 0 && (
+        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...value, { role: free[0], label: "", list: null }])}>
+          <Icon name="plus" size={15} /> Groep
+        </button>
+      )}
+    </div>
   );
 }

@@ -69,6 +69,7 @@ export const LIST_LINKS = {
   color: false,
   fields: true, // zie FIELD_LINKS
   stock: true, // telt voorraad (Voorraad, Bijna op)
+  ledger: true, // een saldo per persoon (Wie moet wie)
   notify: true, // melding bij iets nieuws
   read_photo: false, // welke formulieren een foto lezen: verbindt niets
   archived: false, // een gearchiveerde lijst staat niet op de kaart
@@ -79,12 +80,13 @@ export const LIST_LINKS = {
 export const KIND_LINKS = {
   id: false,
   list_id: true, // een andere lijst kan met deze soort loggen
-  base: true, // bepaalt mee in welke weergave een gebeurtenis komt (zie EVENT_LINKS)
+  base: false, // enkel het vertrekpunt: wat een formulier vraagt en doet, staat in parts en does
   name: false,
   icon: false,
   fields: true, // zie FIELD_LINKS (kcal: Eten; een verwijzing: naar die lijst)
   goal: true, // een activiteit die loopt, geeft na zoveel minuten een melding
   planned: false, // enkel hoe een nieuwe gebeurtenis begint; de status zelf staat op de gebeurtenis (EVENT_LINKS.status)
+  parts: true, // geld (Geld, Wie moet wie), een einde (Loopt nu), groepen lijnen uit een lijst
   does: true, // het formulier vult kolommen van een (andere) lijst in (shared/cells.ts)
   sort_order: false,
 } as const satisfies Record<keyof Kind, boolean>;
@@ -94,7 +96,7 @@ export const EVENT_LINKS = {
   id: false,
   list_id: true, // waar ze in het logboek staat
   kind: true, // een soort van een andere lijst
-  base: true, // gebruik met kcal: Eten; activiteit zonder einde: Loopt nu
+  base: false, // enkel het vertrekpunt van het formulier (zie KIND_LINKS)
   name: false,
   status: true, // gepland: Te doen, Agenda en een herinnering op de dag
   at: false, // elke gebeurtenis staat op haar dag in de agenda (zie AGENDA_NOTE)
@@ -189,9 +191,9 @@ export type Link = { kind: LinkKind; from: string; to: string; texts: string[]; 
 export const LINK_THINGS = 12;
 
 /** Een lijst zoals de kaart ze nodig heeft (enkel lijsten die de lezer ziet, niet gearchiveerd). */
-export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & { role: Role };
+export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & Partial<Pick<List, "ledger">> & { role: Role };
 /** Een eigen soort (van een lijst die de lezer ziet, of die een gebeurtenis gebruikt die hij ziet). */
-export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal"> & Partial<Pick<Kind, "does">>;
+export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal"> & Partial<Pick<Kind, "does" | "parts">>;
 /** Wat er gelogd is, per lijst en soort: tellingen, enkel van gebeurtenissen in lijsten die de lezer ziet. */
 export type LogStat = {
   list: string;
@@ -296,6 +298,7 @@ export function buildLinks(input: LinkInput): LinkResult {
   for (const list of input.lists) {
     fieldLinks(list.id, list.fields, "");
     if (list.stock) add("view", list.id, viewNode("voorraad"), list.stock.min ? "Telt voorraad, met bijna op" : "Telt voorraad");
+    if (list.ledger) add("view", list.id, viewNode("balans"), "Houdt een saldo per persoon bij");
     if (list.notify) add("view", list.id, viewNode("meldingen"), list.notify.to === "all" ? "Iets nieuws: een melding aan iedereen bij de lijst" : "Iets nieuws: een melding aan wie erin staat");
   }
   // Een koppeling: de doellijst hangt van de bron af, zoals een verwijzing.
@@ -306,10 +309,20 @@ export function buildLinks(input: LinkInput): LinkResult {
     if (!lists.has(k.list_id)) continue;
     fieldLinks(k.list_id, k.fields, `${k.name}: `);
     if (k.goal) add("view", k.list_id, viewNode("meldingen"), `${k.name}: een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
+    // Een groep lijnen uit één lijst (Ruimte uit Huis).
+    for (const g of k.parts?.groups ?? []) {
+      if (g.list && g.list !== k.list_id && lists.has(g.list)) add("log", k.list_id, g.list, `${k.name}: ${g.label} uit deze lijst`);
+    }
     // Wat het formulier invult: een kolom van de dingen van een lijst (de voorraad van elke lijst staat bij de lijnen).
     for (const h of k.does ?? []) {
       const to = h.list ? lists.get(h.list) : undefined;
       if (!to) continue;
+      if (h.rows.from !== "lines") {
+        const text = `${k.name} houdt het saldo bij in ${to.name}`;
+        if (to.id === k.list_id) ownNote(k.list_id, text);
+        else add("log", k.list_id, to.id, text);
+        continue;
+      }
       const column = h.field === STOCK ? "de voorraad" : (to.fields.find((f) => f.key === h.field)?.label ?? h.field);
       const text = `${k.name} ${h.op === "zet" ? "zet" : h.op === "bij" ? "telt bij" : "telt af van"} ${column}`;
       if (to.id === k.list_id) ownNote(k.list_id, text);

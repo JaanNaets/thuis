@@ -1,8 +1,9 @@
-// De lijnen van een gebeurtenis: per lijn wat ermee gebeurt (toevoegen, weghalen, voor, bij), het ding (of een tekst, of
-// een nieuw ding in een lijst), hoeveel, de eenheid en de prijs, elk met een label. Zie STIJLBOEK.md → Lijnen.
+// De lijnen van een gebeurtenis, per groep van haar formulier (Wat, Waar, Ruimte): het ding (of een tekst, of een
+// nieuw ding in een lijst), hoeveel, de eenheid en de prijs, elk met een label. Zie STIJLBOEK.md → Lijnen.
 
 import { useState } from "react";
-import { LINE_ROLES, type LineRole, type ListNode, type ThingRef } from "../../shared/model";
+import { stockOp, type Op } from "../../shared/cells";
+import { groupOf, type KindInfo, type LineGroup, type LineRole, type ListNode, type ThingRef } from "../../shared/model";
 import { fold } from "../../shared/parse";
 import { UNITS } from "../../shared/units";
 import { centsToInput, parseEuro } from "../format";
@@ -78,18 +79,27 @@ export function lineDraft(l: { role: LineRole; thing_id: string | null; text: st
   };
 }
 
+/** De groepen om te tonen: die van het formulier, en een rol die een bewaarde lijn heeft maar het formulier niet. */
+export function shownGroups(kind: Pick<KindInfo, "parts">, lines: Pick<LineDraft, "role">[]): LineGroup[] {
+  const extra = [...new Set(lines.map((l) => l.role))].filter((r) => !kind.parts.groups.some((g) => g.role === r));
+  return [...kind.parts.groups, ...extra.map((r) => groupOf(kind, r))];
+}
+
+/**
+ * De lijnen, per groep van het formulier (Wat, Waar, Ruimte): de naam van de groep erboven, de lijnen eronder en
+ * "+ Lijn" (of "+ Ruimte" bij een groep uit één lijst). Een groep uit één lijst kiest enkel daaruit.
+ */
 export function LinesEditor({
+  kind,
   lines,
   onChange,
-  money,
   people,
   targets,
   defaultNew,
 }: {
+  kind: Pick<KindInfo, "parts" | "does">;
   lines: LineDraft[];
   onChange: (lines: LineDraft[]) => void;
-  /** Met een prijs per lijn (een aankoop of dienst). */
-  money: boolean;
   /** Wie een lijn "enkel van" kan zijn (de mensen in de verdeling); leeg = geen keuze. */
   people: { id: string; name: string }[];
   /** Lijsten waarin een nieuw ding kan komen (waar je mag toevoegen). */
@@ -97,30 +107,55 @@ export function LinesEditor({
   /** Waar iets nieuws dat erbij komt standaard in komt (de lijst waar je vandaan kwam); leeg: enkel tekst. */
   defaultNew?: string;
 }) {
-  const set = (i: number, patch: Partial<LineDraft>) => onChange(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
-  const startIn = defaultNew && targets.some((t) => t.id === defaultNew) ? defaultNew : "";
+  const set = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const groups = shownGroups(kind, lines);
   return (
-    <div className="field">
-      <span className="label">Lijnen</span>
-      <ul className="line-rows">
-        {lines.map((l, i) => (
-          <LineRow key={l.key} line={l} money={money} people={people} targets={targets} startIn={startIn} onChange={(p) => set(i, p)} onRemove={() => onChange(lines.filter((_, k) => k !== i))} />
-        ))}
-      </ul>
-      <button
-        type="button"
-        className="btn btn-outline btn-sm"
-        style={{ justifySelf: "start" }}
-        onClick={() => onChange([...lines, emptyLine(lines[lines.length - 1]?.role ?? "in")])}
-      >
-        <Icon name="plus" size={15} /> Lijn
-      </button>
-    </div>
+    <>
+      {groups.map((g) => {
+        const own = lines.filter((l) => l.role === g.role);
+        const op = stockOp(kind.does, g.role);
+        // Hoeveel doet ertoe als de lijn de voorraad verandert of het formulier ermee iets invult.
+        const counted = op !== null || kind.does.some((h) => h.rows.from === "lines" && h.rows.role === g.role && h.value.from === "qty");
+        const only = g.list ? targets.find((t) => t.id === g.list) : undefined;
+        // Iets nieuws: in de lijst van de groep, anders in de lijst waar je vandaan kwam (een wijn in Wijnen).
+        const startIn = g.list ? (only ? g.list : "") : defaultNew && targets.some((t) => t.id === defaultNew) ? defaultNew : "";
+        return (
+          <div key={g.role} className="field">
+            <span className="label">{g.label}</span>
+            {own.length > 0 && (
+              <ul className="line-rows">
+                {own.map((l) => (
+                  <LineRow
+                    key={l.key}
+                    line={l}
+                    group={g}
+                    op={op}
+                    counted={counted}
+                    money={kind.parts.money}
+                    people={people}
+                    targets={g.list ? targets.filter((t) => t.id === g.list) : targets}
+                    startIn={startIn}
+                    onChange={(p) => set(l.key, p)}
+                    onRemove={() => onChange(lines.filter((x) => x.key !== l.key))}
+                  />
+                ))}
+              </ul>
+            )}
+            <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...lines, emptyLine(g.role)])}>
+              <Icon name="plus" size={15} /> {only?.one ?? "Lijn"}
+            </button>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
 function LineRow({
   line,
+  group,
+  op,
+  counted,
   money,
   people,
   targets,
@@ -129,6 +164,11 @@ function LineRow({
   onRemove,
 }: {
   line: LineDraft;
+  group: LineGroup;
+  /** Wat de lijn met de voorraad van haar ding doet. */
+  op: Op | null;
+  /** Hoeveel en de eenheid doen ertoe. */
+  counted: boolean;
   money: boolean;
   people: { id: string; name: string }[];
   targets: ListNode[];
@@ -137,23 +177,16 @@ function LineRow({
   onRemove: () => void;
 }) {
   const [typing, setTyping] = useState<string | null>(null);
-  const { options, placeOf } = useThingOptions([], typing ?? "", line.thing ? [line.thing.id] : []);
+  const { options, placeOf } = useThingOptions(group.list ? [group.list] : [], typing ?? "", line.thing ? [line.thing.id] : []);
   const shown = typing ?? (line.thing ? line.thing.name : line.text);
   const units = [...new Set(["", ...(line.thing?.unit ? [line.thing.unit] : []), ...UNITS, ...(line.unit ? [line.unit] : [])])];
   const free = !line.thing && line.text.trim();
   const what = line.thing?.name ?? (line.text || "lijn");
   return (
     <li className="line-row">
-      <div className="line-main">
-        <select className="line-role" aria-label={`Wat gebeurt er met ${what}`} value={line.role} onChange={(e) => onChange({ role: e.target.value as LineRole })}>
-          {Object.entries(LINE_ROLES).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+      <div className="line-main is-plain">
         <Combo
-          label="Wat"
+          label={group.label}
           text={shown}
           options={options}
           placeOf={placeOf}
@@ -163,8 +196,8 @@ function LineRow({
           typeFirst
           onText={(t) => {
             setTyping(t);
-            // Iets nieuws dat erbij komt: standaard in de lijst waar je vandaan kwam (een wijn in Wijnen).
-            const fresh = !line.text && !line.newIn && t.trim() && line.role === "in" && startIn;
+            // Iets nieuws dat erbij komt: standaard in de lijst van de groep, of waar je vandaan kwam (een wijn in Wijnen).
+            const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.list) && startIn;
             onChange({ thing: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
           }}
           onPick={(o) => {
@@ -178,29 +211,33 @@ function LineRow({
         </button>
       </div>
       {renamed(line) && <p className="line-ticket">Op het ticket: {line.ticket}</p>}
-      {line.role !== "bij" && (
+      {line.role !== "bij" && (counted || money || line.amount) && (
         <div className="line-details">
-          <label className="line-field">
-            <span>Hoeveel</span>
-            <input inputMode="decimal" aria-label={`Hoeveel ${what}`} value={line.amount} onChange={(e) => onChange({ amount: e.target.value })} />
-          </label>
-          <label className="line-field">
-            <span>Eenheid</span>
-            <select aria-label={`Eenheid van ${what}`} value={line.unit} onChange={(e) => onChange({ unit: e.target.value })}>
-              {units.map((u) => (
-                <option key={u} value={u}>
-                  {u || "—"}
-                </option>
-              ))}
-            </select>
-          </label>
+          {(counted || line.amount) && (
+            <>
+              <label className="line-field">
+                <span>Hoeveel</span>
+                <input inputMode="decimal" aria-label={`Hoeveel ${what}`} value={line.amount} onChange={(e) => onChange({ amount: e.target.value })} />
+              </label>
+              <label className="line-field">
+                <span>Eenheid</span>
+                <select aria-label={`Eenheid van ${what}`} value={line.unit} onChange={(e) => onChange({ unit: e.target.value })}>
+                  {units.map((u) => (
+                    <option key={u} value={u}>
+                      {u || "—"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
           {money && (
             <label className="line-field">
               <span>Prijs</span>
               <input inputMode="decimal" aria-label={`Prijs van ${what}`} placeholder="€" value={line.price} onChange={(e) => onChange({ price: e.target.value })} />
             </label>
           )}
-          {line.role === "in" && (
+          {op === "bij" && (
             <label className="line-field">
               <span>Houdbaar tot</span>
               <input type="date" aria-label={`${what}: houdbaar tot`} value={line.expires} onChange={(e) => onChange({ expires: e.target.value })} />
@@ -221,7 +258,7 @@ function LineRow({
           )}
         </div>
       )}
-      {free && (line.role === "in" || line.role === "uit") && targets.length > 0 && (
+      {free && (op === "bij" || op === "af" || group.list) && targets.length > 0 && (
         <label className="line-field">
           <span>Nieuw in</span>
           <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>

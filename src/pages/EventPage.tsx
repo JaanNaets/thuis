@@ -3,7 +3,9 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { formatDuration } from "../../shared/fields";
 import { everyText } from "../../shared/remind";
-import { BASES, LINE_ROLES, minutesBetween, STATUSES, timeOf, type EventView } from "../../shared/model";
+import { stockOp } from "../../shared/cells";
+import { BASES, groupOf, minutesBetween, STATUSES, timeOf, type EventView } from "../../shared/model";
+import { buysWith } from "../../shared/targets";
 import { formatAmount } from "../../shared/units";
 import { api, useApi } from "../api";
 import { CardHead } from "../components/Controls";
@@ -37,13 +39,14 @@ export function EventPage() {
   const kind = names.kind(e);
   const title = e.partial ? kind.name : names.title(e);
   const minutes = e.end_at ? minutesBetween(e.at, e.end_at) : null;
-  const running = e.base === "activiteit" && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+  const running = kind.parts.duration && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
+  const buys = buysWith(kind);
   const fieldNames = namesFrom(data.people, data.things);
 
   async function tick(undo = false) {
     try {
       await api.post(`/events/${e.id}/tick`, undo ? { undo: true } : {});
-      toast(undo ? "Weer open" : e.base === "aankoop" ? "Afgevinkt" : "Gedaan");
+      toast(undo ? "Weer open" : buys ? "Afgevinkt" : "Gedaan");
       reload();
     } catch (err) {
       toast((err as Error).message, "alert");
@@ -67,10 +70,10 @@ export function EventPage() {
     ["Wanneer", `${dayLabel(e.at.slice(0, 10))}${timeOf(e.at) ? ` om ${timeOf(e.at)}` : ""}${e.end_at ? ` tot ${timeOf(e.end_at)}` : ""}`],
     ...(minutes !== null && minutes > 0 ? ([["Duur", formatDuration(minutes)]] as [string, string][]) : []),
     ...(e.amount !== null ? ([["Bedrag", formatCents(e.amount)]] as [string, string][]) : []),
-    ...(e.paid_by ? ([[e.base === "overdracht" ? "Van" : "Betaald door", names.person(e.paid_by)]] as [string, string][]) : []),
+    ...(e.paid_by ? ([[kind.parts.to ? "Van" : "Betaald door", names.person(e.paid_by)]] as [string, string][]) : []),
     ...(e.to_person ? ([["Naar", names.person(e.to_person)]] as [string, string][]) : []),
     ...(e.split?.length
-      ? ([[e.base === "gebruik" ? "Wie" : "Gedeeld met", e.split.map((s) => `${names.person(s.person_id)}${e.split!.length > 1 && Math.abs(s.share - 100 / e.split!.length) > 0.5 ? ` ${Math.round(s.share)}%` : ""}`).join(", ")]] as [string, string][])
+      ? ([[kind.parts.money ? "Gedeeld met" : "Wie", e.split.map((s) => `${names.person(s.person_id)}${e.split!.length > 1 && Math.abs(s.share - 100 / e.split!.length) > 0.5 ? ` ${Math.round(s.share)}%` : ""}`).join(", ")]] as [string, string][])
       : []),
     ...(e.repeat ? ([["Herhaalt", everyText(e.repeat.every)]] as [string, string][]) : []),
     ["Gelogd door", names.person(e.created_by)],
@@ -88,7 +91,7 @@ export function EventPage() {
             <>
               {e.status === "gepland" && (
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => tick()}>
-                  <Icon name="check" size={15} /> {e.base === "aankoop" ? "Afvinken" : "Gedaan"}
+                  <Icon name="check" size={15} /> {buys ? "Afvinken" : "Gedaan"}
                 </button>
               )}
               {e.status === "afgevinkt" && (
@@ -144,7 +147,7 @@ export function EventPage() {
                   const t = l.thing_id ? names.thing(l.thing_id) : undefined;
                   const label = t?.name ?? l.text ?? "Verborgen";
                   const meta = [
-                    LINE_ROLES[l.role].done,
+                    groupOf(kind, l.role).label,
                     l.amount !== null ? formatAmount(l.amount, l.unit ?? t?.unit ?? null) : null,
                     t?.list || null,
                     l.owner ? `van ${names.person(l.owner)}` : null,
@@ -156,7 +159,7 @@ export function EventPage() {
                     <>
                       <span className="cell-main">
                         <span className={`row-media tone-${BASE_TONES[e.base]}`}>
-                          <Icon name={l.role === "bij" ? "store" : l.role === "uit" ? "minus" : l.role === "in" ? "plus" : "next"} size={16} />
+                          <Icon name={l.role === "bij" ? "store" : stockOp(kind.does, l.role) === "af" ? "minus" : stockOp(kind.does, l.role) === "bij" ? "plus" : "next"} size={16} />
                         </span>
                         <span className="row-main">
                           <span className="row-title">{label}</span>

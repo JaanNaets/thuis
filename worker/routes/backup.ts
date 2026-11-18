@@ -86,6 +86,7 @@ backup.get("/backup", async (c) => {
       color: l.color,
       fields: parseJson(l.fields, []),
       stock: parseJson(l.stock, null),
+      ledger: parseJson(l.ledger as string | null, null),
       notify: parseJson(l.notify, null),
       read_photo: parseJson(l.read_photo, null),
       archived: l.archived ? 1 : 0,
@@ -100,6 +101,7 @@ backup.get("/backup", async (c) => {
       fields: parseJson(k.fields as string, []),
       goal: (k.goal as number | null) ?? null,
       planned: k.planned === 1,
+      parts: parseJson(k.parts as string | null, null),
       does: parseJson(k.does as string | null, []),
       sort_order: (k.sort_order as number) ?? 0,
     })),
@@ -175,8 +177,21 @@ backup.post("/restore", async (c) => {
   for (const l of plan.lists) {
     st.push(
       db
-        .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, notify, read_photo, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(l.id, `${l.name}`, l.one, l.icon, l.color, JSON.stringify(l.fields), l.stock ? JSON.stringify(l.stock) : null, l.notify ? JSON.stringify(l.notify) : null, l.read_photo ? JSON.stringify(l.read_photo) : null, l.archived, me),
+        .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, ledger, notify, read_photo, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(
+          l.id,
+          `${l.name}`,
+          l.one,
+          l.icon,
+          l.color,
+          JSON.stringify(l.fields),
+          l.stock ? JSON.stringify(l.stock) : null,
+          l.ledger ? JSON.stringify(l.ledger) : null,
+          l.notify ? JSON.stringify(l.notify) : null,
+          l.read_photo ? JSON.stringify(l.read_photo) : null,
+          l.archived,
+          me,
+        ),
       db.prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(l.id, me),
     );
     for (const name of l.tags) {
@@ -192,8 +207,8 @@ backup.post("/restore", async (c) => {
   for (const k of plan.kinds)
     st.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.does.length ? JSON.stringify(k.does) : null, k.sort_order),
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.parts ? JSON.stringify(k.parts) : null, k.does.length ? JSON.stringify(k.does) : null, k.sort_order),
     );
   // Eerst zonder "deel van" (dat wijst misschien naar een ding dat later komt), daarna die verwijzing.
   for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));

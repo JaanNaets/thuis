@@ -5,7 +5,8 @@ import { cleanKindFields, cleanListFields } from "../../shared/listdef";
 import { withSelf } from "../../shared/template-file";
 import { cleanDoes, type Handeling, type ListColumns } from "../../shared/cells";
 import type { FieldDef } from "../../shared/fields";
-import { canEdit, isBase, isDirectRole, isRole, ROLES, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Role, type Tag } from "../../shared/model";
+import { cleanLedger } from "../../shared/ledger";
+import { baseParts, canEdit, cleanParts, isBase, isDirectRole, isRole, ROLES, type Base, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Parts, type Role, type Tag } from "../../shared/model";
 import { cleanNotify } from "../../shared/alerts";
 import { cleanReadPhoto } from "../../shared/photoread";
 import { keepsAdmin } from "../../shared/rights";
@@ -84,9 +85,10 @@ lists.post("/", async (c) => {
   const fields = withSelf(clean(() => cleanListFields(body.fields)), id);
   const one = optionalString(body, "one", 40);
   const stock = cleanStock(body.stock, fields);
+  const ledger = cleanLedger(body.ledger, fields);
   const statements: D1PreparedStatement[] = [
     db
-      .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, notify, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, ledger, notify, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(
         id,
         name,
@@ -95,6 +97,7 @@ lists.post("/", async (c) => {
         isTone(body.color) ? body.color : null,
         JSON.stringify(fields),
         stock ? JSON.stringify(stock) : null,
+        ledger ? JSON.stringify(ledger) : null,
         JSON.stringify(cleanNotify(body.notify)),
         me.id,
       ),
@@ -104,8 +107,9 @@ lists.post("/", async (c) => {
   // Eigen soorten uit een sjabloon (Gegeten, Bijvulling).
   const rawKinds = Array.isArray(body.kinds) ? body.kinds.slice(0, MAX_KINDS) : [];
   // Wat ze invullen: kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij dingen mag aanpassen.
+  const seen = await seenLists(db, me.id);
   const columns: ListColumns[] = rawKinds.some((k) => Array.isArray(asObject(k).does) && (asObject(k).does as unknown[]).length)
-    ? [{ id, name, stock: Boolean(stock), fields }, ...(await columnsOf(db, await seenLists(db, me.id), true))]
+    ? [{ id, name, stock: Boolean(stock), ledger: Boolean(ledger), fields }, ...(await columnsOf(db, seen, true))]
     : [];
   rawKinds.forEach((raw, i) => {
     const k = asObject(raw);
@@ -113,10 +117,23 @@ lists.post("/", async (c) => {
     const kindFields = withSelf(clean(() => cleanKindFields(k.fields)), id);
     const rawDoes: unknown[] = Array.isArray(k.does) ? k.does : [];
     const does = clean(() => cleanDoes(rawDoes.map((h) => (asObject(h).list === "self" ? { ...asObject(h), list: id } : h)), columns, kindFields));
+    const parts = k.parts === undefined ? null : partsOf(k.parts, k.base, seen, id);
     statements.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(kindFields), goalOf(k), plannedOf(k), does.length ? JSON.stringify(does) : null, i),
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(
+          crypto.randomUUID(),
+          id,
+          k.base,
+          requiredString(k, "name", 40),
+          isIconKey(k.icon) ? k.icon : null,
+          JSON.stringify(kindFields),
+          goalOf(k, parts ?? baseParts(k.base)),
+          plannedOf(k),
+          parts ? JSON.stringify(parts) : null,
+          does.length ? JSON.stringify(does) : null,
+          i,
+        ),
     );
   });
   await db.batch(statements);
@@ -212,8 +229,9 @@ lists.put("/:id", async (c) => {
   const stock = body.stock === undefined ? list.stock : cleanStock(body.stock, fields);
   const notify = body.notify === undefined ? list.notify : cleanNotify(body.notify);
   const readPhoto = body.read_photo === undefined ? list.read_photo : cleanReadPhoto(body.read_photo);
+  const ledger = body.ledger === undefined ? cleanLedger(list.ledger, fields) : cleanLedger(body.ledger, fields);
   await db
-    .prepare("UPDATE lists SET name = ?, one = ?, icon = ?, color = ?, fields = ?, stock = ?, notify = ?, read_photo = ?, updated_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE lists SET name = ?, one = ?, icon = ?, color = ?, fields = ?, stock = ?, ledger = ?, notify = ?, read_photo = ?, updated_at = datetime('now') WHERE id = ?")
     .bind(
       body.name === undefined ? list.name : requiredString(body, "name", 60),
       body.one === undefined ? list.one : optionalString(body, "one", 40),
@@ -221,11 +239,26 @@ lists.put("/:id", async (c) => {
       body.color === undefined ? list.color : isTone(body.color) ? body.color : null,
       JSON.stringify(fields),
       stock ? JSON.stringify(stock) : null,
+      ledger ? JSON.stringify(ledger) : null,
       notify ? JSON.stringify(notify) : null,
       readPhoto ? JSON.stringify(readPhoto) : null,
       list.id,
     )
     .run();
+  // Een ander saldo per persoon: het geld dat erin telt opnieuw uitrekenen (in deze lijst, of met een formulier dat hier een saldo bijhoudt).
+  if (JSON.stringify(ledger) !== JSON.stringify(list.ledger)) {
+    const { results } = await db
+      .prepare(
+        `SELECT id FROM events WHERE amount IS NOT NULL AND paid_by IS NOT NULL
+           AND (list_id = ?1 OR kind IN (SELECT id FROM kinds WHERE instr(does, ?1) > 0))`,
+      )
+      .bind(list.id)
+      .all<{ id: string }>();
+    await rebuildEffects(
+      db,
+      results.map((r) => r.id),
+    );
+  }
   // Andere velden: wat uit deze lijst haalt of erin schrijft, opnieuw uitrekenen.
   await syncFrom(db, list.id, { asTarget: true });
   return c.json({ ok: true });
@@ -340,9 +373,18 @@ lists.put("/:id/people/:personId", async (c) => {
 
 // ---------- soorten ----------
 
-/** Het doel van een activiteit in minuten (een timer), of null. */
-const goalOf = (o: Record<string, unknown>): number | null =>
-  o.base !== undefined && o.base !== "activiteit" ? null : typeof o.goal === "number" && Number.isInteger(o.goal) && o.goal > 0 && o.goal < 100_000 ? o.goal : null;
+/** Het doel in minuten van iets dat loopt (een formulier met een einde: een timer), of null. */
+const goalOf = (o: Record<string, unknown>, parts: Parts): number | null =>
+  parts.duration && typeof o.goal === "number" && Number.isInteger(o.goal) && o.goal > 0 && o.goal < 100_000 ? o.goal : null;
+
+/**
+ * De onderdelen van een formulier: wat binnenkomt (nagekeken; een groep uit een lijst enkel uit een lijst die je ziet,
+ * of de lijst zelf), anders die van het vertrekpunt. `self`: de lijst van het formulier.
+ */
+function partsOf(raw: unknown, base: Base, seen: Map<string, Role>, self: string): Parts {
+  const parts = cleanParts(raw) ?? baseParts(base);
+  return { ...parts, groups: parts.groups.map((g) => (g.list === "self" ? { ...g, list: self } : g)).filter((g) => !g.list || g.list === self || seen.has(g.list)) };
+}
 
 /** Begint een nieuwe gebeurtenis met dit formulier gepland (een boodschap)? Als 0 of 1 voor de databank. */
 const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 1 : 0);
@@ -354,13 +396,14 @@ const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 
 export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: boolean): Promise<ListColumns[]> {
   const wanted = [...seen].filter(([, r]) => !edit || canEdit(r)).map(([id]) => id);
   const { results } = await db
-    .prepare("SELECT id, name, fields, stock FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
+    .prepare("SELECT id, name, fields, stock, ledger FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
     .bind(ids(wanted))
-    .all<{ id: string; name: string; fields: string; stock: string | null }>();
+    .all<{ id: string; name: string; fields: string; stock: string | null; ledger: string | null }>();
   return results.map((r) => ({
     id: r.id,
     name: r.name,
     stock: Boolean(r.stock),
+    ledger: Boolean(r.ledger),
     fields: parseJson<FieldDef[]>(r.fields, []).map((f) => ({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}) })),
   }));
 }
@@ -393,9 +436,22 @@ lists.post("/:id/kinds", async (c) => {
   const id = crypto.randomUUID();
   const fields = clean(() => cleanKindFields(body.fields));
   const does = await doesOf(db, me.id, body.does, fields);
+  const parts = body.parts === undefined ? null : partsOf(body.parts, body.base, await seenLists(db, me.id), list.id);
   await db
-    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, list.id, body.base, requiredString(body, "name", 40), isIconKey(body.icon) ? body.icon : null, JSON.stringify(fields), goalOf(body), plannedOf(body), does.length ? JSON.stringify(does) : null, count?.n ?? 0)
+    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(
+      id,
+      list.id,
+      body.base,
+      requiredString(body, "name", 40),
+      isIconKey(body.icon) ? body.icon : null,
+      JSON.stringify(fields),
+      goalOf(body, parts ?? baseParts(body.base)),
+      plannedOf(body),
+      parts ? JSON.stringify(parts) : null,
+      does.length ? JSON.stringify(does) : null,
+      count?.n ?? 0,
+    )
     .run();
   return c.json({ id }, 201);
 });
@@ -414,28 +470,31 @@ kinds.put("/:id", async (c) => {
   const kind = await requireKind(db, me.id, c.req.param("id"));
   const body = asObject(await c.req.json());
   const fields = body.fields === undefined ? kind.fields : clean(() => cleanKindFields(body.fields));
+  const seen = await seenLists(db, me.id);
+  const parts = body.parts === undefined ? kind.parts : partsOf(body.parts, kind.base, seen, kind.list_id);
   // Handelingen die al bestonden in een lijst waar jij niets mag aanpassen, blijven; nieuwe moeten jouw lijsten zijn.
   let does = kind.does;
   if (body.does !== undefined) {
-    const editable = await columnsOf(db, await seenLists(db, me.id), true);
+    const editable = await columnsOf(db, seen, true);
     const raw = Array.isArray(body.does) ? body.does : [];
     const kept = kind.does.filter((h) => h.list && !editable.some((l) => l.id === h.list) && raw.some((r) => JSON.stringify(r) === JSON.stringify(h)));
     const fresh = raw.filter((r) => !kept.some((h) => JSON.stringify(r) === JSON.stringify(h)));
     does = [...kept, ...clean(() => cleanDoes(fresh, editable, fields))];
   }
   await db
-    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ?, does = ? WHERE id = ?")
+    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ?, parts = ?, does = ? WHERE id = ?")
     .bind(
       body.name === undefined ? kind.name : requiredString(body, "name", 40),
       body.icon === undefined ? kind.icon : isIconKey(body.icon) ? body.icon : null,
       JSON.stringify(fields),
-      body.goal === undefined ? kind.goal : kind.base === "activiteit" ? goalOf(body) : null,
+      body.goal === undefined ? ((parts ?? baseParts(kind.base)).duration ? kind.goal : null) : goalOf(body, parts ?? baseParts(kind.base)),
       body.planned === undefined ? (kind.planned ? 1 : 0) : plannedOf(body),
+      parts ? JSON.stringify(parts) : null,
       does.length ? JSON.stringify(does) : null,
       kind.id,
     )
     .run();
-  if (JSON.stringify(does) !== JSON.stringify(kind.does)) await rebuildKind(db, kind.id);
+  if (JSON.stringify(does) !== JSON.stringify(kind.does) || JSON.stringify(parts) !== JSON.stringify(kind.parts)) await rebuildKind(db, kind.id);
   return c.json({ ok: true });
 });
 

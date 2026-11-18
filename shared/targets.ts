@@ -3,7 +3,8 @@
 // ("Wijn"). Wat je het meest gebruikt, eerst. Noemen de eerste woorden van je tekst er een ("gegeten pasta 300 g"), dan
 // staat die bovenaan en gaat de rest als tekst naar het formulier. Bij een ding (`logForms`): waarmee je ermee logt.
 
-import { BASES, type KindInfo } from "./model.ts";
+import { STOCK } from "./cells.ts";
+import type { KindInfo } from "./model.ts";
 
 export type TargetList = { id: string; name: string; one: string | null; icon: string | null; color: string | null; stock: boolean };
 export type Targets = { lists: TargetList[]; kinds: KindInfo[]; used: { list_id: string; kind: string; n: number; last: string }[] };
@@ -71,7 +72,7 @@ export function buildTargets(t: Targets): Target[] {
     if (!k.list_id || !editable.has(k.list_id)) continue;
     const list = t.lists.find((l) => l.id === k.list_id)!;
     const c = count(k.list_id, k.id);
-    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint: list.name, icon: k.icon, list_id: k.list_id, kind: k.id, thing: false, words: [fold(k.name)], used: c.n, last: c.last, buys: k.base === "aankoop" });
+    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint: list.name, icon: k.icon, list_id: k.list_id, kind: k.id, thing: false, words: [fold(k.name)], used: c.n, last: c.last, buys: buysWith(k) });
   }
   return out.sort((a, b) => b.used - a.used || b.last.localeCompare(a.last) || a.label.localeCompare(b.label, "nl"));
 }
@@ -136,14 +137,18 @@ export type LogForm = {
   hint: string | null;
 };
 
-/** Verandert een formulier de voorraad (er komt iets bij of gaat iets af)? */
-export const movesStock = (k: Pick<KindInfo, "base">) => BASES[k.base].line === "in" || BASES[k.base].line === "uit";
+/** Is dit een formulier voor een kasticket: met geld, en wat erop staat telt bij in een voorraad? */
+export const buysWith = (k: Pick<KindInfo, "parts" | "does">) =>
+  k.parts.money && !k.parts.to && k.does.some((h) => h.rows.from === "lines" && h.field === STOCK && h.op === "bij");
+
+/** Verandert een formulier de voorraad (zijn lijnen tellen bij of af)? */
+export const movesStock = (k: Pick<KindInfo, "does">) => k.does.some((h) => h.rows.from === "lines" && h.field === STOCK && (h.op === "bij" || h.op === "af"));
 
 /**
- * Waarmee je logt bij een lijst of een ding ervan: haar eigen formulieren (zonder: Loggen, met de basissoorten) en, telt
- * ze voorraad, de formulieren van lijsten zonder dingen die de voorraad veranderen: Aankoop in Uitgaven, Boodschap,
- * Gegeten. Daar komt de gebeurtenis in die andere lijst, met het ding als lijn. Een lijst met eigen dingen (een gedeelde
- * wijnkelder) logt enkel over haar eigen dingen. Enkel lijsten waar je mag loggen; `shown` laat weg wat je bij de +
+ * Waarmee je logt bij een lijst of een ding ervan: haar eigen formulieren (zonder: Loggen, met de vertrekpunten) en, telt
+ * ze voorraad, de formulieren die de voorraad veranderen van lijsten die zelf geen voorraad tellen: Aankoop in Uitgaven,
+ * Boodschap, Gegeten. Daar komt de gebeurtenis in die andere lijst, met het ding als lijn. Een lijst met een eigen
+ * voorraad (een gedeelde wijnkelder) logt enkel over haar eigen dingen. Enkel lijsten waar je mag loggen; `shown` laat weg wat je bij de +
  * verborg. Het eigen eerst, daarbinnen wat je het meest gebruikt.
  */
 export function logForms(t: Targets, listId: string, shown: (listId: string) => boolean = () => true): LogForm[] {
@@ -158,7 +163,8 @@ export function logForms(t: Targets, listId: string, shown: (listId: string) => 
         .filter((k) => k.list_id && k.list_id !== listId && movesStock(k))
         .filter((k) => {
           const l = lists.get(k.list_id!);
-          return l && !l.one && shown(l.id);
+          // Een lijst die zelf geen voorraad telt (Uitgaven, Boodschappen, Dieet); een gedeelde wijnkelder logt enkel over haar eigen dingen.
+          return l && !l.stock && shown(l.id);
         })
         .sort(byUse)
     : [];
@@ -173,7 +179,7 @@ export function logForms(t: Targets, listId: string, shown: (listId: string) => 
 /** Met een bedrag in je tekst eerst de formulieren met geld die iets laten gebeuren (een aankoop, geen boodschap). */
 export function pricedFirst(forms: LogForm[], text: string): LogForm[] {
   if (!hasPrice(text)) return forms;
-  const money = (f: LogForm) => Boolean(f.kind && BASES[f.kind.base].money && !f.kind.planned);
+  const money = (f: LogForm) => Boolean(f.kind && f.kind.parts.money && !f.kind.parts.to && !f.kind.planned);
   return [...forms.filter(money), ...forms.filter((f) => !money(f))];
 }
 
@@ -212,7 +218,7 @@ export function restAfter(text: string, name: string): string {
  * gedeelde wijnkelder); zonder zo'n lijst de lijsten die voorraad tellen.
  */
 export function receiptLists(t: Targets): TargetList[] {
-  const buys = new Set(t.kinds.filter((k) => k.list_id && k.base === "aankoop" && !k.planned).map((k) => k.list_id));
+  const buys = new Set(t.kinds.filter((k) => k.list_id && buysWith(k) && !k.planned).map((k) => k.list_id));
   const withForm = t.lists.filter((l) => buys.has(l.id));
   return withForm.length ? withForm : t.lists.filter((l) => l.stock);
 }

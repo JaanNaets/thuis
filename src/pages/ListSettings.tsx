@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
-import { BASES, canManage, formsOf, isBase, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson } from "../../shared/model";
+import { BALANCE, presetDoes } from "../../shared/cells";
+import { baseParts, BASES, canManage, formsOf, isBase, LINE_ROLES, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson, type Parts } from "../../shared/model";
 import { readsPhoto, THINGS_FORM, withReads } from "../../shared/photoread";
+import type { LedgerDef } from "../../shared/ledger";
 import type { StockDef } from "../../shared/stock";
 import { templateFile } from "../../shared/template-file";
 import type { IconKey } from "../../shared/icons";
@@ -10,7 +12,7 @@ import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { Avatar, CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
 import type { ListColumns } from "../../shared/cells";
-import { buildDoes, DoesEditor, doesDraft, type DoesDraft } from "../components/Does";
+import { buildDoes, DoesEditor, doesDraft, GroupsEditor, type DoesDraft } from "../components/Does";
 import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon, type IconName } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
@@ -37,7 +39,7 @@ export function ListSettings() {
     ...(detail.list.one
       ? [
           { value: "velden" as const, label: "Velden" },
-          { value: "voorraad" as const, label: "Voorraad" },
+          { value: "voorraad" as const, label: "Tellen" },
         ]
       : []),
     { value: "soorten", label: "Formulieren" },
@@ -289,9 +291,15 @@ function Stock({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
   const toast = useToast();
   const [on, setOn] = useState(Boolean(list.stock));
   const [def, setDef] = useState<StockDef>(list.stock ?? { default_unit: "stuk" });
+  // Een saldo per persoon (Wie moet wie): een rij per persoon, met de kolom van de persoon en die van het saldo.
+  const persons = list.fields.filter((f) => f.type === "person");
+  const amounts = list.fields.filter((f) => f.type === "money" || f.type === "number");
+  const [ledgerOn, setLedgerOn] = useState(Boolean(list.ledger));
+  const [ledger, setLedger] = useState<LedgerDef>(list.ledger ?? { person: persons[0]?.key ?? "", field: amounts.find((f) => f.type === "money")?.key ?? amounts[0]?.key ?? "" });
   async function save() {
+    if (ledgerOn && (!ledger.person || !ledger.field)) return toast("Een saldo per persoon heeft een veld Persoon en een veld met een bedrag nodig (Velden).", "alert");
     try {
-      await api.put(`/lists/${list.id}`, { stock: on ? def : null });
+      await api.put(`/lists/${list.id}`, { stock: on ? def : null, ledger: ledgerOn ? ledger : null });
       toast("Bewaard");
       onSaved();
     } catch (err) {
@@ -324,6 +332,35 @@ function Stock({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
               </label>
             ))}
           </>
+        )}
+      </section>
+      <section className="card form-section">
+        <Switch label="Saldo per persoon" checked={ledgerOn} onChange={setLedgerOn} />
+        {ledgerOn && (
+          <div className="field-row">
+            <label className="field">
+              <span className="label">Persoon uit</span>
+              <select value={ledger.person} onChange={(e) => setLedger({ ...ledger, person: e.target.value })}>
+                <option value="">Geen veld</option>
+                {persons.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">Saldo in</span>
+              <select value={ledger.field} onChange={(e) => setLedger({ ...ledger, field: e.target.value })}>
+                <option value="">Geen veld</option>
+                {amounts.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         )}
       </section>
       <button type="button" className="btn btn-primary btn-lg" onClick={save}>
@@ -432,34 +469,56 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
   const { person, lists } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  // Een nieuw formulier begint van een vertrekpunt (Aankoop, Gebruik, …): wat het vraagt en doet, pas je daarna aan.
   const [base, setBase] = useState<Base>(kind?.base ?? "gebruik");
+  const [parts, setParts] = useState<Parts>(() => kind?.parts ?? baseParts("gebruik"));
   const [name, setName] = useState(kind?.name ?? "");
   const [icon, setIcon] = useState<IconKey | null>((kind?.icon as IconKey) ?? null);
   const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
   const [planned, setPlanned] = useState(kind?.planned ?? false);
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
-  const [does, setDoes] = useState<DoesDraft[]>(() => doesDraft(kind?.does ?? []));
+  const [does, setDoes] = useState<DoesDraft[]>(() => doesDraft(kind?.does ?? presetDoes("gebruik")));
   const { data: columns } = useApi<ListColumns[]>("/me/columns");
+  const things = lists.filter((l) => l.one && !l.archived);
   // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
   const [readChoice, setReadChoice] = useState<boolean | null>(null);
-  const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { base, fields: kind?.fields ?? [] });
+  const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { parts, fields: kind?.fields ?? [] });
+  /**
+   * Geld aan of uit, naar iemand of gedeeld: het saldo volgt mee (wie betaalde telt bij, wie deelt of naar wie telt af),
+   * tenzij je dat zelf al anders instelde.
+   */
+  function money(on: boolean, to: boolean) {
+    setParts({ ...parts, money: on, to: on && to });
+    const people = does.filter((h) => h.rows.from !== "lines");
+    const standard = people.every((h) => h.field === BALANCE && !h.list && h.value.from === "amount");
+    if (!standard) return;
+    const rest = does.filter((h) => h.rows.from === "lines");
+    setDoes(on ? [...rest, ...doesDraft(presetDoes(to ? "overdracht" : "dienst"))] : rest);
+  }
+  function start(b: Base) {
+    setBase(b);
+    setParts(baseParts(b));
+    setDoes(doesDraft(presetDoes(b)));
+  }
   async function save() {
     const built = buildFields(drafts, "self");
     if ("error" in built) return toast(built.error, "alert");
     // Een nieuw veld krijgt zijn sleutel pas nu: wat het formulier ermee invult, volgt mee.
     const keyOf = new Map(drafts.map((d, i) => [d.key, built.fields[i]?.key ?? d.key]));
+    const groups = parts.groups.map((g) => ({ ...g, label: g.label.trim() || LINE_ROLES[g.role].label }));
     const body = {
       base,
       name,
       icon,
       fields: built.fields,
+      parts: { ...parts, groups },
       does: buildDoes(does).map((h) => (h.value.from === "field" ? { ...h, value: { from: "field" as const, key: keyOf.get(h.value.key) ?? h.value.key } } : h)),
-      goal: base === "activiteit" && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
+      goal: parts.duration && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
       planned,
     };
     try {
       const id = kind ? (await api.put(`/kinds/${kind.id}`, body), kind.id) : (await api.post<{ id: string }>(`/lists/${listId}/kinds`, body)).id;
-      if (readChoice !== null) await api.put(`/lists/${listId}`, { read_photo: withReads(list.read_photo, id, { base, fields: built.fields }, readChoice) });
+      if (readChoice !== null) await api.put(`/lists/${listId}`, { read_photo: withReads(list.read_photo, id, { parts, fields: built.fields }, readChoice) });
       toast(`${name} bewaard`);
       onDone();
     } catch (err) {
@@ -485,8 +544,8 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
     <div className="form">
       {!kind && (
         <label className="field">
-          <span className="label">Werkt als</span>
-          <select value={base} onChange={(e) => isBase(e.target.value) && setBase(e.target.value)}>
+          <span className="label">Begin van</span>
+          <select value={base} onChange={(e) => isBase(e.target.value) && start(e.target.value)}>
             {Object.entries(BASES).map(([k, b]) => (
               <option key={k} value={k} title={b.hint}>
                 {b.label}
@@ -497,20 +556,26 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
       )}
       <label className="field">
         <span className="label">Naam</span>
-        <input value={name} maxLength={40} required placeholder="bv. Gegeten, Carwash" onChange={(e) => setName(e.target.value)} />
+        <input value={name} maxLength={40} required placeholder="bv. Gegeten, Schilderwerk" onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="field">
         <span className="label">Icoon</span>
         <IconPicker value={icon} onChange={setIcon} />
       </div>
-      {base === "activiteit" && (
+      <div className="switch-list">
+        <Switch checked={parts.money} onChange={(on) => money(on, false)} label="Met een bedrag" />
+        {parts.money && <Switch checked={parts.to} onChange={(on) => money(true, on)} label="Naar iemand" />}
+        <Switch checked={parts.duration} onChange={(on) => setParts({ ...parts, duration: on })} label="Met een einde" />
+      </div>
+      {parts.duration && (
         <label className="field">
           <span className="label">Melding na (uren)</span>
           <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
         </label>
       )}
+      <GroupsEditor value={parts.groups} onChange={(groups) => setParts({ ...parts, groups })} lists={things} />
       <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
-      {columns && <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} />}
+      {columns && <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} parts={parts} />}
       <Switch checked={planned} onChange={setPlanned} label="Gepland" />
       <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
       <div className="btn-row">

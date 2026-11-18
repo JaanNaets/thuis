@@ -2,14 +2,15 @@
 // afgeleid uit de gebeurtenissen en hun formulieren) en de waarde van die kolommen voor wie leest. Een cel aanpassen
 // in het ding is een Aanpassing in het logboek van zijn lijst (`adjust`).
 
-import { allDoes, effectsOf, foldCell, STOCK, type CellEntry, type Effect, type EffectLine } from "../shared/cells";
-import { formatFieldValue, type Attributes, type FieldDef, type FieldValue } from "../shared/fields";
+import { effectsOf, foldCell, personAmounts, STOCK, type CellEntry, type Effect, type EffectEvent, type EffectLine, type Ledger } from "../shared/cells";
+import { formatFieldValue, type Attributes, type FieldDef, type FieldValue, type Share } from "../shared/fields";
+import { cleanLedger } from "../shared/ledger";
 import { ADJUST_KIND, baseKind, brusselsNow, isBase, kindInfo, type Base, type KindInfo, type List, type StockLevel } from "../shared/model";
 import { stockLevel } from "../shared/stock";
 import { ids, parseJson, toKind, type KindRowDb } from "./access";
 
 /** Verhoog dit als wat een gebeurtenis doet anders uitgerekend wordt: dan bouwt de Worker alles opnieuw op. */
-export const EFFECTS_VERSION = "1";
+export const EFFECTS_VERSION = "2";
 const CHUNK = 40;
 
 async function kindsById(db: D1Database, kindIds: string[]): Promise<Map<string, KindInfo>> {
@@ -25,31 +26,89 @@ async function kindsById(db: D1Database, kindIds: string[]): Promise<Map<string,
 const kindFor = (kinds: Map<string, KindInfo>, kind: string, base: Base): KindInfo =>
   kind === ADJUST_KIND.id ? ADJUST_KIND : isBase(kind) ? baseKind(kind) : (kinds.get(kind) ?? baseKind(base));
 
+type EventRow = { id: string; list_id: string; kind: string; base: Base; at: string; amount: number | null; data: string; paid_by: string | null; split: string | null; to_person: string | null; created_by: string };
+
+/**
+ * De lijsten met een saldo per persoon die deze gebeurtenissen raken: hun saldokolom en de rij van elke persoon. Een
+ * persoon zonder rij krijgt er een (met zijn naam, en zijn id in de kolom van de persoon).
+ */
+async function ledgersFor(db: D1Database, needs: Map<string, Set<string>>): Promise<Map<string, Ledger>> {
+  const out = new Map<string, Ledger>();
+  if (!needs.size) return out;
+  const { results } = await db
+    .prepare("SELECT id, fields, ledger FROM lists WHERE ledger IS NOT NULL AND id IN (SELECT value FROM json_each(?))")
+    .bind(ids(needs.keys()))
+    .all<{ id: string; fields: string; ledger: string }>();
+  for (const l of results) {
+    const def = cleanLedger(parseJson(l.ledger, null), parseJson<FieldDef[]>(l.fields, []));
+    if (!def) continue;
+    const { results: things } = await db.prepare("SELECT id, data FROM things WHERE list_id = ? AND archived = 0").bind(l.id).all<{ id: string; data: string }>();
+    const rows = new Map<string, string>();
+    for (const t of things) {
+      const who = parseJson<Attributes>(t.data, {})[def.person];
+      if (typeof who === "string" && !rows.has(who)) rows.set(who, t.id);
+    }
+    const missing = [...(needs.get(l.id) ?? [])].filter((p) => !rows.has(p));
+    if (missing.length) {
+      const { results: people } = await db.prepare("SELECT id, name FROM people WHERE id IN (SELECT value FROM json_each(?))").bind(ids(missing)).all<{ id: string; name: string }>();
+      const made = people.map((p) => ({ ...p, thing: crypto.randomUUID() }));
+      if (made.length)
+        await db.batch(
+          made.map((p) =>
+            db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(p.thing, l.id, p.name, JSON.stringify({ [def.person]: p.id }), p.id),
+          ),
+        );
+      for (const p of made) rows.set(p.id, p.thing);
+    }
+    out.set(l.id, { field: def.field, rows });
+  }
+  return out;
+}
+
 /** Wat deze gebeurtenissen doen opnieuw uitrekenen en bewaren (na elk bewaren, of als hun formulier verandert). */
 export async function rebuildEffects(db: D1Database, eventIds: string[]): Promise<void> {
   for (let i = 0; i < eventIds.length; i += CHUNK) {
     const chunk = [...new Set(eventIds.slice(i, i + CHUNK))];
     const [events, lines] = (await db.batch([
-      db.prepare("SELECT id, kind, base, at, amount, data FROM events WHERE id IN (SELECT value FROM json_each(?))").bind(ids(chunk)),
+      db
+        .prepare("SELECT id, list_id, kind, base, at, amount, data, paid_by, split, to_person, created_by FROM events WHERE id IN (SELECT value FROM json_each(?))")
+        .bind(ids(chunk)),
       db
         .prepare(
-          `SELECT l.event_id, l.role, l.thing_id, t.list_id AS thing_list, l.amount, l.unit, l.price, l.expires
+          `SELECT l.event_id, l.role, l.thing_id, t.list_id AS thing_list, l.amount, l.unit, l.price, l.expires, l.owner
            FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id IN (SELECT value FROM json_each(?)) ORDER BY l.position`,
         )
         .bind(ids(chunk)),
-    ])) as [D1Result<{ id: string; kind: string; base: Base; at: string; amount: number | null; data: string }>, D1Result<EffectLine & { event_id: string }>];
+    ])) as [D1Result<EventRow>, D1Result<EffectLine & { event_id: string }>];
     const kinds = await kindsById(db, events.results.map((e) => e.kind));
-    const statements: D1PreparedStatement[] = [db.prepare("DELETE FROM effects WHERE event_id IN (SELECT value FROM json_each(?))").bind(ids(chunk))];
-    for (const e of events.results) {
+    const prepared = events.results.map((e) => {
       const kind = kindFor(kinds, e.kind, e.base);
-      const effects = effectsOf(allDoes(kind), {
+      const input: EffectEvent = {
+        list_id: e.list_id,
         at: e.at,
         amount: e.amount,
         data: parseJson<Attributes>(e.data, {}),
         lines: lines.results.filter((l) => l.event_id === e.id),
-      });
-      statements.push(...effectStatements(db, e.id, effects));
-    }
+        paid_by: e.paid_by,
+        split: parseJson<Share[] | null>(e.split, null),
+        to_person: e.to_person,
+        created_by: e.created_by,
+      };
+      return { id: e.id, does: kind.does, input };
+    });
+    // Wie in welke lijst een saldo krijgt.
+    const needs = new Map<string, Set<string>>();
+    for (const p of prepared)
+      for (const h of p.does) {
+        if (h.rows.from === "lines") continue;
+        const list = h.list ?? p.input.list_id;
+        const set = needs.get(list) ?? new Set<string>();
+        for (const person of personAmounts(h.rows.from, p.input).keys()) set.add(person);
+        needs.set(list, set);
+      }
+    const ledgers = await ledgersFor(db, needs);
+    const statements: D1PreparedStatement[] = [db.prepare("DELETE FROM effects WHERE event_id IN (SELECT value FROM json_each(?))").bind(ids(chunk))];
+    for (const p of prepared) statements.push(...effectStatements(db, p.id, effectsOf(p.does, p.input, ledgers)));
     await db.batch(statements);
   }
 }
@@ -62,10 +121,10 @@ function effectStatements(db: D1Database, eventId: string, effects: Effect[]): D
   );
 }
 
-/** Wat al deze gebeurtenissen doen, als dat nog met een oudere versie uitgerekend werd (eens per isolate nagekeken). */
-let ready = false;
+/** Wat al deze gebeurtenissen doen, als dat nog met een oudere versie uitgerekend werd (hoogstens eens per minuut nagekeken). */
+let checked = 0;
 export async function ensureEffects(db: D1Database): Promise<void> {
-  if (ready) return;
+  if (Date.now() - checked < 60_000) return;
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'effects_version'").first<{ value: string }>();
   if (row?.value !== EFFECTS_VERSION) {
     const { results } = await db.prepare("SELECT id FROM events").all<{ id: string }>();
@@ -78,13 +137,8 @@ export async function ensureEffects(db: D1Database): Promise<void> {
       .bind(EFFECTS_VERSION)
       .run();
   }
-  ready = true;
+  checked = Date.now();
 }
-
-/** Na een test die de databank leegmaakt (lokaal). */
-export const resetEffectsCheck = () => {
-  ready = false;
-};
 
 // ---------- lezen ----------
 

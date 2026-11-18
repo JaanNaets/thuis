@@ -7,7 +7,8 @@
 import { cleanDoes, type Handeling } from "./cells.ts";
 import { cleanAttributes, type AmountEntry, type Attributes, type FieldDef, type Share } from "./fields.ts";
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
-import { BASES, isLineRole, isStatus, type Base, type LineRole, type Status } from "./model.ts";
+import { cleanLedger, type LedgerDef } from "./ledger.ts";
+import { BASES, cleanParts, isLineRole, isStatus, type Base, type LineRole, type Parts, type Status } from "./model.ts";
 import { cleanStock } from "./stock.ts";
 import { cleanReadPhoto, type ReadPhoto } from "./photoread.ts";
 
@@ -65,9 +66,9 @@ export type Backup = {
   created_at: string;
   people: { id: string; name: string; email: string | null; color: string | null }[];
   tags: { id: string; name: string; color: string | null }[];
-  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
+  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; ledger?: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
   /** `planned` ontbreekt in back-ups van vóór 2026-11-10 (dan: niet gepland). */
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; does?: unknown; sort_order: number }[];
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; parts?: unknown; does?: unknown; sort_order: number }[];
   things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id?: string | null; mirror_of?: string | null }[];
   /** Koppelingen (zie shared/transfer.ts) tussen lijsten die allebei in de back-up zitten; ontbreekt in oudere back-ups. */
   mirrors?: { id: string; list_id: string; source_id: string; plan: unknown }[];
@@ -147,8 +148,8 @@ export type RestoreContext = {
 };
 
 export type RestorePlan = {
-  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; does: Handeling[]; sort_order: number }[];
+  lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; ledger: LedgerDef | null; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; parts: Parts | null; does: Handeling[]; sort_order: number }[];
   things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id: string | null; mirror_of: string | null }[];
   mirrors: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
@@ -188,6 +189,7 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       color: typeof l.color === "string" ? l.color : null,
       fields,
       stock: cleanStock(l.stock, fields),
+      ledger: cleanLedger(l.ledger, fields),
       notify: l.notify ?? null,
       // Een eigen soort krijgt een nieuwe id; een basissoort en "dingen" blijven.
       read_photo: remapReadPhoto(cleanReadPhoto(l.read_photo), map),
@@ -211,13 +213,17 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     // Wat het formulier invult: enkel in lijsten die terugkomen (met hun nieuwe velden), of de voorraad van elke lijst.
     let does: Handeling[] = [];
     try {
-      const back = lists.map((l) => ({ id: l.id, name: l.name, stock: Boolean(l.stock), fields: l.fields }));
+      const back = lists.map((l) => ({ id: l.id, name: l.name, stock: Boolean(l.stock), ledger: Boolean(l.ledger), fields: l.fields }));
       const raw = (Array.isArray(k.does) ? k.does : []).map((h) => remap(h, map)).filter((h) => !h?.list || back.some((l) => l.id === h.list));
       does = cleanDoes(raw, back, fields);
     } catch {
       does = [];
     }
-    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, does, sort_order: k.sort_order ?? 0 });
+    // De groepen lijnen: een lijst die niet terugkomt, valt weg (de groep blijft, uit elke lijst).
+    const parts = cleanParts(k.parts === undefined || k.parts === null ? null : remap(k.parts, map));
+    const back = new Set(lists.map((l) => l.id));
+    if (parts) parts.groups = parts.groups.map((g) => (g.list && !back.has(g.list) ? { ...g, list: null } : g));
+    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, parts, does, sort_order: k.sort_order ?? 0 });
   }
 
   // Een koppeling enkel tussen twee lijsten die terugkomen; de bron en de doellijst met hun nieuwe ids.

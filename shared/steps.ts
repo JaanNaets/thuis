@@ -6,7 +6,8 @@
 
 import { normalizeShares, parseFieldText, parseMoney, type Attributes, type FieldDef, type FieldType } from "./fields.ts";
 import { defaultSharers } from "./ledger.ts";
-import { BASES, type KindInfo, type Role } from "./model.ts";
+import { stockOp } from "./cells.ts";
+import { mainGroup, type KindInfo, type Role } from "./model.ts";
 import { fold } from "./targets.ts";
 
 /** Veldsoorten die je in één regel invult. */
@@ -42,20 +43,19 @@ export type StepValues = Record<string, unknown>;
 const quick = (f: FieldDef) => STEP_TYPES.has(f.type);
 const fieldStep = (def: FieldDef): Step => ({ key: def.key, label: def.label, type: "field", def });
 
-/** Formulieren die je stap voor stap logt: geen activiteit (zonder einde loopt ze als timer) en geen overdracht (naar wie). */
-export const canStep = (kind: Pick<KindInfo, "base"> | null | undefined): kind is KindInfo =>
-  Boolean(kind && kind.base !== "activiteit" && kind.base !== "overdracht");
+/** Formulieren die je stap voor stap logt: geen met een einde (zonder einde loopt het als timer) of naar iemand. */
+export const canStep = (kind: Pick<KindInfo, "parts"> | null | undefined): kind is KindInfo => Boolean(kind && !kind.parts.duration && !kind.parts.to);
 
 /**
  * Loggen met een formulier, eventueel over een ding: hoeveel (als het ding erbij komt of eraf gaat), de velden van het
  * formulier, en een bedrag (met geld, tenzij het formulier zelf een bedrag heeft of gepland begint).
  */
 export function eventSteps(kind: KindInfo, thing?: { unit: string | null } | null): Step[] {
-  const base = BASES[kind.base];
   const steps: Step[] = [];
-  if (thing && (base.line === "in" || base.line === "uit")) steps.push({ key: "$qty", label: "Hoeveel", type: "qty", unit: thing.unit });
+  const op = stockOp(kind.does, mainGroup(kind).role);
+  if (thing && (op === "bij" || op === "af")) steps.push({ key: "$qty", label: "Hoeveel", type: "qty", unit: thing.unit });
   steps.push(...kind.fields.filter(quick).map(fieldStep));
-  if (base.money && !kind.planned && !kind.fields.some((f) => f.type === "money")) steps.push({ key: "$amount", label: "Bedrag", type: "amount" });
+  if (kind.parts.money && !kind.planned && !kind.fields.some((f) => f.type === "money")) steps.push({ key: "$amount", label: "Bedrag", type: "amount" });
   return steps;
 }
 
@@ -154,11 +154,12 @@ export function eventBody(
   values: StepValues,
   ctx: { thing?: { id: string; unit: string | null } | null; me: string; people: { id: string; role: Role }[]; today: string; planned?: boolean },
 ) {
-  const base = BASES[kind.base];
+  const money = kind.parts.money;
+  const role = mainGroup(kind).role;
   const data = dataOf(steps, values);
   const moneyField = kind.fields.find((f) => f.type === "money");
   const amount = typeof values.$amount === "number" ? values.$amount : moneyField && typeof data[moneyField.key] === "number" ? (data[moneyField.key] as number) : null;
-  const sharers = base.money ? defaultSharers(kind.base, ctx.people) : [];
+  const sharers = defaultSharers(kind.parts, ctx.people);
   const qty = typeof values.$qty === "number" ? values.$qty : null;
   return {
     kind: kind.id,
@@ -166,13 +167,13 @@ export function eventBody(
     status: kind.planned || ctx.planned ? "gepland" : "gebeurd",
     at: ctx.today,
     end_at: null,
-    amount: base.money ? amount : null,
-    paid_by: base.money ? ctx.me : null,
+    amount: money ? amount : null,
+    paid_by: money ? ctx.me : null,
     to_person: null,
     split: sharers.length ? normalizeShares(sharers.map((id) => ({ person_id: id }))) : null,
     data,
     lines: ctx.thing
-      ? [{ role: base.line, thing_id: ctx.thing.id, amount: qty, unit: ctx.thing.unit, price: kind.base === "aankoop" ? amount : null, expires: null, owner: null }]
+      ? [{ role, thing_id: ctx.thing.id, amount: qty, unit: ctx.thing.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }]
       : [],
     repeat: null,
   };

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { Attributes, Interval } from "../../shared/fields";
 import { defaultSharers } from "../../shared/ledger";
-import { BASES, brusselsNow, canEdit, startsPlanned, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
+import { stockOp } from "../../shared/cells";
+import { formEats } from "../../shared/food";
+import { brusselsNow, canEdit, mainGroup, startsPlanned, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ThingRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { readsPhoto } from "../../shared/photoread";
-import { hasPrice } from "../../shared/targets";
+import { buysWith, hasPrice } from "../../shared/targets";
 import { niceName } from "../../shared/receipt";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -92,7 +94,11 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   );
   const chosenKind = useRef(Boolean(event || wantedKind));
   const kind: KindInfo = detail.kinds.find((k) => k.id === kindId) ?? existing?.kinds.find((k) => k.id === kindId) ?? bases[0];
-  const base = BASES[kind.base];
+  // Waar een ding komt als je logt vanaf dat ding, en wat erbij komt in een voorraad (een aankoop).
+  const main = mainGroup(kind).role;
+  const adds = kind.parts.groups.find((g) => stockOp(kind.does, g.role) === "bij")?.role ?? null;
+  // Een formulier dat koopt (een kasticket, een prijs in je tekst): het eigen van de lijst, anders een vertrekpunt.
+  const buyKind = own.find(buysWith) ?? bases.find(buysWith) ?? null;
 
   const now = brusselsNow();
   // Vooraf ingevuld door een actie op het overzicht (`?vooraf=`): de omschrijving en velden van de soort.
@@ -107,7 +113,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [typed, setTyped] = useState(() => (event ? "" : (params.get("tekst") ?? "")));
   const [name, setName] = useState(event?.name ?? (typeof prefill.name === "string" ? prefill.name : ""));
   const [day, setDay] = useState((event?.at ?? now).slice(0, 10));
-  const [time, setTime] = useState(event ? event.at.slice(11, 16) : kind.base === "activiteit" ? now.slice(11, 16) : "");
+  const [time, setTime] = useState(event ? event.at.slice(11, 16) : kind.parts.duration ? now.slice(11, 16) : "");
   const [endTime, setEndTime] = useState(event?.end_at?.slice(11, 16) ?? "");
   // Gepland als je erom vroeg (`?gepland=1`) of als het formulier gepland begint; tot je de schakelaar zelf zet.
   const askedPlanned = Boolean(params.get("gepland"));
@@ -125,17 +131,17 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
   // Een nieuwe uitgave in een gedeelde lijst: gelijk over wie er logt (shared/ledger.ts), tot je de verdeling zelf kiest.
   const sharers = detail.people.filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, role: p.role }));
-  const defaultShares = (b: typeof kind.base): SharesDraft => {
-    const ids = defaultSharers(b, sharers);
+  const defaultShares = (k: KindInfo): SharesDraft => {
+    const ids = defaultSharers(k.parts, sharers);
     return ids.length ? { mode: "equal", people: ids, values: {} } : sharesDraft(undefined);
   };
-  const [shares, setShares] = useState<SharesDraft>(() => (event ? sharesDraft(event.split ?? undefined) : defaultShares(kind.base)));
+  const [shares, setShares] = useState<SharesDraft>(() => (event ? sharesDraft(event.split ?? undefined) : defaultShares(kind)));
   const sharesChosen = useRef(Boolean(event));
   useEffect(() => {
-    if (!sharesChosen.current) setShares(defaultShares(kind.base));
-    // Enkel bij een andere soort; de mensen van de lijst veranderen niet terwijl je invult.
+    if (!sharesChosen.current) setShares(defaultShares(kind));
+    // Enkel bij een ander formulier; de mensen van de lijst veranderen niet terwijl je invult.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind.base]);
+  }, [kind.id]);
   const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? (Object.fromEntries(Object.entries(prefill).filter(([k]) => k !== "name")) as Attributes)));
   const [lines, setLines] = useState<LineDraft[]>(() =>
     event
@@ -145,7 +151,9 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             existing?.things.find((t) => t.id === l.thing_id),
           ),
         )
-      : [emptyLine(base.line)],
+      : kind.parts.groups.length
+        ? [emptyLine(main)]
+        : [],
   );
   const [repeat, setRepeat] = useState(() => {
     const r = event?.repeat?.every;
@@ -167,7 +175,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   useEffect(() => {
     const t = preset?.things[0];
     const qty = typeof prefill.$qty === "number" ? String(prefill.$qty).replace(".", ",") : "";
-    if (t) setLines((ls) => (ls.length === 1 && !ls[0].thing && !ls[0].text ? [{ ...emptyLine(base.line, t), unit: t.unit ?? "", amount: qty }] : ls));
+    if (t) setLines((ls) => (ls.length <= 1 && !ls[0]?.thing && !ls[0]?.text ? [{ ...emptyLine(main, t), unit: t.unit ?? "", amount: qty }] : ls));
   }, [preset]);
   // Een gedeelde foto (Android: delen met Heystack, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
   // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.
@@ -177,8 +185,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
     if (sharedTaken.current || event || (!receipt && params.get("foto") !== "gedeeld")) return;
     sharedTaken.current = true;
-    // Een kasticket: het eigen aankoopformulier van de lijst, anders de aankoop zelf.
-    const buy = own.find((k) => k.base === "aankoop")?.id ?? (detail.kinds.some((k) => k.id === "aankoop") ? "aankoop" : null);
+    // Een kasticket: het eigen formulier van de lijst dat koopt, anders een vertrekpunt dat koopt (Aankoop).
+    const buy = buyKind?.id ?? null;
     if (receipt && buy) {
       chosenKind.current = true;
       setKindId(buy);
@@ -191,19 +199,22 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       else clearShared();
     });
   }, []);
-  // Een andere soort: haar (lege) velden, en lege lijnen krijgen de rol van de soort.
+  // Een ander formulier: zijn (lege) velden; lege lijnen gaan weg, en de eerste groep krijgt er een.
   const firstKind = useRef(kindId);
   useEffect(() => {
     if (firstKind.current === kindId) return;
     firstKind.current = "";
     setDraft(attributesDraft(kind.fields, {}));
-    setLines((ls) => ls.map((l) => (!l.thing && !l.text ? { ...l, role: base.line } : l)));
+    setLines((ls) => {
+      const kept = ls.filter((l) => l.thing || l.text);
+      return kept.length || !kind.parts.groups.length ? kept : [emptyLine(main)];
+    });
     if (!statusChosen.current) setStatus(startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd");
   }, [kindId]);
 
   // Wat je typt ("pasta 300 g", "tankbeurt 84,50 52 liter"), live in de velden (shared/parse.ts). Enkel wat de tekst
   // er zelf zette, verandert mee; wat je daarna zelf aanpaste, blijft staan (en wissen zet terug wat er stond).
-  const startTime = kind.base === "activiteit" ? now.slice(11, 16) : "";
+  const startTime = kind.parts.duration ? now.slice(11, 16) : "";
   const auto = useRef({
     name: "",
     amount: "",
@@ -224,9 +235,9 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         setKindId(lead.id);
         return;
       }
-    } else if (!chosenKind.current && !money && hasPrice(text) && detail.kinds.some((k) => k.id === "aankoop")) {
-      // Een prijs zonder gekozen soort: een aankoop.
-      setKindId("aankoop");
+    } else if (!chosenKind.current && !money && hasPrice(text) && buyKind) {
+      // Een prijs zonder gekozen formulier: een formulier dat koopt.
+      setKindId(buyKind.id);
       return;
     }
     let stale = false;
@@ -242,8 +253,17 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             ).things
           : [];
         if (stale) return;
-        // Uit een voorraad: wat de soort doet (erbij, eraf, een telling); anders wat het ding meestal is (Colruyt: bij).
-        const roleOf = (t: ThingRef): LineRole => (t.stock ? base.line : (t.usual ?? (base.line === "in" || base.line === "uit" ? "voor" : base.line)));
+        // De groep van het formulier uit de lijst van het ding; uit een voorraad: de groep die de voorraad verandert;
+        // anders wat het ding meestal is (Colruyt: bij), als het formulier die groep heeft.
+        const roleOf = (t: ThingRef): LineRole => {
+          const groups = kind.parts.groups;
+          const listed = groups.find((g) => g.list === t.list_id);
+          if (listed) return listed.role;
+          const stocked = t.stock ? groups.find((g) => !g.list && stockOp(kind.does, g.role)) : undefined;
+          if (stocked) return stocked.role;
+          const usual = t.usual ? groups.find((g) => !g.list && g.role === t.usual) : undefined;
+          return usual?.role ?? groups.find((g) => !g.list && !stockOp(kind.does, g.role))?.role ?? main;
+        };
         const parsed = readEvent(text, {
           today: now.slice(0, 10),
           money,
@@ -274,7 +294,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     // Kom je van een lijst (Aankoop vanuit Wijnen) en noemt je tekst geen ding dat erbij komt, dan is de rest van je
     // tekst iets nieuws in die lijst ("Meursault 2019 32 euro"), niet de omschrijving.
-    const loose = newIn && base.line === "in" && p.name && !p.lines.some((l) => l.thing.role === "in") ? niceName(p.name) : "";
+    const loose = newIn && adds && p.name && !p.lines.some((l) => l.thing.role === adds) ? niceName(p.name) : "";
     const next = {
       name: loose ? "" : p.name,
       amount: p.amount !== null ? centsToInput(p.amount) : "",
@@ -299,13 +319,13 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         price: l.price !== null ? centsToInput(l.price) : "",
       };
     });
-    if (loose) made.push({ ...emptyLine("in"), text: loose, newIn });
+    if (loose && adds) made.push({ ...emptyLine(adds), text: loose, newIn });
     setLines((cur) => {
       // Wat de tekst vroeger maakte en niet aangepast is, gaat weg; een lege lijn ook.
       const kept = cur.filter((l) => (before.lines.has(l.key) ? before.lines.get(l.key) !== sig(l) : Boolean(l.thing || l.text.trim() || l.amount || l.price)));
       const fresh = made.filter((m) => !kept.some((k) => k.thing?.id === m.thing?.id));
       const all = [...kept, ...fresh];
-      return all.length ? all : [emptyLine(base.line)];
+      return all.length || !kind.parts.groups.length ? all : [emptyLine(main)];
     });
     auto.current = {
       ...next,
@@ -316,7 +336,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
 
   if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
   const shareWith = (people ?? []).filter((p) => shares.people.includes(p.id));
-  const money = base.money;
+  const money = kind.parts.money;
+  const eats = formEats(kind);
 
   async function readPhoto(file: File) {
     setReading(true);
@@ -344,7 +365,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       if (read.total !== null) setAmount(centsToInput(read.total));
       if (!name.trim() && read.store_text && !read.store) setName(read.store_text);
       const made: LineDraft[] = read.lines.map((l) => ({
-        ...emptyLine("in", l.thing),
+        ...emptyLine(adds ?? main, l.thing),
         text: l.thing ? "" : niceName(l.name),
         newIn: l.thing ? "" : defaultNew,
         amount: String(l.amount).replace(".", ","),
@@ -353,6 +374,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         ticket: l.name,
       }));
       const store = read.store ? [emptyLine("bij", read.store)] : read.store_text ? [{ ...emptyLine("bij"), text: read.store_text }] : [];
+      // Het formulier heeft geen groep voor de winkel: de naam als omschrijving.
+      if (!kind.parts.groups.some((g) => g.role === "bij")) store.length = 0;
       setLines((cur) => [...cur.filter((l) => l.thing || l.text.trim()), ...store, ...made]);
       setSource(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
     } catch (err) {
@@ -384,10 +407,10 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
       name: name.trim(),
       status,
       at,
-      end_at: kind.base === "activiteit" && time && endTime ? `${day}T${endTime}` : null,
+      end_at: kind.parts.duration && time && endTime ? `${day}T${endTime}` : null,
       amount: cents ?? (money && priced ? priced : null),
       paid_by: money ? paidBy || null : null,
-      to_person: kind.base === "overdracht" ? toPerson || null : null,
+      to_person: kind.parts.to ? toPerson || null : null,
       split: split.length ? split : null,
       data: built.data,
       lines: builtLines,
@@ -499,10 +522,10 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
             <input type="date" required value={day} onChange={(e) => setDay(e.target.value)} />
           </label>
           <label className="field">
-            <span className="label">{kind.base === "activiteit" ? "Van" : "Uur"}</span>
+            <span className="label">{kind.parts.duration ? "Van" : "Uur"}</span>
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </label>
-          {kind.base === "activiteit" && (
+          {kind.parts.duration && (
             <label className="field">
               <span className="label">Tot</span>
               <input type="time" value={endTime} disabled={!time} onChange={(e) => setEndTime(e.target.value)} />
@@ -519,7 +542,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         />
       </section>
 
-      {(money || kind.base === "gebruik") && (
+      {(money || eats) && (
         <section className="card form-section">
           {money && (
             <div className="field-row">
@@ -528,7 +551,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
                 <input inputMode="decimal" placeholder="€" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </label>
               <label className="field">
-                <span className="label">{kind.base === "overdracht" ? "Van" : "Betaald door"}</span>
+                <span className="label">{kind.parts.to ? "Van" : "Betaald door"}</span>
                 <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
                   <option value="">—</option>
                   {(people ?? []).map((p) => (
@@ -538,7 +561,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
                   ))}
                 </select>
               </label>
-              {kind.base === "overdracht" && (
+              {kind.parts.to && (
                 <label className="field">
                   <span className="label">Naar</span>
                   <select value={toPerson} onChange={(e) => setToPerson(e.target.value)}>
@@ -553,9 +576,9 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
               )}
             </div>
           )}
-          {kind.base !== "overdracht" && (
+          {!kind.parts.to && (
             <div className="field">
-              <span className="label">{kind.base === "gebruik" ? "Wie at of gebruikte" : "Gedeeld met"}</span>
+              <span className="label">{money ? "Gedeeld met" : "Wie at of gebruikte"}</span>
               <SharesField
                 people={people ?? []}
                 meId={person.id}
@@ -570,9 +593,11 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         </section>
       )}
 
-      <section className="card form-section">
-        <LinesEditor lines={lines} onChange={setLines} money={money} people={shareWith} targets={targets} defaultNew={newIn} />
-      </section>
+      {(kind.parts.groups.length > 0 || lines.length > 0) && (
+        <section className="card form-section">
+          <LinesEditor kind={kind} lines={lines} onChange={setLines} people={shareWith} targets={targets} defaultNew={newIn} />
+        </section>
+      )}
 
       {kind.fields.length > 0 && (
         <section className="card form-section">

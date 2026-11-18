@@ -1,11 +1,13 @@
 // Eten: kcal en voedingswaarden per persoon, uitgerekend uit wat er gegeten werd (nooit bewaard).
 //
-// Een gebruik (Gegeten) telt als eten als het voedingswaarden heeft: rechtstreeks in een veld van de soort met
-// productinfo (een broodje van 450 kcal), of uit de dingen die eraf gingen (300 g pasta × de kcal per 100 g van de
-// pasta). Wat je zelf invult, wint. Wie at, staat in de verdeling (`split`); zonder verdeling at wie het logde.
+// Een formulier dat eet (`formEats`: zonder geld, en het trekt iets af van de voorraad of heeft kcal, zoals Gegeten)
+// telt als eten als het voedingswaarden heeft: rechtstreeks in een veld van het formulier met productinfo (een broodje
+// van 450 kcal), of uit de dingen die eraf gingen (300 g pasta × de kcal per 100 g van de pasta). Wat je zelf invult,
+// wint. Wie at, staat in de verdeling (`split`); zonder verdeling at wie het logde.
 
+import { stockOp, STOCK } from "./cells.ts";
 import type { Attributes, FieldDef, Share } from "./fields.ts";
-import type { Base, LineRole, Status } from "./model.ts";
+import type { KindInfo, LineRole, Status } from "./model.ts";
 import type { ProductKey } from "./product.ts";
 import { measureFor, type StockDef } from "./stock.ts";
 import { convert, converts, normalizeUnit } from "./units.ts";
@@ -17,14 +19,16 @@ export type Nutrition = Partial<Record<Nutrient, number>>;
 
 export type FoodThing = { fields: FieldDef[]; data: Attributes; stock: StockDef | null };
 export type FoodEvent = {
-  base: Base;
+  /** Het formulier eet (`formEats`). */
+  eats: boolean;
   status: Status;
   split: Share[] | null;
   created_by: string;
-  /** De velden van de soort en hun waarden. */
+  /** De velden van het formulier en hun waarden. */
   fields: FieldDef[];
   data: Attributes;
-  lines: { role: LineRole; amount: number | null; unit: string | null; thing: FoodThing | null }[];
+  /** De lijnen die eraf gaan (wat gegeten werd). */
+  lines: { amount: number | null; unit: string | null; thing: FoodThing | null }[];
 };
 
 const valueOf = (fields: FieldDef[], data: Attributes, key: ProductKey): number | null => {
@@ -49,13 +53,19 @@ export function gramsOf(amount: number | null, unit: string | null, thing: FoodT
 /** Een lijst of soort met kcal (een getal met productinfo kcal). */
 export const hasKcal = (fields: FieldDef[]) => fields.some((f) => f.product === "kcal" && f.type === "number");
 
-/** Is dit eten? Een gebruik met een veld voor kcal, of dat iets gebruikte uit een lijst met kcal (geen pellets). */
-export const isFood = (e: Pick<FoodEvent, "base" | "fields" | "lines">) =>
-  e.base === "gebruik" && (hasKcal(e.fields) || e.lines.some((l) => l.role === "uit" && l.thing !== null && hasKcal(l.thing.fields)));
+/** Eet dit formulier? Zonder geld, en het trekt iets af van de voorraad of heeft een veld voor kcal (Gegeten). */
+export const formEats = (kind: Pick<KindInfo, "parts" | "does" | "fields">) =>
+  !kind.parts.money && (hasKcal(kind.fields) || kind.does.some((h) => h.rows.from === "lines" && h.field === STOCK && h.op === "af"));
+
+/** De rollen van de lijnen die eraf gaan (wat gegeten werd). */
+export const eatenRoles = (kind: Pick<KindInfo, "does">): LineRole[] => (["in", "uit", "voor", "bij"] as const).filter((r) => stockOp(kind.does, r) === "af");
+
+/** Is dit eten? Een formulier dat eet, met een veld voor kcal of dat iets gebruikte uit een lijst met kcal (geen pellets). */
+export const isFood = (e: Pick<FoodEvent, "eats" | "fields" | "lines">) => e.eats && (hasKcal(e.fields) || e.lines.some((l) => l.thing !== null && hasKcal(l.thing.fields)));
 
 /** De voedingswaarden van één gebeurtenis, in totaal; null als ze niet als eten telt. */
 export function nutritionOf(e: FoodEvent): Nutrition | null {
-  if (e.base !== "gebruik" || e.status !== "gebeurd") return null;
+  if (!e.eats || e.status !== "gebeurd") return null;
   const out: Nutrition = {};
   let any = false;
   for (const key of NUTRIENTS) {
@@ -68,7 +78,7 @@ export function nutritionOf(e: FoodEvent): Nutrition | null {
     let sum = 0;
     let found = false;
     for (const l of e.lines) {
-      if (l.role !== "uit" || !l.thing) continue;
+      if (!l.thing) continue;
       const per100 = valueOf(l.thing.fields, l.thing.data, key);
       if (per100 === null) continue;
       const grams = gramsOf(l.amount, l.unit, l.thing);

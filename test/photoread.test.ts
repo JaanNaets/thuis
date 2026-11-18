@@ -1,12 +1,13 @@
+import { baseParts } from "../shared/model.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
 import { cleanReadPhoto, isFoodKind, readsByDefault, readsPhoto, THINGS_FORM, withReads } from "../shared/photoread.ts";
 
 const kcal: FieldDef = { key: "kcal", label: "kcal", type: "number", product: "kcal" };
-const gegeten = { base: "gebruik" as const, fields: [kcal] };
-const sport = { base: "activiteit" as const, fields: [{ key: "km", label: "km", type: "number" } as FieldDef] };
-const aankoop = { base: "aankoop" as const, fields: [] };
+const gegeten = { parts: baseParts("gebruik"), fields: [kcal] };
+const sport = { parts: baseParts("activiteit"), fields: [{ key: "km", label: "km", type: "number" } as FieldDef] };
+const aankoop = { parts: baseParts("aankoop"), fields: [] };
 
 test("foto lezen: standaard een ding, een soort met geld (kasticket) of met voedingswaarden (gerecht)", () => {
   assert.equal(readsByDefault(THINGS_FORM, null), true);
@@ -14,7 +15,7 @@ test("foto lezen: standaard een ding, een soort met geld (kasticket) of met voed
   assert.equal(readsByDefault("k-gegeten", gegeten), true);
   assert.equal(isFoodKind(gegeten), true);
   assert.equal(readsByDefault("k-sport", sport), false);
-  assert.equal(readsByDefault("activiteit", { base: "activiteit", fields: [] }), false);
+  assert.equal(readsByDefault("activiteit", { parts: baseParts("activiteit"), fields: [] }), false);
 });
 
 test("foto lezen: wat de beheerder koos wint, gelijk aan de standaard bewaart niets", () => {

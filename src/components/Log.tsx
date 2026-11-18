@@ -3,7 +3,8 @@
 // Een gebeurtenis die je enkel via een ding ziet (`partial`), toont geen naam of bedrag. Zie STIJLBOEK.md → Logboek.
 
 import { useMemo } from "react";
-import { BASES, dayOf, eventTitle, minutesBetween, timeOf, type EventView, type KindInfo, type ThingRef } from "../../shared/model";
+import { stockOp } from "../../shared/cells";
+import { baseKind, BASES, dayOf, eventTitle, minutesBetween, timeOf, type EventView, type KindInfo, type ThingRef } from "../../shared/model";
 import { formatDuration, formatFieldValue } from "../../shared/fields";
 import { formatAmount } from "../../shared/units";
 import type { Person, Tone } from "../../shared/types";
@@ -34,7 +35,7 @@ export function usePageNames(page: EventPage | undefined) {
     const lists = new Map((page?.lists ?? []).map((l) => [l.id, l.name]));
     return {
       thing: (id: string) => things.get(id),
-      kind: (e: Pick<EventView, "kind" | "base">) => kinds.get(e.kind) ?? { id: e.base, base: e.base, name: BASES[e.base].label, icon: BASES[e.base].icon, fields: [], list_id: null, goal: null, planned: false },
+      kind: (e: Pick<EventView, "kind" | "base">): KindInfo => kinds.get(e.kind) ?? baseKind(e.base),
       person: (id: string | null) => (id ? (people.get(id)?.name ?? "Onbekend") : ""),
       list: (id: string) => lists.get(id) ?? "",
       title: (e: EventView) => eventTitle(e, kinds.get(e.kind) ?? { name: BASES[e.base].label }, (id) => things.get(id)?.name),
@@ -58,7 +59,7 @@ function metaOf(e: EventView, names: ReturnType<typeof usePageNames>, home: stri
   const parts: string[] = [];
   const time = timeOf(e.at);
   if (time) parts.push(e.end_at ? `${time}–${timeOf(e.end_at) ?? ""}` : time);
-  if (e.base === "activiteit" && e.end_at) {
+  if (names.kind(e).parts.duration && e.end_at) {
     const m = minutesBetween(e.at, e.end_at);
     if (m !== null && m > 0) parts.push(formatDuration(m));
   }
@@ -81,7 +82,8 @@ function endOf(e: EventView, names: ReturnType<typeof usePageNames>): string {
   const main = e.lines.filter((l) => l.role !== "bij");
   if (main.length === 1 && main[0].amount !== null) {
     const unit = main[0].unit ?? (main[0].thing_id ? names.thing(main[0].thing_id)?.unit : null) ?? null;
-    return `${main[0].role === "uit" ? "−" : main[0].role === "in" ? "+" : ""}${formatAmount(main[0].amount, unit)}`;
+    const op = stockOp(names.kind(e).does, main[0].role);
+    return `${op === "af" ? "−" : op === "bij" ? "+" : ""}${formatAmount(main[0].amount, unit)}`;
   }
   return main.length > 1 ? `${main.length} lijnen` : "";
 }
