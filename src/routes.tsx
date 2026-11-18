@@ -12,6 +12,7 @@ import { ListPage } from "./pages/ListPage";
 import { ListsPage } from "./pages/ListsPage";
 import { ListSettings } from "./pages/ListSettings";
 import { MePage } from "./pages/MePage";
+import { ExplainPage } from "./pages/ExplainPage";
 import { AppPage, SharedPage, StickerPage } from "./pages/QuickLinks";
 import { TagPage } from "./pages/TagPage";
 import { ItemFormPage } from "./pages/ItemForm";
@@ -63,6 +64,7 @@ export const routes: RouteObject[] = [
       { path: "delen", element: <SharedPage /> },
       { path: "app/:appId", element: <AppPage /> },
       { path: "ik", element: <MePage /> },
+      { path: "uitleg", element: <ExplainPage /> },
       { path: "*", element: <p className="page muted">Deze pagina bestaat niet.</p> },
     ],
   },

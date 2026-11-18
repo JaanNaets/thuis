@@ -1214,6 +1214,64 @@ dialog.sheet.menu-sheet {
   padding-top: 6px;
 }
 
+/* Uitklappen (Disclosure, Hoe Heystack werkt): een rij met één regel en een pijltje; open de tekst eronder, ingezet. */
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  list-style: none;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (hover: hover) {
+  .disclosure > summary:hover {
+    background: var(--hover);
+  }
+}
+
+.disclosure > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.disclosure-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.disclosure-chevron {
+  flex: none;
+  color: var(--faint);
+  transition: transform 0.3s var(--ease-out);
+}
+
+.disclosure[open] .disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.disclosure-body {
+  padding: 0 12px 14px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.disclosure-body ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .rows > li + li {
   border-top: 1px solid var(--divider);
 }

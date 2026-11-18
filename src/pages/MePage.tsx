@@ -10,6 +10,7 @@ import { NotificationsCard } from "../components/Notifications";
 import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
 import { isKiosk, useInstall } from "../device";
+import { Link } from "../router";
 import { useSession } from "../session";
 
 /**
@@ -48,11 +49,16 @@ export function MePage() {
         description={person.email ?? undefined}
         back={{ to: "/", label: boards[0]?.name ?? "Overzicht" }}
         actions={
-          canInstall && (
-            <button type="button" className="btn btn-outline btn-sm" onClick={install}>
-              <Icon name="download" size={15} /> App installeren
-            </button>
-          )
+          <>
+            <Link to="/uitleg" className="btn btn-outline btn-sm">
+              <Icon name="info" size={15} /> Hoe het werkt
+            </Link>
+            {canInstall && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={install}>
+                <Icon name="download" size={15} /> App installeren
+              </button>
+            )}
+          </>
         }
       />
       <section className="card form-section">

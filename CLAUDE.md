@@ -231,6 +231,8 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   nodig heeft); wat je dan
   bewaart, wacht in `src/outbox.ts`. Een nieuw scherm dat offline moet openen, zet zijn route daar (`test/sw.test.ts`
   kijkt na dat elk patroon een echte route is). Verander je de routes, geef `DATA_CACHE` dan een nieuwe naam.
+- **Hoe Heystack werkt** (`/uitleg`, `src/pages/ExplainPage.tsx`): de logica van heel de app, per onderwerp één regel
+  en uit te klappen (`Disclosure`). **Verander je de logica, pas dan ook die tekst aan.**
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.
 - Schemawijziging = nieuw bestand in `migrations/` (nooit een bestaand aanpassen); eerst lokaal testen met
   `npm run db:migrate:local`. Een push naar `main` rolt uit en voert de migratie online uit (een andere tak rolt

@@ -54,7 +54,8 @@ De bouwstenen staan in code; dit document zegt welke je wanneer gebruikt.
     scherm niet zonder uitleg, dan is de opbouw of het label fout: maak het label duidelijker, zet iets op een
     betere plaats, of laat het weg. Grijze tekst onder een titel is enkel voor **gegevens** (de beschrijving van
     een lijst, je e-mailadres, "2 van 3 klaar", "Deze maand") of een **toestand** (een fout, "enkel zien").
-    Uitleg op vraag kan enkel bij een berekening (`Tip`) of als titel van een keuze in een `select`.
+    Uitleg op vraag kan enkel bij een berekening (`Tip`) of als titel van een keuze in een `select`. De logica van
+    heel de app staat op één plek: **Hoe Heystack werkt** (`/uitleg`, `ExplainPage`).
 12. **Elk gegeven staat één keer op het scherm.** Wat in de zijkolom staat, staat niet nog eens in de kaarten.
 
 ---
@@ -739,6 +740,14 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
 - Enkel bij een berekening: wat ze uitrekent, en bij een keuze in de `CalcEditor` die je moet begrijpen ("Welke
   items" bij samenvatten). Nergens anders: zie principe 11.
 - Op een `label` werkt de (i) zonder het veld te focussen.
+
+### Uitklappen: `Disclosure` (`Disclosure.tsx`)
+
+Enkel op **Hoe Heystack werkt** (`/uitleg`, via Hoe het werkt bij Jouw gegevens of Ga naar in het palet): witte
+kaarten per deel (De basis, Wat vanzelf gaat, Samen, Ingangen, De rest) in één leeskolom (`.form`, 680px), met per
+onderwerp een `details`: één vetgedrukte regel die het al zegt en een pijltje (`.disclosure-chevron`, draait open);
+open een grijs lijstje van korte zinnen (`.disclosure-body`). Geen voorbeelden met echte namen. Verandert de logica van
+de app, pas dan ook die tekst aan.
 
 ### Sjabloon delen (`shared/template-file.ts`)
 

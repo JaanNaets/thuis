@@ -86,6 +86,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     () => [
       ...[...placesOf(boards), LINKS_PLACE, LINKS_MAP].map((p) => ({ key: p.to, group: "Ga naar", label: p.label, icon: p.icon, to: p.to })),
       { key: "me", group: "Ga naar", label: "Jouw gegevens", icon: "user", to: "/ik" },
+      { key: "uitleg", group: "Ga naar", label: "Hoe Heystack werkt", icon: "info", to: "/uitleg" },
     ],
     [boards],
   );
