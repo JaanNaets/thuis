@@ -9,7 +9,7 @@ import { AI_PERSON_LIMIT, aiOn, aiUsedToday } from "../ai";
 import { ids, kindsFor, parseJson, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, NotFoundError, parseOrder, requiredString, ValidationError } from "../validate";
-import { knownPeople, myLists } from "./lists";
+import { columnsOf, knownPeople, myLists } from "./lists";
 
 export const me = new Hono<AppEnv>();
 
@@ -36,6 +36,9 @@ me.put("/", async (c) => {
 
 /** Wie je kent (om toe te voegen aan een lijst, of in een veld met mensen). */
 me.get("/people", async (c) => c.json(await knownPeople(c.env.DB, c.get("person").id)));
+
+/** De lijsten waarin je dingen mag aanpassen, met hun kolommen: wat een formulier kan invullen (shared/cells.ts). */
+me.get("/columns", async (c) => c.json(await columnsOf(c.env.DB, await seenLists(c.env.DB, c.get("person").id), true)));
 
 /** Je volgorde van de lijsten: { ids } in de gewenste volgorde. */
 me.put("/order", async (c) => {

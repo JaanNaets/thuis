@@ -66,9 +66,21 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 
 ### Wat afgeleid wordt (nooit bewaard)
 
-- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): de laatste telling (een meting `voor` het ding) plus `in`
-  min `uit`, enkel `gebeurd`, omgerekend met `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op
-  onder het minimum; zonder minimum enkel in een lijst met een minimumveld en als er ooit iets was.
+- **Cellen** (`shared/cells.ts`, `worker/cells.ts`, getest): een formulier zegt wat het doet met de kolommen van de
+  dingen in zijn lijnen (`kinds.does`, handelingen in "Wat het doet": welke lijn, welke kolom, **Zet op**, **Tel bij**
+  of **Tel af**, met een veld, de datum, het bedrag, hoeveel of de prijs, of een vaste waarde). Schilderwerk zet de
+  Kleur van de Ruimte; een Tankbeurt zet de Km-stand. Wat een gebeurtenis zo doet, staat in `effects` (afgeleid: bij
+  elk bewaren uitgerekend met `rebuildEffects`, opnieuw voor alle gebeurtenissen van een formulier dat verandert, en
+  helemaal opnieuw als `EFFECTS_VERSION` verandert). De waarde van een cel is wat in het ding stond of de laatste Zet,
+  plus wat er daarna bij en af ging, in volgorde van de datum en enkel `gebeurd` (`foldCell`); ze komt bij het lezen
+  in de waarden van het ding (`withCells`: lijst, fiche, weergaven, agenda, herinneringen, koppelingen). Een cel die
+  het logboek invult en die je in het ding aanpast, wordt een **Aanpassing** (`ADJUST`: een gebeurtenis die zet). Wie
+  bewaart, moet de lijst van wat het formulier invult mogen wijzigen (`touchesCell`). **Een nieuwe plek die
+  gebeurtenissen of lijnen schrijft, roept `rebuildEffects` op.**
+- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): een cel (`STOCK`) zoals de andere: Toevoegen telt bij,
+  Weghalen telt af en een telling (een meting `voor` het ding) zet (`roleDoes`), enkel `gebeurd`, omgerekend met
+  `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op onder het minimum; zonder minimum enkel in een
+  lijst met een minimumveld en als er ooit iets was.
 - **Geld** (`shared/ledger.ts`): `sharesOf` (lijnen met `owner` zijn van die persoon, de rest volgens `split`, anders
   van wie betaalde), `netBalance` en `settleUp` voor Wie moet wie; een overdracht verrekent. Een nieuwe uitgave
   (aankoop, dienst) in een lijst waar meer mensen loggen, is standaard gelijk verdeeld over hen (`defaultSharers`), zoals

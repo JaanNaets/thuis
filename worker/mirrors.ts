@@ -5,6 +5,7 @@
 // logboek; de naam en de gekoppelde velden volgen de bron (`syncChanges`). Wat het in de doellijst verandert, kan weer
 // een bron zijn voor een volgende koppeling (kringen kunnen niet, zie `makesCycle`).
 
+import { withCells } from "./cells";
 import { referencedItems, referencedPeople, type Attributes } from "../shared/fields";
 import { canManage, type List } from "../shared/model";
 import { cleanPlan, linkedKeys, MAX_TRANSFER, syncChanges, type MirrorChanges, type TransferPlan } from "../shared/transfer";
@@ -57,7 +58,8 @@ export async function syncMirror(db: D1Database, m: MirrorRow): Promise<MirrorCh
     db.prepare("SELECT id, mirror_of, name, data, archived FROM things WHERE mirror_id = ? AND list_id = ?").bind(m.id, target.id).all<{ id: string; mirror_of: string | null; name: string; data: string; archived: number }>(),
   ]);
   const today = brusselsToday();
-  const rows = sourceRows.map(toThing);
+  // Met wat het logboek in de bron invult (shared/cells.ts).
+  const rows = (await withCells(db, source, sourceRows.map(toThing))).rows;
   const people = new Map((await peopleByIds(db, rows.flatMap((t) => referencedPeople(source.fields, t.data)))).map((p) => [p.id, p.name]));
   const refs = new Map((await thingRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
   const names = { person: (id: string) => people.get(id) ?? "?", item: (id: string) => refs.get(id) ?? "?" };

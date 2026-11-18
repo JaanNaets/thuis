@@ -8,6 +8,7 @@
 
 import type { BlockKind } from "./board.ts";
 import { canAgenda } from "./agenda.ts";
+import { STOCK } from "./cells.ts";
 import { refLists, type FieldDef } from "./fields.ts";
 import { BASES, type Base, type Event, type Kind, type Line, type LineRole, type List, type Role } from "./model.ts";
 import { fold } from "./targets.ts";
@@ -84,6 +85,7 @@ export const KIND_LINKS = {
   fields: true, // zie FIELD_LINKS (kcal: Eten; een verwijzing: naar die lijst)
   goal: true, // een activiteit die loopt, geeft na zoveel minuten een melding
   planned: false, // enkel hoe een nieuwe gebeurtenis begint; de status zelf staat op de gebeurtenis (EVENT_LINKS.status)
+  does: true, // het formulier vult kolommen van een (andere) lijst in (shared/cells.ts)
   sort_order: false,
 } as const satisfies Record<keyof Kind, boolean>;
 
@@ -189,7 +191,7 @@ export const LINK_THINGS = 12;
 /** Een lijst zoals de kaart ze nodig heeft (enkel lijsten die de lezer ziet, niet gearchiveerd). */
 export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & { role: Role };
 /** Een eigen soort (van een lijst die de lezer ziet, of die een gebeurtenis gebruikt die hij ziet). */
-export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal">;
+export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal"> & Partial<Pick<Kind, "does">>;
 /** Wat er gelogd is, per lijst en soort: tellingen, enkel van gebeurtenissen in lijsten die de lezer ziet. */
 export type LogStat = {
   list: string;
@@ -304,6 +306,15 @@ export function buildLinks(input: LinkInput): LinkResult {
     if (!lists.has(k.list_id)) continue;
     fieldLinks(k.list_id, k.fields, `${k.name}: `);
     if (k.goal) add("view", k.list_id, viewNode("meldingen"), `${k.name}: een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
+    // Wat het formulier invult: een kolom van de dingen van een lijst (de voorraad van elke lijst staat bij de lijnen).
+    for (const h of k.does ?? []) {
+      const to = h.list ? lists.get(h.list) : undefined;
+      if (!to) continue;
+      const column = h.field === STOCK ? "de voorraad" : (to.fields.find((f) => f.key === h.field)?.label ?? h.field);
+      const text = `${k.name} ${h.op === "zet" ? "zet" : h.op === "bij" ? "telt bij" : "telt af van"} ${column}`;
+      if (to.id === k.list_id) ownNote(k.list_id, text);
+      else add("log", k.list_id, to.id, text);
+    }
   }
 
   // Wat er gelogd is.

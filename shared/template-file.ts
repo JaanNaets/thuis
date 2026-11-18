@@ -4,6 +4,7 @@
 // betekent elders niets en valt weg. Wat binnenkomt, gaat door `parseTemplateFile` en daarna door de gewone
 // controle van POST /lists.
 
+import { cleanDoes, STOCK, type Handeling } from "./cells.ts";
 import { cleanNotify } from "./alerts.ts";
 import type { ListTemplate, KindTemplate } from "./catalog.ts";
 import type { FieldDef } from "./fields.ts";
@@ -43,7 +44,12 @@ function refsTo(fields: FieldDef[], from: string, to: string): FieldDef[] {
 }
 
 /** Het bestand voor een lijst en haar eigen soorten. */
-export function templateFile(list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown }, kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean }[]): TemplateFile {
+export function templateFile(
+  list: { id: string; name: string; one: string | null; icon: string | null; fields: FieldDef[]; stock: unknown; notify?: unknown },
+  kinds: { base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned?: boolean; does?: Handeling[] }[],
+): TemplateFile {
+  // Wat een formulier invult: in de lijst zelf, of de voorraad van elke lijst (niets van andere lijsten).
+  const ownDoes = (does: Handeling[] = []) => does.filter((h) => h.list === list.id || (h.list === null && h.field === STOCK)).map((h) => ({ ...h, list: h.list ? SELF : null }));
   return {
     kind: TEMPLATE_KIND,
     version: TEMPLATE_VERSION,
@@ -52,7 +58,10 @@ export function templateFile(list: { id: string; name: string; one: string | nul
     icon: list.icon,
     fields: refsTo(list.fields, list.id, SELF),
     stock: list.stock,
-    kinds: kinds.map((k) => ({ base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}), ...(k.planned ? { planned: true as const } : {}) })),
+    kinds: kinds.map((k) => {
+      const does = ownDoes(k.does);
+      return { base: k.base, name: k.name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: refsTo(k.fields, list.id, SELF), ...(k.goal ? { goal: k.goal } : {}), ...(k.planned ? { planned: true as const } : {}), ...(does.length ? { does } : {}) };
+    }),
     ...(list.notify ? { notify: list.notify } : {}),
   };
 }
@@ -70,6 +79,7 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
   }
   // Enkel verwijzingen naar de lijst zelf.
   fields = fields.filter((f) => !REF_TYPES.has(f.type) || f.ref_type === SELF);
+  const stock = cleanStock(t.stock, fields);
   const kinds: KindTemplate[] = [];
   for (const k of Array.isArray(t.kinds) ? t.kinds.slice(0, 20) : []) {
     if (!k || typeof k !== "object" || !Object.hasOwn(BASES, (k as KindTemplate).base)) continue;
@@ -80,10 +90,15 @@ export function parseTemplateFile(raw: unknown): ListTemplate {
       kf = [];
     }
     const name = typeof k.name === "string" && k.name.trim() ? k.name.trim().slice(0, 40) : BASES[k.base].label;
-    kinds.push({ base: k.base, name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: kf, ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}), ...(k.planned === true ? { planned: true as const } : {}) });
+    let does: Handeling[] = [];
+    try {
+      does = cleanDoes((k as KindTemplate).does ?? [], [{ id: SELF, name: "deze lijst", stock: Boolean(stock), fields }], kf);
+    } catch {
+      does = [];
+    }
+    kinds.push({ base: k.base, name, ...(isIconKey(k.icon) ? { icon: k.icon } : {}), fields: kf, ...(typeof k.goal === "number" && k.goal > 0 ? { goal: k.goal } : {}), ...(k.planned === true ? { planned: true as const } : {}), ...(does.length ? { does } : {}) });
   }
   const name = typeof t.name === "string" && t.name.trim() ? t.name.trim().slice(0, 60) : "Lijst";
-  const stock = cleanStock(t.stock, fields);
   const notify = cleanNotify(t.notify);
   return {
     key: "bestand",

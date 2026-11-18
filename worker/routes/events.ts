@@ -1,12 +1,14 @@
 import { Hono, type Context } from "hono";
 import { normalizeShares, type Attributes, type Interval, type Share } from "../../shared/fields";
 import { addToDate } from "../../shared/calc";
+import { allDoes, touchesCell } from "../../shared/cells";
 import { BASES, brusselsNow, canEdit, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
 import { fold } from "../../shared/parse";
 import { withAlias } from "../../shared/receipt";
 import { lineAllowed } from "../../shared/rights";
 import { normalizeUnit } from "../../shared/units";
 import { ids, kindsFor, needEdit, requireList, seenLists, toEvent, toLine, type EventRowDb, type LineRowDb } from "../access";
+import { rebuildEffects } from "../cells";
 import { logbookRows, viewEvents } from "../events-view";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { prepareData } from "../prepare";
@@ -141,7 +143,8 @@ async function cleanEvent(
 ): Promise<CleanEvent> {
   const kinds = await kindsFor(db, seen.keys());
   const kind = kinds.find((k) => k.id === raw.kind);
-  if (!kind) throw new ValidationError("Kies een soort");
+  if (!kind) throw new ValidationError("Kies een formulier");
+  const does = allDoes(kind);
   const status = isStatus(raw.status) ? raw.status : "gebeurd";
   const at = typeof raw.at === "string" && isAt(raw.at) ? raw.at : null;
   if (!at) throw new ValidationError("Kies een datum");
@@ -195,9 +198,13 @@ async function cleanEvent(
   // De dingen: bestaan ze, en mag je ermee doen wat de lijn zegt?
   const thingIds = parsed.flatMap((l) => (l.thing_id ? [l.thing_id] : []));
   const { results } = thingIds.length
-    ? await db.prepare("SELECT id, list_id, name FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(thingIds)).all<{ id: string; list_id: string; name: string }>()
-    : { results: [] as { id: string; list_id: string; name: string }[] };
+    ? await db
+        .prepare("SELECT t.id, t.list_id, t.name, l.stock IS NOT NULL AS counts FROM things t JOIN lists l ON l.id = t.list_id WHERE t.id IN (SELECT value FROM json_each(?))")
+        .bind(ids(thingIds))
+        .all<{ id: string; list_id: string; name: string; counts: number }>()
+    : { results: [] as { id: string; list_id: string; name: string; counts: number }[] };
   const listOf = new Map(results.map((r) => [r.id, r.list_id]));
+  const counts = new Set(results.filter((r) => r.counts).map((r) => r.list_id));
   const unchanged = (l: CleanLine) =>
     before?.lines.some((b) => b.thing_id === l.thing_id && b.role === l.role && b.amount === l.amount && (b.unit ?? null) === (l.unit ?? null)) ?? false;
   const lines: CleanLine[] = [];
@@ -216,12 +223,16 @@ async function cleanEvent(
         if (l.text) lines.push({ ...l, thing_id: null });
         continue;
       }
+      // De naam enkel als je de lijst van het ding ziet.
+      const name = () => (seen.has(list) ? (results.find((r) => r.id === l.thing_id)?.name ?? "dat ding") : "dat ding");
       if (!unchanged(l) && !lineAllowed(l.role, seen.get(list) ?? null)) {
-        // De naam enkel als je de lijst van het ding ziet.
-        const name = seen.has(list) ? (results.find((r) => r.id === l.thing_id)?.name ?? "dat ding") : "dat ding";
         throw new ValidationError(
-          l.role === "in" || l.role === "uit" ? `Je mag de voorraad van ${name} niet wijzigen` : `Je kan niet naar ${name} verwijzen`,
+          l.role === "in" || l.role === "uit" ? `Je mag de voorraad van ${name()} niet wijzigen` : `Je kan niet naar ${name()} verwijzen`,
         );
+      }
+      // Vult het formulier een kolom van dit ding in, dan moet je zijn lijst mogen wijzigen (shared/cells.ts).
+      if (!unchanged(l) && touchesCell(does, l.role, list, counts.has(list)) && !canEdit(seen.get(list))) {
+        throw new ValidationError(`Je mag ${name()} niet aanpassen`);
       }
       lines.push({ ...l, text: null });
       continue;
@@ -337,6 +348,7 @@ listEvents.post("/:id/events", async (c) => {
       ),
     ...lineStatements(db, id, input.lines, fresh.newIds),
   ]);
+  await rebuildEffects(db, [id]);
   const bought = input.lines.flatMap((l, i) => (l.role === "in" ? [fresh.newIds.get(i) ?? l.thing_id].filter((x): x is string => Boolean(x)) : []));
   const ticked = input.kind.base === "aankoop" && input.status === "gebeurd" ? await tickShopping(db, seen, id, bought) : [];
   if (input.status !== "gepland") c.executionCtx.waitUntil(notifyNewEvent(c.env, me, list, id).catch((err) => console.error("melding", err)));
@@ -381,6 +393,7 @@ events.put("/:id", async (c) => {
     db.prepare("DELETE FROM lines WHERE event_id = ?").bind(event.id),
     ...lineStatements(db, event.id, [...input.lines, ...hidden], fresh.newIds),
   ]);
+  await rebuildEffects(db, [event.id]);
   return c.json({ ok: true, made: fresh.made });
 });
 
@@ -443,6 +456,7 @@ events.post("/:id/tick", async (c) => {
     );
   }
   await db.batch(statements);
+  if (next) await rebuildEffects(db, [next]);
   return c.json({ status, at, next });
 });
 

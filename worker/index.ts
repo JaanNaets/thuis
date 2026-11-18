@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { requireAccess } from "./auth";
 import { withPerson } from "./person";
+import { ensureEffects } from "./cells";
 import { quarter } from "./cron";
 import { attachments } from "./routes/attachments";
 import { events, listEvents } from "./routes/events";
@@ -26,6 +27,11 @@ const app = new Hono<AppEnv>().basePath("/api");
 app.use("*", requireAccess);
 // 2. Welke persoon is dat? Elke route kijkt daarna zelf na wat die persoon in de lijst mag (zie access.ts).
 app.use("*", withPerson);
+// 3. Wat gebeurtenissen met de kolommen van dingen doen, is uitgerekend met deze versie (zie cells.ts).
+app.use("*", async (c, next) => {
+  await ensureEffects(c.env.DB);
+  await next();
+});
 
 app.route("/me", me);
 app.route("/me", backup);

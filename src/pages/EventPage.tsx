@@ -1,3 +1,4 @@
+import { ADJUST } from "../../shared/cells";
 import { useState } from "react";
 import { useParams } from "react-router";
 import { formatDuration } from "../../shared/fields";
@@ -100,9 +101,11 @@ export function EventPage() {
                   Stoppen
                 </button>
               )}
-              <Link to={`/gebeurtenissen/${e.id}/bewerken`} className="btn btn-outline btn-sm">
-                Bewerken
-              </Link>
+              {e.kind !== ADJUST && (
+                <Link to={`/gebeurtenissen/${e.id}/bewerken`} className="btn btn-outline btn-sm">
+                  Bewerken
+                </Link>
+              )}
             </>
           )
         }

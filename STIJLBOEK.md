@@ -826,6 +826,16 @@ lijst (enkel als het elders gelogd werd), waar en wie, en rechts het bedrag, een
 waarde van een meting (82,4 kg). Een lijn van elders zonder de rest ("gedeeltelijk") toont enkel wat jouw dingen
 raakt, zonder bedrag. Gepland: met een vinkje vooraan.
 
+### Wat een formulier doet: `DoesEditor` (`Does.tsx`)
+
+In Instellen → Formulieren staat onder de velden **Wat het doet**: per handeling een wit kaartje zoals een lijn
+(`.line-row`, bovenaan `.does-main`): de kolom (een keuzelijst per lijst, "Huis · Kleur", en Voorraad), met × om weg te
+halen; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal of de voorraad), **Met** (een veld van het
+formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde, dan met **Waarde** erbij) en **Lijn** (welke lijnen:
+Voor, Bij, Toevoegen, Weghalen). Onderaan "+ Handeling". Enkel kolommen van lijsten waar je dingen mag aanpassen
+(`GET /me/columns`). Een kolom die het logboek invult, toont in de lijst en de fiche gewoon haar waarde; pas je ze in
+het ding aan, dan komt er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
+
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
 Elke lijn is een wit kaartje in de groep (`.line-row`): bovenaan wat er gebeurt (Toevoegen, Weghalen, Voor, Bij: een

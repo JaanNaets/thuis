@@ -16,6 +16,7 @@ import { LOG_KEYS, logItem } from "../../shared/logview";
 import { canEdit, dayOf, STATUSES, type EventView, type List, type Role, type Status } from "../../shared/model";
 import { formatAmount } from "../../shared/units";
 import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
+import { withCells } from "../cells";
 import { viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
@@ -139,7 +140,8 @@ async function datedThings(db: D1Database, lists: List[], from: string, to: stri
     const fields = list.fields.filter((f) => f.agenda && canAgenda(f));
     if (!fields.length) continue;
     const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
-    for (const t of results.map(toThing)) {
+    const { rows } = await withCells(db, list, results.map(toThing));
+    for (const t of rows) {
       const data = computeLocal(list.fields, t.data, today);
       for (const f of fields) for (const o of occurrences(f, data[f.key], from, to)) dated.push({ thing_id: t.id, name: t.name, list_id: list.id, label: f.label, ...o });
     }
@@ -204,7 +206,12 @@ insights.get("/view", async (c) => {
     fields = sourceFields("dingen", { lists, kinds: [] });
     // Uit meer lijsten: ook in welke lijst (LIST_KEY, zie sourceFields).
     const listOf = (id: string): Attributes => (lists.length > 1 ? { [LIST_KEY]: byList.get(id)?.name ?? "" } : {});
-    items = results.map(toThing).map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
+    // Met wat het logboek invult (shared/cells.ts), per lijst.
+    const filled: ReturnType<typeof toThing>[] = [];
+    for (const list of lists) filled.push(...(await withCells(db, list, results.filter((r) => r.list_id === list.id).map(toThing))).rows);
+    const order = new Map(results.map((r, i) => [r.id, i]));
+    filled.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    items = filled.map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
     // Namen van personen en verwijzingen in de velden.
     const values = items.flatMap((i) => Object.values(i.data));
     const strings = values.flatMap((v) => (typeof v === "string" ? [v] : Array.isArray(v) ? (v as unknown[]).flatMap((x) => (typeof x === "string" ? [x] : x && typeof x === "object" ? Object.values(x as object).filter((y): y is string => typeof y === "string") : [])) : []));

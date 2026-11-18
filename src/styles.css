@@ -8518,6 +8518,11 @@ dialog.sheet.builder-sheet {
   gap: 8px;
 }
 
+/* Wat een formulier doet (DoesEditor): bovenaan de kolom, eronder hoe, met wat en welke lijn. */
+.does-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 /* Elk veld van een lijn met zijn naam erboven (Hoeveel, Eenheid, Prijs, Houdbaar tot, Van wie, Nieuw in); een
    placeholder verdwijnt zodra er iets staat. */
 .line-field {

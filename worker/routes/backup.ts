@@ -7,6 +7,7 @@ import { BACKUP_KIND, BACKUP_VERSION, parseBackup, planRestore, type Backup, typ
 import { canManage } from "../../shared/model";
 import { ids, parseJson, seenLists, type ListRow } from "../access";
 import { photoKey } from "../media";
+import { rebuildEffects } from "../cells";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
 import { knownPeople, myLists } from "./lists";
@@ -99,6 +100,7 @@ backup.get("/backup", async (c) => {
       fields: parseJson(k.fields as string, []),
       goal: (k.goal as number | null) ?? null,
       planned: k.planned === 1,
+      does: parseJson(k.does as string | null, []),
       sort_order: (k.sort_order as number) ?? 0,
     })),
     things: things.results.map((t) => ({
@@ -190,8 +192,8 @@ backup.post("/restore", async (c) => {
   for (const k of plan.kinds)
     st.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.sort_order),
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.does.length ? JSON.stringify(k.does) : null, k.sort_order),
     );
   // Eerst zonder "deel van" (dat wijst misschien naar een ding dat later komt), daarna die verwijzing.
   for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));
@@ -224,6 +226,11 @@ backup.post("/restore", async (c) => {
     st.push(db.prepare("INSERT INTO saved_views (id, owner_id, list_id, target, name, def, shared) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(v.id, me, v.list_id, v.target, v.name, JSON.stringify(v.def), v.shared));
   // Alles of niets: D1 voert een batch in één transactie uit.
   await db.batch(st);
+  // Wat de gebeurtenissen met de kolommen van de dingen doen (afgeleid).
+  await rebuildEffects(
+    db,
+    plan.events.map((e) => e.id),
+  );
 
   // Foto's van dingen en gebeurtenissen die nog bestaan en die je ziet.
   let photos = 0;

@@ -4,6 +4,7 @@
 // en kijkt alles na zoals bij gewoon invoeren; wat niet klopt, valt weg: een persoon die je niet kent, een verwijzing
 // naar iets dat er niet (meer) is of dat je niet ziet (een lijn wordt dan tekst met de naam).
 
+import { cleanDoes, type Handeling } from "./cells.ts";
 import { cleanAttributes, type AmountEntry, type Attributes, type FieldDef, type Share } from "./fields.ts";
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
 import { BASES, isLineRole, isStatus, type Base, type LineRole, type Status } from "./model.ts";
@@ -28,6 +29,7 @@ export const BACKUP_TABLES = {
   mirrors: "koppelingen tussen lijsten die allebei in de back-up zitten",
   events: true,
   lines: true,
+  effects: false, // afgeleid uit de gebeurtenissen en hun formulieren (worker/cells.ts): na terugzetten opnieuw uitgerekend
   attachments: "de bestanden zelf staan in R2",
   saved_views: "gedeelde en je eigen",
   // Persoonlijk of af te leiden: van die persoon, of opnieuw in te stellen.
@@ -65,7 +67,7 @@ export type Backup = {
   tags: { id: string; name: string; color: string | null }[];
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
   /** `planned` ontbreekt in back-ups van vóór 2026-11-10 (dan: niet gepland). */
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; sort_order: number }[];
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; does?: unknown; sort_order: number }[];
   things: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id?: string | null; mirror_of?: string | null }[];
   /** Koppelingen (zie shared/transfer.ts) tussen lijsten die allebei in de back-up zitten; ontbreekt in oudere back-ups. */
   mirrors?: { id: string; list_id: string; source_id: string; plan: unknown }[];
@@ -146,7 +148,7 @@ export type RestoreContext = {
 
 export type RestorePlan = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; sort_order: number }[];
+  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; does: Handeling[]; sort_order: number }[];
   things: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id: string | null; mirror_of: string | null }[];
   mirrors: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
@@ -206,7 +208,16 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     }
     const id = map.get(k.id)!;
     kindFields.set(id, fields);
-    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, sort_order: k.sort_order ?? 0 });
+    // Wat het formulier invult: enkel in lijsten die terugkomen (met hun nieuwe velden), of de voorraad van elke lijst.
+    let does: Handeling[] = [];
+    try {
+      const back = lists.map((l) => ({ id: l.id, name: l.name, stock: Boolean(l.stock), fields: l.fields }));
+      const raw = (Array.isArray(k.does) ? k.does : []).map((h) => remap(h, map)).filter((h) => !h?.list || back.some((l) => l.id === h.list));
+      does = cleanDoes(raw, back, fields);
+    } catch {
+      does = [];
+    }
+    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, does, sort_order: k.sort_order ?? 0 });
   }
 
   // Een koppeling enkel tussen twee lijsten die terugkomen; de bron en de doellijst met hun nieuwe ids.

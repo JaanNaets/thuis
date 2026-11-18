@@ -11,6 +11,7 @@ import { canEdit, eventTitle, type Role } from "../shared/model";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
 import { lineAllowed } from "../shared/rights";
 import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "./access";
+import { ensureEffects, rebuildEffects, withCells } from "./cells";
 import { syncAll } from "./mirrors";
 import { notify } from "./push";
 import { brusselsMoment, brusselsToday } from "./today";
@@ -27,6 +28,7 @@ export async function quarter(env: Env, at = new Date()): Promise<void> {
   const to = brusselsMoment(at);
   const from = brusselsMoment(new Date(at.getTime() - 15 * 60_000));
   const morning = `${to.slice(0, 10)}T${MORNING}`;
+  await ensureEffects(db).catch((err) => console.error("Cellen opnieuw uitrekenen lukte niet", err));
   if (morning >= from && morning < to) await daily(db, to.slice(0, 10));
   await syncAll(db).catch((err) => console.error("Koppelingen bijwerken lukte niet", err));
   await sendTimed(db, from, to).catch((err) => console.error("Herinneren op een uur lukte niet", err));
@@ -65,8 +67,10 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
     }
     const { dates, next } = repeatsDue(e.repeat.next_on, e.repeat.every, today);
     const statements: D1PreparedStatement[] = [];
+    const copies: string[] = [];
     for (const day of dates) {
       const copy = crypto.randomUUID();
+      copies.push(copy);
       statements.push(
         db
           .prepare(
@@ -85,6 +89,7 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
     }
     statements.push(db.prepare("UPDATE events SET repeat = ? WHERE id = ?").bind(JSON.stringify({ every: e.repeat.every, next_on: next }), e.id));
     await db.batch(statements);
+    await rebuildEffects(db, copies);
   }
   return made;
 }
@@ -115,7 +120,9 @@ async function collectThings(db: D1Database, people: Map<string, string[]>, pick
       .map((p) => p.person_id);
     if (!who.length) continue;
     const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
-    for (const thing of results.map(toThing)) {
+    // Met wat het logboek invult (de datum van het laatste onderhoud, en wat daaruit berekend wordt).
+    const { rows } = await withCells(db, list, results.map(toThing));
+    for (const thing of rows) {
       const data = computeLocal(list.fields, thing.data, brusselsToday());
       for (const hit of pick(list.fields, data)) {
         for (const person of who)

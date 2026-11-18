@@ -7,7 +7,9 @@ import type { FieldDef } from "../shared/fields";
 import { isIconKey } from "../shared/icons";
 import { cleanNotify } from "../shared/alerts";
 import { cleanReadPhoto } from "../shared/photoread";
+import { ADJUST, type Handeling } from "../shared/cells";
 import {
+  ADJUST_KIND,
   baseKind,
   canEdit,
   canManage,
@@ -84,13 +86,14 @@ export const toEvent = (row: EventRowDb): Event => ({
 export type LineRowDb = Line & { event_id: string };
 export const toLine = ({ event_id: _e, ...l }: LineRowDb): Line => l;
 
-export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned"> & { fields: string; icon: string | null; planned: number };
+export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned" | "does"> & { fields: string; icon: string | null; planned: number; does: string | null };
 export const toKind = (row: KindRowDb): Kind => ({
   ...row,
   base: row.base as Base,
   icon: isIconKey(row.icon) ? row.icon : null,
   fields: parseJson<FieldDef[]>(row.fields, []),
   planned: row.planned === 1,
+  does: parseJson<Handeling[]>(row.does, []),
 });
 
 // ---------- rollen ----------
@@ -191,6 +194,7 @@ export async function kindsFor(db: D1Database, listIds: Iterable<string>): Promi
 /** De soort van een gebeurtenis (wie de gebeurtenis ziet, ziet ook de definitie van haar soort). */
 export async function kindOf(db: D1Database, kind: string, base: Base): Promise<KindInfo> {
   if (isBase(kind)) return baseKind(kind);
+  if (kind === ADJUST) return ADJUST_KIND;
   const row = await db.prepare("SELECT * FROM kinds WHERE id = ?").bind(kind).first<KindRowDb>();
   return row ? kindInfo(toKind(row)) : baseKind(base);
 }

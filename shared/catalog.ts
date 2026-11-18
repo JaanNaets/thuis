@@ -2,13 +2,15 @@
 // logboek en wie een melding krijgt. Zo weinig mogelijk: een lijst uit een sjabloon is een gewone lijst, de rest voeg je
 // zelf toe (Instellen). Een lijst kan ook uit een bestand komen (`shared/template-file.ts`, Uit bestand).
 
+import type { Handeling } from "./cells.ts";
 import type { NotifyDef } from "./alerts.ts";
 import type { FieldDef } from "./fields.ts";
 import type { IconKey } from "./icons.ts";
 import type { Base } from "./model.ts";
 import type { StockDef } from "./stock.ts";
 
-export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number; planned?: true };
+/** `does`: wat het formulier invult, enkel in de lijst zelf ("self") of de voorraad van elke lijst (shared/cells.ts). */
+export type KindTemplate = { base: Base; name: string; icon?: IconKey; fields?: FieldDef[]; goal?: number; planned?: true; does?: Handeling[] };
 
 export type ListTemplate = {
   key: string;

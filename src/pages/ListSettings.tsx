@@ -9,6 +9,8 @@ import type { IconKey } from "../../shared/icons";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
 import { Avatar, CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
+import type { ListColumns } from "../../shared/cells";
+import { buildDoes, DoesEditor, doesDraft, type DoesDraft } from "../components/Does";
 import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon, type IconName } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
@@ -436,17 +438,22 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
   const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
   const [planned, setPlanned] = useState(kind?.planned ?? false);
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
+  const [does, setDoes] = useState<DoesDraft[]>(() => doesDraft(kind?.does ?? []));
+  const { data: columns } = useApi<ListColumns[]>("/me/columns");
   // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
   const [readChoice, setReadChoice] = useState<boolean | null>(null);
   const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { base, fields: kind?.fields ?? [] });
   async function save() {
     const built = buildFields(drafts, "self");
     if ("error" in built) return toast(built.error, "alert");
+    // Een nieuw veld krijgt zijn sleutel pas nu: wat het formulier ermee invult, volgt mee.
+    const keyOf = new Map(drafts.map((d, i) => [d.key, built.fields[i]?.key ?? d.key]));
     const body = {
       base,
       name,
       icon,
       fields: built.fields,
+      does: buildDoes(does).map((h) => (h.value.from === "field" ? { ...h, value: { from: "field" as const, key: keyOf.get(h.value.key) ?? h.value.key } } : h)),
       goal: base === "activiteit" && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
       planned,
     };
@@ -503,6 +510,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
         </label>
       )}
       <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
+      {columns && <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} />}
       <Switch checked={planned} onChange={setPlanned} label="Gepland" />
       <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
       <div className="btn-row">

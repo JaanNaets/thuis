@@ -1,13 +1,14 @@
-// Voorraad: hoeveel er van een ding is, uitgerekend uit de lijnen (nooit bewaard).
+// Voorraad: hoeveel er van een ding is, uitgerekend uit het logboek (nooit bewaard).
 //
 // Een lijst telt voorraad als ze `stock` heeft: welke velden van een ding zeggen in welke eenheid het telt (kg, l,
-// stuk, zak), wat er in één stuk en in één verpakking zit, en wat het minimum is. Dan is de voorraad van een ding:
-// de laatste telling (een meting `voor` het ding, met een hoeveelheid), plus wat er daarna bij kwam (`in`), min wat
-// eraf ging (`uit`). Enkel wat gebeurd is, telt (geen geplande of afgevinkte boodschappen). Elke lijn wordt eerst
+// stuk, zak), wat er in één stuk en in één verpakking zit, en wat het minimum is. De voorraad is een cel zoals elke
+// andere (shared/cells.ts, `STOCK`): de laatste telling (Zet), plus wat er daarna bij kwam (Tel bij), min wat eraf
+// ging (Tel af). Enkel wat gebeurd is, telt (geen geplande of afgevinkte boodschappen). Elke verandering wordt eerst
 // omgerekend naar de eenheid van het ding (500 g van een voorraad in kg is 0,5).
 
+import type { Op } from "./cells.ts";
 import type { Attributes, FieldDef } from "./fields.ts";
-import type { Base, LineRole, Status, StockLevel } from "./model.ts";
+import type { Status, StockLevel } from "./model.ts";
 import { convert, normalizeUnit, round3, type Measure } from "./units.ts";
 
 /** Welke velden van een ding zeggen hoe het telt (sleutels), en de eenheid als er geen veld is. */
@@ -54,39 +55,38 @@ export function measureFor(def: StockDef, data: Attributes): Measure {
   return { unit: normalizeUnit(text(def.unit) ?? def.default_unit ?? null), piece: num(def.piece), pack: num(def.pack), pack_name: text(def.pack_name) };
 }
 
-/** Een lijn die de voorraad van een ding raakt, met wat nodig is om te tellen. */
-export type StockLine = {
+/** Een verandering van de voorraad van een ding (shared/cells.ts), met wat nodig is om te tellen. */
+export type StockEntry = {
   at: string;
-  /** Om lijnen op hetzelfde moment in volgorde te zetten. */
+  /** Om veranderingen op hetzelfde moment in volgorde te zetten. */
   created_at: string;
-  base: Base;
-  status: Status;
-  role: LineRole;
+  position?: number;
+  /** Enkel wat gebeurd is, telt (leeg: gebeurd). */
+  status?: Status;
+  op: Op;
   amount: number | null;
   unit: string | null;
   expires: string | null;
 };
 
-/** Telt deze lijn mee voor de voorraad? */
-export const countsForStock = (l: Pick<StockLine, "status" | "role" | "base">) =>
-  l.status === "gebeurd" && (l.role === "in" || l.role === "uit" || (l.role === "voor" && l.base === "meting"));
-
 /**
- * De voorraad van een ding uit zijn lijnen (in eender welke volgorde). Wat er nog is, komt van de oudste lijnen eerst
+ * De voorraad van een ding uit zijn veranderingen (in eender welke volgorde). Wat er nog is, komt van de oudste eerst
  * eraf (zo weet je ongeveer wat het eerst vervalt).
  */
-export function stockLevel(def: StockDef, data: Attributes, lines: StockLine[]): StockLevel {
+export function stockLevel(def: StockDef, data: Attributes, lines: StockEntry[]): StockLevel {
   const measure = measureFor(def, data);
-  const sorted = lines.filter(countsForStock).sort((a, b) => a.at.localeCompare(b.at) || a.created_at.localeCompare(b.created_at));
+  const sorted = lines
+    .filter((l) => (l.status ?? "gebeurd") === "gebeurd")
+    .sort((a, b) => a.at.localeCompare(b.at) || a.created_at.localeCompare(b.created_at) || (a.position ?? 0) - (b.position ?? 0));
   // Wat er nog is, per partij (van oud naar nieuw).
   let batches: { left: number; expires: string | null }[] = [];
   for (const l of sorted) {
     const n = l.amount === null ? (measure.pack ?? 1) : convert(l.amount, l.unit, measure);
     if (!Number.isFinite(n)) continue;
-    if (l.role === "voor") {
+    if (l.op === "zet") {
       // Een telling: zoveel is er nu.
       batches = n > 0 ? [{ left: n, expires: null }] : [];
-    } else if (l.role === "in") {
+    } else if (l.op === "bij") {
       batches.push({ left: n, expires: l.expires });
     } else {
       let rest = n;

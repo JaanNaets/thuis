@@ -3,13 +3,16 @@ import { Hono } from "hono";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields, cleanListFields } from "../../shared/listdef";
 import { withSelf } from "../../shared/template-file";
-import { isBase, isDirectRole, isRole, ROLES, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Role, type Tag } from "../../shared/model";
+import { cleanDoes, type Handeling, type ListColumns } from "../../shared/cells";
+import type { FieldDef } from "../../shared/fields";
+import { canEdit, isBase, isDirectRole, isRole, ROLES, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Role, type Tag } from "../../shared/model";
 import { cleanNotify } from "../../shared/alerts";
 import { cleanReadPhoto } from "../../shared/photoread";
 import { keepsAdmin } from "../../shared/rights";
 import { cleanStock } from "../../shared/stock";
 import { isTone, type Person } from "../../shared/types";
-import { ids, kindsFor, listRoles, needManage, requireList, seenLists, toKind, toList, type KindRowDb, type ListRow } from "../access";
+import { ids, kindsFor, listRoles, needManage, parseJson, requireList, seenLists, toKind, toList, type KindRowDb, type ListRow } from "../access";
+import { rebuildEffects } from "../cells";
 import type { AppEnv } from "../types";
 import { asObject, ConflictError, idList, NotFoundError, optionalString, requiredString, ValidationError } from "../validate";
 
@@ -100,13 +103,20 @@ lists.post("/", async (c) => {
   statements.push(...(await tagStatements(db, me.id, id, body)));
   // Eigen soorten uit een sjabloon (Gegeten, Bijvulling).
   const rawKinds = Array.isArray(body.kinds) ? body.kinds.slice(0, MAX_KINDS) : [];
+  // Wat ze invullen: kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij dingen mag aanpassen.
+  const columns: ListColumns[] = rawKinds.some((k) => Array.isArray(asObject(k).does) && (asObject(k).does as unknown[]).length)
+    ? [{ id, name, stock: Boolean(stock), fields }, ...(await columnsOf(db, await seenLists(db, me.id), true))]
+    : [];
   rawKinds.forEach((raw, i) => {
     const k = asObject(raw);
     if (!isBase(k.base)) throw new ValidationError("Onbekende basissoort");
+    const kindFields = withSelf(clean(() => cleanKindFields(k.fields)), id);
+    const rawDoes: unknown[] = Array.isArray(k.does) ? k.does : [];
+    const does = clean(() => cleanDoes(rawDoes.map((h) => (asObject(h).list === "self" ? { ...asObject(h), list: id } : h)), columns, kindFields));
     statements.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(withSelf(clean(() => cleanKindFields(k.fields)), id)), goalOf(k), plannedOf(k), i),
+        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(crypto.randomUUID(), id, k.base, requiredString(k, "name", 40), isIconKey(k.icon) ? k.icon : null, JSON.stringify(kindFields), goalOf(k), plannedOf(k), does.length ? JSON.stringify(does) : null, i),
     );
   });
   await db.batch(statements);
@@ -337,18 +347,55 @@ const goalOf = (o: Record<string, unknown>): number | null =>
 /** Begint een nieuwe gebeurtenis met dit formulier gepland (een boodschap)? Als 0 of 1 voor de databank. */
 const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 1 : 0);
 
+/**
+ * De lijsten met hun kolommen: welke die je ziet (`edit`: enkel waar je dingen mag aanpassen), om handelingen van een
+ * formulier te kiezen en na te kijken (shared/cells.ts).
+ */
+export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: boolean): Promise<ListColumns[]> {
+  const wanted = [...seen].filter(([, r]) => !edit || canEdit(r)).map(([id]) => id);
+  const { results } = await db
+    .prepare("SELECT id, name, fields, stock FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
+    .bind(ids(wanted))
+    .all<{ id: string; name: string; fields: string; stock: string | null }>();
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    stock: Boolean(r.stock),
+    fields: parseJson<FieldDef[]>(r.fields, []).map((f) => ({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}) })),
+  }));
+}
+
+/** Wat een formulier doet, nagekeken: enkel kolommen in lijsten waar jij dingen mag aanpassen. */
+async function doesOf(db: D1Database, personId: string, raw: unknown, fields: FieldDef[]): Promise<Handeling[]> {
+  if (raw === undefined || raw === null) return [];
+  const editable = await columnsOf(db, await seenLists(db, personId), true);
+  return clean(() => cleanDoes(raw, editable, fields));
+}
+
+/** Wat de gebeurtenissen met dit formulier doen opnieuw uitrekenen (het formulier veranderde). */
+async function rebuildKind(db: D1Database, kindId: string) {
+  const { results } = await db.prepare("SELECT id FROM events WHERE kind = ?").bind(kindId).all<{ id: string }>();
+  await rebuildEffects(
+    db,
+    results.map((r) => r.id),
+  );
+}
+
 lists.post("/:id/kinds", async (c) => {
   const db = c.env.DB;
-  const { list, role } = await requireList(db, c.get("person").id, c.req.param("id"));
-  needManage(role, "Enkel een beheerder maakt soorten.");
+  const me = c.get("person");
+  const { list, role } = await requireList(db, me.id, c.req.param("id"));
+  needManage(role, "Enkel een beheerder maakt formulieren.");
   const body = asObject(await c.req.json());
   if (!isBase(body.base)) throw new ValidationError("Kies een basissoort");
   const count = await db.prepare("SELECT count(*) AS n FROM kinds WHERE list_id = ?").bind(list.id).first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_KINDS) throw new ValidationError(`Hoogstens ${MAX_KINDS} soorten per lijst`);
+  if ((count?.n ?? 0) >= MAX_KINDS) throw new ValidationError(`Hoogstens ${MAX_KINDS} formulieren per lijst`);
   const id = crypto.randomUUID();
+  const fields = clean(() => cleanKindFields(body.fields));
+  const does = await doesOf(db, me.id, body.does, fields);
   await db
-    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, list.id, body.base, requiredString(body, "name", 40), isIconKey(body.icon) ? body.icon : null, JSON.stringify(clean(() => cleanKindFields(body.fields))), goalOf(body), plannedOf(body), count?.n ?? 0)
+    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, list.id, body.base, requiredString(body, "name", 40), isIconKey(body.icon) ? body.icon : null, JSON.stringify(fields), goalOf(body), plannedOf(body), does.length ? JSON.stringify(does) : null, count?.n ?? 0)
     .run();
   return c.json({ id }, 201);
 });
@@ -363,27 +410,45 @@ async function requireKind(db: D1Database, personId: string, kindId: string) {
 
 kinds.put("/:id", async (c) => {
   const db = c.env.DB;
-  const kind = await requireKind(db, c.get("person").id, c.req.param("id"));
+  const me = c.get("person");
+  const kind = await requireKind(db, me.id, c.req.param("id"));
   const body = asObject(await c.req.json());
+  const fields = body.fields === undefined ? kind.fields : clean(() => cleanKindFields(body.fields));
+  // Handelingen die al bestonden in een lijst waar jij niets mag aanpassen, blijven; nieuwe moeten jouw lijsten zijn.
+  let does = kind.does;
+  if (body.does !== undefined) {
+    const editable = await columnsOf(db, await seenLists(db, me.id), true);
+    const raw = Array.isArray(body.does) ? body.does : [];
+    const kept = kind.does.filter((h) => h.list && !editable.some((l) => l.id === h.list) && raw.some((r) => JSON.stringify(r) === JSON.stringify(h)));
+    const fresh = raw.filter((r) => !kept.some((h) => JSON.stringify(r) === JSON.stringify(h)));
+    does = [...kept, ...clean(() => cleanDoes(fresh, editable, fields))];
+  }
   await db
-    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ? WHERE id = ?")
+    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ?, does = ? WHERE id = ?")
     .bind(
       body.name === undefined ? kind.name : requiredString(body, "name", 40),
       body.icon === undefined ? kind.icon : isIconKey(body.icon) ? body.icon : null,
-      body.fields === undefined ? JSON.stringify(kind.fields) : JSON.stringify(clean(() => cleanKindFields(body.fields))),
+      JSON.stringify(fields),
       body.goal === undefined ? kind.goal : kind.base === "activiteit" ? goalOf(body) : null,
       body.planned === undefined ? (kind.planned ? 1 : 0) : plannedOf(body),
+      does.length ? JSON.stringify(does) : null,
       kind.id,
     )
     .run();
+  if (JSON.stringify(does) !== JSON.stringify(kind.does)) await rebuildKind(db, kind.id);
   return c.json({ ok: true });
 });
 
-/** Een soort weghalen: gebeurtenissen ervan blijven, als hun basissoort. */
+/** Een formulier weghalen: gebeurtenissen ervan blijven, als hun basissoort (en doen dan enkel wat hun lijnen doen). */
 kinds.delete("/:id", async (c) => {
   const db = c.env.DB;
   const kind = await requireKind(db, c.get("person").id, c.req.param("id"));
+  const { results } = await db.prepare("SELECT id FROM events WHERE kind = ?").bind(kind.id).all<{ id: string }>();
   await db.batch([db.prepare("UPDATE events SET kind = base WHERE kind = ?").bind(kind.id), db.prepare("DELETE FROM kinds WHERE id = ?").bind(kind.id)]);
+  await rebuildEffects(
+    db,
+    results.map((r) => r.id),
+  );
   return c.body(null, 204);
 });
 

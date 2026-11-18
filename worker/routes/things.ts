@@ -2,10 +2,11 @@ import { Hono } from "hono";
 import { computeLocal, isLinkCalc } from "../../shared/calc";
 import { referencedItems, referencedPeople, type Attributes } from "../../shared/fields";
 import { canEdit, type LineRole, type List, type Role, type StockLevel, type ThingRef, type ThingRow } from "../../shared/model";
-import { measureFor, stockLevel, unitPrice, type StockLine } from "../../shared/stock";
+import { measureFor, unitPrice } from "../../shared/stock";
 import type { Person } from "../../shared/types";
 import { brusselsToday } from "../today";
 import { ids, kindOf, needEdit, requireList, requireThing, seenLists, toThing, type ThingRowDb } from "../access";
+import { adjust, cellsOf, rebuildEffects, withCells, withValues } from "../cells";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { lockedOf, syncFrom } from "../mirrors";
 import { prepareData } from "../prepare";
@@ -20,20 +21,8 @@ const MAX_THINGS = 2000;
 
 /** De voorraad van dingen in een lijst die telt (uit alle lijnen, ook van gebeurtenissen die jij niet ziet). */
 export async function stockOf(db: D1Database, list: Pick<List, "stock">, rows: { id: string; data: Attributes }[]): Promise<Map<string, StockLevel>> {
-  const out = new Map<string, StockLevel>();
-  if (!list.stock || !rows.length) return out;
-  const { results } = await db
-    .prepare(
-      `SELECT l.thing_id, l.role, l.amount, l.unit, l.expires, e.at, e.created_at, e.base, e.status
-       FROM lines l JOIN events e ON e.id = l.event_id
-       WHERE l.thing_id IN (SELECT value FROM json_each(?)) AND e.status = 'gebeurd' AND l.role IN ('in', 'uit', 'voor')`,
-    )
-    .bind(ids(rows.map((r) => r.id)))
-    .all<StockLine & { thing_id: string }>();
-  const byThing = new Map<string, StockLine[]>();
-  for (const l of results) byThing.set(l.thing_id, [...(byThing.get(l.thing_id) ?? []), l]);
-  for (const r of rows) out.set(r.id, stockLevel(list.stock, r.data, byThing.get(r.id) ?? []));
-  return out;
+  if (!list.stock || !rows.length) return new Map();
+  return (await cellsOf(db, { fields: [], stock: list.stock }, rows)).stock;
 }
 
 /** Namen van dingen (voor verwijzingen en lijnen), enkel uit lijsten die je ziet. */
@@ -87,8 +76,8 @@ listThings.get("/:id/things", async (c) => {
     .bind(...[list.id, archived, ...(q ? [`%${q}%`] : [])])
     .all<ThingRowDb>();
   const today = brusselsToday();
-  const rows = results.map(toThing);
-  const stock = await stockOf(db, list, rows);
+  const { rows, cells } = await withCells(db, list, results.map(toThing));
+  const stock = cells.stock;
   const seen = await seenLists(db, me.id);
   const out: ThingRow[] = rows.map((t) => ({ ...t, data: shown(list.fields, t.data, today), ...(list.stock ? { stock: stock.get(t.id) ?? null } : {}) }));
   return c.json({
@@ -180,7 +169,7 @@ listThings.post("/:id/things/from", async (c) => {
     .bind(source.id)
     .all<ThingRowDb>();
   const today = brusselsToday();
-  const rows = results.map(toThing);
+  const rows = (await withCells(db, source, results.map(toThing))).rows;
   const seen = await seenLists(db, me.id);
   const people = new Map((await peopleByIds(db, rows.flatMap((t) => referencedPeople(source.fields, t.data)))).map((p) => [p.id, p.name]));
   const refs = new Map((await thingRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
@@ -359,7 +348,9 @@ things.get("/:id", async (c) => {
       unit_price: unitPrice(l.price, l.amount, l.unit, measure),
     };
   });
-  const stock = list.stock ? (await stockOf(db, list, [thing])).get(thing.id) : null;
+  const cells = await cellsOf(db, list, [thing]);
+  const stock = list.stock ? cells.stock.get(thing.id) : null;
+  const filled = withValues(thing.data, cells.values.get(thing.id));
   const locked = thing.mirror_id ? await lockedOf(db, thing.mirror_id) : null;
   const mirror = locked
     ? {
@@ -370,7 +361,9 @@ things.get("/:id", async (c) => {
     : null;
   return c.json({
     mirror,
-    thing: { ...thing, data: shown(list.fields, thing.data, today) },
+    thing: { ...thing, data: shown(list.fields, filled, today) },
+    // Welke kolommen het logboek invult, en de gebeurtenis die elk het laatst veranderde.
+    cells: cells.from.get(thing.id) ?? {},
     list: { id: list.id, name: list.name, one: list.one, icon: list.icon, color: list.color, fields: list.fields, stock: list.stock },
     role,
     can_edit: canEdit(role),
@@ -379,8 +372,8 @@ things.get("/:id", async (c) => {
     parts: parts.results.filter((p) => seen.has(p.list_id)),
     part_of: thing.part_of ? ((await thingRefs(db, seen, [thing.part_of]))[0] ?? null) : null,
     files: await attachmentsOf(db, "thing", thing.id),
-    people: await peopleByIds(db, [...referencedPeople(list.fields, thing.data), ...timeline.map((t) => t.created_by)]),
-    refs: await thingRefs(db, seen, referencedItems(list.fields, thing.data).map((r) => r.id)),
+    people: await peopleByIds(db, [...referencedPeople(list.fields, filled), ...timeline.map((t) => t.created_by)]),
+    refs: await thingRefs(db, seen, referencedItems(list.fields, filled).map((r) => r.id)),
     backlinks: await backlinks(db, seen, thing.id),
   });
 });
@@ -427,12 +420,15 @@ things.put("/:id", async (c) => {
     }
   }
   const partOf = body.part_of === undefined ? thing.part_of : await checkPartOf(db, seen, optionalString(body, "part_of", 64), thing.id);
-  await db
-    .prepare("UPDATE things SET name = ?, data = ?, part_of = ?, updated_at = datetime('now') WHERE id = ?")
-    .bind(name, JSON.stringify(data), partOf, thing.id)
-    .run();
+  // Wat het logboek invult en je hier verandert, wordt een Aanpassing in het logboek (shared/cells.ts).
+  const adjusted = await adjust(db, me.id, list, thing, data);
+  await db.batch([
+    db.prepare("UPDATE things SET name = ?, data = ?, part_of = ?, updated_at = datetime('now') WHERE id = ?").bind(name, JSON.stringify(adjusted.data), partOf, thing.id),
+    ...adjusted.statements,
+  ]);
+  if (adjusted.eventId) await rebuildEffects(db, [adjusted.eventId]);
   await syncFrom(db, list.id);
-  return c.json({ ok: true });
+  return c.json({ ok: true, adjusted: adjusted.eventId });
 });
 
 things.put("/:id/archived", async (c) => {

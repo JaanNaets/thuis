@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { cleanStock, stockLevel, unitPrice, type StockLine } from "../shared/stock.ts";
+import { cleanStock, stockLevel, unitPrice, type StockEntry } from "../shared/stock.ts";
 import type { FieldDef } from "../shared/fields.ts";
 
 const FIELDS: FieldDef[] = [
@@ -14,12 +14,14 @@ const FIELDS: FieldDef[] = [
 const DEF = cleanStock({ unit: "eenheid", piece: "per_stuk", pack: "verpakking", pack_name: "verpakking_naam", min: "minimum", default_unit: "Stuks" }, FIELDS)!;
 
 let n = 0;
-const line = (at: string, base: StockLine["base"], role: StockLine["role"], amount: number | null, unit: string | null = null, extra: Partial<StockLine> = {}): StockLine => ({
+// Zoals de lijnen het vroeger zeiden: een meting Voor is een telling (Zet), erbij telt bij en eraf telt af.
+type Old = "meting" | "aankoop" | "gebruik";
+const OP = { voor: "zet", in: "bij", uit: "af" } as const;
+const line = (at: string, _base: Old, role: keyof typeof OP, amount: number | null, unit: string | null = null, extra: Partial<StockEntry> = {}): StockEntry => ({
   at,
   created_at: `2026-01-01 00:00:${String(n++).padStart(2, "0")}`,
-  base,
   status: "gebeurd",
-  role,
+  op: OP[role],
   amount,
   unit,
   expires: null,
