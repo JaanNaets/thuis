@@ -17,9 +17,18 @@ const PARTS: { title: string; topics: Topic[] }[] = [
         title: "Een lijst bewaart items met dezelfde kolommen",
         points: [
           "Kolommen zijn tekst, getallen, datums, keuzes, personen, verwijzingen naar items in een andere lijst of een berekening.",
-          "Een item is zelf geen lijst. Hoort iets bij iets anders (een filiaal bij een winkel), dan maak je het een deel ervan: op de fiche van de winkel bij Delen → Toevoegen. In de lijst staat het dan ingesprongen eronder.",
           "Tags groeperen lijsten en formulieren; een lijst kan meer tags hebben. Een tag toont al de items van haar lijsten samen.",
           "Een lijst is een tabel: filteren (ook op een periode, zoals vorige maand of de laatste 7 dagen), sorteren op meer kolommen, kolommen tonen of verbergen, groeperen, als agenda, en dat bewaren als weergave.",
+        ],
+      },
+      {
+        title: "Een item kan delen hebben: Deel van",
+        points: [
+          "Een item is zelf geen lijst. Hoort iets bij iets anders, dan maak je het er een deel van: Colruyt Herentals is een deel van Colruyt, de pedalen zijn een deel van de fiets.",
+          "Op de fiche van een item staat Delen. Met Toevoegen maak je een nieuw item in dezelfde lijst dat er een deel van is; daarna kom je terug op de fiche. Bij Bewerken kies je Deel van ook zelf, uit al je lijsten.",
+          "In de lijst staat een deel ingesprongen onder zijn item, ook dieper (Winkels → Colruyt → Colruyt Herentals → Kassa 3), en dat blijft zo als je sorteert, groepeert of filtert. Staat het item zelf er niet bij, dan staat het deel gewoon op zijn plaats.",
+          "Een deel heeft dezelfde kolommen als zijn lijst. Iets dat enkel één item heeft (je klantnummer bij Colruyt), is gewoon een kolom die bij de andere leeg blijft: de fiche toont enkel wat ingevuld is.",
+          "Een kring kan niet: Colruyt kan geen deel zijn van zijn eigen filiaal.",
         ],
       },
       {
@@ -131,7 +140,11 @@ const PARTS: { title: string; topics: Topic[] }[] = [
       {
         title: "Een bord toont weergaven en acties",
         points: [
-          "Een weergave is een zin: een bron (logboek, items, voorraad, saldo's, voeding, datums), lijsten, voorwaarden, hoe je telt en hoe je het toont (een lijst, een getal, een grafiek, een agenda …).",
+          "Een weergave bouw je in vier stappen: de lijsten (en wat: de items, het logboek, de voorraad, wie moet wie, wat er gegeten is, alles met een datum), de voorwaarden, de kolommen en hoe je het toont (een lijst, een tabel, een getal, een grafiek, een agenda …).",
+          "Eerst filteren de voorwaarden de rijen, dan tellen de kolommen: elke kolom toon je, of je neemt de som, het gemiddelde, de kleinste, de grootste, het aantal of van–tot (de eerste en laatste datum).",
+          "Een formule is een kolom die rekent met de kolommen ervoor, zoals [Bedrag] ÷ [Liter]. Per rij geeft ze de prijs per liter van die tankbeurt; samen met Tonen rekent ze op de totalen (het totale bedrag gedeeld door de totale liters), met Som telt ze haar uitkomsten per rij op.",
+          "Groeperen per een keuze of een datum (per dag, week, maand of jaar) geeft een tabel een rij per groep met haar totalen; zonder groeperen krijgt ze onderaan een totaalrij. Een getal toont elke kolom die samen telt, een grafiek een reeks per kolom.",
+          "Over meer lijsten is een kolom met dezelfde naam en soort één kolom (de Prijs in Wijnen en in de kelder); heet ze anders, dan kies je per lijst welk veld meetelt.",
           "Een actie logt met één tik, eventueel gepland.",
           "Alles wordt uitgerekend met jouw rechten.",
         ],

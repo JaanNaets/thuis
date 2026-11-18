@@ -1061,27 +1061,42 @@ Meldingen, Herhalen, Productinfo, Kasticket lezen, Overzicht). Wat een verband d
 
 Een bord heeft twee soorten blokken (`shared/blocks.ts`): een **weergave** (iets tonen) en een **actie** (iets loggen).
 Er zijn geen vaste blokken en geen voorbeelden: Toevoegen → **Blok toevoegen** (`AddChoice`: Weergave · Actie, zonder
-ondertitel) → een lege zin. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en Loopt nu zijn gewoon zinnen.
+ondertitel) → een lege weergave. Te doen, Wie moet wie, Bijna op, Uitgaven, Eten en Loopt nu zijn gewone weergaven;
+een weergave van vroeger opent in de stappen met haar kolommen en wat ze telde als kolommen (`withSteps`).
 
-- **De zin** (`ViewBuilder` in een `Sheet` met `builder-sheet`): een weergave lees je als een zin, elk stuk is een
-  witte pil met een pijltje (`.tok`, met de gewone keuzelijst van het toestel erover), wat je toevoegt een stille
-  `+ …` (`.tok-add`), wat je weghaalt een ×. "**Toon** het logboek **van** al je lijsten / Jaan · Voorraad **waar**
-  items bevat komkommer **en** wanneer in deze maand **tel** de som van bedrag **per** maand **over** de laatste 12
-  maanden **met als doel** …". Bronnen (`SOURCES`): het logboek, de items, de voorraad, wie moet wie, wat er gegeten
-  is, alles met een datum (gebeurtenissen en de datums van items met In de agenda). Een lijst krijgt **gesorteerd
-  op** en **hoogstens N rijen**; tellen enkel bij een vorm die telt; de items tellen of staan in een agenda
-  **volgens** een datumveld.
-- **Tonen als** (`.show-grid`, elf `.show-tile`s met een klein tekeningetje, het gekozen wit met een rand en blauw):
-  Lijst, Tabel, Agenda, Getal, Voortgang, Staafjes, Lijn, Gebied, Per keuze, Verdeling, Per dag. Geen 3D, geen
-  grafiekenbibliotheek. **Kolommen** als chips (`.builder-chips`) bij Lijst, Tabel en Agenda (de grijze regel in de
-  daglijst).
-- **Voorwaarden** (`RulesEditor`, `.rule-line`): over wat je ziet, nooit iets dat handelt. "Als een rij waar … →
-  rood / oranje / groen kleuren, bovenaan, verbergen", "Als er niets is → het blok verbergen", "Als de uitkomst > … →
-  kleuren". Een gekleurde rij krijgt een balkje links (`.tone-row-*`) en gekleurde tekst; een gekleurde uitkomst
+- **De stappen** (`ViewBuilder` in een `Sheet` met `builder-sheet`), onder elkaar met een `.cap-label`:
+  1. **Lijsten**: de lijsten als `tag` om aan te vinken (bij het logboek en de rest ook **Alle lijsten**), en **Wat**
+     (een keuzelijst, `SOURCES`): de items, het logboek, de voorraad, wie moet wie, wat er gegeten is, alles met een
+     datum (gebeurtenissen en de datums van items met In de agenda). Bij de items van een lijst die voorraad telt,
+     zijn Voorraad, Bijna op en Houdbaar tot gewone kolommen (`STOCK_FIELDS`).
+  2. **Voorwaarden**: de voorwaarden als zin (`.tok`: een witte pil met een pijltje en de keuzelijst van het toestel
+     erover, `+ waar …` als `.tok-add`, × om weg te halen): "waar items bevat komkommer en wanneer in deze maand".
+     Voor het tellen: eerst filteren, dan samen tellen.
+  3. **Kolommen** (`ViewColumns`, zie hieronder), **Groeperen per** (een keuzeveld; bij een lijst of tabel ook een
+     datum per dag, week, maand of jaar; bij Per keuze en Verdeling de as, bij Staafjes, Lijn en Gebied apart per) en
+     bij een lijst of tabel **Sorteren op** met de richting.
+  4. **Tonen als** (`.show-grid`, elf `.show-tile`s met een klein tekeningetje, het gekozen wit met een rand en blauw):
+     Lijst, Tabel, Agenda, Getal, Voortgang, Staafjes, Lijn, Gebied, Per keuze, Verdeling, Per dag. Eronder wat bij die
+     vorm hoort (`.field-row`): **Volgens** (het datumveld van de items), **Per** (dag, week, maand, jaar), **Over**
+     (de laatste zoveel, deze maand, altijd), **Doel**, **Hoogstens** (rijen). Geen 3D, geen grafiekenbibliotheek.
+- **Kolommen** (`ViewColumns`): per kolom een wit kaartje zoals een lijn (`.line-row`): bovenaan het veld (een
+  keuzelijst) of bij een formule haar naam, met ×; bij een formule de formule zelf (`FormulaInput`, met de kolommen
+  ervoor als `tag` om in te voegen); eronder **Berekening** (Tonen, Som, Gemiddelde, Kleinste, Grootste, Aantal,
+  Van–tot; enkel wat bij de soort past, `calcsFor`), **Naam** (anders die van het veld) en over meer lijsten per lijst
+  zonder dat veld **In <lijst>** (welk veld daar meetelt; velden met dezelfde naam en soort zijn vanzelf één kolom).
+  Onderaan **+ Kolom** (een keuzelijst, `.map-add`) en **+ Formule**. Een kolom die samen telt, geeft een tabel een
+  **totaalrij** (`tfoot`, vet met een haarlijn), een lijst een grijze regel **Totaal · …** (`.view-total`), met
+  Groeperen per **een rij per groep** (`GroupTable`: de groep, de kolommen die samen tellen en onderaan Totaal); een
+  getal toont de eerste groot (met haar naam erboven, `.view-number-label`) en de andere klein eronder
+  (`.view-numbers`); staafjes, lijn en gebied een reeks per kolom, staafjes dan naast elkaar (`side`), elk met haar
+  eigen eenheid in de tooltip.
+- **Regels** (`RulesEditor`, `.rule-line`, in Tonen als): over wat je ziet, nooit iets dat handelt. "Als een rij waar
+  … → rood / oranje / groen kleuren, bovenaan, verbergen", "Als er niets is → het blok verbergen", "Als de uitkomst >
+  … → kleuren". Een gekleurde rij krijgt een balkje links (`.tone-row-*`) en gekleurde tekst; een gekleurde uitkomst
   kleurt het getal.
 - **Voorbeeld** (`.cap-label` Voorbeeld): de echte weergave met jouw gegevens, die meekijkt terwijl je bouwt
   (`GET /insights/view`, 300 ms na de laatste wijziging); in het voorbeeld doet een rij niets. Op tablet (vanaf 900px)
-  links de zin en rechts het voorbeeld, op gsm het voorbeeld bovenaan. **Naam** bovenaan, met de naam die vanzelf
+  links de stappen en rechts het voorbeeld, op gsm het voorbeeld bovenaan. **Naam** bovenaan, met de naam die vanzelf
   komt als placeholder ("Het logboek", "Bijna op"). Onderaan, altijd zichtbaar (`.builder-actions`): Annuleren en **Op
   het bord zetten** / **Bewaren**.
 - **Een weergave op het bord** (`ViewCard`): een `dash-card` met `CardHead`, de periode eronder ("Laatste 6 maanden")

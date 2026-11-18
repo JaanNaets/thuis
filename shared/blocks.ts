@@ -8,11 +8,13 @@
 
 import { monthGrid, shiftMonth } from "./agenda.ts";
 import { bucketLabel, CHART_AGGS, CHART_STEPS, chartWindow, cleanChart, computeChart, previousWindow, type ChartAgg, type ChartData, type ChartDef, type ChartForm, type ChartNames, type ChartStep, type ChartWindow } from "./charts.ts";
+import { evalFormula, parseFormula } from "./formula.ts";
 import type { Attributes, FieldDef, FieldValue, Names } from "./fields.ts";
 import { NUTRIENTS } from "./food.ts";
 import { logFields } from "./logview.ts";
 import { fillsLists, STATUSES, type KindInfo } from "./model.ts";
-import { matchesView, NAME, PERIODS, periodRange, periodText, sortItems, type Condition, type Period, type PeriodKind, type ViewDef, type ViewItem } from "./views.ts";
+import { groupItems, matchesView, NAME, PERIODS, periodRange, periodText, sortItems, type Condition, type Period, type PeriodKind, type ViewDef, type ViewItem } from "./views.ts";
+import { aggregateCols, cleanCols, colFields, isMeasure, sameField, withCols, type ColGroup, type ViewCol } from "./viewcols.ts";
 
 // ---------- bronnen ----------
 
@@ -38,6 +40,13 @@ export function sourceDate(source: SourceKind, fields: FieldDef[], chosen?: stri
   }
   return "created";
 }
+
+/** De voorraad als kolommen bij de items van een lijst die telt: hoeveel, bijna op, de vroegste houdbaarheid. */
+export const STOCK_FIELDS: FieldDef[] = [
+  { key: "_voorraad", label: "Voorraad", type: "number" },
+  { key: "_bijna_op", label: "Bijna op", type: "bool" },
+  { key: "_houdbaar", label: "Houdbaar tot", type: "date" },
+];
 
 /** Een veld dat het logboek heeft naast de vaste delen: loopt deze activiteit nu (een timer)? */
 export const RUNNING: FieldDef = { key: "running", label: "Loopt nu", type: "bool" };
@@ -72,8 +81,9 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
       return [{ key: NAME, label: "Omschrijving", type: "text" }, ...base, RUNNING, ...extra];
     }
     case "items": {
-      const seen = new Set<string>();
-      const fields = ctx.lists.flatMap((l) => l.fields).filter((f) => !seen.has(f.key) && (seen.add(f.key), true));
+      // Over meer lijsten heen: een veld met dezelfde sleutel, of dezelfde naam en soort, is één kolom (`sameField`).
+      const fields: FieldDef[] = [];
+      for (const f of ctx.lists.flatMap((l) => l.fields)) if (!fields.some((g) => sameField(g, f))) fields.push(f);
       // Uit meer lijsten: ook in welke lijst het staat (om te tonen, te filteren of te groeperen).
       const list: FieldDef[] = ctx.lists.length > 1 ? [{ key: LIST_KEY, label: "Lijst", type: "select", options: ctx.lists.map((l) => l.name).slice(0, 60) }] : [];
       return [{ key: NAME, label: "Naam", type: "text" }, ...list, ...fields.filter((f) => f.key !== LIST_KEY)];
@@ -191,7 +201,17 @@ export type ViewBlock = {
   /** Voortgang (en een lijn bij getal en grafiek): het doel. */
   goal?: number;
   rules?: Rule[];
+  /**
+   * De kolommen en wat ermee gebeurt (shared/viewcols.ts): een tabel of lijst toont ze, met een totaalrij of per groep
+   * een rij als er een samen telt; een getal of grafiek telt elke kolom die samen telt (een reeks of getal per kolom).
+   * Leeg: van vroeger (`where.columns`, `tally`).
+   */
+  cols?: ViewCol[];
+  /** Groeperen: per waarde van een veld, een datum per dag, week, maand of jaar (`step`). */
+  group?: ViewGroup;
 };
+
+export type ViewGroup = { field: string; step?: ChartStep };
 
 export const ACTION_DOES = {
   form: "Opent het formulier",
@@ -327,6 +347,9 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
     const x = cleanRule(r);
     return x ? [x] : [];
   });
+  const cols = cleanCols(o.cols);
+  const g = o.group && typeof o.group === "object" ? (o.group as Record<string, unknown>) : null;
+  const group = g && typeof g.field === "string" && KEY.test(g.field) ? { field: g.field, ...(Object.hasOwn(CHART_STEPS, String(g.step)) ? { step: g.step as ChartStep } : {}) } : undefined;
   return {
     kind: "view",
     name: text(o.name),
@@ -339,6 +362,8 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
     ...((show === "lijst" || show === "tabel") && limit ? { limit } : {}),
     ...(goal !== undefined ? { goal } : {}),
     ...(rules.length ? { rules } : {}),
+    ...(cols.length ? { cols } : {}),
+    ...(group ? { group } : {}),
   };
 }
 
@@ -457,6 +482,10 @@ export type ViewOutcome<T extends SourceItem = SourceItem> = {
   tone: RuleTone | null;
   /** De periode die je ziet en of je kan bladeren; null: geen periode. */
   span: Span | null;
+  /** Een tabel of lijst met kolommen die samen tellen: de totaalrij, en per groep een rij (dan geen gewone rijen). */
+  summary?: { total: Record<string, FieldValue | undefined>; groups?: ColGroup[] } | null;
+  /** Een getal met meer kolommen die samen tellen: elk met zijn uitkomst (en die van de periode ervoor). */
+  numbers?: { key: string; label: string; unit: ChartData["unit"]; value: number | null; previous: number | null }[];
 };
 
 // ---------- bladeren door de tijd ----------
@@ -646,23 +675,101 @@ export function chartOf(block: ViewBlock, fields: FieldDef[]): ChartDef | null {
 
 const compare = (a: number, op: ResultOp, b: number) => (op === "lt" ? a < b : op === "le" ? a <= b : op === "gt" ? a > b : a >= b);
 
+/** Een berekening van een kolom als telling van een grafiek (van–tot en tonen tellen niet). */
+const AGG_OF: Partial<Record<ViewCol["calc"], ChartAgg>> = { sum: "sum", avg: "avg", min: "min", max: "max", count: "count" };
+
+/** De eenheid van een formule die op de uitkomsten rekent (zoals een veld van die soort). */
+const unitOfDef = (def: FieldDef): ChartData["unit"] =>
+  def.type === "money" ? { kind: "money" } : def.type === "duration" ? { kind: "duration" } : { kind: "number", ...(def.unit ? { unit: def.unit } : {}) };
+
 /**
- * Rekent een weergave uit over de rijen van haar bron (al met de rechten van de lezer): de voorwaarden van de zin, de
- * volgorde, de voorwaarden op wat je ziet, en de grafiek of de rijen (hoogstens `limit`).
+ * Een getal of grafiek met kolommen die samen tellen: per kolom een telling (een veld of de uitkomsten van een formule
+ * per rij), een formule met Tonen op de uitkomsten van haar kolommen. Over de tijd: een reeks per kolom; een getal: het
+ * eerste groot en de andere erbij (`numbers`); per keuze, een verdeling, voortgang of per dag: de eerste kolom.
+ */
+function measureChart(base: ChartDef, measures: { c: ViewCol; def: FieldDef }[], fields: FieldDef[], rows: SourceItem[], names: ChartNames, today: string) {
+  const one = !(base.form === "bars" || base.form === "line" || base.form === "number");
+  const used = one ? measures.slice(0, 1) : measures;
+  const charts = new Map<string, ChartData | null>();
+  for (const m of used) {
+    const agg = AGG_OF[m.c.calc];
+    if (m.c.formula && m.c.calc === "toon") continue;
+    if (!agg) continue;
+    // Apart per keuze enkel met één kolom (anders is elke kolom een reeks).
+    const def: ChartDef = { ...base, agg, ...(agg !== "count" ? { field: m.c.key } : {}), ...(used.length > 1 ? { by: undefined } : {}) };
+    if (agg === "count") delete (def as { field?: string }).field;
+    charts.set(m.c.key, computeChart(def, fields, rows, names, today));
+  }
+  // Een formule op de uitkomsten: per periode (of het geheel) met de uitkomsten van haar kolommen.
+  const formulaOn = (m: { c: ViewCol }, pick: (key: string) => number | null | undefined): number | null => {
+    try {
+      const node = parseFormula(m.c.formula!);
+      const v = evalFormula(node, (ref) => pick(ref) ?? undefined, (ref) => {
+        const d = measures.find((x) => x.c.key === ref)?.def.type;
+        return d === "money" ? "money" : d === "duration" ? "duration" : "number";
+      });
+      return typeof v === "number" && Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null;
+    } catch {
+      return null;
+    }
+  };
+  const first = used.map((m) => charts.get(m.c.key)).find((c): c is ChartData => Boolean(c));
+  if (!first) return { chart: null, numbers: undefined };
+  const value = (key: string, i: number | "total" | "previous"): number | null => {
+    const c = charts.get(key);
+    if (c) return i === "total" ? c.total : i === "previous" ? c.previous : (c.series[0]?.values[i] ?? null);
+    const m = used.find((x) => x.c.key === key);
+    return m?.c.formula ? formulaOn(m, (ref) => value(ref, i)) : null;
+  };
+  if (used.length === 1 && charts.get(used[0].c.key)) return { chart: first, numbers: undefined };
+  const series = used.map((m, slot) => ({
+    key: m.c.key,
+    label: m.def.label,
+    slot: slot < MAX_SERIES_SLOTS ? slot : null,
+    values: first.buckets.map((_, i) => value(m.c.key, i)),
+    unit: charts.get(m.c.key)?.unit ?? unitOfDef(m.def),
+  }));
+  const head = used[0];
+  const chart: ChartData = {
+    ...first,
+    unit: charts.get(head.c.key)?.unit ?? unitOfDef(head.def),
+    series: base.form === "number" ? first.series : series,
+    ...(base.form === "bars" ? { side: true as const } : {}),
+    total: value(head.c.key, "total"),
+    previous: value(head.c.key, "previous"),
+  };
+  const numbers =
+    base.form === "number"
+      ? used.map((m) => ({ key: m.c.key, label: m.def.label, unit: charts.get(m.c.key)?.unit ?? unitOfDef(m.def), value: value(m.c.key, "total"), previous: value(m.c.key, "previous") }))
+      : undefined;
+  return { chart, numbers: numbers && numbers.length > 1 ? numbers : undefined };
+}
+const MAX_SERIES_SLOTS = 7;
+
+/**
+ * Rekent een weergave uit over de rijen van haar bron (al met de rechten van de lezer): de kolommen (velden en
+ * formules, shared/viewcols.ts), de voorwaarden van de zin, de volgorde, de voorwaarden op wat je ziet, en de grafiek,
+ * de rijen (hoogstens `limit`) met hun totaal, of een rij per groep.
  */
 export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: FieldDef[], items: T[], ctx: { today: string; me: string; names: Names; chart: ChartNames; shift?: number }): ViewOutcome<T> {
   const at = viewSpan(block, ctx.today, ctx.shift);
   const span: Span | null = at ? { label: at.label, earlier: at.earlier, later: at.later, from: at.from, to: at.to, ...(at.month ? { month: at.month } : {}) } : null;
   const today = at?.today ?? ctx.today;
-  const chosen = items.filter((i) => matchesView(i, block.where, fields, { today, me: ctx.me, names: ctx.names }));
+  // De kolommen: hun waarden in elke rij, en hun velden erbij (een formule kan je ook filteren of sorteren).
+  const cols = block.cols ?? [];
+  const defs = colFields(cols, fields);
+  const all = withCols(items, cols, defs);
+  const vfields = [...fields, ...defs.filter((d): d is FieldDef => d !== null && !fields.some((f) => f.key === d.key))];
+  const chosen = all.filter((i) => matchesView(i, block.where, vfields, { today, me: ctx.me, names: ctx.names }));
   const rules = block.rules ?? [];
   const hideEmpty = rules.some((r) => r.when === "leeg");
-  const def = chartOf(block, fields);
+  const def = chartOf(block, vfields);
   if (def) {
-    const chart = computeChart(def, fields, chosen, ctx.chart, today);
+    const measures = cols.flatMap((c, i) => (defs[i] && isMeasure(c) && c.calc !== "range" ? [{ c, def: defs[i]! }] : []));
+    const { chart, numbers } = measures.length ? measureChart(def, measures, vfields, chosen, ctx.chart, today) : { chart: computeChart(def, vfields, chosen, ctx.chart, today), numbers: undefined };
     const result = chart?.total ?? null;
     const toneRule = result === null ? undefined : rules.find((r): r is Extract<Rule, { when: "uitkomst" }> => r.when === "uitkomst" && compare(result, r.op, r.value));
-    return { rows: [], total: chosen.length, chart, hidden: hideEmpty && chosen.length === 0, tone: toneRule?.then ?? null, span };
+    return { rows: [], total: chosen.length, chart, hidden: hideEmpty && chosen.length === 0, tone: toneRule?.then ?? null, span, ...(numbers ? { numbers } : {}) };
   }
   if (block.show === "agenda" && at) {
     // Een agenda: wat in het rooster van de maand valt, op volgorde van de dag.
@@ -676,8 +783,8 @@ export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: Fie
   }
   // Een lijst of tabel: de volgorde, dan wat bovenaan moet, wat weg moet en welke kleur.
   const rowRules = rules.filter((r): r is Extract<Rule, { when: "rij" }> => r.when === "rij");
-  const effects = (i: T) => rowRules.filter((r) => matchesView(i, { match: "all", conditions: [r.cond] }, fields, { today, me: ctx.me, names: ctx.names })).map((r) => r.then);
-  const sorted = sortItems(chosen, block.where.sort, fields, ctx.names);
+  const effects = (i: T) => rowRules.filter((r) => matchesView(i, { match: "all", conditions: [r.cond] }, vfields, { today, me: ctx.me, names: ctx.names })).map((r) => r.then);
+  const sorted = sortItems(chosen, block.where.sort, vfields, ctx.names);
   const rows: ViewRow<T>[] = [];
   for (const i of sorted) {
     const fx = effects(i);
@@ -686,7 +793,25 @@ export function evaluateView<T extends SourceItem>(block: ViewBlock, fields: Fie
     rows.push({ ...i, ...(tone ? { tone } : {}), ...(fx.includes("bovenaan") ? { top: true } : {}) });
   }
   const ordered = [...rows.filter((r) => r.top), ...rows.filter((r) => !r.top)];
-  return { rows: ordered.slice(0, block.limit ?? DEFAULT_LIMIT), total: ordered.length, chart: null, hidden: hideEmpty && ordered.length === 0, tone: null, span };
+  // Kolommen die samen tellen: een totaalrij over alles (niet enkel wat je ziet), en per groep een rij.
+  const counted = cols.some((c, i) => defs[i] && isMeasure(c));
+  const groups = block.group ? groupItems(ordered, block.group.field, vfields, ctx.names, block.group.step) : null;
+  const summary =
+    counted || groups
+      ? {
+          total: aggregateCols(cols, defs, ordered),
+          ...(groups ? { groups: groups.map((g) => ({ key: g.key, label: g.label, count: g.items.length, values: aggregateCols(cols, defs, g.items) })) } : {}),
+        }
+      : null;
+  return {
+    rows: groups ? [] : ordered.slice(0, block.limit ?? DEFAULT_LIMIT),
+    total: groups ? groups.length : ordered.length,
+    chart: null,
+    hidden: hideEmpty && ordered.length === 0,
+    tone: null,
+    span,
+    summary,
+  };
 }
 
 /**
@@ -716,6 +841,7 @@ export function viewName(block: ViewBlock, listName: (id: string) => string | un
 
 /** De kolommen van een lijst of tabel: wat gekozen is, anders de eerste velden die iets zeggen. */
 export function columnsOf(block: ViewBlock, fields: FieldDef[]): FieldDef[] {
+  if (block.cols?.length) return colFields(block.cols, fields).filter((f): f is FieldDef => f !== null);
   const byKey = new Map(fields.map((f) => [f.key, f]));
   const chosen = (block.where.columns ?? []).map((k) => byKey.get(k)).filter((f): f is FieldDef => Boolean(f));
   if (chosen.length) return chosen;

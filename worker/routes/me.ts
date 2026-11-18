@@ -40,7 +40,9 @@ me.put("/", async (c) => {
 me.get("/people", async (c) => c.json(await knownPeople(c.env.DB, c.get("person").id)));
 
 /** De lijsten waarin je items mag aanpassen, met hun kolommen: wat een formulier kan invullen (shared/cells.ts). */
-me.get("/columns", async (c) => c.json(await columnsOf(c.env.DB, await seenLists(c.env.DB, c.get("person").id), true)));
+// De kolommen van de lijsten waarin je mag aanpassen (een formulier vult ze in); met ?alle=1 van elke lijst die je ziet
+// (een weergave toont ze).
+me.get("/columns", async (c) => c.json(await columnsOf(c.env.DB, await seenLists(c.env.DB, c.get("person").id), c.req.query("alle") !== "1")));
 
 /** Je volgorde van de lijsten: { ids } in de gewenste volgorde. */
 me.put("/order", async (c) => {

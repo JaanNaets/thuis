@@ -241,8 +241,13 @@ export type ChartData = {
   step: ChartStep;
   /** De as: periodes (Staafjes, Lijn, Getal) of keuzes (Per keuze, Verdeling, met hun kleur `slot`). */
   buckets: { key: string; label: string; long: string; slot?: number | null }[];
-  /** Eén reeks zonder Apart per; anders per keuze (slot = kleur 0–6, null = Overige). */
-  series: { key: string; label: string; slot: number | null; values: (number | null)[] }[];
+  /**
+   * Eén reeks zonder Apart per; anders per keuze (slot = kleur 0–6, null = Overige), of per kolom van een weergave
+   * (`unit`: haar eigen eenheid, een bedrag naast liters).
+   */
+  series: { key: string; label: string; slot: number | null; values: (number | null)[]; unit?: ChartUnit }[];
+  /** Staafjes naast elkaar in plaats van gestapeld (reeksen die niet samen een geheel zijn: kolommen van een weergave). */
+  side?: true;
   /** Getal: de uitkomst over de hele periode; Verdeling: het geheel. */
   total: number | null;
   /** Getal: hetzelfde over de periode net ervoor (om te vergelijken). */

@@ -5,7 +5,8 @@
 
 import { linkedKeys, type TransferPlan } from "../../shared/transfer";
 import { Hono } from "hono";
-import { cleanViewBlock, evaluateView, LIST_KEY, MAX_SHIFT, sourceFields, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
+import { cleanViewBlock, evaluateView, LIST_KEY, MAX_SHIFT, sourceFields, STOCK_FIELDS, viewSpan, type SourceItem, type ViewResponse } from "../../shared/blocks";
+import { coupleRow, sameField } from "../../shared/viewcols";
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
@@ -13,7 +14,7 @@ import { eatenGroups, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, 
 import { buildLinks, formNode, linkProblems, type BoardUse, type LineItem, type LinkForm, type LinkKindDef, type LinkPersonView, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
-import { canEdit, dayOf, fillsLists, kindInfo, STATUSES, type KindInfo, type List, type Role, type Status } from "../../shared/model";
+import { canEdit, dayOf, fillsLists, kindInfo, STATUSES, type KindInfo, type List, type Role, type Status, type StockLevel } from "../../shared/model";
 import { formatAmount } from "../../shared/units";
 import { ids, kindsFor, parseJson, seenAll, toKind, toList, toItem, type EventRowDb, type KindRowDb, type ListRow, type ItemRowDb, type Seen } from "../access";
 import { withCells } from "../cells";
@@ -237,15 +238,35 @@ insights.get("/view", async (c) => {
       ? await db.prepare("SELECT * FROM items WHERE archived = 0 AND list_id IN (SELECT value FROM json_each(?)) ORDER BY name LIMIT 2000").bind(ids(lists.map((l) => l.id))).all<ItemRowDb>()
       : { results: [] as ItemRowDb[] };
     const byList = new Map(lists.map((l) => [l.id, l]));
-    fields = sourceFields("items", { lists, kinds: [] });
+    // Een lijst die voorraad telt, heeft de voorraad als kolommen (hoeveel, bijna op, houdbaar tot).
+    const stocked = lists.some((l) => l.stock);
+    fields = [...sourceFields("items", { lists, kinds: [] }), ...(stocked ? STOCK_FIELDS : [])];
     // Uit meer lijsten: ook in welke lijst (LIST_KEY, zie sourceFields).
     const listOf = (id: string): Attributes => (lists.length > 1 ? { [LIST_KEY]: byList.get(id)?.name ?? "" } : {});
-    // Met wat het logboek invult (shared/cells.ts), per lijst.
+    // Per lijst: haar velden die in de weergave anders heten (dezelfde naam en soort, `sameField`).
+    const sameOf = new Map(lists.map((l) => [l.id, new Map(l.fields.flatMap((f) => fields.filter((g) => g.key !== f.key && sameField(g, f) && !l.fields.some((x) => x.key === g.key)).slice(0, 1).map((g) => [f.key, g.key] as const)))]));
+    // Met wat het logboek invult (shared/cells.ts), per lijst, en haar voorraad.
     const filled: ReturnType<typeof toItem>[] = [];
-    for (const list of lists) filled.push(...(await withCells(db, list, results.filter((r) => r.list_id === list.id).map(toItem))).rows);
+    const levels = new Map<string, StockLevel>();
+    for (const list of lists) {
+      const { rows, cells } = await withCells(db, list, results.filter((r) => r.list_id === list.id).map(toItem));
+      filled.push(...rows);
+      for (const [id, level] of cells.stock) levels.set(id, level);
+    }
     const order = new Map(results.map((r, i) => [r.id, i]));
     filled.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
-    items = filled.map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/items/${t.id}` }));
+    const stockData = (id: string): Attributes => {
+      const level = levels.get(id);
+      return level ? { _voorraad: level.amount, _bijna_op: level.low, ...(level.expires ? { _houdbaar: level.expires } : {}) } : {};
+    };
+    items = filled.map((t) => ({
+      id: t.id,
+      name: t.name,
+      data: { ...coupleRow(computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), t.list_id, block.cols ?? [], sameOf.get(t.list_id) ?? new Map()), ...listOf(t.list_id), ...stockData(t.id) },
+      tag_ids: [],
+      created_at: t.created_at,
+      link: `/items/${t.id}`,
+    }));
     // Namen van personen en verwijzingen in de velden.
     const values = items.flatMap((i) => Object.values(i.data));
     const strings = values.flatMap((v) => (typeof v === "string" ? [v] : Array.isArray(v) ? (v as unknown[]).flatMap((x) => (typeof x === "string" ? [x] : x && typeof x === "object" ? Object.values(x as object).filter((y): y is string => typeof y === "string") : [])) : []));

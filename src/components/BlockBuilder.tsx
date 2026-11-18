@@ -1,7 +1,7 @@
-// De bouwer van het overzicht (zie STIJLBOEK.md → Overzicht en shared/blocks.ts). Een weergave stel je samen als een
-// zin met aantikbare stukken ("Toon het logboek van Jaan waar soort is Gegeten, tel som van kcal per dag"), kies je
-// hoe ze getoond wordt en welke voorwaarden op wat je ziet gelden; rechts (op gsm erboven) kijkt een voorbeeld live
-// mee. Een actie kies je als lijst, soort, wat een tik doet en wat vooraf ingevuld is. Elke keuze is een gewone
+// De bouwer van het overzicht (zie STIJLBOEK.md → Overzicht en shared/blocks.ts). Een weergave stel je samen in stappen:
+// de lijsten (en wat: de items, het logboek, …), de voorwaarden (aantikbare stukken: "waar soort is Gegeten"), de
+// kolommen met wat ermee gebeurt (som, gemiddelde, van–tot, een formule; groeperen en sorteren, ViewColumns) en tonen
+// als, met de regels op wat je ziet; rechts (op gsm erboven) kijkt een voorbeeld live mee. Een actie kies je als lijst, soort, wat een tik doet en wat vooraf ingevuld is. Elke keuze is een gewone
 // keuzelijst van het toestel onder een stukje tekst (zoals een filterpil), zodat het op gsm en met het toetsenbord werkt.
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -32,7 +32,8 @@ import {
   type ViewResponse,
 } from "../../shared/blocks";
 import { actionForm } from "../../shared/blocks";
-import { CHART_STEPS, isGroupField, isNumberField, type ChartAgg, type ChartStep } from "../../shared/charts";
+import type { ListColumns } from "../../shared/cells";
+import { CHART_STEPS, isGroupField, type ChartStep } from "../../shared/charts";
 import type { FieldDef, FieldValue } from "../../shared/fields";
 import type { Targets } from "../../shared/targets";
 import { COUNTED, kindOfKey, NAME, OPS, OPS_FOR, PERIOD_UNITS, PERIODS, WEEKDAYS, type Condition, type Op, type Period, type PeriodKind, type PeriodUnit } from "../../shared/views";
@@ -43,6 +44,8 @@ import { CardHead, Switch } from "./Controls";
 import { FormPicker } from "./FormPicker";
 import { Icon, type IconName } from "./Icon";
 import { ViewBody, viewUrl } from "./ViewBlock";
+import { ViewColumns } from "./ViewColumns";
+import { colFields, type ViewCol } from "../../shared/viewcols";
 
 // ---------- stukjes van de zin ----------
 
@@ -368,11 +371,28 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
+/**
+ * Een weergave van vroeger in de stappen van nu: haar getoonde kolommen (`where.columns`) en wat ze telde (`tally`)
+ * als kolommen, en per keuze als groeperen.
+ */
+function withSteps(block: ViewBlock): ViewBlock {
+  if (block.cols?.length) return block;
+  const shown: ViewCol[] = (block.where.columns ?? []).map((k) => ({ key: k, field: k, calc: "toon" }));
+  const t = block.tally;
+  const measure: ViewCol[] = counts(block.show) && t ? [{ key: t.agg === "count" ? "aantal" : (t.field ?? "aantal"), field: t.agg === "count" ? NAME : (t.field ?? NAME), calc: t.agg }] : [];
+  const cols = [...shown, ...measure.filter((m) => !shown.some((c) => c.key === m.key))];
+  return { ...block, ...(cols.length ? { cols } : {}), ...(!block.group && t?.by && counts(block.show) ? { group: { field: t.by } } : {}) };
+}
+
+/** Groeperen in één keuze: een veld ("wagen"), of een datum per dag, week, maand of jaar ("at:month"). */
+const groupValue = (g: ViewBlock["group"]) => (g ? (g.step ? `${g.field}:${g.step}` : g.field) : "");
+
 export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial: ViewBlock; saveLabel: string; onSave: (b: ViewBlock) => void; onCancel: () => void }) {
   const { lists, person } = useSession();
-  const [draft, setDraft] = useState<ViewBlock>(initial);
+  const [draft, setDraft] = useState<ViewBlock>(() => withSteps(initial));
   const settled = useDebounced(draft, 300);
   const { data } = useApi<ViewResponse>(viewUrl(settled));
+  const { data: columns } = useApi<ListColumns[]>("/me/columns?alle=1");
   const [fields, setFields] = useState<FieldDef[]>([]);
   useEffect(() => {
     if (data) setFields(data.fields);
@@ -382,25 +402,44 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
   const setTally = (patch: Partial<Tally>) => setDraft((d) => ({ ...d, tally: { ...(d.tally ?? { agg: "count", step: "week", n: 8 }), ...patch } }));
   const choices: Choices = { people: data?.people ?? [], items: data?.items ?? {}, me: person.id };
   const conds = draft.where.conditions;
-  const usable = fields.filter((f) => f.type !== "calc" || f.result);
+  // De velden om mee te werken: die van de bron, en de formules van de kolommen (ook om te filteren of te sorteren).
+  const colDefs = colFields(draft.cols ?? [], fields).filter((d): d is FieldDef => d !== null && !fields.some((f) => f.key === d.key));
+  const usable = [...fields.filter((f) => f.type !== "calc" || f.result), ...colDefs];
   const dates = usable.filter((f) => f.type === "date" || f.type === "date_range");
   const listName = (id: string) => lists.find((l) => l.id === id)?.name;
-
+  const rows = draft.show === "lijst" || draft.show === "tabel";
+  const chart = counts(draft.show);
+  const t = draft.tally;
+  // Groeperen: per keuze; een tabel of lijst ook per datum (dag, week, maand of jaar). Een getal, voortgang of per dag niet.
+  const canGroup = rows || perChoice(draft.show) || (overTime(draft.show) && draft.show !== "kalender");
+  const groupFields = usable.filter((f) => isGroupField(f) && f.key !== NAME);
+  const groupOptions: Option<string>[] = [
+    ...(perChoice(draft.show) ? [] : [{ value: "", label: "—" }]),
+    ...groupFields.map((f) => ({ value: f.key, label: f.label })),
+    ...(rows ? dates.flatMap((f) => (Object.keys(CHART_STEPS) as ChartStep[]).map((s) => ({ value: `${f.key}:${s}`, label: `${f.label} · ${CHART_STEPS[s].per.toLowerCase()}` }))) : []),
+  ];
+  function setGroup(v: string) {
+    const [field, step] = v.split(":");
+    const group = field ? { field, ...(step ? { step: step as ChartStep } : {}) } : undefined;
+    // Een grafiek: per keuze is haar as, over de tijd apart per keuze.
+    setDraft((d) => ({ ...d, group, ...(counts(d.show) && d.tally ? { tally: { ...d.tally, by: group && !group.step ? group.field : undefined } } : {}) }));
+  }
   function setSource(source: SourceKind) {
     const keep = source === "items" ? draft.lists.filter((id) => lists.find((l) => l.id === id)?.one) : draft.lists;
     const first = lists.find((l) => l.one)?.id;
-    setDraft((d) => ({ ...d, source, lists: source === "items" && !keep.length && first ? [first] : keep, where: { match: d.where.match, conditions: [] }, ...(d.tally ? { tally: { agg: "count", step: d.tally.step, n: d.tally.n } } : {}) }));
+    setDraft((d) => ({
+      ...d,
+      source,
+      lists: source === "items" && !keep.length && first ? [first] : keep,
+      where: { match: d.where.match, conditions: [] },
+      cols: undefined,
+      group: undefined,
+      ...(d.tally ? { tally: { agg: "count", step: d.tally.step, n: d.tally.n } } : {}),
+    }));
   }
-
-  const t = draft.tally;
-  const tallyValue = !t || t.agg === "count" ? "count" : `${t.agg}:${t.field}`;
-  const tallyOptions: Option<string>[] = [
-    { value: "count", label: "het aantal keer" },
-    ...usable.filter(isNumberField).flatMap((f) =>
-      (["sum", "avg", "min", "max"] as const).map((agg) => ({ value: `${agg}:${f.key}`, label: `${agg === "sum" ? "de som van" : agg === "avg" ? "het gemiddelde van" : agg === "min" ? "de kleinste" : "de grootste"} ${f.label.toLowerCase()}` })),
-    ),
-  ];
-  const groups = usable.filter((f) => isGroupField(f) && f.key !== NAME);
+  const toggleList = (id: string) =>
+    set({ lists: draft.lists.includes(id) ? (draft.source === "items" && draft.lists.length === 1 ? draft.lists : draft.lists.filter((x) => x !== id)) : [...draft.lists, id] });
+  const chosen = draft.lists.flatMap((id) => columns?.filter((c) => c.id === id) ?? []).map((c) => ({ id: c.id, name: c.name, fields: c.fields as FieldDef[] }));
   const stepOptions = (Object.keys(CHART_STEPS) as ChartStep[]).map((s) => ({ value: s, label: CHART_STEPS[s].one }));
 
   return (
@@ -411,22 +450,43 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
           <input value={draft.name} maxLength={40} placeholder={viewName({ ...draft, name: "" }, listName)} onChange={(e) => set({ name: e.target.value })} />
         </label>
 
-        <section className="sentence" aria-label="Wat je ziet">
-          <div className="sentence-line">
-            Toon
-            <Tok<SourceKind> label="Bron" value={draft.source} options={(Object.keys(SOURCES) as SourceKind[]).map((s) => ({ value: s, label: SOURCES[s] }))} onChange={setSource} />
-            van
-            {draft.lists.length === 0 && <span className="sentence-soft">al je lijsten</span>}
-            {draft.lists.map((id) => (
-              <TokChip key={id} text={listName(id) ?? "Lijst"} label={`${listName(id) ?? "Lijst"} weghalen`} onRemove={() => draft.source !== "items" || draft.lists.length > 1 ? set({ lists: draft.lists.filter((x) => x !== id) }) : undefined} />
-            ))}
-            <TokAdd
-              label="Lijst toevoegen"
-              text={draft.lists.length ? "en" : "kies"}
-              options={lists.filter((l) => !draft.lists.includes(l.id) && (draft.source !== "items" || l.one)).map((l) => ({ value: l.id, label: l.name }))}
-              onPick={(id) => set({ lists: [...draft.lists, id] })}
-            />
+        <section className="builder-section" aria-label="Lijsten">
+          <h3 className="cap-label">Lijsten</h3>
+          <div className="tag-picker">
+            {draft.source !== "items" && (
+              <button type="button" className="tag" aria-pressed={!draft.lists.length} onClick={() => set({ lists: [] })}>
+                <Icon name="check" size={14} className="check" />
+                {draft.lists.length > 0 && <span className="dot" />}
+                Alle lijsten
+              </button>
+            )}
+            {lists
+              .filter((l) => !l.archived && (draft.source !== "items" || l.one))
+              .map((l) => {
+                const on = draft.lists.includes(l.id);
+                return (
+                  <button key={l.id} type="button" className="tag" aria-pressed={on} onClick={() => toggleList(l.id)}>
+                    <Icon name="check" size={14} className="check" />
+                    {!on && <span className="dot" />}
+                    {l.name}
+                  </button>
+                );
+              })}
           </div>
+          <label className="field">
+            <span className="label">Wat</span>
+            <select value={draft.source} onChange={(e) => setSource(e.target.value as SourceKind)}>
+              {(Object.keys(SOURCES) as SourceKind[]).map((s) => (
+                <option key={s} value={s}>
+                  {SOURCES[s].charAt(0).toUpperCase() + SOURCES[s].slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
+        <section className="builder-section sentence" aria-label="Voorwaarden">
+          <h3 className="cap-label">Voorwaarden</h3>
           {conds.map((c, i) => (
             <ConditionLine
               key={i}
@@ -466,99 +526,52 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
               }}
             />
           </div>
-
-          {draft.source === "items" && (counts(draft.show) || draft.show === "agenda") && dates.length > 0 && (
-            <div className="sentence-line">
-              volgens
-              <Tok label="Volgens welke datum" value={sourceDate("items", usable, draft.date)} options={dates.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))} onChange={(date) => set({ date })} />
-            </div>
-          )}
-
-          {counts(draft.show) && t && (
-            <>
-              <div className="sentence-line">
-                tel
-                <Tok
-                  label="Wat tellen"
-                  value={tallyValue}
-                  options={tallyOptions}
-                  onChange={(v) => {
-                    if (v === "count") setTally({ agg: "count", field: undefined });
-                    else {
-                      const [agg, field] = v.split(":");
-                      setTally({ agg: agg as ChartAgg, field });
-                    }
-                  }}
-                />
-                {overTime(draft.show) && draft.show !== "kalender" && (
-                  <>
-                    per <Tok<ChartStep> label="Per" value={t.step} options={stepOptions} onChange={(step) => setTally({ step })} />
-                  </>
-                )}
-                {perChoice(draft.show) && groups.length > 0 && (
-                  <>
-                    per <Tok label="Per keuze" value={t.by ?? groups[0].key} options={groups.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))} onChange={(by) => setTally({ by })} />
-                  </>
-                )}
-              </div>
-              {overTime(draft.show) && draft.show !== "kalender" && groups.length > 0 && (
-                <div className="sentence-line">
-                  apart per
-                  <Tok label="Apart per" value={t.by ?? ""} options={[{ value: "", label: "niets" }, ...groups.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))]} onChange={(by) => setTally({ by: by || undefined })} />
-                </div>
-              )}
-              <div className="sentence-line">
-                over
-                {overTime(draft.show) ? (
-                  <Tok
-                    label="Hoeveel periodes"
-                    value={String(t.n)}
-                    options={(draft.show === "kalender" ? [35, 91, 182, 365] : [4, 6, 8, 12, 24, 52, 0]).map((n) => ({ value: String(n), label: n === 0 ? "altijd" : `de laatste ${n} ${draft.show === "kalender" ? "dagen" : CHART_STEPS[t.step].many}` }))}
-                    onChange={(n) => setTally({ n: Number(n) })}
-                  />
-                ) : (
-                  <Tok label="Periode" value={`${t.step}:${t.n}`} options={SPANS} onChange={(v) => setTally({ step: SPANS.find((s) => s.value === v)!.step, n: SPANS.find((s) => s.value === v)!.n })} />
-                )}
-              </div>
-              {draft.show !== "perkeuze" && draft.show !== "verdeling" && draft.show !== "kalender" && (
-                <div className="sentence-line">
-                  {draft.show === "voortgang" ? "naar een doel van" : "met als doel"}
-                  <TokInput label="Doel" type="number" value={show(draft.goal)} placeholder={draft.show === "voortgang" ? "…" : "geen"} onChange={(s) => set({ goal: s.trim() ? num(s) : undefined })} />
-                </div>
-              )}
-            </>
-          )}
-
-          {(draft.show === "lijst" || draft.show === "tabel") && (
-            <>
-              <div className="sentence-line">
-                gesorteerd op
-                <Tok
-                  label="Sorteren op"
-                  value={draft.where.sort?.[0]?.field ?? ""}
-                  options={[{ value: "", label: "zoals het komt" }, ...usable.filter((f) => f.type !== "items" && f.type !== "people").map((f) => ({ value: f.key, label: f.label.toLowerCase() }))]}
-                  onChange={(field) => setWhere({ sort: field ? [{ field, dir: draft.where.sort?.[0]?.dir ?? "asc" }] : undefined })}
-                />
-                {draft.where.sort?.[0] && (
-                  <Tok<"asc" | "desc">
-                    label="Richting"
-                    value={draft.where.sort[0].dir}
-                    options={[
-                      { value: "asc", label: "van laag naar hoog" },
-                      { value: "desc", label: "van hoog naar laag" },
-                    ]}
-                    onChange={(dir) => setWhere({ sort: [{ field: draft.where.sort![0].field, dir }] })}
-                  />
-                )}
-              </div>
-              <div className="sentence-line">
-                hoogstens
-                <TokInput label="Hoeveel rijen" type="number" value={String(draft.limit ?? DEFAULT_LIMIT)} onChange={(s) => set({ limit: Math.max(1, Math.min(50, Math.round(num(s)) || 1)) })} />
-                rijen
-              </div>
-            </>
-          )}
         </section>
+
+        {draft.show !== "agenda" && (
+          <section className="builder-section" aria-label="Kolommen">
+            <h3 className="cap-label">Kolommen</h3>
+            <ViewColumns cols={draft.cols ?? []} onChange={(cols) => set({ cols: cols.length ? cols : undefined })} fields={fields} lists={draft.source === "items" ? chosen : []} />
+            {canGroup && groupOptions.length > (perChoice(draft.show) ? 0 : 1) && (
+              <label className="field">
+                <span className="label">Groeperen per</span>
+                <select value={groupValue(draft.group) || (perChoice(draft.show) ? (t?.by ?? groupOptions[0]?.value ?? "") : "")} onChange={(e) => setGroup(e.target.value)}>
+                  {groupOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {rows && (
+              <div className="field-row">
+                <label className="field">
+                  <span className="label">Sorteren op</span>
+                  <select value={draft.where.sort?.[0]?.field ?? ""} onChange={(e) => setWhere({ sort: e.target.value ? [{ field: e.target.value, dir: draft.where.sort?.[0]?.dir ?? "asc" }] : undefined })}>
+                    <option value="">—</option>
+                    {usable
+                      .filter((f) => f.type !== "items" && f.type !== "people")
+                      .map((f) => (
+                        <option key={f.key} value={f.key}>
+                          {f.key === NAME ? "Naam" : f.label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {draft.where.sort?.[0] && (
+                  <label className="field">
+                    <span className="label">Richting</span>
+                    <select value={draft.where.sort[0].dir} onChange={(e) => setWhere({ sort: [{ field: draft.where.sort![0].field, dir: e.target.value as "asc" | "desc" }] })}>
+                      <option value="asc">Van laag naar hoog</option>
+                      <option value="desc">Van hoog naar laag</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="builder-section" aria-label="Tonen als">
           <h3 className="cap-label">Tonen als</h3>
@@ -572,33 +585,74 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
               </button>
             ))}
           </div>
+          <div className="field-row">
+            {draft.source === "items" && (chart || draft.show === "agenda") && dates.length > 0 && (
+              <label className="field">
+                <span className="label">Volgens</span>
+                <select value={sourceDate("items", usable, draft.date)} onChange={(e) => set({ date: e.target.value })}>
+                  {dates.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {chart && t && overTime(draft.show) && draft.show !== "kalender" && (
+              <label className="field">
+                <span className="label">Per</span>
+                <select value={t.step} onChange={(e) => setTally({ step: e.target.value as ChartStep })}>
+                  {stepOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {chart && t && (
+              <label className="field">
+                <span className="label">Over</span>
+                {overTime(draft.show) ? (
+                  <select value={String(t.n)} onChange={(e) => setTally({ n: Number(e.target.value) })}>
+                    {(draft.show === "kalender" ? [35, 91, 182, 365] : [4, 6, 8, 12, 24, 52, 0]).map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n === 0 ? "Altijd" : `De laatste ${n} ${draft.show === "kalender" ? "dagen" : CHART_STEPS[t.step].many}`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={`${t.step}:${t.n}`}
+                    onChange={(e) => {
+                      const span = SPANS.find((x) => x.value === e.target.value)!;
+                      setTally({ step: span.step, n: span.n });
+                    }}
+                  >
+                    {SPANS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label.charAt(0).toUpperCase() + o.label.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            )}
+            {chart && draft.show !== "perkeuze" && draft.show !== "verdeling" && draft.show !== "kalender" && (
+              <label className="field">
+                <span className="label">Doel</span>
+                <input inputMode="decimal" value={show(draft.goal)} placeholder={draft.show === "voortgang" ? "…" : "—"} onChange={(e) => set({ goal: e.target.value.trim() ? num(e.target.value) : undefined })} />
+              </label>
+            )}
+            {rows && !draft.group && (
+              <label className="field">
+                <span className="label">Hoogstens</span>
+                <input inputMode="numeric" value={String(draft.limit ?? DEFAULT_LIMIT)} onChange={(e) => set({ limit: Math.max(1, Math.min(50, Math.round(num(e.target.value)) || 1)) })} />
+              </label>
+            )}
+          </div>
+          <RulesEditor draft={draft} fields={usable} choices={choices} onChange={(rules) => set({ rules: rules.length ? rules : undefined })} />
         </section>
-
-        {!counts(draft.show) && usable.length > 1 && (
-          <section className="builder-section" aria-label="Kolommen">
-            <h3 className="cap-label">Kolommen</h3>
-            <div className="filters builder-chips">
-              {usable
-                .filter((f) => f.key !== NAME)
-                .map((f) => {
-                  const on = draft.where.columns?.includes(f.key) ?? false;
-                  return (
-                    <button
-                      key={f.key}
-                      type="button"
-                      className="filter"
-                      aria-pressed={on}
-                      onClick={() => setWhere({ columns: on ? draft.where.columns!.filter((k) => k !== f.key) : [...(draft.where.columns ?? []), f.key] })}
-                    >
-                      {on && <Icon name="check" size={13} />} {f.label}
-                    </button>
-                  );
-                })}
-            </div>
-          </section>
-        )}
-
-        <RulesEditor draft={draft} fields={usable} choices={choices} onChange={(rules) => set({ rules: rules.length ? rules : undefined })} />
       </div>
 
       <div className="builder-preview">
@@ -641,14 +695,14 @@ function RulesEditor({ draft, fields, choices, onChange }: { draft: ViewBlock; f
     ...(!rules.some((r) => r.when === "leeg") ? [{ value: "leeg", label: "Als er niets is …" }] : []),
   ];
   return (
-    <section className="builder-section" aria-label="Voorwaarden">
-      <h3 className="cap-label">Voorwaarden</h3>
+    <section className="builder-section" aria-label="Regels">
+      <h3 className="cap-label">Regels</h3>
       {rules.map((r, i) => {
         if (r.when === "leeg")
           return (
             <div key={i} className="sentence-line rule-line">
               Als er niets is → <span className="sentence-soft">verberg het blok</span>
-              <TokRemove label="Voorwaarde weghalen" onClick={() => remove(i)} />
+              <TokRemove label="Regel weghalen" onClick={() => remove(i)} />
             </div>
           );
         if (r.when === "uitkomst")
@@ -658,7 +712,7 @@ function RulesEditor({ draft, fields, choices, onChange }: { draft: ViewBlock; f
               <Tok<ResultOp> label="Vergelijking" value={r.op} options={(Object.keys(RESULT_OPS) as ResultOp[]).map((o) => ({ value: o, label: RESULT_OPS[o] }))} onChange={(op) => set(i, { ...r, op })} />
               <TokInput label="Grens" type="number" value={show(r.value)} onChange={(s) => set(i, { ...r, value: num(s) })} />→
               <Tok<RuleTone> label="Kleur" value={r.then} options={TONE_OPTIONS} onChange={(then) => set(i, { ...r, then })} />
-              <TokRemove label="Voorwaarde weghalen" onClick={() => remove(i)} />
+              <TokRemove label="Regel weghalen" onClick={() => remove(i)} />
             </div>
           );
         return (
@@ -678,8 +732,8 @@ function RulesEditor({ draft, fields, choices, onChange }: { draft: ViewBlock; f
       })}
       <div className="sentence-line">
         <TokAdd
-          label="Voorwaarde toevoegen"
-          text="Voorwaarde"
+          label="Regel toevoegen"
+          text="Regel"
           options={adds}
           onPick={(v) => {
             if (v === "leeg") onChange([...rules, { when: "leeg", then: "verbergen" }]);

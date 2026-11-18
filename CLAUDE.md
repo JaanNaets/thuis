@@ -194,10 +194,18 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 - **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een formulier, `worker/notify-events.ts`): aan iedereen
   die het formulier ziet of aan wie in de verdeling staat; nooit aan wie het logde of wie het formulier of een tag ervan
   stilzette.
-- **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden (naam, icoon) met blokken van twee soorten. Een **weergave** is een
-  zin: bron (logboek, items, voorraad, saldo's, voeding, alles met een datum) + lijsten + voorwaarden (`ViewDef`) +
-  tellen (`Tally`) + één van elf vormen (`SHOWS`, ook Agenda) + voorwaarden op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
-  verbergen als er niets is; de uitkomst kleuren). De server rekent ze uit met de rechten van de lezer
+- **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden (naam, icoon) met blokken van twee soorten. Een **weergave** bouw
+  je in stappen (`ViewBuilder`): **lijsten** + wat (bron: items, logboek, voorraad, saldo's, voeding, alles met een
+  datum) → **voorwaarden** (`ViewDef`, eerst filteren) → **kolommen** (`cols`, `shared/viewcols.ts`, getest: een veld
+  of een formule op de kolommen ervoor, met een berekening: tonen, som, gemiddelde, kleinste, grootste, aantal,
+  van–tot; over meer lijsten is een veld met dezelfde naam en soort één kolom (`sameField`), anders koppel je per
+  lijst (`from`, `coupleRow`); een formule rekent per rij, en samen met Tonen op de uitkomsten (€/l over een maand)) +
+  **groeperen** (`group`: een keuze, of een datum per dag/week/maand/jaar) + sorteren → **tonen als** (één van elf
+  vormen, `SHOWS`, met `Tally` voor per/over) + regels op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
+  verbergen als er niets is; de uitkomst kleuren). Kolommen die samen tellen geven een tabel een totaalrij en per groep
+  een rij (`summary`), een getal een getal per kolom (`numbers`), een grafiek een reeks per kolom. Bij de items van een
+  lijst die voorraad telt zijn Voorraad, Bijna op en Houdbaar tot kolommen (`STOCK_FIELDS`). Een weergave zonder
+  kolommen (van vroeger) werkt zoals voordien (`where.columns`, `tally`). De server rekent ze uit met de rechten van de lezer
   (`GET /insights/view`, `evaluateView`); met een periode blader je (`viewSpan`, `?periode=`), een agenda per maand.
   Een **actie** logt: een formulier (`actionForm`; van vroeger een lijst met een vertrekpunt), vooraf ingevulde velden en wat een tik doet
   (formulier, meteen bewaren met Ongedaan maken, tellen, timer); formulier en bewaren kunnen ook gepland (`planned`,

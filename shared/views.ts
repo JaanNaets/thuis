@@ -497,11 +497,22 @@ export function treeOrder<T extends { id: string; part_of?: string | null }>(ite
   return out;
 }
 
+/** De groep van een datum per dag, week (vanaf maandag), maand of jaar: een sleutel die sorteert en een naam. */
+function dateGroup(day: string, step: "day" | "week" | "month" | "year"): [string, string] {
+  const month = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+  if (step === "year") return [day.slice(0, 4), day.slice(0, 4)];
+  if (step === "month") return [day.slice(0, 7), `${month(day)} ${day.slice(0, 4)}`];
+  if (step === "day") return [day, `${Number(day.slice(8, 10))} ${month(day)} ${day.slice(0, 4)}`];
+  const t = Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)));
+  const monday = new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+  return [monday, `Week van ${Number(monday.slice(8, 10))} ${month(monday)} ${monday.slice(0, 4)}`];
+}
+
 /**
  * Items per groep, in een vaste volgorde: keuzes zoals ze ingesteld zijn, datums per maand (de nieuwste eerst), de rest
  * op naam; zonder waarde achteraan ("Zonder …"). Binnen een groep blijft de volgorde van `items`.
  */
-export function groupItems<T extends ViewItem>(items: T[], key: string, fields: FieldDef[], names: Names): Group<T>[] {
+export function groupItems<T extends ViewItem>(items: T[], key: string, fields: FieldDef[], names: Names, step: "day" | "week" | "month" | "year" = "month"): Group<T>[] {
   const def = fields.find((f) => f.key === key);
   if (!def || !canGroup(key, def)) return [{ key: "", label: "", items }];
   const kind = kindOf(def);
@@ -515,8 +526,7 @@ export function groupItems<T extends ViewItem>(items: T[], key: string, fields: 
       label = v === true ? def.label : `Niet ${def.label.toLowerCase()}`;
     } else if (!isEmpty(v)) {
       if (kind === "date" && isDate(v)) {
-        k = v.slice(0, 7);
-        label = `${MONTHS[Number(v.slice(5, 7)) - 1]} ${v.slice(0, 4)}`;
+        [k, label] = dateGroup(v.slice(0, 10), step);
       } else {
         k = String(v);
         label = formatFieldValue(def, v, names);

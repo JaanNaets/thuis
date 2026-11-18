@@ -8147,6 +8147,47 @@ button.quick-tile[aria-busy="true"] {
   white-space: normal;
 }
 
+/* De totaalrij van een weergave en de rij per groep (kolommen die samen tellen): vet, met een haarlijn erboven. */
+.view-table tfoot td {
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+
+/* Een lijst met kolommen die samen tellen: het totaal eronder, als grijze regel. */
+.view-total {
+  margin: 0;
+  padding: 4px 16px 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Een getal met meer kolommen: de naam van het eerste erboven, de andere klein eronder, naast elkaar. */
+.view-number-label {
+  margin: 0 0 2px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.view-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.view-numbers dt {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.view-numbers dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .view-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

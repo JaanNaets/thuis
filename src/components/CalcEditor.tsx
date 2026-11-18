@@ -189,7 +189,7 @@ export function CalcEditor({
  * Een formule typen: velden tussen [ ] met hun naam (tik op een veld om het in te voegen). Bewaard wordt ze met de
  * sleutels van de velden; wat niet te lezen is, blijft staan zoals getypt (de controle zegt wat er scheelt).
  */
-function FormulaInput({ expr, fields, onChange }: { expr: string; fields: FieldDef[]; onChange: (expr: string) => void }) {
+export function FormulaInput({ expr, fields, onChange }: { expr: string; fields: FieldDef[]; onChange: (expr: string) => void }) {
   const [text, setText] = useState(() => formulaToLabels(expr, fields));
   const ref = useRef<HTMLTextAreaElement>(null);
 

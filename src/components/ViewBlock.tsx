@@ -4,11 +4,12 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { agendaDays, columnsOf, SHOWS, sourceDate, viewName, type ViewBlock, type ViewResponse, type ViewRowOut } from "../../shared/blocks";
-import { formatDuration, formatFieldValue, type FieldDef, type Names } from "../../shared/fields";
+import { formatDuration, formatFieldValue, type FieldDef, type FieldValue, type Names } from "../../shared/fields";
+import type { ColCalc } from "../../shared/viewcols";
 import { brusselsNow, minutesBetween } from "../../shared/model";
 import { NAME } from "../../shared/views";
 import { api, useApi } from "../api";
-import { today as todayIso } from "../format";
+import { formatDate, formatNumber, today as todayIso } from "../format";
 import { listTone } from "../lists";
 import { useSession } from "../session";
 import { Link } from "../router";
@@ -147,11 +148,25 @@ export function ViewBody({
     if (table) return <ChartTable data={data.chart} />;
     return (
       <div className="card-body">
+        {data.numbers && <p className="view-number-label">{data.numbers[0].label}</p>}
         <ChartView data={data.chart} area={block.show === "gebied"} />
+        {/* Een getal met meer kolommen die samen tellen: de andere eronder. */}
+        {data.numbers && (
+          <dl className="view-numbers">
+            {data.numbers.slice(1).map((n) => (
+              <div key={n.key}>
+                <dt>{n.label}</dt>
+                <dd>{formatChartValue(n.unit, n.value)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
     );
   }
   const columns = columnsOf(block, data.fields);
+  // Per groep een rij (som per maand, per wagen), met de kolommen die samen tellen.
+  if (data.summary?.groups) return <GroupTable block={block} data={data} columns={columns} names={names} />;
   if (!data.rows.length) return <p className="view-empty">Niets</p>;
   // Wie moet wie: wie aan wie (met hun echte namen) en waar Terugbetaald logt.
   const realName = (id: unknown) => data.people.find((p) => p.id === id)?.name ?? "Iemand";
@@ -160,7 +175,10 @@ export function ViewBody({
       ? { from: { id: String(r.data.from), name: realName(r.data.from) }, to: { id: String(r.data.to), name: realName(r.data.to) }, amount: r.data.amount, list: r.settle.list, iban: r.settle.iban }
       : undefined;
   const more = data.total - data.rows.length;
-  if (block.show === "tabel") return <ViewTable rows={data.rows} columns={columns} names={names} more={more} preview={preview} />;
+  const total = data.summary?.total;
+  if (block.show === "tabel") return <ViewTable rows={data.rows} columns={columns} names={names} more={more} preview={preview} total={total} calcOf={calcOf(block)} />;
+  // Een lijst met kolommen die samen tellen: het totaal eronder.
+  const totals = total ? columns.flatMap((c) => (calcOf(block)(c.key) !== "toon" || block.cols?.some((x) => x.key === c.key && x.formula) ? [`${c.label} ${summaryCell(c, calcOf(block)(c.key), total[c.key], names)}`.trim()] : [])) : [];
   return (
     <>
       <ul className="rows view-rows">
@@ -169,11 +187,78 @@ export function ViewBody({
         ))}
       </ul>
       {more > 0 && <p className="view-more">+{more}</p>}
+      {totals.length > 0 && <p className="view-total">Totaal · {totals.join(" · ")}</p>}
     </>
   );
 }
 
 const cell = (row: ViewRowOut, def: FieldDef, names: Names) => (def.key === NAME ? row.name : formatFieldValue(def, row.data[def.key], names));
+
+/** Wat een kolom van de weergave doet (Tonen, Som, …); zonder kolommen: tonen. */
+const calcOf =
+  (block: ViewBlock) =>
+  (key: string): ColCalc =>
+    block.cols?.find((c) => c.key === key)?.calc ?? "toon";
+
+/** Een uitkomst samen: van–tot als twee datums, een datum als dag, een aantal als getal, de rest zoals het veld. */
+function summaryCell(def: FieldDef, calc: ColCalc, value: FieldValue | undefined, names: Names): string {
+  if (value === undefined || value === null) return "";
+  if (calc === "count") return formatNumber(value as number);
+  if (Array.isArray(value) && typeof value[0] === "string" && typeof value[1] === "string") return value[0] === value[1] ? formatDate(value[0]) : `${formatDate(value[0])} – ${formatDate(value[1])}`;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
+  return formatFieldValue(def, value, names);
+}
+
+const numeric = (c: FieldDef) => ["money", "number", "duration", "score", "year"].includes(c.type);
+
+/** Per groep een rij: de groep, hoeveel rijen erin, de kolommen die samen tellen; onderaan het totaal. */
+function GroupTable({ block, data, columns, names }: { block: ViewBlock; data: ViewResponse; columns: FieldDef[]; names: Names }) {
+  const calc = calcOf(block);
+  const shown = columns.filter((c) => c.key !== NAME && (calc(c.key) !== "toon" || block.cols?.some((x) => x.key === c.key && x.formula)));
+  const groups = data.summary!.groups!;
+  const head = data.fields.find((f) => f.key === block.group?.field)?.label ?? "Groep";
+  if (!groups.length) return <p className="view-empty">Niets</p>;
+  return (
+    <div className="view-table-wrap">
+      <table className="view-table">
+        <thead>
+          <tr>
+            <th scope="col">{head}</th>
+            {shown.map((c) => (
+              <th key={c.key} scope="col" className={numeric(c) || calc(c.key) === "count" ? "is-num" : undefined}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <tr key={g.key}>
+              <td>{g.label}</td>
+              {shown.map((c) => (
+                <td key={c.key} className={numeric(c) || calc(c.key) === "count" ? "is-num" : undefined}>
+                  {summaryCell(c, calc(c.key), g.values[c.key], names)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        {groups.length > 1 && (
+          <tfoot>
+            <tr>
+              <td>Totaal</td>
+              {shown.map((c) => (
+                <td key={c.key} className={numeric(c) || calc(c.key) === "count" ? "is-num" : undefined}>
+                  {summaryCell(c, calc(c.key), data.summary!.total[c.key], names)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
 
 /** Hoe lang iets al loopt (een timer), elke halve minuut bij. */
 function Running({ at }: { at: string }) {
@@ -281,9 +366,25 @@ function ViewListRow({ row, columns, names, onChanged, preview, settle }: { row:
   );
 }
 
-function ViewTable({ rows, columns, names, more, preview }: { rows: ViewRowOut[]; columns: FieldDef[]; names: Names; more: number; preview: boolean }) {
+function ViewTable({
+  rows,
+  columns,
+  names,
+  more,
+  preview,
+  total,
+  calcOf: calc = () => "toon",
+}: {
+  rows: ViewRowOut[];
+  columns: FieldDef[];
+  names: Names;
+  more: number;
+  preview: boolean;
+  /** De totaalrij (kolommen die samen tellen). */
+  total?: Record<string, FieldValue | undefined>;
+  calcOf?: (key: string) => ColCalc;
+}) {
   const all = [{ key: NAME, label: "Naam", type: "text" } as FieldDef, ...columns.filter((c) => c.key !== NAME)];
-  const numeric = (c: FieldDef) => ["money", "number", "duration", "score", "year"].includes(c.type);
   return (
     <div className="view-table-wrap">
       <table className="view-table">
@@ -307,6 +408,17 @@ function ViewTable({ rows, columns, names, more, preview }: { rows: ViewRowOut[]
             </tr>
           ))}
         </tbody>
+        {total && all.some((c) => total[c.key] !== undefined) && (
+          <tfoot>
+            <tr>
+              {all.map((c, k) => (
+                <td key={c.key} className={numeric(c) || calc(c.key) === "count" ? "is-num" : undefined}>
+                  {k === 0 ? "Totaal" : summaryCell(c, calc(c.key), total[c.key], names)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
       {more > 0 && <p className="view-more">+{more}</p>}
     </div>

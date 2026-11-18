@@ -84,7 +84,7 @@ function Legend({ series, line }: { series: ChartData["series"]; line: boolean }
 }
 
 /** Eén tooltip voor alle reeksen in een periode: de waarde vooraan (vet), de reeks erachter. */
-function Tip({ x, width, title, rows, unit }: { x: number; width: number; title: string; rows: { label: string; slot: number | null; value: number | null }[]; unit: ChartUnit }) {
+function Tip({ x, width, title, rows, unit }: { x: number; width: number; title: string; rows: { label: string; slot: number | null; value: number | null; unit?: ChartUnit }[]; unit: ChartUnit }) {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(140);
   useLayoutEffect(() => setW(ref.current?.offsetWidth ?? 140), [title, rows.length]);
@@ -95,7 +95,7 @@ function Tip({ x, width, title, rows, unit }: { x: number; width: number; title:
       {rows.map((r, i) => (
         <p key={i} className="chart-tip-row">
           {rows.length > 1 && <span className="chart-key is-line" style={{ background: seriesColor(r.slot) }} />}
-          <strong>{formatChartValue(unit, r.value)}</strong>
+          <strong>{formatChartValue(r.unit ?? unit, r.value)}</strong>
           {rows.length > 1 && <span>{r.label}</span>}
         </p>
       ))}
@@ -112,13 +112,15 @@ function TimeChart({ data, area: filled = false }: { data: ChartData; area?: boo
   const plotW = Math.max(0, width - LEFT - RIGHT);
   const band = n ? plotW / n : 0;
   const single = data.series.length === 1;
+  // Staafjes naast elkaar (kolommen van een weergave) in plaats van opgestapeld.
+  const side = Boolean(data.side) && !line && !single;
   // Opgestapeld (staafjes): positief naar boven, negatief naar onder.
   const sums = data.buckets.map((_, b) => {
     let pos = 0;
     let neg = 0;
     for (const s of data.series) {
       const v = s.values[b] ?? 0;
-      if (line) {
+      if (line || side) {
         pos = Math.max(pos, v);
         neg = Math.min(neg, v);
       } else if (v >= 0) pos += v;
@@ -144,7 +146,21 @@ function TimeChart({ data, area: filled = false }: { data: ChartData; area?: boo
   };
 
   const bars: ReactNode[] = [];
-  if (!line)
+  if (side)
+    data.buckets.forEach((_, b) => {
+      const w = Math.max(2, barW / data.series.length);
+      data.series.forEach((s, i) => {
+        const v = s.values[b] ?? 0;
+        if (!v) return;
+        const y1 = y(Math.max(0, v));
+        const h = Math.max(1, y(Math.min(0, v)) - y1);
+        const xl = x(b) - barW / 2 + i * w;
+        const r = Math.min(3, h, (w - 1) / 2);
+        const d = `M${xl},${y1 + h} V${y1 + r} Q${xl},${y1} ${xl + r},${y1} H${xl + w - 1 - r} Q${xl + w - 1},${y1} ${xl + w - 1},${y1 + r} V${y1 + h} Z`;
+        bars.push(<path key={`${b}-${s.key}`} d={d} fill={color(s.slot, b)} className={active === b ? "is-active" : undefined} />);
+      });
+    });
+  else if (!line)
     data.buckets.forEach((_, b) => {
       let up = 0;
       let down = 0;
@@ -262,7 +278,7 @@ function TimeChart({ data, area: filled = false }: { data: ChartData; area?: boo
           width={width}
           title={data.buckets[active].long}
           unit={data.unit}
-          rows={data.series.map((s) => ({ label: s.label, slot: s.slot, value: s.values[active] }))}
+          rows={data.series.map((s) => ({ label: s.label, slot: s.slot, value: s.values[active], unit: s.unit }))}
         />
       )}
     </div>
@@ -415,7 +431,7 @@ export function ChartTable({ data }: { data: ChartData }) {
             <tr key={b.key}>
               <th scope="row">{b.long}</th>
               {data.series.map((s) => (
-                <td key={s.key}>{formatChartValue(data.unit, s.values[i])}</td>
+                <td key={s.key}>{formatChartValue(s.unit ?? data.unit, s.values[i])}</td>
               ))}
             </tr>
           ))}
