@@ -4793,6 +4793,28 @@ dialog.palette[open]::backdrop {
 }
 
 /* Gekozen verwijzingen (Verwijzingen): kleine tags met een kruisje, de keuzelijst eronder. */
+/* Kiezen uit iets dat kan groeien (SearchSelect, SearchMulti): het zoekveld met eventueel × ernaast, de gekozen als tags erboven. */
+.search-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-select:not(:has(> .btn)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Zoeken in de zin van een weergave (een waarde uit veel items): een smal zoekveld tussen de stukken. */
+.tok-search {
+  width: min(100%, 220px);
+}
+
+.search-multi {
+  display: grid;
+  gap: 8px;
+}
+
 .ref-chips {
   display: flex;
   flex-wrap: wrap;
@@ -7122,7 +7144,8 @@ span.lm-row-toggle {
 }
 
 .picker-row > select,
-.picker-row > .picker {
+.picker-row > .picker,
+.picker-row > .search-select {
   flex: 1;
   min-width: 0;
 }
@@ -8725,10 +8748,14 @@ dialog.sheet.builder-sheet {
   min-width: 0;
 }
 
-/* + Lijst: een keuzelijst die eruitziet als een knop, op haar eigen breedte. */
+/* + Lijst, + Kolom: een keuzelijst op haar eigen breedte; + Lijst zoekt (een zoekveld van hoogstens 320px). */
 .map-add {
   justify-self: start;
   width: auto;
+}
+
+.map-add-search {
+  width: min(100%, 320px);
 }
 
 @media (max-width: 520px) {

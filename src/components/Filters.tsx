@@ -27,6 +27,7 @@ import {
 import { api } from "../api";
 import { Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { SearchMulti } from "./SearchSelect";
 import { useSortable } from "./Sortable";
 import { useToast } from "./Toast";
 
@@ -231,8 +232,13 @@ function PeriodInput({ value, onChange }: { value: Period; onChange: (p: Period)
   );
 }
 
+/** Zoveel keuzes hoogstens als tags om aan te vinken; meer zoek je. */
+const MAX_TOGGLES = 8;
+
 function Toggles({ options, value, onChange, label }: { options: { value: string; label: string }[]; value: string[]; onChange: (v: string[]) => void; label: string }) {
   if (!options.length) return <span className="hint">Nog niets om uit te kiezen.</span>;
+  // Veel keuzes (items, personen in een grote lijst): de gekozen als tags, eronder zoeken.
+  if (options.length > MAX_TOGGLES) return <SearchMulti label={label} value={value} options={options.map((o) => ({ id: o.value, name: o.label }))} onChange={onChange} placeholder="Zoek…" />;
   return (
     <div className="tag-picker" role="group" aria-label={label}>
       {options.map((o) => {

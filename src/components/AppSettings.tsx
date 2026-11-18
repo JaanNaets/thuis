@@ -14,6 +14,7 @@ import { setStartDestination, startDestination } from "../start";
 import { useConfirm } from "./ConfirmDialog";
 import { CardHead, Segmented } from "./Controls";
 import { Icon } from "./Icon";
+import { SearchSelect } from "./SearchSelect";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
@@ -112,28 +113,28 @@ export function DestinationPicker({
         </label>
       )}
       {(value?.kind === "list" || value?.kind === "item") && (
-        <label className="field">
+        <div className="field">
           <span className="label">Lijst</span>
-          <select value={value.list} onChange={(e) => onChange(value.kind === "item" ? { kind: "item", list: e.target.value, ...withText(text) } : { kind: "list", list: e.target.value })}>
-            {(value.kind === "item" ? items : choices.lists).map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchSelect
+            label="Welke lijst"
+            value={value.list}
+            options={(value.kind === "item" ? items : choices.lists).map((l) => ({ id: l.id, name: l.name }))}
+            placeholder="Kies een lijst…"
+            onChange={(id) => id && onChange(value.kind === "item" ? { kind: "item", list: id, ...withText(text) } : { kind: "list", list: id })}
+          />
+        </div>
       )}
       {value?.kind === "form" && (
-        <label className="field">
+        <div className="field">
           <span className="label">Formulier</span>
-          <select value={value.form} onChange={(e) => onChange({ kind: "form", form: e.target.value, ...withText(text) })}>
-            {choices.forms.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchSelect
+            label="Welk formulier"
+            value={value.form}
+            options={choices.forms.map((f) => ({ id: f.id, name: f.name }))}
+            placeholder="Kies een formulier…"
+            onChange={(id) => id && onChange({ kind: "form", form: id, ...withText(text) })}
+          />
+        </div>
       )}
       {(value?.kind === "form" || value?.kind === "item") && (
         <label className="field">

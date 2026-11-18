@@ -3,6 +3,7 @@
 
 import { fillsLists, formsOf, type KindInfo } from "../../shared/model";
 import { Icon, type IconName } from "./Icon";
+import { SearchAdd } from "./SearchSelect";
 
 export function FormPicker({ kinds, listId, value, onChange, wrap = false }: { kinds: KindInfo[]; listId?: string | null; value: string; onChange: (k: KindInfo) => void; wrap?: boolean }) {
   const { shown, more } = formsOf(kinds, (k) => Boolean(listId) && fillsLists(k).includes(listId!), value);
@@ -17,21 +18,15 @@ export function FormPicker({ kinds, listId, value, onChange, wrap = false }: { k
         ))}
       </div>
       {more.length > 0 && (
-        <select
-          aria-label="Ander formulier"
-          value=""
-          onChange={(e) => {
-            const k = more.find((x) => x.id === e.target.value);
+        <SearchAdd
+          label="Ander formulier"
+          placeholder="Ander formulier…"
+          options={more.map((k) => ({ id: k.id, name: k.name }))}
+          onPick={(id) => {
+            const k = more.find((x) => x.id === id);
             if (k) onChange(k);
           }}
-        >
-          <option value="">Ander formulier…</option>
-          {more.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.name}
-            </option>
-          ))}
-        </select>
+        />
       )}
     </div>
   );

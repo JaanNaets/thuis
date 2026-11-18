@@ -854,8 +854,8 @@ Naam en Icoon; de schakelaars **Met een bedrag** (met eronder **Saldo**), **Naar
 **Met een einde** (dan Melding na); **Lijsten**; de velden; Gepland, Foto lezen met AI, Melding bij iets nieuws en de
 tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen "Werkt als".
 
-- **Lijsten** (`FormLists`): je vormt het formulier vanuit de lijsten. "+ Lijst" (een keuzelijst op haar eigen breedte,
-  `.map-add`) zet een lijst erbij als groep lijnen; per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan
+- **Lijsten** (`FormLists`): je vormt het formulier vanuit de lijsten. "+ Lijst…" (een zoekveld, `SearchAdd` in
+  `.map-add-search`, met Elke lijst onderaan) zet een lijst erbij als groep lijnen; per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan
   `.line-main.is-plain`: de naam van de groep, standaard hoe één item heet, met ×), eronder **Rol** (Waarover, Wat
   erbij komt, Wat eraf gaat, Waar of bij wie; meer groepen mogen dezelfde rol hebben, ook uit dezelfde lijst: Wagen én
   Bestuurder), **Item** (`Segmented`: Bestaand of Nieuwe rij, met minstens één lijst), **Aantal** (Eén of Meerdere;
@@ -926,6 +926,20 @@ per formulier (`useSession().lists[].role`, `useSession().forms[].role`, `ListDe
 | `.dashboard` + `.dash-card` + `.dash-head` | Het overzicht: zachte witte kaarten zo breed als past, die 2px omhoog komen bij aanwijzen; een blok dat als geheel opent is een `dash-link` |
 | `.sr-only` | Tekst enkel voor schermlezers (bv. de nieuwe plaats na het verslepen) |
 
+### Kiezen: `SearchSelect`, `SearchMulti`, `SearchAdd` (`SearchSelect.tsx`)
+
+Hoe je kiest, hangt af van wat je kiest:
+
+| Wat | Hoe |
+| --- | --- |
+| Iets dat kan groeien: lijsten, formulieren, tags, items, veel waarden | Een **zoekveld met de keuzes eronder** (`Combo` in `ItemPicker.tsx`: een gewoon veld, de keuzes op een wit vlak `.picker-list`, pijltjes, Enter, Escape; de tag van een lijst grijs ernaast, `tagChoices`). Eén keuze: `SearchSelect` (het veld toont wat gekozen is, × maakt het leeg als dat mag). Meer keuzes: `SearchMulti` (de gekozen als tags met ×, `.ref-chips`, eronder het zoekveld). Iets toevoegen of doen: `SearchAdd` (+ Lijst…, Samenvoegen met, Stilzetten…, Ander formulier…). Items: `ItemPicker`, `ItemsPicker` |
+| Een vaste, korte reeks (rol, berekening, richting, eenheid, een keuzelijst van een veld) | Een gewone `select` |
+| Twee tot vier opties die je naast elkaar ziet | `Segmented` |
+| Een paar vaste waarden om aan te vinken (hoogstens acht: keuzes van een veld, personen) | `tag`s met een vinkje (`tag-picker`); meer dan acht wordt vanzelf een `SearchMulti` (`Toggles`, de zin van een weergave) |
+| Snel een van je meest gebruikte (formulieren bij Loggen) | Hoogstens zes `filter`-pillen met icoon, de rest in een zoekveld |
+
+Nooit een lange rij pillen of een keuzelijst met tientallen namen: die kan je niet doorzoeken.
+
 ### Badges, tags, stipjes, avatars
 
 | Element | Gebruik |
@@ -935,7 +949,7 @@ per formulier (`useSession().lists[].role`, `useSession().forms[].role`, `ListDe
 | `badge badge-warning` | Aandacht (bijna op, vervalt binnenkort) |
 | `badge badge-danger` | Voorbij (vervallen) |
 | `badge badge-accent` | Nieuw of info |
-| `tag tone-x` | Tags van de gebruiker: pillen, niet gekozen grijs, gekozen in de kleur van de tag (met een vinkje) |
+| `tag tone-x` | Tags van de gebruiker: een gekozen tag in haar kleur, met × om weg te halen (`TagChooser`: eronder een zoekveld met de andere tags en "Nieuwe tag: …") |
 | `dot tone-x` | De kleur van een lijst of tag in een rij |
 | `Avatar` | Personen: pastel rondje met een dunne gekleurde letter; `size="sm"` in tekst, gewoon in lijsten, `lg` in kaarten |
 
@@ -1065,7 +1079,8 @@ ondertitel) → een lege weergave. Te doen, Wie moet wie, Bijna op, Uitgaven, Et
 een weergave van vroeger opent in de stappen met haar kolommen en wat ze telde als kolommen (`withSteps`).
 
 - **De stappen** (`ViewBuilder` in een `Sheet` met `builder-sheet`), onder elkaar met een `.cap-label`:
-  1. **Lijsten**: de lijsten als `tag` om aan te vinken (bij het logboek en de rest ook **Alle lijsten**), en **Wat**
+  1. **Lijsten**: de gekozen lijsten als tags met × en eronder een zoekveld (`SearchMulti`; leeg staat er "Alle
+     lijsten", behalve bij de items: daar blijft er minstens één), en **Wat**
      (een keuzelijst, `SOURCES`): de items, het logboek, de voorraad, wie moet wie, wat er gegeten is, alles met een
      datum (gebeurtenissen en de datums van items met In de agenda). Bij de items van een lijst die voorraad telt,
      zijn Voorraad, Bijna op en Houdbaar tot gewone kolommen (`STOCK_FIELDS`).
@@ -1188,8 +1203,8 @@ met, gelogd door, de lijsten die ze raakte) in de zijkolom, rechts de **Lijnen**
 
 **Loggen** (`/loggen?formulier=…`, `EventForm`; vanuit een lijst met `&nieuw=<lijst>`): bovenaan **Typ wat je weet**
 (vult live in, zie `shared/parse.ts`) met Kasticket ✨, dan **Formulier** (`FormPicker`, filterpillen met icoon: de
-formulieren waarmee je mag loggen die de lijst invullen waar je vandaan komt; de rest in "Ander formulier…"; zie
-`formsOf`; zonder lijst alle), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland
+formulieren waarmee je mag loggen die de lijst invullen waar je vandaan komt, zonder lijst de eerste, hoogstens zes;
+de rest in het zoekveld "Ander formulier…"; zie `formsOf`), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland
 (aan bij `?gepland=1` of een formulier dat gepland begint, `startsPlanned`; volgt een ander formulier tot je hem zelf zet); bij geld Bedrag, Betaald
 door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van het
 formulier; Herhalen en Foto. Een prijs in de tekst zonder gekozen formulier kiest een formulier dat koopt. Heb je nog
@@ -1319,4 +1334,6 @@ Loop deze lijst af voor je iets oplevert:
       opbouw of het label aan.
 - [ ] Gebruikt iets de AI? Dan een ✨ (`AiMark`) op de knop, nooit vanzelf, "met AI" in de melding achteraf, en
       verborgen als de AI voor jou uit staat (`useSession().ai`).
+- [ ] Kies je uit iets dat kan groeien (lijsten, formulieren, tags, items)? Dan een zoekveld (zie [Kiezen](#kiezen-searchselect-searchmulti-searchadd)),
+      nooit een rij pillen of een gewone keuzelijst.
 - [ ] Nieuw patroon nodig? Bouw het als component, en **voeg het toe aan dit stijlboek**.

@@ -121,6 +121,9 @@ test("de formulieren van een lijst: die haar invullen, anders alle; de rest onde
   // Vult niets de lijst in: alle formulieren.
   assert.deepEqual(ids(formsOf(kinds, fills("LEEG")).shown), ["aankoop", "k1", "k2", "k3"]);
   assert.deepEqual(ids(formsOf(kinds, fills("LEEG")).more), []);
+  // Hoogstens zes als pillen; de rest zoek je onder Ander formulier.
+  const many = Array.from({ length: 9 }, (_, i) => ({ ...kinds[1], id: `f${i}` }));
+  assert.deepEqual([ids(formsOf(many, () => false).shown).length, ids(formsOf(many, () => false).more).length], [6, 3]);
   // Wat al gekozen is, staat erbij (een gebeurtenis die je bewerkt) en niet nog eens onderaan.
   const chosen = formsOf(kinds, fills("VOORRAAD"), "aankoop");
   assert.deepEqual(ids(chosen.shown), ["k1", "k2", "aankoop"]);

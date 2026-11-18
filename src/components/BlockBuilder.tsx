@@ -45,6 +45,8 @@ import { FormPicker } from "./FormPicker";
 import { Icon, type IconName } from "./Icon";
 import { ViewBody, viewUrl } from "./ViewBlock";
 import { ViewColumns } from "./ViewColumns";
+import { SearchAdd, SearchMulti } from "./SearchSelect";
+import { tagChoices } from "../lists";
 import { colFields, type ViewCol } from "../../shared/viewcols";
 
 // ---------- stukjes van de zin ----------
@@ -154,6 +156,9 @@ function startValue(op: Op): unknown {
   }
 }
 
+/** Zoveel keuzes hoogstens in een gewone keuzelijst; meer (items) zoek je. */
+const MAX_TOK_OPTIONS = 8;
+
 /** De keuzes bij "is een van": de opties van een keuzeveld, personen (jij eerst) of items. */
 function optionsFor(def: FieldDef, choices: Choices): Option<string>[] {
   if (def.type === "select" || def.type === "multi") return (def.options ?? []).map((o) => ({ value: o, label: o }));
@@ -219,7 +224,19 @@ function ConditionLine({ cond, fields, choices, prefix, onChange, onRemove }: { 
         {chosen.map((v) => (
           <TokChip key={v} text={name(v)} label={`${name(v)} weghalen`} onRemove={() => setValue(chosen.filter((x) => x !== v))} />
         ))}
-        <TokAdd label="Waarde toevoegen" text={chosen.length ? "of" : "kies"} options={all.filter((o) => !chosen.includes(o.value))} onPick={(v) => setValue([...chosen, v])} />
+        {/* Veel keuzes (items): zoeken in plaats van een lange keuzelijst. */}
+        {all.length > MAX_TOK_OPTIONS ? (
+          <span className="tok-search">
+            <SearchAdd
+              label="Waarde toevoegen"
+              placeholder={chosen.length ? "of …" : "kies …"}
+              options={all.filter((o) => !chosen.includes(o.value)).map((o) => ({ id: o.value, name: o.label }))}
+              onPick={(v) => setValue([...chosen, v])}
+            />
+          </span>
+        ) : (
+          <TokAdd label="Waarde toevoegen" text={chosen.length ? "of" : "kies"} options={all.filter((o) => !chosen.includes(o.value))} onPick={(v) => setValue([...chosen, v])} />
+        )}
       </>
     );
   }
@@ -388,7 +405,7 @@ function withSteps(block: ViewBlock): ViewBlock {
 const groupValue = (g: ViewBlock["group"]) => (g ? (g.step ? `${g.field}:${g.step}` : g.field) : "");
 
 export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial: ViewBlock; saveLabel: string; onSave: (b: ViewBlock) => void; onCancel: () => void }) {
-  const { lists, person } = useSession();
+  const { lists, person, tags } = useSession();
   const [draft, setDraft] = useState<ViewBlock>(() => withSteps(initial));
   const settled = useDebounced(draft, 300);
   const { data } = useApi<ViewResponse>(viewUrl(settled));
@@ -437,8 +454,6 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
       ...(d.tally ? { tally: { agg: "count", step: d.tally.step, n: d.tally.n } } : {}),
     }));
   }
-  const toggleList = (id: string) =>
-    set({ lists: draft.lists.includes(id) ? (draft.source === "items" && draft.lists.length === 1 ? draft.lists : draft.lists.filter((x) => x !== id)) : [...draft.lists, id] });
   const chosen = draft.lists.flatMap((id) => columns?.filter((c) => c.id === id) ?? []).map((c) => ({ id: c.id, name: c.name, fields: c.fields as FieldDef[] }));
   const stepOptions = (Object.keys(CHART_STEPS) as ChartStep[]).map((s) => ({ value: s, label: CHART_STEPS[s].one }));
 
@@ -452,27 +467,17 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
 
         <section className="builder-section" aria-label="Lijsten">
           <h3 className="cap-label">Lijsten</h3>
-          <div className="tag-picker">
-            {draft.source !== "items" && (
-              <button type="button" className="tag" aria-pressed={!draft.lists.length} onClick={() => set({ lists: [] })}>
-                <Icon name="check" size={14} className="check" />
-                {draft.lists.length > 0 && <span className="dot" />}
-                Alle lijsten
-              </button>
+          <SearchMulti
+            label="Lijst toevoegen"
+            value={draft.lists}
+            options={tagChoices(
+              lists.filter((l) => !l.archived && (draft.source !== "items" || l.one)),
+              tags,
             )}
-            {lists
-              .filter((l) => !l.archived && (draft.source !== "items" || l.one))
-              .map((l) => {
-                const on = draft.lists.includes(l.id);
-                return (
-                  <button key={l.id} type="button" className="tag" aria-pressed={on} onClick={() => toggleList(l.id)}>
-                    <Icon name="check" size={14} className="check" />
-                    {!on && <span className="dot" />}
-                    {l.name}
-                  </button>
-                );
-              })}
-          </div>
+            onChange={(ids) => set({ lists: ids })}
+            placeholder={draft.lists.length ? "Nog een lijst…" : draft.source === "items" ? "Kies een lijst…" : "Alle lijsten"}
+            keepOne={draft.source === "items"}
+          />
           <label className="field">
             <span className="label">Wat</span>
             <select value={draft.source} onChange={(e) => setSource(e.target.value as SourceKind)}>

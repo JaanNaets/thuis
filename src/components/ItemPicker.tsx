@@ -55,7 +55,7 @@ export const useItemOptions = (def: FieldDef, text = "", chosen: string[] = []) 
  * gekozen. Pijltjes, Enter en Escape werken zoals in het zoekpalet. `typeFirst`: keuzes pas als je iets typt (een lijn
  * kan elk item zijn; alles van A tot Z zegt dan niets).
  */
-export function Combo({
+export function Combo<O extends { id: string; name: string } = ItemRef>({
   label,
   text,
   onText,
@@ -72,10 +72,10 @@ export function Combo({
   label: string;
   text: string;
   onText: (text: string) => void;
-  onPick: (option: ItemRef) => void;
+  onPick: (option: O) => void;
   onLeave?: () => void;
-  options: ItemRef[] | undefined;
-  placeOf: (o: ItemRef) => string;
+  options: O[] | undefined;
+  placeOf: (o: O) => string;
   exclude?: string[];
   disabled: boolean;
   placeholder: string;
@@ -92,7 +92,7 @@ export function Combo({
   );
   const current = Math.min(active, matches.length - 1);
 
-  const pick = (o: ItemRef) => {
+  const pick = (o: O) => {
     onPick(o);
     setOpen(false);
   };

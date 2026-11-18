@@ -18,6 +18,7 @@ import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from 
 import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
+import { SearchAdd } from "../components/SearchSelect";
 import { PeopleEditor } from "../components/People";
 import { TagChooser } from "../components/TagChooser";
 import { useToast } from "../components/Toast";
@@ -280,17 +281,10 @@ function FormEditor({ detail, list, onSaved, onMerged }: { detail: FormDetail | 
       </button>
       {kind && others.length > 0 && (
         <section className="card form-section">
-          <label className="field">
+          <div className="field">
             <span className="label">Samenvoegen met</span>
-            <select value="" onChange={(e) => e.target.value && merge(e.target.value)}>
-              <option value="">Kies een formulier…</option>
-              {others.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {formLabel(f)}
-                </option>
-              ))}
-            </select>
-          </label>
+            <SearchAdd label="Samenvoegen met" placeholder="Kies een formulier…" options={others.map((f) => ({ id: f.id, name: formLabel(f) }))} onPick={merge} />
+          </div>
         </section>
       )}
       {kind && detail && (

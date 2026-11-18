@@ -8,7 +8,10 @@
 import { COUNTABLE, OPS, STOCK, type Handeling, type ListColumns, type Op, type Value } from "../../shared/cells";
 import { FIELD_TYPES, type FieldDef } from "../../shared/fields";
 import { MAX_GROUPS, type LineGroup, type LineRole, type Parts } from "../../shared/model";
+import { tagChoices } from "../lists";
+import { useSession } from "../session";
 import { Segmented } from "./Controls";
+import { SearchAdd } from "./SearchSelect";
 import { newDoes, type DoesDraft } from "./Does";
 import type { FieldDraft } from "./Fields";
 import { Icon } from "./Icon";
@@ -79,6 +82,9 @@ export function FormLists({
   columns: ListColumns[];
 }) {
   const groups = parts.groups;
+  const { lists: nodes, tags } = useSession();
+  // De lijsten om te kiezen, met hun tags ernaast (zoals overal waar je een lijst kiest).
+  const choicesOf = (ls: ListColumns[]) => tagChoices(ls.map((l) => ({ id: l.id, name: l.name, tags: nodes.find((n) => n.id === l.id)?.tags })), tags);
   const listOf = (id: string) => columns.find((l) => l.id === id);
   const setGroups = (next: LineGroup[]) => onParts({ ...parts, groups: next });
   const setGroup = (i: number, patch: Partial<LineGroup>) =>
@@ -214,21 +220,10 @@ export function FormLists({
                     </div>
                   )}
                   {others.length > 0 && (
-                    <label className="line-field is-double">
+                    <div className="line-field is-double">
                       <span>{g.lists.length ? "Ook uit" : "Enkel uit"}</span>
-                      <select
-                        aria-label={`${title}: ook uit`}
-                        value=""
-                        onChange={(e) => e.target.value && setGroup(i, { lists: [...g.lists, e.target.value] })}
-                      >
-                        <option value="">—</option>
-                        {others.map((l) => (
-                          <option key={l.id} value={l.id}>
-                            {l.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      <SearchAdd label={`${title}: ook uit`} options={choicesOf(others)} placeholder="Zoek een lijst…" onPick={(id) => setGroup(i, { lists: [...g.lists, id] })} />
+                    </div>
                   )}
                 </div>
                 {stocked && (
@@ -306,15 +301,9 @@ export function FormLists({
         </ul>
       )}
       {groups.length < MAX_GROUPS && (
-        <select aria-label="Lijst toevoegen" className="map-add" value="" onChange={(e) => e.target.value && add(e.target.value)}>
-          <option value="">+ Lijst</option>
-          {columns.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-          <option value="*">Elke lijst</option>
-        </select>
+        <div className="map-add-search">
+          <SearchAdd label="Lijst toevoegen" options={[...choicesOf(columns), { id: "*", name: "Elke lijst" }]} placeholder="+ Lijst…" onPick={add} />
+        </div>
       )}
     </div>
   );

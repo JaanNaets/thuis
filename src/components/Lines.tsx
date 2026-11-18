@@ -8,6 +8,7 @@ import { fold } from "../../shared/parse";
 import { UNITS } from "../../shared/units";
 import { centsToInput, parseEuro } from "../format";
 import { Combo, useListItems } from "./ItemPicker";
+import { SearchSelect } from "./SearchSelect";
 import { Icon } from "./Icon";
 
 /** Een lijn terwijl je ze invult. `item`: gekozen item; anders `text` (en eventueel `newIn`: maak er een item van). */
@@ -326,29 +327,23 @@ function LineRow({
       )}
       {/* Een nieuwe rij in een groep met meer lijsten: in welke. */}
       {group.fresh && !line.item && targets.length > 1 && (
-        <label className="line-field">
+        <div className="line-field">
           <span>In</span>
-          <select aria-label={`${line.text || group.label}: in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchSelect label={`${line.text || group.label}: in`} value={line.newIn || null} options={targets.map((t) => ({ id: t.id, name: t.name }))} placeholder="Kies een lijst…" onChange={(id) => id && onChange({ newIn: id })} />
+        </div>
       )}
       {free && !group.fresh && (op === "bij" || op === "af" || group.lists.length > 0) && targets.length > 0 && (
-        <label className="line-field">
+        <div className="line-field is-double">
           <span>Nieuw in</span>
-          <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>
-            <option value="">Geen lijst</option>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <SearchSelect
+            label={`${line.text}: nieuw in`}
+            value={line.newIn || null}
+            options={targets.map((t) => ({ id: t.id, name: t.name }))}
+            placeholder="Geen lijst"
+            clearable
+            onChange={(id) => onChange({ newIn: id ?? "" })}
+          />
+        </div>
       )}
     </li>
   );

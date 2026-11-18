@@ -13,6 +13,9 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 - Geen uitleg in de interface (stijlboek, principe 11): geen ondertitel die herhaalt, geen uitlegzin onder een veld,
   schakelaar of kaart, geen "· optioneel", geen tellers of rollen als bijlabel, een lege staat is een titel en één
   knop. Snapt iemand het niet zonder uitleg, verbeter dan het label of de opbouw.
+- Kies je uit iets dat kan groeien (lijsten, formulieren, tags, items), dan altijd een zoekveld met de keuzes eronder
+  (`SearchSelect`, `SearchMulti`, `SearchAdd`, `ItemPicker`), nooit een rij pillen of een gewone keuzelijst
+  (stijlboek → Kiezen).
 - Introduceer je toch een nieuw patroon, bouw het dan als component en voeg het toe aan `STIJLBOEK.md`.
 - Bekijk het resultaat op gsm (390px) en tablet (1280px en 820px) voor je het oplevert.
 

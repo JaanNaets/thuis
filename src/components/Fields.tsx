@@ -47,6 +47,7 @@ import { CalcEditor } from "./CalcEditor";
 import { AmountsPicker, ItemPicker, ItemsPicker } from "./ItemPicker";
 import { Avatar, RequiredMark, Segmented, Switch } from "./Controls";
 import { Icon } from "./Icon";
+import { SearchSelect } from "./SearchSelect";
 import { useSortable } from "./Sortable";
 import { Tip } from "./Tip";
 import { PhotoButton } from "./PhotoPicker";
@@ -1447,25 +1448,15 @@ export function FieldsEditor({
                       <span className="label">Verwijst naar</span>
                       {[f.ref_type ?? "", ...(f.ref_also ?? [])].map((ref, k) => (
                         <div key={k} className="picker-row">
-                          <select
-                            value={ref}
-                            aria-label={k === 0 ? "Verwijst naar" : "Ook naar"}
-                            onChange={(e) =>
-                              k === 0
-                                ? update(i, { ref_type: e.target.value || undefined })
-                                : update(i, { ref_also: (f.ref_also ?? []).map((x, j) => (j === k - 1 ? e.target.value : x)) })
+                          <SearchSelect
+                            label={k === 0 ? "Verwijst naar" : "Ook naar"}
+                            value={ref || null}
+                            placeholder="Kies een lijst…"
+                            options={[{ id: selfId ?? "self", name: `${selfLabel} (deze lijst)` }, ...lists.filter((t) => t.id !== selfId).map((t) => ({ id: t.id, name: t.name }))]}
+                            onChange={(id) =>
+                              k === 0 ? update(i, { ref_type: id || undefined }) : update(i, { ref_also: (f.ref_also ?? []).map((x, j) => (j === k - 1 ? (id ?? "") : x)) })
                             }
-                          >
-                            <option value="">Kies een lijst</option>
-                            <option value={selfId ?? "self"}>{selfLabel} (deze lijst)</option>
-                            {lists
-                              .filter((t) => t.id !== selfId)
-                              .map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
-                          </select>
+                          />
                           {k > 0 && (
                             <button
                               type="button"

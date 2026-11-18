@@ -298,11 +298,13 @@ export const startsPlanned = (kind: Pick<KindInfo, "planned">, asked: boolean): 
  */
 export function formsOf(kinds: KindInfo[], fills: (k: KindInfo) => boolean, chosen?: string | null): { shown: KindInfo[]; more: KindInfo[] } {
   const own = kinds.filter(fills);
-  const first = own.length ? own : kinds;
-  const rest = own.length ? kinds.filter((k) => !own.includes(k)) : [];
+  // Als pillen hoogstens zes (die de lijst invullen, anders de eerste); de rest zoek je (Ander formulier…).
+  const first = (own.length ? own : kinds).slice(0, MAX_FORM_PILLS);
+  const rest = kinds.filter((k) => !first.includes(k));
   const extra = rest.find((k) => k.id === chosen);
   return { shown: extra ? [...first, extra] : first, more: rest.filter((k) => k !== extra) };
 }
+const MAX_FORM_PILLS = 6;
 
 // ---------- formulieren zoals jij ze ziet ----------
 

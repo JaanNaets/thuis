@@ -9,6 +9,7 @@ import { api, useApi } from "../api";
 import { useSession } from "../session";
 import { Icon } from "./Icon";
 import { Alert, CardHead, Switch } from "./Controls";
+import { SearchAdd } from "./SearchSelect";
 import { useToast } from "./Toast";
 
 type State = "loading" | "unsupported" | "install" | "denied" | "off" | "on";
@@ -195,29 +196,15 @@ function MutedProjects() {
           ))}
         </ul>
       )}
-      <select aria-label="Stilzetten" value="" onChange={(e) => e.target.value && set(e.target.value, true)}>
-        <option value="">Stilzetten…</option>
-        {tags.filter((t) => !muted.includes(t.id)).length > 0 && (
-          <optgroup label="Tags">
-            {tags
-              .filter((t) => !muted.includes(t.id))
-              .map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-          </optgroup>
-        )}
-        <optgroup label="Formulieren">
-          {forms
-            .filter((f) => !f.archived && !muted.includes(f.id))
-            .map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-        </optgroup>
-      </select>
+      <SearchAdd
+        label="Stilzetten"
+        placeholder="Stilzetten…"
+        options={[
+          ...tags.filter((t) => !muted.includes(t.id)).map((t) => ({ id: t.id, name: t.name, place: "Tag" })),
+          ...forms.filter((f) => !f.archived && !muted.includes(f.id)).map((f) => ({ id: f.id, name: f.name, place: "Formulier" })),
+        ]}
+        onPick={(id) => set(id, true)}
+      />
     </div>
   );
 }

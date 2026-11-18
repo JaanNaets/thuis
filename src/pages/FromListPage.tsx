@@ -17,6 +17,8 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { attributesDraft, buildAttributes, FieldInputs, namesFrom, type AttributeDraft } from "../components/Fields";
 import { ConditionsEditor, type Choices } from "../components/Filters";
 import { PageHead } from "../components/Page";
+import { SearchSelect } from "../components/SearchSelect";
+import { tagChoices } from "../lists";
 import { useToast } from "../components/Toast";
 import { formatNumber, today } from "../format";
 import { useNavigate } from "../router";
@@ -60,7 +62,7 @@ function startPlan(target: List, source: ListDetail, mirror: MirrorInfo | undefi
 const choiceOf = (s: FieldSource | undefined) => (!s ? "" : s.from === "field" ? `field:${s.key}` : s.from);
 
 function FromListForm({ list, role }: { list: List; role: Role }) {
-  const { lists, person } = useSession();
+  const { lists, person, tags } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
@@ -182,23 +184,19 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
       <PageHead title="Toevoegen uit andere lijst" back={{ to: -1, label: list.name }} />
 
       <section className="card form-section">
-        <label className="field">
+        <div className="field">
           <span className="label">Uit</span>
-          <select
-            value={sourceId}
-            onChange={(e) => {
-              setSourceId(e.target.value);
+          <SearchSelect
+            label="Uit welke lijst"
+            value={sourceId || null}
+            options={tagChoices(sources, tags)}
+            placeholder="Kies een lijst…"
+            onChange={(id) => {
+              setSourceId(id ?? "");
               setPlan(null);
             }}
-          >
-            {!sourceId && <option value="">Kies een lijst…</option>}
-            {sources.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
         {ready && modes.length > 1 && (
           <Segmented label="Hoe" value={ready.plan.mode} onChange={(mode) => update({ mode })} options={modes.map((m) => ({ value: m, label: TRANSFER_MODES[m] }))} />
         )}

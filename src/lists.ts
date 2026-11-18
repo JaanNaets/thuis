@@ -23,3 +23,7 @@ export function groupByTag(lists: ListNode[], tags: Tag[], archived = false): Ta
   if (loose.length) groups.push({ tag: null, lists: loose });
   return groups;
 }
+
+/** Lijsten (of formulieren) om uit te kiezen in een zoekveld (`SearchSelect`): met hun tags grijs ernaast. */
+export const tagChoices = (rows: { id: string; name: string; tags?: string[] }[], tags: Pick<Tag, "id" | "name">[]) =>
+  rows.map((r) => ({ id: r.id, name: r.name, place: (r.tags ?? []).flatMap((t) => tags.find((x) => x.id === t)?.name ?? []).join(", ") }));
