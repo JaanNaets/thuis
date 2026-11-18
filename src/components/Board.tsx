@@ -394,7 +394,7 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
               setBuilding(
                 kind === "view"
                   ? { step: "view", index: null, block: EMPTY_VIEW_BLOCK }
-                  : { step: "action", index: null, block: { kind: "action", name: "", list: lists[0]?.id ?? "", type: "", does: "form", values: {} } },
+                  : { step: "action", index: null, block: { kind: "action", name: "", list: "", type: "", does: "form", values: {} } },
               )
             }
           />

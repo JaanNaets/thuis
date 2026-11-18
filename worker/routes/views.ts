@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { logFields } from "../../shared/logview";
 import { canEdit, canManage, type Role } from "../../shared/model";
 import { cleanView, viewFields, type SavedView, type ViewDef } from "../../shared/views";
-import { kindsFor, parseJson, requireList, seenLists } from "../access";
+import { kindsFor, parseJson, requireList, seenAll, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, ForbiddenError, NotFoundError, requiredString, ValidationError } from "../validate";
 
@@ -49,14 +49,14 @@ async function viewById(db: D1Database, id: string, me: string): Promise<SavedVi
 
 /** De velden waartegen een weergave nagekeken wordt. */
 async function fieldsFor(db: D1Database, personId: string, listId: string | null, target: "items" | "logboek") {
-  const seen = await seenLists(db, personId);
+  const seen = await seenAll(db, personId);
   if (target === "items") {
     if (!listId) throw new ValidationError("Kies een lijst");
     const { list } = await requireList(db, personId, listId);
     return viewFields(list.fields, list.one ?? "Naam");
   }
-  const { results } = await db.prepare("SELECT name FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...seen.keys()])).all<{ name: string }>();
-  return viewFields(logFields(await kindsFor(db, seen.keys()), results), "Omschrijving");
+  const { results } = await db.prepare("SELECT name FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...seen.lists.keys()])).all<{ name: string }>();
+  return viewFields(logFields(await kindsFor(db, seen.forms.keys()), results), "Omschrijving");
 }
 
 function checkedDef(raw: unknown, fields: Parameters<typeof cleanView>[1]): ViewDef {

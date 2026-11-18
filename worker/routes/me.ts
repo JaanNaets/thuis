@@ -2,23 +2,25 @@ import { Hono } from "hono";
 import { cleanAppSettings, destinationPath, keepReachable, type AppSettings, type ListPlace, type Reach, orderTags } from "../../shared/apps";
 import { cleanBlocks, cleanBoards, defaultBlocks, renameBoards, type Board } from "../../shared/board";
 import { appManifest, ownAppManifest } from "../../shared/manifest";
-import { canEdit, type KindInfo } from "../../shared/model";
+import { canEdit, fillsLists, type KindInfo } from "../../shared/model";
+import { buysWith } from "../../shared/targets";
 import { isValidIban, normalizeIban } from "../../shared/payment";
 import { isTone, type AiState, type Person } from "../../shared/types";
 import { AI_PERSON_LIMIT, aiOn, aiUsedToday } from "../ai";
-import { ids, kindsFor, parseJson, seenLists } from "../access";
+import { ids, kindsFor, parseJson, seenAll, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { asObject, NotFoundError, parseOrder, requiredString, ValidationError } from "../validate";
-import { columnsOf, knownPeople, myLists } from "./lists";
+import { knownPeople, myLists } from "./lists";
+import { columnsOf } from "./forms";
 
 export const me = new Hono<AppEnv>();
 
-/** Wie je bent, je lijsten (met je rol, tags en volgorde), de tags die je ziet, en of de AI voor jou leest. */
+/** Wie je bent, je lijsten (met je rol, tags en volgorde), je formulieren, de tags die je ziet, en of de AI voor jou leest. */
 me.get("/", async (c) => {
   const db = c.env.DB;
   const person = c.get("person");
-  const [{ lists, tags }, settings, boards] = await Promise.all([myLists(db, person.id), storedSettings(db, person.id), boardsOf(db, person.id)]);
-  return c.json({ person, lists, tags: orderTags(tags, settings.tag_order), ai: settings.ai, hidden: settings.hidden, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
+  const [{ lists, forms, tags }, settings, boards] = await Promise.all([myLists(db, person.id), storedSettings(db, person.id), boardsOf(db, person.id)]);
+  return c.json({ person, lists, forms, tags: orderTags(tags, settings.tag_order), ai: settings.ai, hidden: settings.hidden, boards: boards.map(({ id, name, icon }) => ({ id, name, icon })) });
 });
 
 /** Je eigen naam, kleur en rekeningnummer. Je e-mailadres komt van je aanmelding en verandert hier niet. */
@@ -34,7 +36,7 @@ me.put("/", async (c) => {
   return c.json(updated);
 });
 
-/** Wie je kent (om toe te voegen aan een lijst, of in een veld met mensen). */
+/** Wie je kent (om toe te voegen aan een lijst of formulier, of in een veld met mensen). */
 me.get("/people", async (c) => c.json(await knownPeople(c.env.DB, c.get("person").id)));
 
 /** De lijsten waarin je items mag aanpassen, met hun kolommen: wat een formulier kan invullen (shared/cells.ts). */
@@ -57,34 +59,37 @@ me.put("/order", async (c) => {
 // ---------- waar je logt ----------
 
 /**
- * Waar je kan loggen (voor Toevoegen, de snelkoppelingen en de app): per lijst waar je lid of beheerder bent, de
- * soorten die je er kan gebruiken, en hoe vaak jij er de laatste 90 dagen iets logde (per soort) of een item toevoegde.
+ * Waar je kan loggen en toevoegen (voor de +, de snelkoppelingen en de app): de lijsten waar je lid of beheerder bent,
+ * de formulieren waarmee je mag loggen, en hoe vaak jij de laatste 90 dagen met elk formulier logde (`list_id` leeg) of
+ * in een lijst een item toevoegde (`+item`).
  */
 export type Targets = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; stock: boolean }[];
   kinds: KindInfo[];
-  used: { list_id: string; kind: string; n: number; last: string }[];
+  used: { list_id: string | null; kind: string; n: number; last: string }[];
 };
 
 export async function targetsFor(db: D1Database, personId: string): Promise<Targets> {
-  const seen = await seenLists(db, personId);
-  const editable = [...seen].filter(([, r]) => canEdit(r)).map(([id]) => id);
+  const seen = await seenAll(db, personId);
+  const editable = [...seen.lists].filter(([, r]) => canEdit(r)).map(([id]) => id);
+  const forms = [...seen.forms].filter(([, r]) => canEdit(r)).map(([id]) => id);
   const [rows, used] = (await db.batch([
     db.prepare("SELECT id, name, one, icon, color, stock IS NOT NULL AS stock FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(editable)),
     db
       .prepare(
-        `SELECT list_id, kind, count(*) AS n, max(created_at) AS last FROM events
-         WHERE created_by = ?1 AND created_at >= datetime('now', '-90 days') GROUP BY list_id, kind
+        `SELECT NULL AS list_id, kind, count(*) AS n, max(created_at) AS last FROM events
+         WHERE created_by = ?1 AND created_at >= datetime('now', '-90 days') GROUP BY kind
          UNION ALL
          SELECT list_id, '+item' AS kind, count(*) AS n, max(created_at) AS last FROM items
          WHERE created_by = ?1 AND created_at >= datetime('now', '-90 days') GROUP BY list_id`,
       )
       .bind(personId),
   ])) as [D1Result<Targets["lists"][number]>, D1Result<Targets["used"][number]>];
+  const kinds = await kindsFor(db, forms, true);
   return {
     lists: rows.results.map((r) => ({ ...r, stock: Boolean(r.stock) })),
-    kinds: await kindsFor(db, seen.keys()),
-    used: used.results.filter((u) => editable.includes(u.list_id)),
+    kinds,
+    used: used.results.filter((u) => (u.list_id ? editable.includes(u.list_id) : forms.includes(u.kind))),
   };
 }
 
@@ -97,11 +102,12 @@ function often(t: Targets): { name: string; url: string }[] {
   return [...t.used]
     .sort((a, b) => b.n - a.n || b.last.localeCompare(a.last))
     .flatMap((u) => {
-      const list = lists.get(u.list_id);
-      if (!list) return [];
-      if (u.kind === "+item") return list.one ? [{ name: list.one, url: `/lijsten/${list.id}/nieuw` }] : [];
+      if (u.kind === "+item") {
+        const list = u.list_id ? lists.get(u.list_id) : undefined;
+        return list?.one ? [{ name: list.one, url: `/lijsten/${list.id}/nieuw` }] : [];
+      }
       const kind = kinds.get(u.kind);
-      return kind ? [{ name: kind.name, url: `/lijsten/${list.id}/loggen?soort=${encodeURIComponent(kind.id)}` }] : [];
+      return kind ? [{ name: kind.name, url: `/loggen?formulier=${encodeURIComponent(kind.id)}` }] : [];
     });
 }
 
@@ -142,14 +148,14 @@ me.put("/tag-order", async (c) => {
   return c.json({ tag_order: order });
 });
 
-/** Een lijst of tag stilzetten (of niet meer): geen melding bij iets nieuws daar. */
+/** Een formulier of tag stilzetten (of niet meer): geen melding bij iets nieuws daar. */
 me.put("/muted", async (c) => {
   const db = c.env.DB;
   const personId = c.get("person").id;
   const obj = asObject(await c.req.json());
   const target = typeof obj.id === "string" ? obj.id : "";
-  const { lists, tags } = await myLists(db, personId);
-  if (!lists.some((l) => l.id === target) && !tags.some((t) => t.id === target)) throw new NotFoundError("Die lijst of tag ken je niet.");
+  const { forms, tags } = await myLists(db, personId);
+  if (!forms.some((f) => f.id === target) && !tags.some((t) => t.id === target)) throw new NotFoundError("Dat formulier of die tag ken je niet.");
   const settings = await storedSettings(db, personId);
   const muted = obj.muted === true ? [...new Set([...settings.muted, target])] : settings.muted.filter((x) => x !== target);
   await saveSettings(db, personId, { ...settings, muted });
@@ -209,19 +215,19 @@ async function appSettingsOf(db: D1Database, personId: string): Promise<AppSetti
   return keepReachable(await storedSettings(db, personId), await reachFor(db, personId));
 }
 
-/** Wat je kan bereiken: je borden, en je lijsten met hun soorten (en of je er mag loggen). */
+/** Wat je kan bereiken: je borden, je lijsten en je formulieren (en of je erin of ermee mag loggen). */
 async function reachFor(db: D1Database, personId: string): Promise<Reach> {
-  const seen = await seenLists(db, personId);
+  const seen = await seenAll(db, personId);
   const [{ results }, kinds, boards] = await Promise.all([
-    db.prepare("SELECT id, name, one FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(seen.keys())).all<{ id: string; name: string; one: string | null }>(),
-    kindsFor(db, seen.keys()),
+    db.prepare("SELECT id, name, one FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(seen.lists.keys())).all<{ id: string; name: string; one: string | null }>(),
+    kindsFor(db, seen.forms.keys()),
     boardsOf(db, personId),
   ]);
-  const kindMap = new Map(kinds.map((k) => [k.id, k.name]));
   const { tags } = await myLists(db, personId);
   return {
     boards: boards.map(({ id, name, icon }) => ({ id, name, icon })),
-    lists: new Map(results.map((l) => [l.id, { name: l.name, one: l.one, edit: canEdit(seen.get(l.id)), kinds: kindMap }])),
+    lists: new Map(results.map((l) => [l.id, { name: l.name, one: l.one, edit: canEdit(seen.lists.get(l.id)) }])),
+    forms: new Map(kinds.map((k) => [k.id, { name: k.name, base: k.base, fills: fillsLists(k), edit: canEdit(seen.forms.get(k.id)), receipt: buysWith(k) }])),
     tags: new Set(tags.map((t) => t.id)),
   };
 }
@@ -245,14 +251,13 @@ me.get("/overview", async (c) => {
   const board = boards.find((b) => b.id === c.req.query("board")) ?? boards[0];
   let blocks = board.blocks;
   if (!blocks) {
-    const { lists } = await myLists(db, personId);
-    const seen = ids(lists.map((l) => l.id));
+    const { lists, forms } = await myLists(db, personId);
     const has = await db
       .prepare(
-        `SELECT EXISTS (SELECT 1 FROM events WHERE amount IS NOT NULL AND list_id IN (SELECT value FROM json_each(?1))) AS money,
+        `SELECT EXISTS (SELECT 1 FROM events WHERE amount IS NOT NULL AND kind IN (SELECT value FROM json_each(?2))) AS money,
                 EXISTS (SELECT 1 FROM lists WHERE stock IS NOT NULL AND id IN (SELECT value FROM json_each(?1))) AS stock`,
       )
-      .bind(seen)
+      .bind(ids(lists.map((l) => l.id)), ids(forms.map((f) => f.id)))
       .first<{ money: number; stock: number }>();
     blocks = defaultBlocks(lists, { money: Boolean(has?.money), stock: Boolean(has?.stock) });
   }

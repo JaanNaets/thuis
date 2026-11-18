@@ -26,7 +26,7 @@ async function kindsById(db: D1Database, kindIds: string[]): Promise<Map<string,
 const kindFor = (kinds: Map<string, KindInfo>, kind: string, base: Base): KindInfo =>
   kind === ADJUST_KIND.id ? ADJUST_KIND : isBase(kind) ? baseKind(kind) : (kinds.get(kind) ?? baseKind(base));
 
-type EventRow = { id: string; list_id: string; kind: string; base: Base; at: string; amount: number | null; data: string; paid_by: string | null; split: string | null; to_person: string | null; created_by: string };
+type EventRow = { id: string; kind: string; base: Base; at: string; amount: number | null; data: string; paid_by: string | null; split: string | null; to_person: string | null; created_by: string };
 
 /**
  * De lijsten met een saldo per persoon die deze gebeurtenissen raken: hun saldokolom en de rij van elke persoon. Een
@@ -71,7 +71,7 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
     const chunk = [...new Set(eventIds.slice(i, i + CHUNK))];
     const [events, lines] = (await db.batch([
       db
-        .prepare("SELECT id, list_id, kind, base, at, amount, data, paid_by, split, to_person, created_by FROM events WHERE id IN (SELECT value FROM json_each(?))")
+        .prepare("SELECT id, kind, base, at, amount, data, paid_by, split, to_person, created_by FROM events WHERE id IN (SELECT value FROM json_each(?))")
         .bind(ids(chunk)),
       db
         .prepare(
@@ -84,7 +84,6 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
     const prepared = events.results.map((e) => {
       const kind = kindFor(kinds, e.kind, e.base);
       const input: EffectEvent = {
-        list_id: e.list_id,
         at: e.at,
         amount: e.amount,
         data: parseJson<Attributes>(e.data, {}),
@@ -100,8 +99,8 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
     const needs = new Map<string, Set<string>>();
     for (const p of prepared)
       for (const h of p.does) {
-        if (h.rows.from === "lines") continue;
-        const list = h.list ?? p.input.list_id;
+        if (h.rows.from === "lines" || !h.list) continue;
+        const list = h.list;
         const set = needs.get(list) ?? new Set<string>();
         for (const person of personAmounts(h.rows.from, p.input).keys()) set.add(person);
         needs.set(list, set);
@@ -243,18 +242,18 @@ export async function adjust(
     changed.push(f);
   }
   if (!changed.length) return { data: kept, statements: [], eventId: null };
-  return { data: kept, ...adjustStatements(db, meId, list.id, item.id, changed, changes) };
+  return { data: kept, ...adjustStatements(db, meId, item.id, changed, changes) };
 }
 
-/** Een Aanpassing: een gebeurtenis in de lijst van het item die deze kolommen zet. */
-export function adjustStatements(db: D1Database, meId: string, listId: string, itemId: string, fields: FieldDef[], changes: Record<string, FieldValue | null>) {
+/** Een Aanpassing: een gebeurtenis die deze kolommen van het item zet (je ziet ze met de lijst van het item). */
+export function adjustStatements(db: D1Database, meId: string, itemId: string, fields: FieldDef[], changes: Record<string, FieldValue | null>) {
   const eventId = crypto.randomUUID();
   const name = fields.map((f) => `${f.label}: ${changes[f.key] === null ? "leeg" : formatFieldValue(f, changes[f.key] ?? undefined)}`).join(" · ").slice(0, 200);
   const data = Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v === null ? "" : v]));
   const statements = [
     db
-      .prepare("INSERT INTO events (id, list_id, kind, base, name, status, at, data, created_by) VALUES (?, ?, ?, ?, ?, 'gebeurd', ?, ?, ?)")
-      .bind(eventId, listId, ADJUST_KIND.id, ADJUST_KIND.base, name, brusselsNow(), JSON.stringify(data), meId),
+      .prepare("INSERT INTO events (id, kind, base, name, status, at, data, created_by) VALUES (?, ?, ?, ?, 'gebeurd', ?, ?, ?)")
+      .bind(eventId, ADJUST_KIND.id, ADJUST_KIND.base, name, brusselsNow(), JSON.stringify(data), meId),
     db.prepare("INSERT INTO lines (id, event_id, position, role, item_id) VALUES (?, ?, 0, 'voor', ?)").bind(crypto.randomUUID(), eventId, itemId),
   ];
   return { statements, eventId };

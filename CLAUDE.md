@@ -1,7 +1,7 @@
 # Heystack: werkafspraken
 
-Heystack (het repo, de Worker en de databank heten nog `thuis`) is onze app op Cloudflare (Workers, D1, R2): lijsten met items en een logboek, mensen per lijst, tags om te
-groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, commits en uitleg.
+Heystack (het repo, de Worker en de databank heten nog `thuis`) is onze app op Cloudflare (Workers, D1, R2): lijsten met items,
+formulieren met een logboek, mensen per lijst en per formulier, tags om te groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, commits en uitleg.
 
 ## Ontwerp: lees eerst het stijlboek
 
@@ -19,36 +19,43 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 ## Code
 
 - **Bouw altijd generiek.** Een vraag voor één geval (boodschappen, de wijnkelder, Jana) wordt een eigenschap die voor
-  elke lijst, soort, gebeurtenis of blok werkt (zoals `planned` op een actie, niet een knop Boodschap). Het geval
-  zelf is dan instellen of gegevens, geen code. Nooit een lijst, soort, persoon of id in de code.
+  elke lijst, formulier, gebeurtenis of blok werkt (zoals `planned` op een actie, niet een knop Boodschap). Het geval
+  zelf is dan instellen of gegevens, geen code. Nooit een lijst, formulier, persoon of id in de code.
 - Navigeren altijd met `Link`, `NavLink` en `useNavigate` uit `src/router.tsx` (vloeiende schermwissels), nooit
   rechtstreeks uit `react-router`. Een nieuw scherm komt in `src/routes.tsx`.
 - Bedragen in cent, datums als `YYYY-MM-DD` (een tijdstip `YYYY-MM-DDTHH:MM`, tijd in België). Opmaak via `src/format.ts`.
 
-### Het model (`shared/model.ts`, `migrations/0029_lijsten.sql`)
+### Het model (`shared/model.ts`, `migrations/0029_lijsten.sql`, `0037_formulieren_los.sql`)
 
-- Er zijn enkel **lijsten** (`lists`). Een lijst heeft **items** (`items`, allemaal met dezelfde velden: `fields`;
-  `one` = hoe één item heet, leeg = een lijst zonder items), altijd een **logboek** met **gebeurtenissen**
-  (`events`), **mensen** (`list_people`) en **tags** (`list_tags`, `list_tag_links`). Geen projecten, geen lijsten in
-  lijsten: tags groeperen, een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "item", "logboek" en
-  "formulier" (een soort; het woord "soort" staat nergens in de interface).
-- Een gebeurtenis heeft een **formulier** (`kinds`; in de code soms nog "soort"). Een formulier is velden plus
+- Er zijn **lijsten** (`lists`) en **formulieren** (`kinds`; in de code soms nog "soort"), los van elkaar. Een lijst
+  heeft **items** (`items`, allemaal met dezelfde velden: `fields`; `one` = hoe één item heet, altijd ingevuld),
+  **mensen** (`list_people`) en **tags** (`list_tags`, `list_tag_links`). Een formulier heeft zijn eigen **mensen**
+  (`form_people`, dezelfde rollen), **tags** (`form_tag_links`, dezelfde tags), een melding (`notify`), of het een foto
+  leest (`reads`) en een **logboek**: alles wat ermee gelogd werd (**gebeurtenissen**, `events.kind`; een gebeurtenis
+  hoort bij geen lijst). Het logboek van een lijst is wat haar items raakte: een lijn of een veranderde cel
+  (`touchesLists` in `worker/events-view.ts`). Geen projecten, geen lijsten in lijsten: tags groeperen (lijsten én
+  formulieren), een lijst kan meer tags hebben. Wie de gebruiker leest, zegt "lijst", "item", "formulier" en "logboek"
+  (het woord "soort" staat nergens in de interface). Een formulier staat op `/formulieren/:id` (logboek, Loggen,
+  Instellen: `FormSettings`), loggen op `/loggen?formulier=…`; het menu heeft onder Formulieren je formulieren.
+- Een formulier is velden plus
   **onderdelen** (`parts`: `money` = bedrag, wie betaalde, verdeling en een prijs per lijn; `to` = naar iemand, een
   overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en
   eventueel één lijst: Wat, Waar, "Ruimte uit Huis") plus **handelingen** (`does`, zie Cellen). Er is geen "Werkt als"
   meer: de zes **vertrekpunten** (`BASES`: aankoop, gebruik, dienst, activiteit, meting, overdracht, met `baseParts` en
-  `presetDoes`) zijn enkel waar een nieuw formulier mee begint, en de formulieren van een lijst zonder eigen formulieren.
-  Een formulier zonder eigen onderdelen (`parts` NULL) volgt zijn vertrekpunt (`kindInfo`). **De code vraagt nooit "is dit
+  `presetDoes`) zijn enkel waar een nieuw formulier mee begint. Een formulier zonder eigen onderdelen (`parts` NULL) volgt
+  zijn vertrekpunt (`kindInfo`). **De code vraagt nooit "is dit
   een aankoop?"** maar wat het formulier vraagt of doet: `parts.money`, `parts.duration`, `buysWith` (kasticket,
-  afvinken), `movesStock`, `formEats`, `stockOp`. Kiezen gebeurt in `FormPicker`: de formulieren van de lijst, zonder
-  eigen de vertrekpunten, de rest onder Ander formulier (`formsOf`). **Lijnen** (`lines`) staan in de groep van hun rol
+  afvinken), `movesStock`, `formEats`, `stockOp`. Wat een formulier invult, zeggen zijn groepen en handelingen
+  (`fillsLists`); kiezen gebeurt in `FormPicker`: de formulieren die de lijst invullen, de rest onder Ander formulier
+  (`formsOf`). **Lijnen** (`lines`) staan in de groep van hun rol
   (`in`, `uit`, `voor`, `bij`; `bij` = waar of bij wie, enkel met de hele gebeurtenis te zien), naar een item of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon); wat een lijn doet,
   zeggen de handelingen, niet haar rol. Een groep uit één lijst kiest enkel daaruit (de server kijkt het na). Status:
   `gebeurd`, `gepland` (te doen, boodschappen), `afgevinkt` (een boodschap die gekocht is: telt niet mee). Een formulier
-  kan gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschappen een lijst zonder items met
-  een formulier Boodschap, die op Gepland opent.
-- Uitgaven, kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen. Er zijn ook geen vaste
+  kan gepland beginnen (`kinds.planned`, `startsPlanned`, `actionPlans`): zo is Boodschap een formulier dat op Gepland
+  opent.
+- Kastickets, boodschappen en eten zijn **geen lijsten** maar gebeurtenissen (Uitgaven is een lijst met een rij per
+  persoon, zie Geld). Er zijn ook geen vaste
   pagina's (Geld, Voorraad, Eten, Te doen, Agenda): dat zijn **borden** met weergaven (bronnen: logboek, items,
   voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan
   met naam en icoon in het menu, in jouw volgorde (`placesOf`: `/` en `/bord/:id`; ⋯ → Volgorde); Alle lijsten staat niet
@@ -58,17 +65,22 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 
 ### Rechten (`shared/rights.ts`, `worker/access.ts`)
 
-- Vaste rollen per lijst: **beheerder** (instellen, mensen), **lid** (items en loggen), **gast** (kijken), en
-  rechtstreeks **geen** (een uitzondering). Er zijn geen rechten per veld.
-- Een **regel op een tag** (`tag_rules`, "Jana altijd beheerder bij Huis") geeft een rol op elke lijst met die tag,
-  maar enkel waar wie de regel maakte zelf rechtstreeks beheerder is; wie een tag zet, ziet wie er zo bij komt; een
-  rechtstreekse rij op de lijst wint, ook `geen`. Uitgerekend in één vraag: `seenLists` (wat iemand ziet, met rol).
-- Elke route haalt eerst de toegang op: `requireList`, `requireItem` (geen toegang = 404 "niet gevonden"), daarna
-  `needEdit` of `needManage`. Bij twijfel: weigeren. Er blijft altijd een rechtstreekse beheerder (`keepsAdmin`).
-- **Lijnen zien**: een lijn `in`/`uit`/`voor` is ook zichtbaar voor wie de lijst van het item ziet (in het logboek
-  van die lijst, als "gedeeltelijk": zonder bedrag, naam of andere lijnen); een lijn `bij` enkel met de hele
-  gebeurtenis (anders ziet Jana via Dr. Peeters het doktersbezoek van Jaan). Zie `lineVisible`, `viewEvents`.
-- Velden van een item of soort gaan altijd door `prepareData` (`worker/prepare.ts`): `cleanAttributes`, enkel gekende
+- Vaste rollen per lijst en per formulier: **beheerder** (instellen, mensen), **lid** (items toevoegen of ermee loggen),
+  **gast** (kijken), en rechtstreeks **geen** (een uitzondering). Er zijn geen rechten per veld. Mensen en tags van
+  beide gaan door `worker/members.ts`; wie je bij een lijst zet, komt ook bij de formulieren die ze invullen en die jij
+  beheert (`addPerson`).
+- Een **regel op een tag** (`tag_rules`, "Jana altijd beheerder bij Huis") geeft een rol op elke lijst en elk formulier
+  met die tag, maar enkel waar wie de regel maakte zelf rechtstreeks beheerder is; wie een tag zet, ziet wie er zo bij
+  komt; een rechtstreekse rij wint, ook `geen`. Uitgerekend in één vraag: `seenLists`, `seenForms`, samen `seenAll`.
+- Elke route haalt eerst de toegang op: `requireList`, `requireItem`, `requireForm` (geen toegang = 404 "niet
+  gevonden"), daarna `needEdit` of `needManage`. Bij twijfel: weigeren. Er blijft altijd een rechtstreekse beheerder
+  (`keepsAdmin`).
+- **Gebeurtenissen zien**: wie het formulier ziet, ziet de gebeurtenis helemaal (een Aanpassing: wie de lijst van haar
+  item ziet, `eventRole`). Een lijn `in`/`uit`/`voor`, of een cel die ze veranderde, is ook zichtbaar voor wie de lijst
+  van het item ziet (in het logboek van die lijst, als "gedeeltelijk": zonder bedrag, naam of andere lijnen); een lijn
+  `bij` enkel met de hele gebeurtenis (anders ziet Jana via Dr. Peeters het doktersbezoek van Jaan). Zie
+  `lineVisible`, `viewEvents`.
+- Velden van een item of formulier gaan altijd door `prepareData` (`worker/prepare.ts`): `cleanAttributes`, enkel gekende
   personen, verwijzingen enkel naar items die de bewerker ziet. Lijstvelden door `cleanListFields`
   (`shared/listdef.ts`).
 
@@ -91,12 +103,13 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   lijst met een minimumveld en als er ooit iets was.
 - **Geld** (`shared/ledger.ts`, `shared/cells.ts`): ook een cel. Een lijst met een **saldo per persoon** (`ledger`:
   welke kolom de persoon is en welke het saldo; Instellen → Tellen) heeft een rij per persoon; ontbreekt die, dan maakt
-  `rebuildEffects` ze. Handelingen op personen (`rows`: `payer`, `sharers`, `to`; `BALANCE` = het saldo van de lijst van
-  de gebeurtenis): wie betaalde telt het bedrag bij, wie deelt zijn deel af (`sharesOf`: lijnen met `owner` zijn van die
-  persoon, de rest volgens `split`, tot op de cent), naar wie een overdracht gaat telt het af. Wie moet wie telt de
-  saldo's van alle lijsten met een saldo die je ziet samen (`balanceOf`, `settleUp`); Terugbetaald logt een overdracht in
-  zo'n lijst. Een nieuwe uitgave in een lijst waar meer mensen loggen, is standaard gelijk verdeeld over hen
-  (`defaultSharers`), zoals in Splitwise; eten en een overdracht nooit vanzelf.
+  `rebuildEffects` ze. Handelingen op personen (`rows`: `payer`, `sharers`, `to`; `BALANCE` = het saldo, altijd in een
+  gekozen lijst met een saldo per persoon): wie betaalde telt het bedrag bij, wie deelt zijn deel af (`sharesOf`: lijnen
+  met `owner` zijn van die persoon, de rest volgens `split`, tot op de cent), naar wie een overdracht gaat telt het af.
+  Wie moet wie telt de saldo's van alle lijsten met een saldo die je ziet samen (`balanceOf`, `settleUp`); Terugbetaald
+  logt een overdracht met een formulier dat het saldo van zo'n lijst bijhoudt (`POST /lists/:id/settle-form` zoekt of
+  maakt Terugbetaling). Een nieuwe uitgave met een formulier waarmee meer mensen loggen, is standaard gelijk verdeeld
+  over hen (`defaultSharers`), zoals in Splitwise; eten en een overdracht nooit vanzelf.
 - **Eten** (`shared/food.ts`): een formulier dat eet (`formEats`: zonder geld, en het trekt af van de voorraad of heeft
   kcal) met kcal (in het formulier, of uit een item met kcal per 100 g × gram van de lijnen die eraf gaan; `isFood`).
 - **Berekeningen** (veldsoort `calc`, `shared/calc.ts`) enkel binnen het item; geen verwijzende berekeningen meer.
@@ -107,8 +120,8 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
 
 - **Palet** (`CommandPalette`, `GET /me/targets`, `shared/targets.ts`): zoeken en toevoegen; de + is voor wat er
   gebeurde, in drie groepen: **Loggen** (formulieren; noemt je tekst een item, dan "Uit eten · Het Forum" met dat item
-  als lijn), **Nieuw** (een item in een lijst) en **Openen**. De rest van de tekst gaat als `?tekst=` naar het
-  formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). **Stap voor stap**
+  als lijn), **Nieuw** (een item in een lijst, of een nieuwe lijst of formulier) en **Openen** (ook formulieren). De rest
+  van de tekst gaat als `?tekst=` naar het formulier. Op een lijst opent de + hetzelfde palet, enkel voor die lijst (`PaletteScope`). **Stap voor stap**
   (`shared/steps.ts`, getest): na "Uit eten · Het Forum" of Nieuw vul je veld na veld in het palet in, met suggesties;
   leeg is overslaan, na het laatste bewaar je (`eventBody`, `itemBody`: zoals het formulier, met de gelijke verdeling)
   met Ongedaan maken; Alles invullen opent het formulier met wat er al staat (`prefillOf`, `?vooraf=`). Een
@@ -119,25 +132,27 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   zoeken, Verbanden en keuzelijsten tonen ze altijd. Een **tag** toont al de items van haar lijsten samen
   (`tagView` in `shared/blocks.ts`, getest: zoeken, de gedeelde kolommen en rechts de lijst; alle wijnen over Wijnen,
   Geproefd en de gedeelde kelder); een weergave over meer lijsten heeft daarvoor de kolom Lijst (`LIST_KEY`). Alles op één plek: **Lijsten** (`/lijsten`, `ListsPage`): één pagina met je lijsten per tag (de naam opent de lijst,
-  ▸ toont haar verbanden), wie erbij is, per lijst Menu, Toevoegen en Meldingen (stilzetten, `mutedBy` in
-  `shared/apps.ts`), je volgorde, en op tablet ook de kaart.
+  ▸ toont haar verbanden), wie erbij is, per lijst Menu en Toevoegen, je volgorde, en op tablet ook de kaart.
+  Meldingen zet je per formulier stil (⋯ van het formulier, `mutedBy` in `shared/apps.ts`) of per tag.
 - **Typ wat je weet** (`shared/parse.ts`, getest): tekst live naar de gebeurtenis (datum, uur, bedrag, items met
-  hoeveelheid en prijs, velden van de soort); enkel wat de tekst zette verandert mee. Items komen van
+  hoeveelheid en prijs, velden van het formulier); enkel wat de tekst zette verandert mee. Items komen van
   `GET /items?in=` (met `usual`: de rol die ze meestal hebben, Colruyt = bij).
-- **Waarmee je logt** (`logForms`, getest; `LogButtons` op een item en bovenaan het logboek, en in het palet): de eigen
-  formulieren van de lijst en, telt ze voorraad, de formulieren die de voorraad veranderen van lijsten die zelf geen
-  voorraad tellen (Aankoop in Uitgaven, Boodschap, Gegeten). Een aankoop logt in de lijst van wie meebetaalt (Uitgaven = met Jana), de
-  lijnen bepalen welke voorraad stijgt (Chablis in Wijnen); een kasticket gaat naar een lijst met een eigen aankoop
-  (`receiptLists`). Een formulier van elders krijgt `?nieuw=<lijst>` (`logPath`): iets nieuws dat erbij komt (een wijn
-  die er nog niet staat) staat dan standaard op Nieuw in die lijst (`defaultNew` in `LinesEditor`), niet bij gepland;
-  noemt Typ wat je weet dan geen item dat erbij komt, dan wordt de rest van de tekst zo'n nieuwe lijn, niet de omschrijving.
+- **Waarmee je logt** (`logForms`, getest; `LogButtons` op een item en bovenaan het logboek, en in het palet): de
+  formulieren die de lijst uitdrukkelijk invullen eerst en, telt ze voorraad, de formulieren die de voorraad veranderen
+  (Aankoop, Boodschap, Gegeten). Een aankoop houdt het saldo bij in Uitgaven (een handeling), de lijnen bepalen welke
+  voorraad stijgt (Chablis in Wijnen); een kasticket gaat naar een formulier dat koopt (`receiptForms`). Vanuit een
+  lijst krijgt het formulier `?nieuw=<lijst>` (`logPath`): iets nieuws dat erbij komt (een wijn die er nog niet staat)
+  staat dan standaard op Nieuw in die lijst (`defaultNew` in `LinesEditor`), niet bij gepland; noemt Typ wat je weet dan
+  geen item dat erbij komt, dan wordt de rest van de tekst zo'n nieuwe lijn, niet de omschrijving. Het oude adres
+  `/lijsten/:id/loggen?soort=` stuurt door naar `/loggen?formulier=…&nieuw=…`.
 - **De AI is altijd zichtbaar**: elke knop die ze gebruikt draagt ✨ (`AiMark`), ze start nooit vanzelf (enkel na een
   tik of de schakelaar Lezen met AI in de fotokiezer, `PhotoButton`), per persoon aan of uit (`useAiBudget`: 25 per
-  persoon per dag, 50 samen). Welke formulieren een foto lezen: per lijst (`lists.read_photo`, `shared/photoread.ts`;
-  standaard items, soorten met geld of voedingswaarden). Een foto lezen voor een gebeurtenis
-  (`POST /lists/:id/events/read-photo` met de soort): een aankoop is een kasticket (`shared/receipt.ts`): één aankoop
-  met een lijn per product, koppelt enkel aan items die de lezer ziet, bewaart niets; een soort met voedingswaarden
-  herkent een gerecht en schat (dat zegt de app); een andere soort vult haar velden met wat er echt staat. Van een
+  persoon per dag, 50 samen). Of een foto gelezen wordt: per formulier (`kinds.reads`, `formReads`) en per lijst voor
+  een nieuw item (`lists.read_photo`, `shared/photoread.ts`); standaard items en formulieren met geld of
+  voedingswaarden. Een foto lezen voor een gebeurtenis (`POST /forms/:id/read-photo`): een formulier dat koopt leest
+  een kasticket (`shared/receipt.ts`): één aankoop met een lijn per product, koppelt enkel aan items die de lezer ziet,
+  bewaart niets; een formulier met voedingswaarden herkent een gerecht en schat (dat zegt de app); een ander vult zijn
+  velden met wat er echt staat. Van een
   kasticket wordt de naam op het ticket onthouden (`POST /items/:id/alias`, een tekstveld met `aliases`; een nieuw item
   met een andere naam krijgt hem bij het maken, `new_item.alias`): Go-tan wok wordt de volgende keer vanzelf Noedels. Een item van een foto (`POST /lists/:id/items/read-photo`) of barcode (Open Food Facts,
   zonder AI); de app toont altijd of iets uit een databank komt of geschat is.
@@ -152,28 +167,31 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   vandaag met de rechten die wie ze maakte nu heeft (stopt als dat niet meer mag); een geplande met `repeat` maakt de
   volgende bij afvinken. Om 7 u herinneringen voor datums van items en wat vandaag gepland staat. Een timer is een
   activiteit zonder einde (`POST /events/:id/stop`, `kinds.goal` voor een melding).
-- **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een lijst): aan iedereen die de lijst ziet of aan wie in
-  de verdeling staat; nooit aan wie het logde of wie de lijst of tag stilzette.
+- **Melding bij iets nieuws** (`shared/alerts.ts`, `notify` op een formulier, `worker/notify-events.ts`): aan iedereen
+  die het formulier ziet of aan wie in de verdeling staat; nooit aan wie het logde of wie het formulier of een tag ervan
+  stilzette.
 - **Overzicht** (`shared/board.ts`, `shared/blocks.ts`): borden (naam, icoon) met blokken van twee soorten. Een **weergave** is een
   zin: bron (logboek, items, voorraad, saldo's, voeding, alles met een datum) + lijsten + voorwaarden (`ViewDef`) +
   tellen (`Tally`) + één van elf vormen (`SHOWS`, ook Agenda) + voorwaarden op wat je ziet (`Rule`: een rij kleuren, bovenaan, verbergen; het blok
   verbergen als er niets is; de uitkomst kleuren). De server rekent ze uit met de rechten van de lezer
   (`GET /insights/view`, `evaluateView`); met een periode blader je (`viewSpan`, `?periode=`), een agenda per maand.
-  Een **actie** logt: soort, vooraf ingevulde velden en wat een tik doet
+  Een **actie** logt: een formulier (`actionForm`; van vroeger een lijst met een vertrekpunt), vooraf ingevulde velden en wat een tik doet
   (formulier, meteen bewaren met Ongedaan maken, tellen, timer); formulier en bewaren kunnen ook gepland (`planned`,
   `canPlan`: een boodschap, iets te doen). Geen vaste blokken of voorbeelden; oude blokken
   (todo, money, stock, quick, chart, …) worden bij het lezen een gelijke zin (`upgradeBlock`). Automatisaties (iets
   dat zelf handelt) zijn voor later. Opstarten blijft licht: elk blok haalt zijn eigen inhoud.
-- **App** (`shared/apps.ts`): eigen apps, snelkoppelingen, wat een gedeelde foto doet; enkel naar wat je bereikt
-  (`keepReachable`).
+- **App** (`shared/apps.ts`): eigen apps, snelkoppelingen (een bord, een lijst, loggen met een formulier, een nieuw
+  item), wat een gedeelde foto doet (een kasticket met een formulier dat koopt); enkel naar wat je bereikt
+  (`keepReachable`, dat ook een bestemming van vroeger omzet met `legacyForm`).
 - **Verbanden** (`shared/links.ts`, `GET /insights/links`, op `/lijsten`: Lijst of Kaart): hoe je lijsten samenhangen (verwijzingen,
-  wat er gelogd is tussen lijsten, met welke items, de weergaven), enkel wat de lezer ziet, met wat voor iemand niet
-  werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
+  de formulieren die ze samen invullen of met lijnen raken, met welke items, de weergaven), enkel wat de lezer ziet,
+  met wat voor iemand niet werkt. Zoeken (`searchLinks`), groeperen, sorteren en selecteren (`betweenSelection`) zitten in `shared/links.ts`
   (getest); de keuze staat in het adres (`?lijst=`, `?keuze=`, `?groep=`, `?sort=`). **Een nieuwe
-  eigenschap van een veld, lijst, soort, gebeurtenis, lijn of blok beslis je in de `…_LINKS`-tabellen** (TypeScript
+  eigenschap van een veld, lijst, formulier, gebeurtenis, lijn of blok beslis je in de `…_LINKS`-tabellen** (TypeScript
   dwingt het af; wat verbindt, krijgt een voorbeeld in `test/links.test.ts`).
-- **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`): de lijsten die je beheert; terugzetten maakt altijd een
-  nieuwe kopie en kijkt alles na. **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
+- **Back-up** (`shared/backup.ts`, `worker/routes/backup.ts`, versie 4): de lijsten en formulieren die je beheert (met
+  het logboek van die formulieren en de Aanpassingen in die lijsten); terugzetten maakt altijd een nieuwe kopie en kijkt
+  alles na; een back-up van vroeger wordt bij het lezen omgezet (`fromV2`, `fromV3`, zoals de migraties). **Een nieuwe tabel of kolom neem je mee in de back-up** (of zeg in `BACKUP_TABLES`
   waarom niet; `test/backup.test.ts` leest de migraties na).
 - **Toevoegen uit andere lijst** (`shared/transfer.ts`, getest; `FromListPage`): items uit een bron met voorwaarden
   (zoals een weergave), per veld een veld van de bron, een vaste waarde of een verwijzing naar het origineel, keuzes
@@ -186,13 +204,13 @@ groeperen. Alles in het Nederlands (Vlaams, "je"): code-commentaar, teksten, com
   doellijst niet te wijzigen of te verwijderen; wat niet meer voldoet, gaat naar het archief. De server rekent elk plan
   opnieuw uit (`cleanPlan`) en elke waarde gaat door `prepareData`.
 - **Sjablonen** (`shared/catalog.ts`): enkel Lege lijst, Uitgaven (Splitwise: een rij per persoon met een saldo,
-  Aankoop en Terugbetaling) en Dieet (Yazio), zo eenvoudig mogelijk;
-  geen sjabloon per geval. **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst (ook
-  wie een melding krijgt), zonder items of mensen.
-- De oude tabellen (projecten, items, …) staan er nog maar worden niet meer gebruikt; ze gaan weg in een latere
-  migratie.
+  Aankoop en Terugbetaling die het saldo bijhouden) en Dieet (Yazio: enkel de formulieren Gegeten en Gewicht), zo
+  eenvoudig mogelijk; geen sjabloon per geval. De formulieren van een sjabloon zijn gewone formulieren (jij beheerder,
+  de tags van de lijst). **Sjabloon delen** (`shared/template-file.ts`, Uit bestand): de opbouw van een lijst met de
+  formulieren die haar invullen (ook wie een melding krijgt), zonder items of mensen.
 - **Offline** (`sw/sw.js`): de service worker bewaart wat je eerder bekeek voor de GET-routes in `OFFLINE_API` (jij, borden
-  en weergaven, een lijst met items en logboek, een item, een gebeurtenis, wat een formulier nodig heeft); wat je dan
+  en weergaven, een lijst met items en logboek, een formulier met zijn logboek, een item, een gebeurtenis, wat loggen
+  nodig heeft); wat je dan
   bewaart, wacht in `src/outbox.ts`. Een nieuw scherm dat offline moet openen, zet zijn route daar (`test/sw.test.ts`
   kijkt na dat elk patroon een echte route is). Verander je de routes, geef `DATA_CACHE` dan een nieuwe naam.
 - Bewaar nooit een wachtwoord, enkel bv. een klantnummer en waarmee je aanmeldt.

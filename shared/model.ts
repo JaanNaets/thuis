@@ -1,11 +1,13 @@
-// Het model van Heystack: lijsten met items, en per lijst een logboek met gebeurtenissen.
+// Het model van Heystack: lijsten met items, formulieren die ze invullen, en per formulier een logboek met gebeurtenissen.
 //
-// - Een **lijst** heeft items (allemaal met dezelfde velden; mag leeg zijn), mensen met een rol, tags en een logboek.
-// - Een **gebeurtenis** gebeurt op een moment en heeft een soort: een van de zes basissoorten (`BASES`) of een eigen
-//   soort erop (Gegeten is een Gebruik met kcal). Ze heeft **lijnen** naar de items die ze raakt: wat erbij komt
-//   (in), wat eraf gaat (uit), waarover ze gaat (voor) en waar of bij wie (bij).
-// - Wat je ziet, hangt af van je rol per lijst (zie shared/rights.ts). Voorraad, uitgaven, wie moet wie en eten
-//   worden nooit bewaard maar uitgerekend uit de lijnen (shared/stock.ts, shared/ledger.ts, shared/food.ts).
+// - Een **lijst** heeft items (allemaal met dezelfde velden), mensen met een rol en tags.
+// - Een **formulier** staat los van lijsten: velden, onderdelen, groepen lijnen en handelingen (wat het met de items
+//   van lijsten doet, shared/cells.ts), met eigen mensen en tags. Het **logboek** hoort bij het formulier: elke
+//   gebeurtenis is van haar formulier. Het logboek van een lijst is wat haar items raakt.
+// - Een **gebeurtenis** gebeurt op een moment. Ze heeft **lijnen** naar de items die ze raakt, per groep van haar
+//   formulier: wat erbij komt (in), wat eraf gaat (uit), waarover ze gaat (voor) en waar of bij wie (bij).
+// - Wat je ziet, hangt af van je rol per lijst en per formulier (zie shared/rights.ts). Voorraad, saldo's en eten worden
+//   nooit bewaard maar uitgerekend (shared/cells.ts, shared/stock.ts, shared/ledger.ts, shared/food.ts).
 
 import { ADJUST, ADJUST_DOES, presetDoes, type Handeling } from "./cells.ts";
 import type { Attributes, FieldDef, Interval, Share } from "./fields.ts";
@@ -116,7 +118,6 @@ export const baseParts = (base: Base): Parts => {
  */
 export type Kind = {
   id: string;
-  list_id: string;
   base: Base;
   name: string;
   icon: IconKey | null;
@@ -125,7 +126,13 @@ export type Kind = {
   planned: boolean;
   parts: Parts | null;
   does: Handeling[];
-  sort_order: number;
+  /** Een melding bij iets nieuws (shared/alerts.ts). */
+  notify: NotifyDef | null;
+  /** Een foto lezen met AI: aan, uit, of null = de standaard (shared/photoread.ts). */
+  reads: boolean | null;
+  archived: 0 | 1;
+  created_by: string;
+  created_at: string;
 };
 
 /**
@@ -138,18 +145,20 @@ export type KindInfo = {
   name: string;
   icon: IconKey;
   fields: FieldDef[];
-  list_id: string | null;
   goal: number | null;
   planned: boolean;
   parts: Parts;
   does: Handeling[];
+  reads: boolean | null;
+  /** Een systeemformulier (Aanpassing): zonder eigen mensen, je ziet het met de lijst van zijn item. */
+  system?: true;
 };
 
 /** Het vertrekpunt zelf als formulier (zonder eigen velden, behalve een meting: een waarde). */
 export function baseKind(base: Base): KindInfo {
   const b = BASES[base];
   const fields: FieldDef[] = base === "meting" ? [{ key: "waarde", label: "Waarde", type: "number" }] : [];
-  return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null, goal: null, planned: false, parts: baseParts(base), does: presetDoes(base) };
+  return { id: base, base, name: b.label, icon: b.icon, fields, goal: null, planned: false, parts: baseParts(base), does: presetDoes(base), reads: null };
 }
 
 /** Een cel rechtstreeks aanpassen (in het item): een gebeurtenis die de nieuwe waarde zet (shared/cells.ts). */
@@ -159,11 +168,12 @@ export const ADJUST_KIND: KindInfo = {
   name: "Aanpassing",
   icon: "note",
   fields: [],
-  list_id: null,
   goal: null,
   planned: false,
   parts: { ...NO_PARTS, groups: [{ role: "voor", label: "Voor", list: null }] },
   does: ADJUST_DOES,
+  reads: false,
+  system: true,
 };
 
 export function kindInfo(kind: Kind): KindInfo {
@@ -173,12 +183,17 @@ export function kindInfo(kind: Kind): KindInfo {
     name: kind.name,
     icon: kind.icon ?? BASES[kind.base].icon,
     fields: kind.fields,
-    list_id: kind.list_id,
     goal: kind.goal,
     planned: kind.planned,
     parts: kind.parts ?? baseParts(kind.base),
     does: kind.parts ? kind.does : [...presetDoes(kind.base), ...kind.does],
+    reads: kind.reads,
   };
+}
+
+/** De lijsten die een formulier uitdrukkelijk invult: een groep lijnen uit één lijst, of een handeling op een lijst. */
+export function fillsLists(kind: Pick<KindInfo, "parts" | "does">): string[] {
+  return [...new Set([...kind.parts.groups.flatMap((g) => (g.list ? [g.list] : [])), ...kind.does.flatMap((h) => (h.list ? [h.list] : []))])];
 }
 
 /** De eerste groep lijnen van een formulier (waar een item komt als je logt vanaf dat item). */
@@ -191,20 +206,33 @@ export const groupOf = (kind: Pick<KindInfo, "parts">, role: LineRole): LineGrou
 export const startsPlanned = (kind: Pick<KindInfo, "planned">, asked: boolean): boolean => asked || kind.planned;
 
 /**
- * De formulieren (soorten) om in een lijst te loggen, zoals je ze kiest: haar eigen, of zonder eigen de zes
- * basissoorten (`shown`). De rest (de basissoorten naast eigen formulieren, de formulieren van andere lijsten) staat
- * onder Ander formulier (`more`). Een formulier dat al gekozen is (een gebeurtenis die je bewerkt, een actie, een
- * kasticket), staat er vooraan bij.
+ * De formulieren om mee te loggen, zoals je ze kiest: die een lijst invullen (`fills`) eerst, de rest onder Ander
+ * formulier. Een formulier dat al gekozen is (een gebeurtenis die je bewerkt, een actie, een kasticket), staat er
+ * vooraan bij.
  */
-export function formsOf(kinds: KindInfo[], listId: string, chosen?: string | null): { shown: KindInfo[]; more: KindInfo[] } {
-  const own = kinds.filter((k) => k.list_id === listId);
-  const bases = kinds.filter((k) => !k.list_id);
-  const others = kinds.filter((k) => k.list_id && k.list_id !== listId);
-  const first = own.length ? own : bases;
-  const rest = own.length ? [...bases, ...others] : others;
+export function formsOf(kinds: KindInfo[], fills: (k: KindInfo) => boolean, chosen?: string | null): { shown: KindInfo[]; more: KindInfo[] } {
+  const own = kinds.filter(fills);
+  const first = own.length ? own : kinds;
+  const rest = own.length ? kinds.filter((k) => !own.includes(k)) : [];
   const extra = rest.find((k) => k.id === chosen);
   return { shown: extra ? [...first, extra] : first, more: rest.filter((k) => k !== extra) };
 }
+
+// ---------- formulieren zoals jij ze ziet ----------
+
+/** Een formulier in je menu: met je rol en zijn tags. */
+export type FormNode = { id: string; name: string; icon: IconKey; base: Base; role: Role; tags: string[]; archived: 0 | 1 };
+
+/** Een formulier met wie erbij is, zijn tags en instellingen (zijn pagina en Instellen). */
+export type FormDetail = {
+  form: KindInfo;
+  role: Role;
+  tags: Tag[];
+  people: ListPerson[];
+  notify: NotifyDef | null;
+  archived: 0 | 1;
+  counts: { events: number; planned: number };
+};
 
 // ---------- lijsten ----------
 
@@ -248,7 +276,7 @@ export type ListDetail = {
   role: Role;
   tags: Tag[];
   people: ListPerson[];
-  /** De soorten die je hier kan loggen: de basissoorten, die van deze lijst en die van andere lijsten die je ziet. */
+  /** De formulieren die je ziet (die deze lijst invullen eerst, zie `formsOf`). */
   kinds: KindInfo[];
   counts: { items: number; events: number; planned: number };
 };
@@ -322,7 +350,7 @@ export type Line = {
 
 export type Event = {
   id: string;
-  list_id: string;
+  /** Het formulier (en zo het logboek) van de gebeurtenis. */
   kind: string;
   base: Base;
   name: string;
@@ -346,7 +374,13 @@ export type Event = {
  * Een gebeurtenis zoals jij ze ziet. `partial`: je ziet de lijst van de gebeurtenis niet, enkel de lijnen over items
  * die je wel ziet (zonder naam, bedrag, foto of andere lijnen).
  */
-export type EventView = Omit<Event, "data"> & { data: Attributes; lines: Line[]; partial: boolean };
+export type EventView = Omit<Event, "data"> & {
+  data: Attributes;
+  lines: Line[];
+  /** De lijsten die haar lijnen raken (die je ziet), voor de kolom Lijst. */
+  lists: string[];
+  partial: boolean;
+};
 
 /** Een lijn zoals je ze invoert: een item, een nieuw item of tekst. */
 export type LineInput = {

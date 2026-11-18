@@ -8,9 +8,9 @@ import { fold } from "../../shared/parse";
 import { withAlias } from "../../shared/receipt";
 import { lineAllowed } from "../../shared/rights";
 import { normalizeUnit } from "../../shared/units";
-import { ids, kindOf, kindsFor, needEdit, requireList, seenLists, toEvent, toLine, type EventRowDb, type LineRowDb } from "../access";
+import { ids, kindOf, needEdit, requireForm, requireList, seenAll, toEvent, toLine, type EventRowDb, type LineRowDb, type Seen } from "../access";
 import { rebuildEffects } from "../cells";
-import { logbookRows, viewEvents } from "../events-view";
+import { eventRole, logbookRows, viewEvents, type LogOptions } from "../events-view";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { prepareData } from "../prepare";
 import { knownPeople } from "./lists";
@@ -20,6 +20,7 @@ import { notifyNewEvent } from "../notify-events";
 
 export const events = new Hono<AppEnv>();
 export const listEvents = new Hono<AppEnv>();
+export const formEvents = new Hono<AppEnv>();
 
 const MAX_LINES = 80;
 const MAX_PAGE = 100;
@@ -27,39 +28,57 @@ const MAX_CENTS = 100_000_000;
 
 // ---------- lezen ----------
 
-/** Het logboek van een lijst (nieuwste eerst; gepland: eerst wat het eerst moet), met `before` om verder te lezen. */
-listEvents.get("/:id/events", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const { list } = await requireList(db, me.id, c.req.param("id"));
-  const seen = await seenLists(db, me.id);
-  const limit = Math.min(Number(c.req.query("limit")) || 50, MAX_PAGE);
+/** Wat je vraagt van een logboek: gepland of klaar, een periode, verder lezen (`before`), zoeken. */
+function logOptions(c: Context<AppEnv>, limit: number): LogOptions {
   const status = c.req.query("status");
-  const rows = await logbookRows(db, list.id, {
+  return {
     status: status === "gepland" || status === "klaar" ? status : undefined,
-    base: c.req.query("base") || undefined,
+    kind: c.req.query("formulier") || undefined,
     from: c.req.query("from") || undefined,
     to: c.req.query("to") || undefined,
     before: c.req.query("before") || undefined,
     q: c.req.query("q")?.trim() || undefined,
     limit: limit + 1,
-  });
+  };
+}
+
+/** Het logboek van een lijst: wat haar items raakte (nieuwste eerst; gepland: eerst wat het eerst moet). */
+listEvents.get("/:id/events", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { list } = await requireList(db, me.id, c.req.param("id"));
+  const seen = await seenAll(db, me.id);
+  const limit = Math.min(Number(c.req.query("limit")) || 50, MAX_PAGE);
+  const rows = await logbookRows(db, { list: list.id }, logOptions(c, limit));
   const page = await viewEvents(db, seen, rows.slice(0, limit));
   return c.json({ ...page, more: rows.length > limit });
 });
 
-type Found = { event: Event; role: Role | null; seen: Map<string, Role> };
+/** Het logboek van een formulier: alles wat ermee gelogd werd. */
+formEvents.get("/:id/events", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { form } = await requireForm(db, me.id, c.req.param("id"));
+  const seen = await seenAll(db, me.id);
+  const limit = Math.min(Number(c.req.query("limit")) || 50, MAX_PAGE);
+  const rows = await logbookRows(db, { form: form.id }, logOptions(c, limit));
+  const page = await viewEvents(db, seen, rows.slice(0, limit));
+  return c.json({ ...page, more: rows.length > limit });
+});
+
+type Found = { event: Event; role: Role | null; seen: Seen };
 
 /** Een gebeurtenis die je ziet (helemaal, of enkel een lijn erin); anders "niet gevonden". */
 async function findEvent(c: Context<AppEnv>, id: string): Promise<Found> {
   const db = c.env.DB;
   const row = await db.prepare("SELECT * FROM events WHERE id = ?").bind(id).first<EventRowDb>();
   if (!row) throw new NotFoundError("Dat bestaat niet (meer), of je kan er niet bij.");
-  const seen = await seenLists(db, c.get("person").id);
-  return { event: toEvent(row), role: seen.get(row.list_id) ?? null, seen };
+  const seen = await seenAll(db, c.get("person").id);
+  const { results: lists } = await db.prepare("SELECT t.list_id FROM lines l JOIN items t ON t.id = l.item_id WHERE l.event_id = ?").bind(id).all<{ list_id: string }>();
+  return { event: toEvent(row), role: eventRole(seen, row.kind, lists.map((l) => l.list_id)), seen };
 }
 
-/** Om te wijzigen: je moet de lijst van de gebeurtenis mogen wijzigen. */
+/** Om te wijzigen: je moet het formulier van de gebeurtenis mogen gebruiken (een Aanpassing: de lijst van haar item). */
 async function editableEvent(c: Context<AppEnv>, id: string): Promise<Found & { role: Role }> {
   const found = await findEvent(c, id);
   if (!found.role) throw new NotFoundError("Dat bestaat niet (meer), of je kan er niet bij.");
@@ -84,9 +103,9 @@ events.get("/:id", async (c) => {
   });
 });
 
-async function tickedBy(db: D1Database, seen: Map<string, Role>, eventId: string) {
-  const { results } = await db.prepare("SELECT id, name, list_id FROM events WHERE done_by = ?").bind(eventId).all<{ id: string; name: string; list_id: string }>();
-  return results.filter((r) => seen.has(r.list_id));
+async function tickedBy(db: D1Database, seen: Seen, eventId: string) {
+  const { results } = await db.prepare("SELECT id, name, kind FROM events WHERE done_by = ?").bind(eventId).all<{ id: string; name: string; kind: string }>();
+  return results.filter((r) => seen.forms.has(r.kind)).map((r) => ({ id: r.id, name: r.name }));
 }
 
 // ---------- invoer nakijken ----------
@@ -131,21 +150,19 @@ const cents = (v: unknown, what: string) => {
 };
 
 /**
- * Een gebeurtenis van buiten nakijken: de soort moet je kunnen gebruiken, personen moet je kennen, items moet je
- * zien en voor erbij/eraf ook mogen wijzigen (shared/rights.ts). `before`: de lijnen die er al stonden; een lijn die
+ * Een gebeurtenis van buiten nakijken met haar formulier: personen moet je kennen, items moet je zien en wat het
+ * formulier eraan verandert ook mogen wijzigen (shared/rights.ts). `before`: de lijnen die er al stonden; een lijn die
  * niet verandert, mag altijd blijven.
  */
 async function cleanEvent(
   db: D1Database,
   meId: string,
-  seen: Map<string, Role>,
-  listId: string,
+  seenAccess: Seen,
+  kind: KindInfo,
   raw: Record<string, unknown>,
   before: { data: Attributes; lines: CleanLine[] } | null,
 ): Promise<CleanEvent> {
-  const kinds = await kindsFor(db, seen.keys());
-  const kind = kinds.find((k) => k.id === raw.kind);
-  if (!kind) throw new ValidationError("Kies een formulier");
+  const seen = seenAccess.lists;
   const does = kind.does;
   const status = isStatus(raw.status) ? raw.status : "gebeurd";
   const at = typeof raw.at === "string" && isAt(raw.at) ? raw.at : null;
@@ -253,9 +270,9 @@ async function cleanEvent(
     every && Number.isInteger(every.n) && every.n > 0 && every.n <= 365 && ["day", "week", "month", "year"].includes(every.unit)
       ? { every: { n: every.n, unit: every.unit }, next_on: addToDate(at.slice(0, 10), every.n, every.unit) }
       : null;
-  // Houdt het formulier een saldo bij in een andere lijst, dan moet je die lijst mogen wijzigen.
-  for (const l of ledgerLists(does, listId)) {
-    if (l !== listId && !canEdit(seen.get(l))) throw new ValidationError("Dit formulier houdt een saldo bij in een lijst die je niet mag wijzigen");
+  // Houdt het formulier een saldo bij in een lijst, dan moet je die lijst mogen wijzigen.
+  for (const l of ledgerLists(does)) {
+    if (!canEdit(seen.get(l))) throw new ValidationError("Dit formulier houdt een saldo bij in een lijst die je niet mag wijzigen");
   }
   return {
     kind,
@@ -303,17 +320,17 @@ async function newItemStatements(db: D1Database, meId: string, seen: Map<string,
 }
 
 /**
- * Een aankoop vinkt open boodschappen af: geplande gebeurtenissen in lijsten die je mag wijzigen, met een formulier dat
- * koopt (`buysWith`) en een lijn erbij voor hetzelfde item (of een tekst met dezelfde naam).
+ * Een aankoop vinkt open boodschappen af: geplande gebeurtenissen met formulieren die je mag gebruiken en die
+ * kopen (`buysWith`) en een lijn erbij voor hetzelfde item (of een tekst met dezelfde naam).
  */
-async function tickShopping(db: D1Database, seen: Map<string, Role>, eventId: string, itemIds: string[]): Promise<{ id: string; name: string }[]> {
+async function tickShopping(db: D1Database, seen: Seen, eventId: string, itemIds: string[]): Promise<{ id: string; name: string }[]> {
   if (!itemIds.length) return [];
   const { results: names } = await db.prepare("SELECT lower(name) AS name FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(ids(itemIds)).all<{ name: string }>();
-  const editable = [...seen].filter(([, r]) => canEdit(r)).map(([id]) => id);
+  const editable = [...seen.forms].filter(([, r]) => canEdit(r)).map(([id]) => id);
   const { results: found } = await db
     .prepare(
       `SELECT DISTINCT e.id, e.name, e.kind, e.base FROM events e JOIN lines l ON l.event_id = e.id
-       WHERE e.status = 'gepland' AND e.id != ?1 AND e.list_id IN (SELECT value FROM json_each(?2)) AND l.role = 'in'
+       WHERE e.status = 'gepland' AND e.id != ?1 AND e.kind IN (SELECT value FROM json_each(?2)) AND l.role = 'in'
          AND (l.item_id IN (SELECT value FROM json_each(?3)) OR (l.item_id IS NULL AND lower(l.text) IN (SELECT value FROM json_each(?4))))`,
     )
     .bind(eventId, ids(editable), ids(itemIds), ids(names.map((n) => n.name)))
@@ -327,25 +344,25 @@ async function tickShopping(db: D1Database, seen: Map<string, Role>, eventId: st
 
 // ---------- bewaren ----------
 
-listEvents.post("/:id/events", async (c) => {
+/** Loggen met een formulier: de gebeurtenis komt in zijn logboek. */
+formEvents.post("/:id/events", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
-  const { list, role } = await requireList(db, me.id, c.req.param("id"));
-  needEdit(role);
-  const seen = await seenLists(db, me.id);
-  const input = await cleanEvent(db, me.id, seen, list.id, asObject(await c.req.json()), null);
+  const { form, role } = await requireForm(db, me.id, c.req.param("id"));
+  needEdit(role, "Met dit formulier mag je enkel kijken.");
+  const seen = await seenAll(db, me.id);
+  const input = await cleanEvent(db, me.id, seen, form, asObject(await c.req.json()), null);
   const id = crypto.randomUUID();
-  const fresh = await newItemStatements(db, me.id, seen, input.lines);
+  const fresh = await newItemStatements(db, me.id, seen.lists, input.lines);
   await db.batch([
     ...fresh.statements,
     db
       .prepare(
-        `INSERT INTO events (id, list_id, kind, base, name, status, at, end_at, amount, paid_by, split, to_person, data, repeat, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (id, kind, base, name, status, at, end_at, amount, paid_by, split, to_person, data, repeat, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
-        list.id,
         input.kind.id,
         input.kind.base,
         input.name,
@@ -365,7 +382,7 @@ listEvents.post("/:id/events", async (c) => {
   await rebuildEffects(db, [id]);
   const bought = input.lines.flatMap((l, i) => (l.role === "in" ? [fresh.newIds.get(i) ?? l.item_id].filter((x): x is string => Boolean(x)) : []));
   const ticked = buysWith(input.kind) && input.status === "gebeurd" ? await tickShopping(db, seen, id, bought) : [];
-  if (input.status !== "gepland") c.executionCtx.waitUntil(notifyNewEvent(c.env, me, list, id).catch((err) => console.error("melding", err)));
+  if (input.status !== "gepland") c.executionCtx.waitUntil(notifyNewEvent(c.env, me, id).catch((err) => console.error("melding", err)));
   return c.json({ id, made: fresh.made, ticked }, 201);
 });
 
@@ -378,10 +395,14 @@ events.put("/:id", async (c) => {
     .bind(event.id)
     .all<LineRowDb & { item_list: string | null }>();
   const old = oldRows.map((r) => ({ ...toLine(r), item_list: r.item_list, new_item: null }));
-  const input = await cleanEvent(db, me.id, seen, event.list_id, asObject(await c.req.json()), { data: event.data, lines: old });
+  const body = asObject(await c.req.json());
+  // Een ander formulier (en zo een ander logboek) mag, als je dat ook mag gebruiken.
+  const wanted = typeof body.kind === "string" && body.kind !== event.kind && canEdit(seen.forms.get(body.kind)) ? body.kind : event.kind;
+  const kind = await kindOf(db, wanted, event.base);
+  const input = await cleanEvent(db, me.id, seen, kind, body, { data: event.data, lines: old });
   // Lijnen naar items die jij niet ziet, blijven staan zoals ze waren.
-  const hidden = old.filter((l) => l.item_list && !seen.has(l.item_list)).map(({ item_list: _t, id: _i, position: _p, ...l }) => ({ ...l, new_item: null }));
-  const fresh = await newItemStatements(db, me.id, seen, input.lines);
+  const hidden = old.filter((l) => l.item_list && !seen.lists.has(l.item_list)).map(({ item_list: _t, id: _i, position: _p, ...l }) => ({ ...l, new_item: null }));
+  const fresh = await newItemStatements(db, me.id, seen.lists, input.lines);
   await db.batch([
     ...fresh.statements,
     db
@@ -457,8 +478,8 @@ events.post("/:id/tick", async (c) => {
     statements.push(
       db
         .prepare(
-          `INSERT INTO events (id, list_id, kind, base, name, status, at, amount, paid_by, split, to_person, data, repeat, created_by)
-           SELECT ?, list_id, kind, base, name, 'gepland', ?, amount, paid_by, split, to_person, data, ?, created_by FROM events WHERE id = ?`,
+          `INSERT INTO events (id, kind, base, name, status, at, amount, paid_by, split, to_person, data, repeat, created_by)
+           SELECT ?, kind, base, name, 'gepland', ?, amount, paid_by, split, to_person, data, ?, created_by FROM events WHERE id = ?`,
         )
         .bind(next, nextAt, JSON.stringify(repeat), event.id),
       db

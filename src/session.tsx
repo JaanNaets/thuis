@@ -1,16 +1,18 @@
 import { createContext, useContext } from "react";
 import { NO_HIDDEN, type Hidden } from "../shared/apps";
 import type { BoardInfo } from "../shared/board";
-import type { ListNode, Tag } from "../shared/model";
+import type { FormNode, ListNode, Tag } from "../shared/model";
 import type { Person } from "../shared/types";
 
 /**
- * Wie aangemeld is, al je lijsten (met je rol, tags en volgorde), de tags die je ziet en je borden (het menu). Eén keer
- * opgehaald in App, overal leesbaar. Na het maken, hernoemen of verwijderen van een lijst, tag of bord: `reloadMe()`.
+ * Wie aangemeld is, al je lijsten (met je rol, tags en volgorde), je formulieren, de tags die je ziet en je borden (het
+ * menu). Eén keer opgehaald in App, overal leesbaar. Na het maken, hernoemen of verwijderen van een lijst, formulier,
+ * tag of bord: `reloadMe()`.
  */
 export type Session = {
   person: Person;
   lists: ListNode[];
+  forms: FormNode[];
   tags: Tag[];
   /** Je borden (overzichten), in je volgorde: het eerste is je beginscherm. */
   boards: BoardInfo[];
@@ -25,6 +27,7 @@ export type Session = {
 export const SessionContext = createContext<Session>({
   person: { id: "", name: "", email: null, color: null },
   lists: [],
+  forms: [],
   tags: [],
   boards: [],
   ai: false,
@@ -38,4 +41,4 @@ export function useSession(): Session {
 }
 
 /** Het antwoord van GET /me. */
-export type Me = { person: Person; lists: ListNode[]; tags: Tag[]; ai: boolean; hidden?: Hidden; boards?: BoardInfo[] };
+export type Me = { person: Person; lists: ListNode[]; forms?: FormNode[]; tags: Tag[]; ai: boolean; hidden?: Hidden; boards?: BoardInfo[] };

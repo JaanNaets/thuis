@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { occurrences } from "../../shared/agenda";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 import { formatFieldValue, rangeStatus, refLists, type ChecklistEntry, type FieldDef, type FieldType, type FieldValue, type Names } from "../../shared/fields";
-import { brusselsNow, canEdit, type List, type Role, type ItemRef, type ItemRow } from "../../shared/model";
+import { canEdit, type List, type Role, type ItemRef, type ItemRow } from "../../shared/model";
 import { measureFor } from "../../shared/stock";
 import { formatAmount } from "../../shared/units";
 import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
@@ -179,13 +179,7 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
     clearTimeout(pending.current[t.id]);
     pending.current[t.id] = setTimeout(async () => {
       try {
-        await api.post(`/lists/${list.id}/events`, {
-          kind: "meting",
-          name: "Telling",
-          status: "gebeurd",
-          at: brusselsNow(),
-          lines: [{ role: "voor", item_id: t.id, amount: next, unit: measure.unit }],
-        });
+        await api.post(`/items/${t.id}/count`, { amount: next, unit: measure.unit });
         onChanged?.();
       } catch (err) {
         toast((err as Error).message, "alert");

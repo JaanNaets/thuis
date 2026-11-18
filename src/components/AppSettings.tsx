@@ -1,12 +1,12 @@
 // De app instellen (Jouw gegevens → App, zie shared/apps.ts): waar ze opent op dit toestel, je eigen apps (elk een
 // icoon op je beginscherm met een eigen naam en bestemming), de snelkoppelingen op het icoon en wat er met een gedeelde
-// foto gebeurt (Android). Een bestemming is een overzicht (een bord: Geld, Agenda, …), een lijst, of een formulier:
-// loggen (eventueel met een soort en tekst) of een item toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
+// foto gebeurt (Android). Een bestemming is een overzicht (een bord: Geld, Agenda, …), een lijst, loggen met een
+// formulier (eventueel met tekst) of een item toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
 
 import { useMemo, useState } from "react";
 import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
-import { formsOf } from "../../shared/model";
-import type { Targets } from "../../shared/targets";
+import { fillsLists } from "../../shared/model";
+import { buysWith, receiptForms, type Targets } from "../../shared/targets";
 import { api, useApi } from "../api";
 import { useSession } from "../session";
 import type { Overview } from "./Board";
@@ -17,38 +17,44 @@ import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
-/** Wat je kan kiezen: je overzichten en de lijsten waarin je iets mag toevoegen, met hun formulieren. */
-type Choices = { boards: { id: string; name: string }[]; lists: { id: string; name: string; one: string | null; stock: boolean; kinds: { id: string; name: string }[] }[]; reach: Reach };
+/** Wat je kan kiezen: je overzichten, de lijsten waarin je iets mag toevoegen en de formulieren waarmee je mag loggen. */
+type Choices = {
+  boards: { id: string; name: string }[];
+  lists: { id: string; name: string; one: string | null; stock: boolean }[];
+  forms: { id: string; name: string }[];
+  /** Waarmee een kasticket kan (`receiptForms`). */
+  receipts: { id: string; name: string }[];
+  reach: Reach;
+};
 
 function useChoices(): Choices | null {
   const { data: targets } = useApi<Targets>("/me/targets");
   const { data: overview } = useApi<Overview>("/me/overview");
   return useMemo(() => {
     if (!targets || !overview) return null;
-    // Kiezen uit de formulieren van de lijst (`formsOf`); wat al gekozen was (een basissoort), blijft bereikbaar.
-    const lists = targets.lists.map((l) => ({
-      ...l,
-      kinds: formsOf(targets.kinds, l.id).shown.map((k) => ({ id: k.id, name: k.name })),
-    }));
-    const all = (id: string) => targets.kinds.filter((k) => k.list_id === id || k.list_id === null);
     const reach: Reach = {
       boards: overview.boards,
-      lists: new Map(lists.map((l) => [l.id, { name: l.name, one: l.one, edit: true, kinds: new Map(all(l.id).map((k) => [k.id, k.name])) }])),
+      lists: new Map(targets.lists.map((l) => [l.id, { name: l.name, one: l.one, edit: true }])),
+      forms: new Map(targets.kinds.map((k) => [k.id, { name: k.name, base: k.base, fills: fillsLists(k), edit: true, receipt: buysWith(k) }])),
     };
-    return { boards: overview.boards, lists, reach };
+    return {
+      boards: overview.boards,
+      lists: targets.lists,
+      forms: targets.kinds.map((k) => ({ id: k.id, name: k.name })),
+      receipts: receiptForms(targets).map((k) => ({ id: k.id, name: k.name })),
+      reach,
+    };
   }, [targets, overview]);
 }
 
 /** Een korte naam voor een snelkoppeling ("Bijvulling", "Keuken", "Agenda"). */
 function shortName(d: Destination, reach: Reach): string {
-  if (d.kind === "form") {
-    const l = reach.lists.get(d.list);
-    return (d.item ? l?.one : d.type ? l?.kinds.get(d.type) : l?.name) ?? "Toevoegen";
-  }
+  if (d.kind === "form") return reach.forms.get(d.form)?.name ?? "Loggen";
+  if (d.kind === "item") return reach.lists.get(d.list)?.one ?? "Toevoegen";
   return destinationLabel(d, reach);
 }
 
-/** Een bestemming kiezen: wat (overzicht, agenda, project, lijst, formulier), welk, en bij een formulier eventueel tekst. */
+/** Een bestemming kiezen: wat (overzicht, lijst, formulier, nieuw item), welk, en bij loggen of toevoegen eventueel tekst. */
 export function DestinationPicker({
   value,
   onChange,
@@ -65,18 +71,21 @@ export function DestinationPicker({
   none?: string;
 }) {
   const kind = value?.kind ?? "";
+  const items = choices.lists.filter((l) => l.one);
+  const text = value && (value.kind === "form" || value.kind === "item") ? value.text : undefined;
+  const withText = (t?: string) => (t ? { text: t } : {});
   const pick = (k: string) => {
     if (!k) return onChange(null);
-    const first = choices.lists[0];
     const next: Destination | null =
       k === "board"
         ? choices.boards[0] && { kind: "board", board: choices.boards[0].id }
-        : first && { kind: k as "list" | "form", list: first.id };
+        : k === "form"
+          ? choices.forms[0] && { kind: "form", form: choices.forms[0].id }
+          : k === "item"
+            ? items[0] && { kind: "item", list: items[0].id }
+            : choices.lists[0] && { kind: "list", list: choices.lists[0].id };
     onChange(next ?? null);
   };
-  const list = value && "list" in value ? choices.lists.find((l) => l.id === value.list) : undefined;
-  // Wat het formulier doet: loggen (met een soort) of een item toevoegen.
-  const action = value?.kind === "form" ? (value.item ? "item" : (value.type ?? "")) : "";
   return (
     <div className="field-row">
       <label className="field">
@@ -102,11 +111,11 @@ export function DestinationPicker({
           </select>
         </label>
       )}
-      {(value?.kind === "list" || value?.kind === "form") && (
+      {(value?.kind === "list" || value?.kind === "item") && (
         <label className="field">
           <span className="label">Lijst</span>
-          <select value={value.list} onChange={(e) => onChange(value.kind === "form" ? { kind: "form", list: e.target.value, ...(value.text ? { text: value.text } : {}) } : { kind: "list", list: e.target.value })}>
-            {choices.lists.map((l) => (
+          <select value={value.list} onChange={(e) => onChange(value.kind === "item" ? { kind: "item", list: e.target.value, ...withText(text) } : { kind: "list", list: e.target.value })}>
+            {(value.kind === "item" ? items : choices.lists).map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
               </option>
@@ -114,28 +123,19 @@ export function DestinationPicker({
           </select>
         </label>
       )}
-      {value?.kind === "form" && list && (
+      {value?.kind === "form" && (
         <label className="field">
-          <span className="label">Wat</span>
-          <select
-            value={action}
-            onChange={(e) => {
-              const v = e.target.value;
-              const { item: _t, type: _k, ...rest } = value;
-              onChange(v === "item" ? { ...rest, item: true } : v ? { ...rest, type: v } : rest);
-            }}
-          >
-            <option value="">Loggen</option>
-            {list.kinds.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
+          <span className="label">Formulier</span>
+          <select value={value.form} onChange={(e) => onChange({ kind: "form", form: e.target.value, ...withText(text) })}>
+            {choices.forms.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
               </option>
             ))}
-            {list.one && <option value="item">{list.one} toevoegen</option>}
           </select>
         </label>
       )}
-      {value?.kind === "form" && (
+      {(value?.kind === "form" || value?.kind === "item") && (
         <label className="field">
           <span className="label">Met tekst</span>
           <input value={value.text ?? ""} maxLength={120} placeholder="bv. pellets" onChange={(e) => onChange({ ...value, text: e.target.value || undefined })} />
@@ -188,9 +188,8 @@ export function AppCard() {
     if (await save({ ...settings, apps: settings.apps.filter((a) => a.id !== app.id) }, `${app.name} verwijderd`)) setEditing(null);
   }
 
-  // Een kasticket: een aankoop in een lijst die voorraad telt.
-  const stocks = choices.lists.filter((l) => l.stock);
-  const shareKey = settings.share.kind === "receipt" ? settings.share.list : "";
+  // Een kasticket: met een formulier dat koopt (Aankoop).
+  const shareKey = settings.share.kind === "receipt" ? settings.share.form : "";
 
   return (
     <section className="card">
@@ -291,17 +290,17 @@ export function AppCard() {
         </div>
 
         {/* Een kasticket leest de AI: deze keuze enkel als ze voor jou aan staat. */}
-        {ai && stocks.length > 0 && (
+        {ai && choices.receipts.length > 0 && (
           <label className="field">
             <span className="label">Gedeelde foto (Android)</span>
             <select
               value={shareKey}
-              onChange={(e) => save({ ...settings, share: e.target.value ? { kind: "receipt", list: e.target.value } : { kind: "ask" } }, "Bewaard")}
+              onChange={(e) => save({ ...settings, share: e.target.value ? { kind: "receipt", form: e.target.value } : { kind: "ask" } }, "Bewaard")}
             >
               <option value="">Telkens vragen</option>
-              {stocks.map((l) => (
-                <option key={l.id} value={l.id}>
-                  Kasticket lezen · {l.name}
+              {choices.receipts.map((f) => (
+                <option key={f.id} value={f.id}>
+                  Kasticket lezen · {f.name}
                 </option>
               ))}
             </select>

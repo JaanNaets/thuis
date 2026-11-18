@@ -5,14 +5,14 @@ import { useSession } from "../session";
 import { Avatar } from "./Controls";
 import { Icon } from "./Icon";
 import { Sheet } from "./Sheet";
-import { currentList, LINKS_PLACE, onLinks, placeIndex, placesOf, TagTree } from "./Sidebar";
+import { currentForm, currentList, FormTree, LINKS_PLACE, onLinks, placeIndex, placesOf, TagTree } from "./Sidebar";
 
 /**
  * Het menublad (gsm, achter de tab Menu; zie STIJLBOEK.md → Gsm): zoeken, je borden, onder Lijsten Verbanden en je
- * lijsten per tag, en jij, op de schil. Een tik op een rij of een nieuwe pagina sluit het blad.
+ * lijsten per tag, onder Formulieren je formulieren, en jij, op de schil. Een tik op een rij of een nieuwe pagina sluit het blad.
  */
 export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose: () => void; onSearch: () => void }) {
-  const { lists, tags, person, boards } = useSession();
+  const { lists, forms, tags, person, boards } = useSession();
   const { pathname } = useLocation();
   const places = placesOf(boards);
   const here = placeIndex(places, pathname);
@@ -48,6 +48,8 @@ export function MenuSheet({ open, onClose, onSearch }: { open: boolean; onClose:
           </NavLink>
         </nav>
         <TagTree lists={lists} tags={tags} current={currentList(pathname)} />
+        <p className="nav-section">Formulieren</p>
+        <FormTree forms={forms} current={currentForm(pathname)} />
         <Link to="/ik" className="menu-row menu-me">
           <Avatar member={person} />
           <span>Jouw gegevens</span>

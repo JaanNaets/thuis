@@ -1,16 +1,17 @@
-// Back-up (GET /me/backup) en terugzetten (POST /me/restore), zie shared/backup.ts. Enkel de lijsten die je beheert,
-// met wat erin staat; terugzetten maakt een nieuwe kopie waarin jij beheerder bent, en neemt foto's mee van items en
-// gebeurtenissen die nog bestaan en die je ziet.
+// Back-up (GET /me/backup) en terugzetten (POST /me/restore), zie shared/backup.ts. Enkel de lijsten en formulieren
+// die je beheert, met wat erin staat; terugzetten maakt een nieuwe kopie waarin jij beheerder bent, en neemt foto's mee
+// van items en gebeurtenissen die nog bestaan en die je ziet.
 
 import { Hono } from "hono";
 import { BACKUP_KIND, BACKUP_VERSION, parseBackup, planRestore, type Backup, type BackupLine } from "../../shared/backup";
 import { canManage } from "../../shared/model";
-import { ids, parseJson, seenLists, type ListRow } from "../access";
+import { ADJUST } from "../../shared/cells";
+import { ids, parseJson, seenAll, type ListRow } from "../access";
 import { photoKey } from "../media";
 import { rebuildEffects } from "../cells";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
-import { knownPeople, myLists } from "./lists";
+import { knownPeople, seenTags } from "../members";
 
 export const backup = new Hono<AppEnv>();
 
@@ -21,27 +22,32 @@ const chunks = <T,>(xs: T[], n = CHUNK) => Array.from({ length: Math.ceil(xs.len
 backup.get("/backup", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
-  const seen = await seenLists(db, me);
+  const seenBoth = await seenAll(db, me);
+  const seen = seenBoth.lists;
   const mine = [...seen].filter(([, role]) => canManage(role)).map(([id]) => id);
-  if (!mine.length) throw new ValidationError("Je beheert nog geen lijst.");
+  const mineForms = [...seenBoth.forms].filter(([, role]) => canManage(role)).map(([id]) => id);
+  if (!mine.length && !mineForms.length) throw new ValidationError("Je beheert nog geen lijst of formulier.");
   const L = ids(mine);
-  const [lists, links, kinds, items, events, lines, views, people, mirrors] = (await db.batch([
+  const F = ids(mineForms);
+  // Het logboek van je formulieren, en de Aanpassingen van items in je lijsten.
+  const logged = `(e.kind IN (SELECT value FROM json_each(?1))
+    OR (e.kind = '${ADJUST}' AND e.id IN (SELECT f.event_id FROM effects f JOIN items t ON t.id = f.item_id WHERE t.list_id IN (SELECT value FROM json_each(?2)))))`;
+  const [lists, links, kinds, formLinks, items, events, lines, views, people, mirrors] = (await db.batch([
     db.prepare("SELECT * FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT l.list_id, t.id, t.name, t.color FROM list_tag_links l JOIN list_tags t ON t.id = l.tag_id WHERE l.list_id IN (SELECT value FROM json_each(?))").bind(L),
-    db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
+    db.prepare("SELECT * FROM kinds WHERE id IN (SELECT value FROM json_each(?))").bind(F),
+    db.prepare("SELECT l.form_id, t.id, t.name, t.color FROM form_tag_links l JOIN list_tags t ON t.id = l.tag_id WHERE l.form_id IN (SELECT value FROM json_each(?))").bind(F),
     db.prepare("SELECT id, list_id, name, data, part_of, archived, photo_version, mirror_id, mirror_of FROM items WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
-    db.prepare("SELECT * FROM events WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
-    db
-      .prepare(
-        `SELECT l.* FROM lines l JOIN events e ON e.id = l.event_id WHERE e.list_id IN (SELECT value FROM json_each(?)) ORDER BY l.event_id, l.position`,
-      )
-      .bind(L),
+    db.prepare(`SELECT e.* FROM events e WHERE ${logged}`).bind(F, L),
+    db.prepare(`SELECT l.* FROM lines l JOIN events e ON e.id = l.event_id WHERE ${logged} ORDER BY l.event_id, l.position`).bind(F, L),
     db.prepare("SELECT * FROM saved_views WHERE list_id IN (SELECT value FROM json_each(?)) AND (shared = 1 OR owner_id = ?)").bind(L, me),
     db
       .prepare(
-        `SELECT DISTINCT p.id, p.name, p.email, p.color FROM people p JOIN list_people lp ON lp.person_id = p.id WHERE lp.list_id IN (SELECT value FROM json_each(?))`,
+        `SELECT DISTINCT p.id, p.name, p.email, p.color FROM people p
+         WHERE p.id IN (SELECT person_id FROM list_people WHERE list_id IN (SELECT value FROM json_each(?1)))
+            OR p.id IN (SELECT person_id FROM form_people WHERE form_id IN (SELECT value FROM json_each(?2)))`,
       )
-      .bind(L),
+      .bind(L, F),
     db.prepare("SELECT id, list_id, source_id, plan FROM mirrors WHERE list_id IN (SELECT value FROM json_each(?1)) AND source_id IN (SELECT value FROM json_each(?1))").bind(L),
   ])) as D1Result<Record<string, unknown>>[];
   const linesOf = new Map<string, BackupLine[]>();
@@ -68,9 +74,10 @@ backup.get("/backup", async (c) => {
   }
   const tags = new Map<string, { id: string; name: string; color: string | null }>();
   const tagIds = new Map<string, string[]>();
-  for (const l of links.results) {
+  for (const l of [...links.results, ...formLinks.results]) {
+    const owner = (l.list_id ?? l.form_id) as string;
     tags.set(l.id as string, { id: l.id as string, name: l.name as string, color: (l.color as string | null) ?? null });
-    tagIds.set(l.list_id as string, [...(tagIds.get(l.list_id as string) ?? []), l.id as string]);
+    tagIds.set(owner, [...(tagIds.get(owner) ?? []), l.id as string]);
   }
   const file: Backup = {
     kind: BACKUP_KIND,
@@ -94,16 +101,18 @@ backup.get("/backup", async (c) => {
     })),
     kinds: kinds.results.map((k) => ({
       id: k.id as string,
-      list_id: k.list_id as string,
       base: k.base as Backup["kinds"][number]["base"],
       name: k.name as string,
-      icon: k.icon as string,
+      icon: (k.icon as string | null) ?? null,
       fields: parseJson(k.fields as string, []),
       goal: (k.goal as number | null) ?? null,
       planned: k.planned === 1,
       parts: parseJson(k.parts as string | null, null),
       does: parseJson(k.does as string | null, []),
-      sort_order: (k.sort_order as number) ?? 0,
+      notify: parseJson(k.notify as string | null, null),
+      reads: k.reads === null || k.reads === undefined ? null : k.reads === 1,
+      archived: k.archived ? 1 : 0,
+      tag_ids: tagIds.get(k.id as string) ?? [],
     })),
     items: items.results.map((t) => ({
       id: t.id as string,
@@ -119,7 +128,6 @@ backup.get("/backup", async (c) => {
     mirrors: mirrors.results.map((m) => ({ id: m.id as string, list_id: m.list_id as string, source_id: m.source_id as string, plan: parseJson(m.plan as string, {}) })),
     events: events.results.map((e) => ({
       id: e.id as string,
-      list_id: e.list_id as string,
       kind: e.kind as string,
       base: e.base as Backup["events"][number]["base"],
       name: (e.name as string) ?? "",
@@ -159,7 +167,7 @@ backup.post("/restore", async (c) => {
   } catch (err) {
     throw new ValidationError((err as Error).message);
   }
-  const seen = await seenLists(db, me);
+  const { lists: seen, forms: seenForms } = await seenAll(db, me);
   const people = new Set((await knownPeople(db, me)).map((p) => p.id));
   // Items buiten de back-up die er nog zijn en die je ziet.
   const refs = [...new Set(file.events.flatMap((e) => (e.lines ?? []).flatMap((l) => (l.item_id ? [l.item_id] : []))))];
@@ -171,9 +179,18 @@ backup.post("/restore", async (c) => {
   const plan = planRestore(file, { newId: () => crypto.randomUUID(), me, people, seenItems });
 
   // Tags op naam: een tag die je al hebt, of een nieuwe.
-  const { tags } = await myLists(db, me);
+  const tags = await seenTags(db, me);
   const tagByName = new Map(tags.map((t) => [t.name.toLocaleLowerCase("nl"), t.id]));
   const st: D1PreparedStatement[] = [];
+  const tagOf = (name: string) => {
+    let tagId = tagByName.get(name.toLocaleLowerCase("nl"));
+    if (!tagId) {
+      tagId = crypto.randomUUID();
+      tagByName.set(name.toLocaleLowerCase("nl"), tagId);
+      st.push(db.prepare("INSERT INTO list_tags (id, name, created_by) VALUES (?, ?, ?)").bind(tagId, name, me));
+    }
+    return tagId;
+  };
   for (const l of plan.lists) {
     st.push(
       db
@@ -194,22 +211,31 @@ backup.post("/restore", async (c) => {
         ),
       db.prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(l.id, me),
     );
-    for (const name of l.tags) {
-      let tagId = tagByName.get(name.toLocaleLowerCase("nl"));
-      if (!tagId) {
-        tagId = crypto.randomUUID();
-        tagByName.set(name.toLocaleLowerCase("nl"), tagId);
-        st.push(db.prepare("INSERT INTO list_tags (id, name, created_by) VALUES (?, ?, ?)").bind(tagId, name, me));
-      }
-      st.push(db.prepare("INSERT INTO list_tag_links (list_id, tag_id) VALUES (?, ?)").bind(l.id, tagId));
-    }
+    for (const name of l.tags) st.push(db.prepare("INSERT INTO list_tag_links (list_id, tag_id) VALUES (?, ?)").bind(l.id, tagOf(name)));
   }
-  for (const k of plan.kinds)
+  for (const k of plan.kinds) {
     st.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.parts ? JSON.stringify(k.parts) : null, k.does.length ? JSON.stringify(k.does) : null, k.sort_order),
+        .prepare("INSERT INTO kinds (id, base, name, icon, fields, goal, planned, parts, does, notify, reads, archived, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(
+          k.id,
+          k.base,
+          k.name,
+          k.icon,
+          JSON.stringify(k.fields),
+          k.goal,
+          k.planned ? 1 : 0,
+          k.parts ? JSON.stringify(k.parts) : null,
+          k.does.length ? JSON.stringify(k.does) : null,
+          k.notify ? JSON.stringify(k.notify) : null,
+          k.reads === null ? null : k.reads ? 1 : 0,
+          k.archived,
+          me,
+        ),
+      db.prepare("INSERT INTO form_people (form_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(k.id, me),
     );
+    for (const name of k.tags) st.push(db.prepare("INSERT INTO form_tag_links (form_id, tag_id) VALUES (?, ?)").bind(k.id, tagOf(name)));
+  }
   // Eerst zonder "deel van" (dat wijst misschien naar een item dat later komt), daarna die verwijzing.
   for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));
   for (const t of plan.items)
@@ -223,10 +249,10 @@ backup.post("/restore", async (c) => {
     st.push(
       db
         .prepare(
-          `INSERT INTO events (id, list_id, kind, base, name, status, at, end_at, amount, paid_by, split, to_person, data, repeat, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO events (id, kind, base, name, status, at, end_at, amount, paid_by, split, to_person, data, repeat, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(e.id, e.list_id, e.kind, e.base, e.name, e.status, e.at, e.end_at, e.amount, e.paid_by, e.split ? JSON.stringify(e.split) : null, e.to_person, JSON.stringify(e.data), e.repeat ? JSON.stringify(e.repeat) : null, me),
+        .bind(e.id, e.kind, e.base, e.name, e.status, e.at, e.end_at, e.amount, e.paid_by, e.split ? JSON.stringify(e.split) : null, e.to_person, JSON.stringify(e.data), e.repeat ? JSON.stringify(e.repeat) : null, me),
     );
     e.lines.forEach((l, i) =>
       st.push(
@@ -250,8 +276,9 @@ backup.post("/restore", async (c) => {
   // Foto's van items en gebeurtenissen die nog bestaan en die je ziet.
   let photos = 0;
   const copy = async (kind: "item" | "event", oldId: string, newId: string, table: "items" | "events") => {
-    const row = await db.prepare(`SELECT list_id FROM ${table} WHERE id = ?`).bind(oldId).first<{ list_id: string }>();
-    if (!row || !seen.has(row.list_id)) return;
+    // Een item: als je zijn lijst ziet; een gebeurtenis: als je haar formulier ziet.
+    const row = await db.prepare(table === "items" ? "SELECT list_id AS of FROM items WHERE id = ?" : "SELECT kind AS of FROM events WHERE id = ?").bind(oldId).first<{ of: string }>();
+    if (!row || !(table === "items" ? seen.has(row.of) : seenForms.has(row.of))) return;
     const object = await c.env.FILES.get(photoKey(kind, oldId));
     if (!object) return;
     await c.env.FILES.put(photoKey(kind, newId), await object.arrayBuffer(), { httpMetadata: object.httpMetadata });
@@ -260,5 +287,5 @@ backup.post("/restore", async (c) => {
   };
   for (const t of plan.items) if (t.photo) await copy("item", t.old, t.id, "items");
   for (const e of plan.events) if (e.photo) await copy("event", e.old, e.id, "events");
-  return c.json({ lists: plan.lists.length, items: plan.items.length, events: plan.events.length, photos });
+  return c.json({ lists: plan.lists.length, forms: plan.kinds.length, items: plan.items.length, events: plan.events.length, photos });
 });

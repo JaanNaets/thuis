@@ -10,7 +10,8 @@ import { formatDuration } from "../shared/fields";
 import { canEdit, eventTitle, type Role } from "../shared/model";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
 import { lineAllowed } from "../shared/rights";
-import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toItem, type EventRowDb, type ListRow, type ItemRowDb } from "./access";
+import { ids, kindOf, listRoles, parseJson, seenAll, seenForms, toEvent, toList, toItem, type EventRowDb, type ListRow, type ItemRowDb } from "./access";
+import { eventRole } from "./events-view";
 import { ensureEffects, rebuildEffects, withCells } from "./cells";
 import { syncAll } from "./mirrors";
 import { notify } from "./push";
@@ -55,12 +56,13 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
   for (const row of results) {
     const e = toEvent(row);
     if (!e.repeat) continue;
-    const seen = await seenLists(db, e.created_by);
+    const seen = await seenAll(db, e.created_by);
     const { results: lines } = await db
       .prepare("SELECT l.*, t.list_id AS item_list FROM lines l LEFT JOIN items t ON t.id = l.item_id WHERE l.event_id = ? ORDER BY l.position")
       .bind(e.id)
       .all<{ id: string; role: "in" | "uit" | "voor" | "bij"; item_id: string | null; item_list: string | null }>();
-    const allowed = canEdit(seen.get(e.list_id)) && lines.every((l) => !l.item_id || lineAllowed(l.role, l.item_list ? (seen.get(l.item_list) ?? null) : null));
+    const allowed =
+      canEdit(eventRole(seen, e.kind, lines.map((l) => l.item_list))) && lines.every((l) => !l.item_id || lineAllowed(l.role, l.item_list ? (seen.lists.get(l.item_list) ?? null) : null));
     if (!allowed) {
       await db.prepare("UPDATE events SET repeat = NULL WHERE id = ?").bind(e.id).run();
       continue;
@@ -74,8 +76,8 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
       statements.push(
         db
           .prepare(
-            `INSERT INTO events (id, list_id, kind, base, name, status, at, amount, paid_by, split, to_person, data, created_by)
-             SELECT ?, list_id, kind, base, name, 'gebeurd', ?, amount, paid_by, split, to_person, data, created_by FROM events WHERE id = ?`,
+            `INSERT INTO events (id, kind, base, name, status, at, amount, paid_by, split, to_person, data, created_by)
+             SELECT ?, kind, base, name, 'gebeurd', ?, amount, paid_by, split, to_person, data, created_by FROM events WHERE id = ?`,
           )
           .bind(copy, day + e.at.slice(10), e.id),
         db
@@ -133,7 +135,7 @@ async function collectItems(db: D1Database, people: Map<string, string[]>, pick:
   return due;
 }
 
-/** Geplande gebeurtenissen die nu vallen: naar wie ze logde en wie erin staat, als die de lijst nog ziet. */
+/** Geplande gebeurtenissen die nu vallen: naar wie ze logde en wie erin staat, als die het formulier nog ziet. */
 async function collectPlanned(db: D1Database, people: Map<string, string[]>, due: Map<string, Due[]>, where: string, binds: unknown[]) {
   const { results } = await db.prepare(`SELECT * FROM events WHERE status = 'gepland' AND ${where}`).bind(...binds).all<EventRowDb>();
   for (const e of results.map(toEvent)) {
@@ -146,8 +148,8 @@ async function collectPlanned(db: D1Database, people: Map<string, string[]>, due
     const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
     const wanted = new Set([e.created_by, e.paid_by, e.to_person, ...(e.split ?? []).map((s) => s.person_id)].filter((x): x is string => Boolean(x)));
     for (const person of wanted) {
-      if (!people.has(person) || isMuted(people.get(person)!, e.list_id)) continue;
-      const role: Role | undefined = (await seenLists(db, person, e.list_id)).get(e.list_id);
+      if (!people.has(person) || isMuted(people.get(person)!, e.kind)) continue;
+      const role: Role | undefined = (await seenForms(db, person, e.kind)).get(e.kind);
       if (!role) continue;
       const time = e.at.length > 10 ? ` om ${e.at.slice(11, 16)}` : "";
       due.set(person, [...(due.get(person) ?? []), { title, body: `Gepland: vandaag${time}`, url: `/gebeurtenissen/${e.id}`, tag: `plan:${e.id}:${e.at}` }]);
@@ -202,7 +204,7 @@ export async function sendTimerGoals(db: D1Database, from: string, to: string): 
   for (const r of results) {
     const reached = addMinutes(r.at, r.goal);
     if (!(reached >= from && reached < to)) continue;
-    if (!(await seenLists(db, r.created_by, r.list_id)).has(r.list_id)) continue;
+    if (!(await seenForms(db, r.created_by, r.kind)).has(r.kind)) continue;
     sent += await notify(db, r.created_by, { title: `${r.kind_name}: ${formatDuration(r.goal)} bereikt`, body: r.name || r.kind_name, url: `/gebeurtenissen/${r.id}`, tag: `timer-${r.id}` });
   }
   return sent;

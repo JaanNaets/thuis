@@ -67,7 +67,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
   }, [pathname]);
 
   const session = useMemo(
-    () => ({ person: me.person, lists: me.lists, tags: me.tags, boards: me.boards ?? [], ai: me.ai !== false, hidden: me.hidden ?? NO_HIDDEN, reloadMe, openSearch: () => openPalette("search") }),
+    () => ({ person: me.person, lists: me.lists, forms: me.forms ?? [], tags: me.tags, boards: me.boards ?? [], ai: me.ai !== false, hidden: me.hidden ?? NO_HIDDEN, reloadMe, openSearch: () => openPalette("search") }),
     [me, reloadMe],
   );
 

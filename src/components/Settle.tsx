@@ -1,5 +1,6 @@
-// Terugbetaald (een rij van wie moet wie, zie shared/blocks.ts → saldo): logt een overdracht in een lijst waar beiden in
-// staan, met een betaal-QR als jij moet en wie krijgt een rekeningnummer gaf.
+// Terugbetaald (een rij van wie moet wie, zie shared/blocks.ts → saldo): logt een overdracht met het formulier dat het
+// saldo bijhoudt in een lijst waar beiden in staan (POST /lists/:id/settle-form zoekt of maakt het), met een betaal-QR
+// als jij moet en wie krijgt een rekeningnummer gaf.
 
 import { lazy, Suspense, useState, type FormEvent } from "react";
 import { brusselsNow } from "../../shared/model";
@@ -26,8 +27,9 @@ export function SettleForm({ settle, onDone }: { settle: Settle; onDone: () => v
     setBusy(true);
     setError(undefined);
     try {
-      await api.post(`/lists/${settle.list}/events`, {
-        kind: "overdracht",
+      const form = await api.post<{ id: string }>(`/lists/${settle.list}/settle-form`, {});
+      await api.post(`/forms/${form.id}/events`, {
+        kind: form.id,
         name: `${settle.from.name} aan ${settle.to.name}`,
         status: "gebeurd",
         at: brusselsNow().slice(0, 10),

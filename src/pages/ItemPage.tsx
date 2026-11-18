@@ -25,8 +25,6 @@ type Entry = {
   base: keyof typeof BASES;
   status: string;
   at: string;
-  list_id: string;
-  list: string | null;
   partial: boolean;
   name: string;
   role: "in" | "uit" | "voor" | "bij";
@@ -177,6 +175,7 @@ export function ItemPage() {
                             <span>
                               {[
                                 dayLabel(e.at.slice(0, 10)),
+                                e.name ? e.kind_name : null,
                                 e.store,
                                 e.amount !== null ? `${ROLE_WORD[e.role]} ${formatAmount(e.amount, e.unit ?? data.stock?.unit ?? null)}` : null,
                                 e.unit_price !== null && data.stock?.unit ? `${formatCents(e.unit_price)} per ${data.stock.unit}` : null,

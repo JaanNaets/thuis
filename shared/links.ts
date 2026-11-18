@@ -70,16 +70,15 @@ export const LIST_LINKS = {
   fields: true, // zie FIELD_LINKS
   stock: true, // telt voorraad (Voorraad, Bijna op)
   ledger: true, // een saldo per persoon (Wie moet wie)
-  notify: true, // melding bij iets nieuws
-  read_photo: false, // welke formulieren een foto lezen: verbindt niets
+  notify: false, // niet meer gebruikt: een melding hoort bij een formulier (KIND_LINKS.notify)
+  read_photo: false, // een item van een foto: verbindt niets
   archived: false, // een gearchiveerde lijst staat niet op de kaart
   created_at: false,
 } as const satisfies Record<keyof List, boolean>;
 
-/** Eigen soorten. */
+/** Formulieren. */
 export const KIND_LINKS = {
   id: false,
-  list_id: true, // een andere lijst kan met deze soort loggen
   base: false, // enkel het vertrekpunt: wat een formulier vraagt en doet, staat in parts en does
   name: false,
   icon: false,
@@ -88,14 +87,17 @@ export const KIND_LINKS = {
   planned: false, // enkel hoe een nieuwe gebeurtenis begint; de status zelf staat op de gebeurtenis (EVENT_LINKS.status)
   parts: true, // geld (Geld, Wie moet wie), een einde (Loopt nu), groepen lijnen uit een lijst
   does: true, // het formulier vult kolommen van een (andere) lijst in (shared/cells.ts)
-  sort_order: false,
+  notify: true, // een melding bij iets nieuws
+  reads: false, // een foto lezen: verbindt niets
+  archived: false,
+  created_by: false,
+  created_at: false,
 } as const satisfies Record<keyof Kind, boolean>;
 
 /** Gebeurtenissen (wat er gelogd is). */
 export const EVENT_LINKS = {
   id: false,
-  list_id: true, // waar ze in het logboek staat
-  kind: true, // een soort van een andere lijst
+  kind: true, // het formulier (en zijn logboek): verbindt de lijsten die het raakt
   base: false, // enkel het vertrekpunt van het formulier (zie KIND_LINKS)
   name: false,
   status: true, // gepland: Te doen, Agenda en een herinnering op de dag
@@ -193,10 +195,9 @@ export const LINK_ITEMS = 12;
 /** Een lijst zoals de kaart ze nodig heeft (enkel lijsten die de lezer ziet, niet gearchiveerd). */
 export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & Partial<Pick<List, "ledger">> & { role: Role };
 /** Een eigen soort (van een lijst die de lezer ziet, of die een gebeurtenis gebruikt die hij ziet). */
-export type LinkKindDef = Pick<Kind, "id" | "list_id" | "base" | "name" | "fields" | "goal"> & Partial<Pick<Kind, "does" | "parts">>;
-/** Wat er gelogd is, per lijst en soort: tellingen, enkel van gebeurtenissen in lijsten die de lezer ziet. */
+export type LinkKindDef = Pick<Kind, "id" | "base" | "name" | "fields" | "goal"> & Partial<Pick<Kind, "does" | "parts" | "notify">>;
+/** Wat er gelogd is, per formulier: tellingen, enkel van gebeurtenissen met formulieren die de lezer ziet. */
 export type LogStat = {
-  list: string;
   kind: string;
   base: Base;
   events: number;
@@ -212,19 +213,17 @@ export type LogStat = {
   food: number;
   last: string | null;
 };
-/** Lijnen van gebeurtenissen in `list` naar items in `to` (beide gezien), per soort en rol: in hoeveel gebeurtenissen. */
-export type LineStat = { list: string; kind: string; base: Base; role: LineRole; to: string; events: number; last: string | null };
-/** Hoeveel gebeurtenissen in `list` lijnen hebben naar items in `to`, in totaal (een gebeurtenis telt één keer). */
-export type LinePair = { list: string; to: string; events: number; last: string | null };
-/** Hoeveel gebeurtenissen in `list` een lijn hebben naar het item `item` (in `to`, beide gezien). */
-export type LineItem = { list: string; to: string; item: string; name: string; events: number };
+/** Lijnen van gebeurtenissen met formulier `kind` naar items in `to` (een lijst die de lezer ziet), per rol. */
+export type LineStat = { kind: string; base: Base; role: LineRole; to: string; events: number; last: string | null };
+/** Hoeveel gebeurtenissen met formulier `kind` een lijn hebben naar het item `item` (in `to`). */
+export type LineItem = { kind: string; to: string; item: string; name: string; events: number };
 /** Een blok op een van je overzichten dat een lijst toont. */
 export type BoardUse = { board: string; list: string; block: BlockKind };
 
 /** Een koppeling (zie shared/transfer.ts): `list` haalt blijvend items uit `source`, met de velden die meelopen. */
 export type MirrorUse = { list: string; source: string; fields: string[] };
 
-export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; items?: LineItem[]; boards: BoardUse[]; mirrors?: MirrorUse[] };
+export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; items?: LineItem[]; boards: BoardUse[]; mirrors?: MirrorUse[] };
 
 /** Verbanden en wat een lijst met haar eigen items doet (dat is geen lijn op de kaart). */
 export type LinkResult = { links: Link[]; own: Record<string, string[]> };
@@ -299,71 +298,81 @@ export function buildLinks(input: LinkInput): LinkResult {
     fieldLinks(list.id, list.fields, "");
     if (list.stock) add("view", list.id, viewNode("voorraad"), list.stock.min ? "Telt voorraad, met bijna op" : "Telt voorraad");
     if (list.ledger) add("view", list.id, viewNode("balans"), "Houdt een saldo per persoon bij");
-    if (list.notify) add("view", list.id, viewNode("meldingen"), list.notify.to === "all" ? "Iets nieuws: een melding aan iedereen bij de lijst" : "Iets nieuws: een melding aan wie erin staat");
   }
   // Een koppeling: de doellijst hangt van de bron af, zoals een verwijzing.
   for (const m of input.mirrors ?? []) {
     if (lists.has(m.list) && lists.has(m.source)) add("ref", m.list, m.source, m.fields.length ? `Gekoppeld: ${m.fields.join(", ")} lopen mee` : "Gekoppeld: de namen lopen mee");
   }
+  // Een formulier hoort bij geen lijst: het verbindt de lijsten die het raakt (wat het uitdrukkelijk invult, en waar
+  // zijn lijnen naartoe gingen). De eerste is waar het "vandaan" komt op de kaart; raakt het er één, dan is het een
+  // notitie bij die lijst.
+  const touched = new Map<string, string[]>();
+  const touch = (kind: string, list: string) => {
+    if (!lists.has(list)) return;
+    const had = touched.get(kind) ?? [];
+    if (!had.includes(list)) touched.set(kind, [...had, list]);
+  };
   for (const k of input.kinds) {
-    if (!lists.has(k.list_id)) continue;
-    fieldLinks(k.list_id, k.fields, `${k.name}: `);
-    if (k.goal) add("view", k.list_id, viewNode("meldingen"), `${k.name}: een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
+    for (const g of k.parts?.groups ?? []) if (g.list) touch(k.id, g.list);
+    for (const h of k.does ?? []) if (h.list) touch(k.id, h.list);
+  }
+  for (const s of input.lines) touch(s.kind, s.to);
+  const formLists = (kind: string) => touched.get(kind) ?? [];
+  const viaForm = (kind: string, to: string, text: string, count: number | null = null, last: string | null = null) => {
+    const from = formLists(kind)[0];
+    if (!from || from === to) ownNote(to, text);
+    else add("log", from, to, text, count, last);
+  };
+  const toView = (kind: string, view: ViewKey, text: string, count: number | null = null, last: string | null = null) => {
+    for (const l of formLists(kind)) add("view", l, viewNode(view), text, count, last);
+  };
+
+  for (const k of input.kinds) {
+    const home = formLists(k.id)[0];
+    if (home) fieldLinks(home, k.fields, `${k.name}: `);
+    if (k.goal) toView(k.id, "meldingen", `${k.name}: een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
+    if (k.notify) toView(k.id, "meldingen", k.notify.to === "all" ? `${k.name}: een melding aan iedereen bij het formulier` : `${k.name}: een melding aan wie erin staat`);
     // Een groep lijnen uit één lijst (Ruimte uit Huis).
     for (const g of k.parts?.groups ?? []) {
-      if (g.list && g.list !== k.list_id && lists.has(g.list)) add("log", k.list_id, g.list, `${k.name}: ${g.label} uit deze lijst`);
+      if (g.list && lists.has(g.list)) viaForm(k.id, g.list, `${k.name}: ${g.label} uit deze lijst`);
     }
     // Wat het formulier invult: een kolom van de items van een lijst (de voorraad van elke lijst staat bij de lijnen).
     for (const h of k.does ?? []) {
       const to = h.list ? lists.get(h.list) : undefined;
       if (!to) continue;
       if (h.rows.from !== "lines") {
-        const text = `${k.name} houdt het saldo bij in ${to.name}`;
-        if (to.id === k.list_id) ownNote(k.list_id, text);
-        else add("log", k.list_id, to.id, text);
+        viaForm(k.id, to.id, `${k.name} houdt het saldo bij in ${to.name}`);
         continue;
       }
       const column = h.field === STOCK ? "de voorraad" : (to.fields.find((f) => f.key === h.field)?.label ?? h.field);
-      const text = `${k.name} ${h.op === "zet" ? "zet" : h.op === "bij" ? "telt bij" : "telt af van"} ${column}`;
-      if (to.id === k.list_id) ownNote(k.list_id, text);
-      else add("log", k.list_id, to.id, text);
+      viaForm(k.id, to.id, `${k.name} ${h.op === "zet" ? "zet" : h.op === "bij" ? "telt bij" : "telt af van"} ${column}`);
     }
   }
 
-  // Wat er gelogd is.
+  // Wat er gelogd is: bij de lijsten die het formulier raakt.
   for (const s of input.log) {
-    if (!lists.has(s.list)) continue;
     const name = kindName(kinds, s.kind, s.base);
-    const owner = kinds.get(s.kind)?.list_id;
-    if (owner && owner !== s.list && lists.has(owner)) add("log", s.list, owner, `Logt met het formulier ${name}`, s.events, s.last);
-    if (s.money) add("view", s.list, viewNode("geld"), `${name}: ${times(s.money)} met een bedrag`, s.money, s.last);
-    if (s.shared) add("view", s.list, viewNode("balans"), `${name}: ${times(s.shared)} gedeeld`, s.shared, s.last);
-    if (s.food) add("view", s.list, viewNode("eten"), `${name}: ${times(s.food)} gegeten`, s.food, s.last);
+    if (s.money) toView(s.kind, "geld", `${name}: ${times(s.money)} met een bedrag`, s.money, s.last);
+    if (s.shared) toView(s.kind, "balans", `${name}: ${times(s.shared)} gedeeld`, s.shared, s.last);
+    if (s.food) toView(s.kind, "eten", `${name}: ${times(s.food)} gegeten`, s.food, s.last);
     if (s.planned) {
-      add("view", s.list, viewNode("tedoen"), `${name}: ${s.planned} gepland`, s.planned, null);
-      add("view", s.list, viewNode("agenda"), `${name}: ${s.planned} gepland`, s.planned, null);
-      add("view", s.list, viewNode("herinneringen"), `${name}: om 7 u op de dag zelf`);
+      toView(s.kind, "tedoen", `${name}: ${s.planned} gepland`, s.planned, null);
+      toView(s.kind, "agenda", `${name}: ${s.planned} gepland`, s.planned, null);
+      toView(s.kind, "herinneringen", `${name}: om 7 u op de dag zelf`);
     }
-    if (s.repeats) add("view", s.list, viewNode("herhalen"), `${name}: ${s.repeats} ${s.repeats === 1 ? "herhaalt" : "herhalen"}`, s.repeats, null);
-    if (s.running) add("view", s.list, viewNode("timers"), `${name}: ${s.running} ${s.running === 1 ? "loopt" : "lopen"} nu`, s.running, null);
+    if (s.repeats) toView(s.kind, "herhalen", `${name}: ${s.repeats} ${s.repeats === 1 ? "herhaalt" : "herhalen"}`, s.repeats, null);
+    if (s.running) toView(s.kind, "timers", `${name}: ${s.running} ${s.running === 1 ? "loopt" : "lopen"} nu`, s.running, null);
   }
   for (const s of input.lines) {
-    if (!lists.has(s.list) || !lists.has(s.to)) continue;
+    if (!lists.has(s.to)) continue;
     const text = lineText(kindName(kinds, s.kind, s.base), s.role, lists.get(s.to)!);
-    if (s.list === s.to) ownNote(s.list, `${text}, ${times(s.events)}`);
-    else add("log", s.list, s.to, text);
-  }
-  for (const p of input.pairs) {
-    if (p.list === p.to || !lists.has(p.list) || !lists.has(p.to)) continue;
-    const link = byKey.get(`log ${p.list} ${p.to}`);
-    if (link) {
-      // Het aantal gebeurtenissen met lijnen (en die met de soort van daar, als dat er meer zijn).
-      link.count = Math.max(link.count ?? 0, p.events);
-      link.last = later(link.last, p.last);
-    }
+    const from = formLists(s.kind)[0];
+    if (!from || from === s.to) ownNote(s.to, `${text}, ${times(s.events)}`);
+    else add("log", from, s.to, text, s.events, s.last);
   }
   for (const t of input.items ?? []) {
-    const link = t.list !== t.to ? byKey.get(`log ${t.list} ${t.to}`) : undefined;
+    const from = formLists(t.kind)[0];
+    const link = from && from !== t.to ? byKey.get(`log ${from} ${t.to}`) : undefined;
     if (link) (link.items ??= []).push({ name: t.name, count: t.events });
   }
   for (const link of byKey.values()) {
@@ -617,7 +626,7 @@ export function searchLinks(
       key: `soort ${k.id}`,
       select: k.list,
       title: k.name,
-      detail: `Formulier van ${names.get(k.list)}`,
+      detail: `Formulier bij ${names.get(k.list)}`,
       nodes: [...new Set([k.list, ...ends])],
       links: used.map(linkKey),
     });

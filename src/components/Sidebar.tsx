@@ -7,6 +7,7 @@ import { groupByTag, listIcon, listTone } from "../lists";
 import { Link, NavLink } from "../router";
 import { useSession } from "../session";
 import { Icon, type IconName } from "./Icon";
+import { BASE_TONES } from "./Log";
 
 /** ⌘K op een Mac, Ctrl K elders. */
 export const SEARCH_SHORTCUT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘K" : "Ctrl K";
@@ -36,14 +37,16 @@ export function placeIndex(places: Place[], pathname: string): number {
 
 /** De lijst die je nu bekijkt (uit het adres). */
 export const currentList = (pathname: string) => pathname.match(/^\/lijsten\/([0-9a-f-]{36})/)?.[1] ?? null;
+/** Het formulier dat je nu bekijkt (uit het adres). */
+export const currentForm = (pathname: string) => pathname.match(/^\/formulieren\/([\w-]{3,})/)?.[1] ?? null;
 
 /**
- * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, je borden, en onder Lijsten Verbanden en je
- * lijsten per tag (een tag klapt open). Smal (enkel iconen) blijft van de lijsten enkel Verbanden over, onder een
- * haarlijn. Jouw gegevens: je letter rechtsboven in de paneelbalk.
+ * Zijbalk op het grijze canvas (zie STIJLBOEK.md → Zijbalk): de app, zoeken, je borden, onder Lijsten Verbanden en je
+ * lijsten per tag (een tag klapt open), en onder Formulieren je formulieren. Smal (enkel iconen) blijft van de lijsten
+ * enkel Verbanden over, onder een haarlijn. Jouw gegevens: je letter rechtsboven in de paneelbalk.
  */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
-  const { lists, tags, boards } = useSession();
+  const { lists, forms, tags, boards } = useSession();
   const { pathname } = useLocation();
   const current = currentList(pathname);
   const places = placesOf(boards);
@@ -83,6 +86,8 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           </NavLink>
         </nav>
         <TagTree lists={lists} tags={tags} current={current} />
+        <p className="nav-section">Formulieren</p>
+        <FormTree forms={forms} current={currentForm(pathname)} />
       </div>
     </aside>
   );
@@ -155,6 +160,35 @@ export function TagTree({ lists, tags, current }: { lists: ReturnType<typeof use
           <Link to="/lijsten/nieuw" className="place-add">
             <Icon name="plus" size={14} />
             <span>Lijst</span>
+          </Link>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/** Je formulieren (niet gearchiveerd, behalve dat je nu bekijkt), op naam, met + Formulier. */
+export function FormTree({ forms, current }: { forms: ReturnType<typeof useSession>["forms"]; current: string | null }) {
+  const live = forms.filter((f) => !f.archived || f.id === current);
+  return (
+    <div className="sidebar-places">
+      <ul className="place-tree">
+        {live.map((f) => (
+          <li key={f.id}>
+            <div className="place-row">
+              <Link to={`/formulieren/${f.id}`} className="place-link root" aria-current={current === f.id ? "page" : undefined}>
+                <span className={`place-icon tone-${BASE_TONES[f.base]}`}>
+                  <Icon name={f.icon as IconName} size={15} />
+                </span>
+                <span className="place-name">{f.name}</span>
+              </Link>
+            </div>
+          </li>
+        ))}
+        <li>
+          <Link to="/formulieren/nieuw" className="place-add">
+            <Icon name="plus" size={14} />
+            <span>Formulier</span>
           </Link>
         </li>
       </ul>

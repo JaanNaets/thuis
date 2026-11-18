@@ -2,6 +2,8 @@ import { redirect, type RouteObject } from "react-router";
 import { App } from "./App";
 import { EventFormPage } from "./pages/EventForm";
 import { EventPage } from "./pages/EventPage";
+import { FormPage } from "./pages/FormPage";
+import { FormNew, FormSettings } from "./pages/FormSettings";
 import { Home } from "./pages/Home";
 import { FromListPage } from "./pages/FromListPage";
 import { ImportPage } from "./pages/ImportPage";
@@ -30,7 +32,23 @@ export const routes: RouteObject[] = [
       { path: "lijsten/:id", element: <ListPage /> },
       { path: "lijsten/:id/instellingen", element: <ListSettings /> },
       { path: "lijsten/:id/nieuw", element: <ItemFormPage /> },
-      { path: "lijsten/:id/loggen", element: <EventFormPage /> },
+      // Loggen hoort bij een formulier, niet meer bij een lijst: het oude adres stuurt door (`soort` → `formulier`, de
+      // lijst als waar je vandaan komt).
+      {
+        path: "lijsten/:id/loggen",
+        loader: ({ params, request }) => {
+          const q = new URL(request.url).searchParams;
+          const soort = q.get("soort");
+          q.delete("soort");
+          if (soort) q.set("formulier", soort);
+          if (!q.has("nieuw")) q.set("nieuw", params.id!);
+          return redirect(`/loggen?${q}`);
+        },
+      },
+      { path: "loggen", element: <EventFormPage /> },
+      { path: "formulieren/nieuw", element: <FormNew /> },
+      { path: "formulieren/:id", element: <FormPage /> },
+      { path: "formulieren/:id/instellingen", element: <FormSettings /> },
       { path: "lijsten/:id/importeren", element: <ImportPage /> },
       { path: "lijsten/:id/uit-lijst", element: <FromListPage /> },
       { path: "lijsten/:id/sticker", element: <StickerPage /> },

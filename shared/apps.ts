@@ -1,15 +1,17 @@
 // De app instellen (Jouw gegevens → App): waar ze opent (per toestel), meerdere apps op één toestel (elk een eigen
 // icoon op je beginscherm met een eigen naam, dat naar een eigen pagina gaat), de snelkoppelingen als je lang op het
-// icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, wat je stilzette, en welke
-// lijsten je niet in je menu of bij de + wil (een hulplijst zoals Winkels).
+// icoon drukt (Android), wat er met een gedeelde foto gebeurt, of de AI voor jou mag lezen, welke formulieren je
+// stilzette, en welke lijsten je niet in je menu of bij de + wil (een hulplijst zoals Winkels).
 // Alles verwijst met ids; wat je niet (meer) kan bereiken, valt weg (`cleanAppSettings`, `keepReachable`).
 
-/** Waar iets naartoe gaat: een overzicht (je borden: Geld, Agenda, …), een lijst of een formulier. */
+/** Waar iets naartoe gaat: een overzicht (je borden: Geld, Agenda, …), een lijst, loggen met een formulier of een nieuw item. */
 export type Destination =
   | { kind: "board"; board: string }
   | { kind: "list"; list: string }
-  /** Loggen in een lijst (eventueel met een soort en tekst), of met `item` een item toevoegen. */
-  | { kind: "form"; list: string; type?: string; item?: boolean; text?: string };
+  /** Loggen met een formulier (met tekst). `list`: enkel van vroeger, om het formulier terug te vinden (`legacyForm`). */
+  | { kind: "form"; form: string; list?: string; text?: string }
+  /** Een item toevoegen in een lijst (met tekst). */
+  | { kind: "item"; list: string; text?: string };
 
 export type DestinationKind = Destination["kind"];
 
@@ -17,13 +19,14 @@ export const DESTINATION_KINDS = {
   board: "Overzicht",
   list: "Lijst",
   form: "Formulier",
+  item: "Nieuw item",
 } as const satisfies Record<DestinationKind, string>;
 
 export type AppDef = { id: string; name: string; to: Destination };
 export type Shortcut = { name: string; to: Destination };
 
-/** Een gedeelde foto: telkens vragen, of meteen als kasticket in een lijst. */
-export type ShareChoice = { kind: "ask" } | { kind: "receipt"; list: string };
+/** Een gedeelde foto: telkens vragen, of meteen als kasticket met een formulier (`list`: enkel van vroeger). */
+export type ShareChoice = { kind: "ask" } | { kind: "receipt"; form: string; list?: string };
 
 export type AppSettings = {
   apps: AppDef[];
@@ -32,7 +35,7 @@ export type AppSettings = {
   share: ShareChoice;
   /** Mag de AI voor jou lezen (✨)? Uit: geen ✨-knoppen, en de server weigert elke AI-vraag van jou. */
   ai: boolean;
-  /** Lijsten of tags die je stilzette: geen melding bij iets nieuws daar. */
+  /** Formulieren of tags die je stilzette: geen melding bij iets nieuws daar. */
   muted: string[];
   /**
    * Lijsten die je verborg: niet in je menu, of niet bij de + (Toevoegen). In het menu ook tags: hun groep staat er dan
@@ -65,12 +68,12 @@ export function orderTags<T extends { id: string; name: string }>(tags: readonly
 export const shownIn = (hidden: Hidden | undefined, place: ListPlace, list: string) => !hidden?.[place].includes(list);
 
 /**
- * Waarom een lijst voor jou stil staat (geen melding bij iets nieuws): `"list"` als je de lijst zelf stilzette, de id
- * van een tag als het via die tag is (dan laat enkel de tag ze weer melden), of null.
+ * Waarom een formulier voor jou stil staat (geen melding bij iets nieuws): `"self"` als je het zelf stilzette, de id
+ * van een tag als het via die tag is (dan laat enkel de tag het weer melden), of null.
  */
-export function mutedBy(muted: readonly string[], list: { id: string; tags: readonly string[] }): "list" | string | null {
-  if (muted.includes(list.id)) return "list";
-  return list.tags.find((t) => muted.includes(t)) ?? null;
+export function mutedBy(muted: readonly string[], form: { id: string; tags: readonly string[] }): "self" | string | null {
+  if (muted.includes(form.id)) return "self";
+  return form.tags.find((t) => muted.includes(t)) ?? null;
 }
 
 /** Staat de AI aan in deze (bewaarde, nog niet nagekeken) instellingen? Enkel een uitdrukkelijk `false` zet ze uit. */
@@ -88,15 +91,17 @@ export function cleanDestination(raw: unknown): Destination | null {
       return id(o.board) ? { kind: "board", board: o.board as string } : null;
     case "list":
       return id(o.list) ? { kind: "list", list: o.list as string } : null;
-    case "form": {
-      if (!id(o.list)) return null;
+    case "item": {
       const t = text(o.text, 120);
-      return {
-        kind: "form",
-        list: o.list as string,
-        ...(o.item === true || o.thing === true ? { item: true } : id(o.type) ? { type: o.type as string } : {}),
-        ...(t ? { text: t } : {}),
-      };
+      return id(o.list) ? { kind: "item", list: o.list as string, ...(t ? { text: t } : {}) } : null;
+    }
+    case "form": {
+      const t = text(o.text, 120);
+      // Vroeger: een item toevoegen was een formulier met `item`, en loggen een lijst met een soort (`type`, leeg: de eerste).
+      if ((o.item === true || o.thing === true) && id(o.list)) return { kind: "item", list: o.list as string, ...(t ? { text: t } : {}) };
+      const form = id(o.form) ?? id(o.type) ?? (id(o.list) ? "" : null);
+      if (form === null) return null;
+      return { kind: "form", form, ...(id(o.list) && !id(o.form) ? { list: o.list as string } : {}), ...(t ? { text: t } : {}) };
     }
     default:
       return null;
@@ -130,7 +135,8 @@ export function cleanAppSettings(raw: unknown, newId: () => string = () => crypt
         .slice(0, MAX_SHORTCUTS)
     : null;
   const s = o.share && typeof o.share === "object" ? (o.share as Record<string, unknown>) : {};
-  const share: ShareChoice = s.kind === "receipt" && id(s.list) ? { kind: "receipt", list: s.list as string } : { kind: "ask" };
+  const share: ShareChoice =
+    s.kind === "receipt" && id(s.form) ? { kind: "receipt", form: s.form as string } : s.kind === "receipt" && id(s.list) ? { kind: "receipt", form: "aankoop", list: s.list as string } : { kind: "ask" };
   const muted = Array.isArray(o.muted) ? [...new Set(o.muted.map(id).filter((x): x is string => x !== null))].slice(0, MAX_MUTED) : [];
   const tagOrder = Array.isArray(o.tag_order) ? [...new Set(o.tag_order.map(id).filter((x): x is string => x !== null))].slice(0, MAX_HIDDEN) : [];
   return { apps, shortcuts, share, ai: aiAllowed(o), muted, hidden: cleanHidden(o.hidden), tag_order: tagOrder };
@@ -148,23 +154,45 @@ export function destinationPath(d: Destination): string {
       return boardPath(d.board);
     case "list":
       return `/lijsten/${d.list}`;
+    case "item": {
+      const query = d.text ? `?${new URLSearchParams({ tekst: d.text })}` : "";
+      return `/lijsten/${d.list}/nieuw${query}`;
+    }
     case "form": {
-      const q = new URLSearchParams();
-      if (d.type) q.set("soort", d.type);
+      const q = new URLSearchParams({ formulier: d.form });
       if (d.text) q.set("tekst", d.text);
-      const query = q.toString();
-      return `/lijsten/${d.list}/${d.item ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
+      // Van vroeger (een lijst met een vertrekpunt, nog niet omgezet): loggen vanuit die lijst.
+      if (d.list) q.set("nieuw", d.list);
+      return `/loggen?${q}`;
     }
   }
 }
 
-/** Wat je kan bereiken: je overzichten, en de lijsten die je ziet (en of je erin mag loggen), met hun soorten. */
+/** Een formulier dat je kan bereiken: zijn naam, vertrekpunt, de lijsten die het invult, en of je ermee mag loggen. */
+export type ReachForm = { name: string; base: string; fills: string[]; edit: boolean; receipt: boolean };
+
+/** Wat je kan bereiken: je overzichten, de lijsten en formulieren die je ziet (en of je erin of ermee mag loggen). */
 export type Reach = {
   boards: { id: string; name: string; icon?: string }[];
-  lists: Map<string, { name: string; one: string | null; edit: boolean; kinds: Map<string, string> }>;
+  lists: Map<string, { name: string; one: string | null; edit: boolean }>;
+  forms: Map<string, ReachForm>;
   /** De tags die je ziet (verborgen in het menu, je volgorde); zonder: niet nagekeken. */
   tags?: Set<string>;
 };
+
+/**
+ * Een formulier van vroeger terugvinden: van een lijst en een vertrekpunt of soort (een snelkoppeling, een actie of een
+ * gedeelde foto van voor de losse formulieren). Het formulier zelf, dat van de omzetting voor die lijst en dat
+ * vertrekpunt (`<lijst>-<vertrekpunt>`), of een formulier met dat vertrekpunt (leeg: om het even welk) dat die lijst
+ * invult. `pick`: enkel zulke formulieren (een kasticket).
+ */
+export function legacyForm(forms: Map<string, ReachForm>, form: string, list: string | undefined, pick: (f: ReachForm) => boolean = () => true): string | null {
+  const ok = (id: string) => forms.has(id) && pick(forms.get(id)!);
+  if (form && ok(form)) return form;
+  if (!list) return null;
+  if (form && ok(`${list}-${form}`)) return `${list}-${form}`;
+  return [...forms].find(([, f]) => pick(f) && f.fills.includes(list) && (!form || f.base === form))?.[0] ?? null;
+}
 
 export function reachable(d: Destination, reach: Reach): boolean {
   switch (d.kind) {
@@ -172,12 +200,12 @@ export function reachable(d: Destination, reach: Reach): boolean {
       return reach.boards.some((b) => b.id === d.board);
     case "list":
       return reach.lists.has(d.list);
-    case "form": {
+    case "item": {
       const l = reach.lists.get(d.list);
-      if (!l?.edit) return false;
-      if (d.item) return Boolean(l.one);
-      return !d.type || l.kinds.has(d.type);
+      return Boolean(l?.edit && l.one);
     }
+    case "form":
+      return Boolean(reach.forms.get(d.form)?.edit);
   }
 }
 
@@ -188,19 +216,36 @@ export function destinationLabel(d: Destination, reach: Reach): string {
       return reach.boards.find((b) => b.id === d.board)?.name ?? "Overzicht";
     case "list":
       return reach.lists.get(d.list)?.name ?? "Lijst";
-    case "form": {
-      const l = reach.lists.get(d.list);
-      if (d.item) return `${l?.one ?? "Item"} toevoegen`;
-      return `${(d.type && l?.kinds.get(d.type)) || "Iets"} loggen`;
-    }
+    case "item":
+      return `${reach.lists.get(d.list)?.one ?? "Item"} toevoegen`;
+    case "form":
+      return `${reach.forms.get(d.form)?.name ?? "Iets"} loggen`;
   }
 }
 
+/** Een bestemming van vroeger met het formulier dat ze bedoelde (zie `legacyForm`), of null als je dat niet bereikt. */
+function upgraded(d: Destination, reach: Reach): Destination | null {
+  if (d.kind !== "form" || !d.list) return d;
+  const form = legacyForm(reach.forms, d.form, d.list, (f) => f.edit);
+  return form ? { kind: "form", form, ...(d.text ? { text: d.text } : {}) } : null;
+}
+
 export function keepReachable(s: AppSettings, reach: Reach): AppSettings {
-  const share = s.share.kind === "receipt" && !reachable({ kind: "form", list: s.share.list }, reach) ? ({ kind: "ask" } as const) : s.share;
+  const kept = (d: Destination) => {
+    const u = upgraded(d, reach);
+    return u && reachable(u, reach) ? u : null;
+  };
+  const receipt = s.share.kind === "receipt" ? legacyForm(reach.forms, s.share.form, s.share.list, (f) => f.edit && f.receipt) : null;
+  const share: ShareChoice = receipt ? { kind: "receipt", form: receipt } : { kind: "ask" };
   return {
-    apps: s.apps.filter((a) => reachable(a.to, reach)),
-    shortcuts: s.shortcuts && s.shortcuts.filter((x) => reachable(x.to, reach)),
+    apps: s.apps.flatMap((a) => {
+      const to = kept(a.to);
+      return to ? [{ ...a, to }] : [];
+    }),
+    shortcuts: s.shortcuts && s.shortcuts.flatMap((x) => {
+      const to = kept(x.to);
+      return to ? [{ ...x, to }] : [];
+    }),
     share,
     ai: s.ai,
     muted: s.muted,

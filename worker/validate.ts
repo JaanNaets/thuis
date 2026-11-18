@@ -136,3 +136,12 @@ export async function guard<T>(promise: Promise<T>, messages: { unique?: string;
     throw err;
   }
 }
+
+/** Een fout van het nakijken (in shared/) wordt een gewone fout voor de gebruiker. */
+export function cleaned<T>(fn: () => T, fallback = "Ongeldige velden"): T {
+  try {
+    return fn();
+  } catch (err) {
+    throw new ValidationError(err instanceof Error ? err.message : fallback);
+  }
+}

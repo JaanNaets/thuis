@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { destinationPath, type AppSettings } from "../../shared/apps";
 import type { ListDetail } from "../../shared/model";
-import { buildTargets, matchTargets, receiptLists, targetPath, type Targets } from "../../shared/targets";
+import { buildTargets, logPath, matchTargets, receiptForms, targetPath, type Targets } from "../../shared/targets";
 import { useApi } from "../api";
 import { Barcode } from "../components/Barcode";
 import { AiMark } from "../components/Fields";
@@ -114,18 +114,22 @@ export function AppPage() {
   );
 }
 
-/** Een QR-sticker voor een lijst: scannen opent het formulier (loggen, met een soort en tekst, of een item toevoegen). */
+/**
+ * Een QR-sticker voor een lijst: scannen opent een item toevoegen, of loggen (met een formulier, `?formulier=`, en tekst)
+ * vanuit deze lijst.
+ */
 export function StickerPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const item = params.get("item") === "1";
-  const kind = params.get("soort");
+  const kind = params.get("formulier") ?? params.get("soort");
   const text = params.get("tekst") ?? "";
   const { data: detail } = useApi<ListDetail>(`/lists/${id}`);
   const q = new URLSearchParams();
-  if (kind) q.set("soort", kind);
+  if (kind && !item) q.set("formulier", kind);
   if (text) q.set("tekst", text);
-  const url = `${window.location.origin}/lijsten/${id}/${item ? "nieuw" : "loggen"}${q.toString() ? `?${q}` : ""}`;
+  if (!item) q.set("nieuw", id!);
+  const url = `${window.location.origin}${item ? `/lijsten/${id}/nieuw` : "/loggen"}${q.toString() ? `?${q}` : ""}`;
   const kindName = detail?.kinds.find((k) => k.id === kind)?.name;
   const title = item ? `${detail?.list.one ?? "Item"} toevoegen` : kindName ? `${kindName}` : "Loggen";
   return (
@@ -172,13 +176,13 @@ export function SharedPage() {
   }, []);
   useEffect(() => {
     if (file === null) navigate(`/?toevoegen=1${text ? `&tekst=${encodeURIComponent(text)}` : ""}`, { replace: true });
-    if (file && receipt) navigate(`/lijsten/${receipt.list}/loggen?kasticket=gedeeld`, { replace: true });
+    if (file && receipt) navigate(`${logPath({ id: receipt.form })}&kasticket=gedeeld`, { replace: true });
   }, [file, receipt]);
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   if (!file || !raw || !settings || receipt) return null;
-  // Een kasticket: in een lijst met een eigen aankoop (Uitgaven), zonder zo'n lijst een die voorraad telt.
-  const buyLists = ai ? receiptLists(raw) : [];
+  // Een kasticket: met een formulier dat koopt (Aankoop), je meestgebruikte eerst.
+  const buyForms = ai ? receiptForms(raw) : [];
   const read = matchTargets(text, targets).slice(0, 8);
   const row = (key: string, to: string, icon: IconName, title: string, meta: string | null, aiMark = false) => (
     <li key={key}>
@@ -206,11 +210,11 @@ export function SharedPage() {
     <div className="page">
       <PageHead title="Gedeeld" back={{ to: "/", label: boards[0]?.name ?? "Overzicht" }} />
       {preview && <img className="shared-photo" src={preview} alt="" />}
-      {buyLists.length > 0 && (
+      {buyForms.length > 0 && (
         <>
           <h2 className="section-title">Kasticket lezen</h2>
           <section className="card">
-            <ul className="rows">{buyLists.map((l) => row(`r${l.id}`, `/lijsten/${l.id}/loggen?kasticket=gedeeld`, "receipt", l.name, null, true))}</ul>
+            <ul className="rows">{buyForms.map((f) => row(`r${f.id}`, `${logPath(f)}&kasticket=gedeeld`, "receipt", f.name, null, true))}</ul>
           </section>
         </>
       )}

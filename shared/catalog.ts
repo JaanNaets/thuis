@@ -1,13 +1,14 @@
-// Sjablonen voor een nieuwe lijst: een vertrekpunt met velden, een voorraad als ze telt, eigen soorten voor haar
-// logboek en wie een melding krijgt. Zo weinig mogelijk: een lijst uit een sjabloon is een gewone lijst, de rest voeg je
-// zelf toe (Instellen). Een lijst kan ook uit een bestand komen (`shared/template-file.ts`, Uit bestand).
+// Sjablonen voor een nieuwe lijst: een vertrekpunt met velden, een voorraad als ze telt, formulieren die erin loggen
+// en wie daarvan een melding krijgt. Zo weinig mogelijk: een lijst uit een sjabloon is een gewone lijst met gewone
+// formulieren, de rest voeg je zelf toe (Instellen). Een sjabloon zonder items (`one` leeg) maakt enkel zijn
+// formulieren. Een lijst kan ook uit een bestand komen (`shared/template-file.ts`, Uit bestand).
 
-import type { Handeling } from "./cells.ts";
+import { presetDoes, type Handeling } from "./cells.ts";
 import type { NotifyDef } from "./alerts.ts";
 import type { FieldDef } from "./fields.ts";
 import type { IconKey } from "./icons.ts";
 import type { LedgerDef } from "./ledger.ts";
-import type { Base, Parts } from "./model.ts";
+import { baseParts, type Base, type Parts } from "./model.ts";
 import type { StockDef } from "./stock.ts";
 
 /**
@@ -22,7 +23,7 @@ export type ListTemplate = {
   name: string;
   /** Hoe het sjabloon heet in de kiezer; anders de naam. */
   label?: string;
-  /** Hoe één item heet; null = enkel een logboek. */
+  /** Hoe één item heet; null = geen lijst, enkel de formulieren. */
   one: string | null;
   icon: IconKey;
   fields: FieldDef[];
@@ -45,8 +46,9 @@ export const TEMPLATES: ListTemplate[] = [
     fields: [note],
   },
   {
-    // Zoals Splitwise: een rij per persoon met zijn saldo (wie betaalde krijgt erbij, wie deelt zijn deel eraf), gelijk
-    // verdeeld over wie erbij is (`defaultSharers`), Wie moet wie en Terugbetaald; een melding aan wie in de verdeling staat.
+    // Zoals Splitwise: een rij per persoon met zijn saldo (wie betaalde krijgt erbij, wie deelt zijn deel eraf: de
+    // handelingen op deze lijst), gelijk verdeeld over wie erbij is (`defaultSharers`), Wie moet wie en Terugbetaald;
+    // een melding aan wie in de verdeling staat.
     key: "uitgaven",
     name: "Uitgaven",
     one: "Persoon",
@@ -57,8 +59,8 @@ export const TEMPLATES: ListTemplate[] = [
     ],
     ledger: { person: "persoon", field: "saldo" },
     kinds: [
-      { base: "aankoop", name: "Aankoop", icon: "cart" },
-      { base: "overdracht", name: "Terugbetaling", icon: "transfer" },
+      { base: "aankoop", name: "Aankoop", icon: "cart", parts: baseParts("aankoop"), does: presetDoes("aankoop", "self") },
+      { base: "overdracht", name: "Terugbetaling", icon: "transfer", parts: baseParts("overdracht"), does: presetDoes("overdracht", "self") },
     ],
     notify: { to: "people" },
   },

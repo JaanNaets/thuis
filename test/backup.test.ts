@@ -37,8 +37,8 @@ const backup: Backup = {
     },
   ],
   kinds: [
-    { id: GEGETEN, list_id: VOORRAAD, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, sort_order: 0 },
-    { id: "33333333-3333-4333-8333-333333333333", list_id: VOORRAAD, base: "aankoop", name: "Boodschap", icon: "cart", fields: [], goal: null, planned: true, sort_order: 1 },
+    { id: GEGETEN, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, planned: false, parts: { money: false, to: false, duration: false, groups: [{ role: "uit", label: "Wat", list: VOORRAAD }] }, does: [], notify: { to: "all" }, reads: true, archived: 0, tag_ids: [TAG] },
+    { id: "33333333-3333-4333-8333-333333333333", base: "aankoop", name: "Boodschap", icon: "cart", fields: [], goal: null, planned: true, parts: null, does: [], notify: null, reads: null, archived: 0, tag_ids: [] },
   ],
   items: [
     { id: PASTA, list_id: VOORRAAD, name: "Pasta", data: { eenheid: "g", met: SAUS, van: "vreemde" }, part_of: null, archived: 0, photo: true },
@@ -47,7 +47,6 @@ const backup: Backup = {
   events: [
     {
       id: EVENT,
-      list_id: VOORRAAD,
       kind: GEGETEN,
       base: "gebruik",
       name: "",
@@ -96,8 +95,13 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
   // De verwijzing in een veld wijst naar de nieuwe lijst.
   assert.equal(list.fields.find((f) => f.key === "met")?.ref_type, list.id);
   assert.deepEqual(list.stock, { unit: "eenheid", default_unit: "stuk" });
-  // Een formulier dat gepland begint, blijft dat; een back-up van vroeger (zonder) is niet gepland.
-  assert.deepEqual(plan.kinds.map((k) => [k.name, k.planned]), [["Gegeten", false], ["Boodschap", true]]);
+  // Een formulier dat gepland begint, blijft dat; zijn tags, melding en fotokeuze komen mee; zijn groep uit de lijst
+  // wijst naar de nieuwe lijst.
+  assert.deepEqual(plan.kinds.map((k) => [k.name, k.planned, k.tags, k.notify, k.reads]), [
+    ["Gegeten", false, ["Huis"], { to: "all" }, true],
+    ["Boodschap", true, [], null, null],
+  ]);
+  assert.equal(plan.kinds[0].parts?.groups[0].list, list.id);
   const pasta = plan.items.find((t) => t.old === PASTA)!;
   const saus = plan.items.find((t) => t.old === SAUS)!;
   // Pasta: met = de nieuwe saus; een persoon die je niet kent valt weg.
@@ -192,4 +196,47 @@ test("een back-up van versie 2 (dingen) leest als versie 3 (items)", () => {
   assert.equal(b.items[0].name, "Chablis");
   assert.equal(b.events[0].lines[0].item_id, "T");
   assert.equal(b.views[0].target, "items");
+});
+
+test("een back-up van versie 3 (formulieren bij een lijst) leest als versie 4 (losse formulieren)", () => {
+  const ledger = { id: "U", name: "Uitgaven", one: "Persoon", icon: null, color: null, fields: [{ key: "p", label: "Persoon", type: "person" }, { key: "s", label: "Saldo", type: "money" }], stock: null, ledger: { person: "p", field: "s" }, notify: { to: "people" }, read_photo: { on: [], off: ["aankoop"] }, archived: 0, tag_ids: ["T"] };
+  const wines = { id: "W", name: "Wijnen", one: "Wijn", icon: null, color: null, fields: [], stock: { default_unit: "fles" }, notify: null, archived: 0, tag_ids: [] };
+  const event = (id: string, list_id: string, kind: string, extra: object = {}) => ({ id, list_id, kind, base: kind === "K" ? "gebruik" : kind, name: "", status: "gebeurd", at: "2026-11-01", end_at: null, amount: null, paid_by: null, split: null, to_person: null, data: {}, repeat: null, done_by: null, photo: false, lines: [], ...extra });
+  const old = {
+    kind: BACKUP_KIND,
+    version: 3,
+    people: [],
+    tags: [{ id: "T", name: "Huis", color: null }],
+    lists: [ledger, wines],
+    kinds: [
+      { id: "A", list_id: "U", base: "aankoop", name: "Aankoop", icon: "cart", fields: [], goal: null, sort_order: 0 },
+      { id: "K", list_id: "W", base: "gebruik", name: "Proeverij", icon: null, fields: [], goal: null, parts: { money: false, to: false, duration: false, groups: [] }, sort_order: 0 },
+    ],
+    items: [{ id: "C", list_id: "W", name: "Chablis", data: {}, part_of: null, archived: 0, photo: false }],
+    events: [
+      event("E1", "U", "aankoop"),
+      event("E2", "W", "aankoop"),
+      event("E3", "W", "meting", { lines: [{ role: "voor", item_id: "C", text: null, amount: 6, unit: null, price: null, expires: null, owner: null }] }),
+      event("E4", "W", "K"),
+    ],
+    views: [],
+    outside: [],
+  };
+  const b = parseBackup(old);
+  assert.equal(b.version, BACKUP_VERSION);
+  // Een gebeurtenis met een vertrekpunt: naar het eigen formulier met dat vertrekpunt, anders een nieuw per lijst; een
+  // telling wordt een Aanpassing.
+  assert.deepEqual(b.events.map((e) => e.kind), ["A", "W-aankoop", "aanpassing", "K"]);
+  assert.ok(b.events.every((e) => !("list_id" in e)));
+  const aankoop = b.kinds.find((k) => k.id === "A")!;
+  // De tags, melding en fotokeuze van de lijst; het saldo uitdrukkelijk in de lijst met een saldo per persoon.
+  assert.deepEqual([aankoop.tag_ids, aankoop.notify, aankoop.reads], [["T"], { to: "people" }, null]);
+  assert.ok((aankoop.does as { list: string | null; field: string }[]).some((h) => h.list === "U" && h.field === "$saldo"));
+  assert.deepEqual(b.kinds.map((k) => k.id), ["A", "K", "W-aankoop"]);
+  const plan = planRestore(b, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenItems: new Set() });
+  assert.equal(plan.kinds.length, 3);
+  assert.equal(plan.events.length, 4);
+  const saldo = plan.kinds.find((k) => k.name === "Aankoop" && k.does.some((h) => h.field === "$saldo"))!;
+  const uitgaven = plan.lists.find((l) => l.name === "Uitgaven")!;
+  assert.ok(saldo.does.every((h) => h.field !== "$saldo" || h.list === uitgaven.id), "het saldo in de nieuwe Uitgaven");
 });

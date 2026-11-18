@@ -1,13 +1,14 @@
-// Waar je iets kan toevoegen (de +, het palet, de snelkoppelingen): per eigen formulier "Gegeten" (in haar lijst), per
-// lijst zonder eigen formulieren "Loggen in Voorraad" (met de basissoorten) en per lijst met items een nieuw item
-// ("Wijn"). Wat je het meest gebruikt, eerst. Noemen de eerste woorden van je tekst er een ("gegeten pasta 300 g"), dan
-// staat die bovenaan en gaat de rest als tekst naar het formulier. Bij een item (`logForms`): waarmee je ermee logt.
+// Waar je iets kan toevoegen (de +, het palet, de snelkoppelingen): per formulier waarmee je mag loggen "Gegeten", en
+// per lijst met items een nieuw item ("Wijn"). Wat je het meest gebruikt, eerst. Noemen de eerste woorden van je tekst er
+// een ("gegeten pasta 300 g"), dan staat die bovenaan en gaat de rest als tekst naar het formulier. Bij een lijst of een
+// item ervan (`logForms`): de formulieren die die lijst invullen.
 
 import { STOCK } from "./cells.ts";
-import type { KindInfo } from "./model.ts";
+import { fillsLists, type KindInfo } from "./model.ts";
 
 export type TargetList = { id: string; name: string; one: string | null; icon: string | null; color: string | null; stock: boolean };
-export type Targets = { lists: TargetList[]; kinds: KindInfo[]; used: { list_id: string; kind: string; n: number; last: string }[] };
+/** `used`: per formulier (`list_id` null) of per lijst een nieuw item (`kind` "+item"), hoe vaak en het laatst. */
+export type Targets = { lists: TargetList[]; kinds: KindInfo[]; used: { list_id: string | null; kind: string; n: number; last: string }[] };
 
 export type Target = {
   key: string;
@@ -18,8 +19,9 @@ export type Target = {
   /** Waar (de lijst), als dat niet al in het label staat. */
   hint: string | null;
   icon: string;
-  list_id: string;
-  /** Een soort (loggen) of een item toevoegen. */
+  /** Bij een nieuw item: de lijst. */
+  list_id: string | null;
+  /** Een formulier (loggen) of een item toevoegen. */
   kind: string | null;
   item: boolean;
   /** Waarop je kan zoeken (kleine letters, zonder accenten). */
@@ -39,40 +41,19 @@ export const fold = (s: string) =>
 
 /** Alle plekken om iets toe te voegen, je meestgebruikte eerst. */
 export function buildTargets(t: Targets): Target[] {
-  const used = new Map(t.used.map((u) => [`${u.list_id}|${u.kind}`, u]));
-  const count = (list: string, kind: string) => used.get(`${list}|${kind}`) ?? { n: 0, last: "" };
+  const count = (list: string | null, kind: string) => t.used.find((u) => u.list_id === list && u.kind === kind) ?? { n: 0, last: "" };
   const out: Target[] = [];
-  const owns = new Set(t.kinds.map((k) => k.list_id));
   for (const l of t.lists) {
-    const logs = t.used.filter((u) => u.list_id === l.id && u.kind !== "+item");
-    // Met eigen formulieren staan die er zelf; "Loggen in" zou hetzelfde formulier nog eens openen.
-    if (!owns.has(l.id)) {
-      out.push({
-        key: `log:${l.id}`,
-        label: `Loggen in ${l.name}`,
-        name: "Loggen",
-        hint: null,
-        icon: l.icon ?? "note",
-        list_id: l.id,
-        kind: null,
-        item: false,
-        words: [fold(l.name)],
-        used: logs.reduce((s, u) => s + u.n, 0),
-        last: logs.reduce((s, u) => (u.last > s ? u.last : s), ""),
-        buys: l.stock,
-      });
-    }
-    if (l.one) {
-      const c = count(l.id, "+item");
-      out.push({ key: `item:${l.id}`, label: `${l.one} toevoegen`, name: l.one, hint: l.name, icon: l.icon ?? "folder", list_id: l.id, kind: null, item: true, words: [fold(l.one), fold(l.name)], used: c.n, last: c.last, buys: false });
-    }
+    if (!l.one) continue;
+    const c = count(l.id, "+item");
+    out.push({ key: `item:${l.id}`, label: `${l.one} toevoegen`, name: l.one, hint: l.name, icon: l.icon ?? "folder", list_id: l.id, kind: null, item: true, words: [fold(l.one), fold(l.name)], used: c.n, last: c.last, buys: false });
   }
-  const editable = new Set(t.lists.map((l) => l.id));
+  const names = new Map(t.lists.map((l) => [l.id, l.name]));
   for (const k of t.kinds) {
-    if (!k.list_id || !editable.has(k.list_id)) continue;
-    const list = t.lists.find((l) => l.id === k.list_id)!;
-    const c = count(k.list_id, k.id);
-    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint: list.name, icon: k.icon, list_id: k.list_id, kind: k.id, item: false, words: [fold(k.name)], used: c.n, last: c.last, buys: buysWith(k) });
+    const c = count(null, k.id);
+    // Waar het formulier iets invult, als het dat uitdrukkelijk zegt (Ruimte uit Huis).
+    const hint = fillsLists(k).map((id) => names.get(id)).filter(Boolean).join(", ") || null;
+    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint, icon: k.icon, list_id: null, kind: k.id, item: false, words: [fold(k.name)], used: c.n, last: c.last, buys: buysWith(k) });
   }
   return out.sort((a, b) => b.used - a.used || b.last.localeCompare(a.last) || a.label.localeCompare(b.label, "nl"));
 }
@@ -117,24 +98,19 @@ export function matchTargets(text: string, targets: Target[]): Match[] {
 /** Het pad van een plek, met de tekst die je typte. */
 export function targetPath(t: Target, rest = ""): string {
   const q = new URLSearchParams();
-  if (t.kind) q.set("soort", t.kind);
+  if (t.kind) q.set("formulier", t.kind);
   if (rest) q.set("tekst", rest);
   const query = q.toString();
-  return `/lijsten/${t.list_id}/${t.item ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
+  return t.item ? `/lijsten/${t.list_id}/nieuw${query ? `?${query}` : ""}` : `/loggen${query ? `?${query}` : ""}`;
 }
 
-/** Een formulier om mee te loggen bij een lijst of een item ervan; `kind` null = Loggen (kiezen uit de basissoorten). */
+/** Een formulier om mee te loggen bij een lijst of een item ervan. */
 export type LogForm = {
-  /** Dezelfde sleutel als de plek in `buildTargets` ("soort:…", "log:…"). */
+  /** Dezelfde sleutel als de plek in `buildTargets` ("soort:…"). */
   key: string;
-  kind: KindInfo | null;
-  /** Waar de gebeurtenis komt (bij een aankoop in Uitgaven: Uitgaven, niet de lijst van de wijn). */
-  list_id: string;
-  /** De naam van het formulier, met de lijst erbij als twee formulieren hetzelfde heten. */
+  kind: KindInfo;
   label: string;
   icon: string;
-  /** De lijst waar de gebeurtenis komt, als dat een andere lijst is. */
-  hint: string | null;
 };
 
 /** Is dit een formulier voor een kasticket: met geld, en wat erop staat telt bij in een voorraad? */
@@ -144,42 +120,32 @@ export const buysWith = (k: Pick<KindInfo, "parts" | "does">) =>
 /** Verandert een formulier de voorraad (zijn lijnen tellen bij of af)? */
 export const movesStock = (k: Pick<KindInfo, "does">) => k.does.some((h) => h.rows.from === "lines" && h.field === STOCK && (h.op === "bij" || h.op === "af"));
 
+/** Vult dit formulier de lijst in: uitdrukkelijk (een groep of handeling uit die lijst), of telt het in haar voorraad? */
+export const fillsList = (k: Pick<KindInfo, "parts" | "does">, list: Pick<TargetList, "id" | "stock">) =>
+  fillsLists(k).includes(list.id) || (list.stock && movesStock(k) && k.parts.groups.some((g) => !g.list && k.does.some((h) => h.rows.from === "lines" && h.rows.role === g.role && h.field === STOCK && !h.list)));
+
 /**
- * Waarmee je logt bij een lijst of een item ervan: haar eigen formulieren (zonder: Loggen, met de vertrekpunten) en, telt
- * ze voorraad, de formulieren die de voorraad veranderen van lijsten die zelf geen voorraad tellen: Aankoop in Uitgaven,
- * Boodschap, Gegeten. Daar komt de gebeurtenis in die andere lijst, met het item als lijn. Een lijst met een eigen
- * voorraad (een gedeelde wijnkelder) logt enkel over haar eigen items. Enkel lijsten waar je mag loggen; `shown` laat weg wat je bij de +
- * verborg. Het eigen eerst, daarbinnen wat je het meest gebruikt.
+ * Waarmee je logt bij een lijst of een item ervan: de formulieren die die lijst uitdrukkelijk invullen (Schilderwerk bij
+ * Huis) eerst, en telt ze voorraad, dan die haar voorraad veranderen (Aankoop, Gegeten). `shown` laat weg wat je bij de
+ * + verborg. Daarbinnen wat je het meest gebruikt, eerst.
  */
-export function logForms(t: Targets, listId: string, shown: (listId: string) => boolean = () => true): LogForm[] {
+export function logForms(t: Targets, listId: string, shown: (id: string) => boolean = () => true): LogForm[] {
   const list = t.lists.find((l) => l.id === listId);
   if (!list) return [];
-  const lists = new Map(t.lists.map((l) => [l.id, l]));
-  const used = (k: KindInfo) => t.used.find((u) => u.list_id === k.list_id && u.kind === k.id);
-  const byUse = (a: KindInfo, b: KindInfo) => (used(b)?.n ?? 0) - (used(a)?.n ?? 0) || (used(b)?.last ?? "").localeCompare(used(a)?.last ?? "");
-  const own = t.kinds.filter((k) => k.list_id === listId).sort(byUse);
-  const others = list.stock
-    ? t.kinds
-        .filter((k) => k.list_id && k.list_id !== listId && movesStock(k))
-        .filter((k) => {
-          const l = lists.get(k.list_id!);
-          // Een lijst die zelf geen voorraad telt (Uitgaven, Boodschappen, Dieet); een gedeelde wijnkelder logt enkel over haar eigen items.
-          return l && !l.stock && shown(l.id);
-        })
-        .sort(byUse)
-    : [];
-  const forms: LogForm[] = own.length
-    ? own.map((k) => ({ key: `soort:${k.id}`, kind: k, list_id: listId, label: k.name, icon: k.icon, hint: null }))
-    : [{ key: `log:${listId}`, kind: null, list_id: listId, label: "Loggen", icon: list.icon ?? "note", hint: null }];
-  for (const k of others) forms.push({ key: `soort:${k.id}`, kind: k, list_id: k.list_id!, label: k.name, icon: k.icon, hint: lists.get(k.list_id!)!.name });
-  // Twee formulieren met dezelfde naam (Aankoop hier en in Uitgaven): de lijst erbij.
-  return forms.map((f) => (forms.some((o) => o !== f && fold(o.label) === fold(f.label)) ? { ...f, label: `${f.label} · ${lists.get(f.list_id)!.name}` } : f));
+  const used = (k: KindInfo) => t.used.find((u) => u.list_id === null && u.kind === k.id);
+  const own = (k: KindInfo) => (fillsLists(k).includes(listId) ? 0 : 1);
+  const byUse = (a: KindInfo, b: KindInfo) =>
+    own(a) - own(b) || (used(b)?.n ?? 0) - (used(a)?.n ?? 0) || (used(b)?.last ?? "").localeCompare(used(a)?.last ?? "") || a.name.localeCompare(b.name, "nl");
+  return t.kinds
+    .filter((k) => fillsList(k, list) && shown(k.id))
+    .sort(byUse)
+    .map((k) => ({ key: `soort:${k.id}`, kind: k, label: k.name, icon: k.icon }));
 }
 
 /** Met een bedrag in je tekst eerst de formulieren met geld die iets laten gebeuren (een aankoop, geen boodschap). */
 export function pricedFirst(forms: LogForm[], text: string): LogForm[] {
   if (!hasPrice(text)) return forms;
-  const money = (f: LogForm) => Boolean(f.kind && f.kind.parts.money && !f.kind.parts.to && !f.kind.planned);
+  const money = (f: LogForm) => f.kind.parts.money && !f.kind.parts.to && !f.kind.planned;
   return [...forms.filter(money), ...forms.filter((f) => !money(f))];
 }
 
@@ -187,14 +153,13 @@ export function pricedFirst(forms: LogForm[], text: string): LogForm[] {
  * Het pad om met een formulier te loggen, eventueel met een item als eerste lijn en je tekst. `newIn`: de lijst waar je
  * vandaan komt; een nieuw item in een lijn (een wijn die er nog niet staat) komt daar dan vanzelf in (`?nieuw=`).
  */
-export function logPath(form: Pick<LogForm, "kind" | "list_id">, item?: string, text = "", newIn?: string): string {
+export function logPath(form: { id: string }, item?: string, text = "", newIn?: string): string {
   const q = new URLSearchParams();
-  if (form.kind) q.set("soort", form.kind.id);
+  q.set("formulier", form.id);
   if (item) q.set("item", item);
   if (text) q.set("tekst", text);
-  if (newIn && newIn !== form.list_id) q.set("nieuw", newIn);
-  const query = q.toString();
-  return `/lijsten/${form.list_id}/loggen${query ? `?${query}` : ""}`;
+  if (newIn) q.set("nieuw", newIn);
+  return `/loggen?${q.toString()}`;
 }
 
 /**
@@ -213,12 +178,8 @@ export function restAfter(text: string, name: string): string {
     .join(" ");
 }
 
-/**
- * Waar een kasticket kan komen: de lijsten met een eigen aankoopformulier dat niet gepland begint (Uitgaven, een
- * gedeelde wijnkelder); zonder zo'n lijst de lijsten die voorraad tellen.
- */
-export function receiptLists(t: Targets): TargetList[] {
-  const buys = new Set(t.kinds.filter((k) => k.list_id && buysWith(k) && !k.planned).map((k) => k.list_id));
-  const withForm = t.lists.filter((l) => buys.has(l.id));
-  return withForm.length ? withForm : t.lists.filter((l) => l.stock);
+/** Waarmee een kasticket kan: de formulieren die kopen (`buysWith`) en niet gepland beginnen, je meestgebruikte eerst. */
+export function receiptForms(t: Targets): KindInfo[] {
+  const used = (k: KindInfo) => t.used.find((u) => u.list_id === null && u.kind === k.id)?.n ?? 0;
+  return t.kinds.filter((k) => buysWith(k) && !k.planned).sort((a, b) => used(b) - used(a) || a.name.localeCompare(b.name, "nl"));
 }

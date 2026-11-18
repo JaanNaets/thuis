@@ -1,5 +1,5 @@
 import { ADJUST } from "../../shared/cells";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useParams } from "react-router";
 import { formatDuration } from "../../shared/fields";
 import { everyText } from "../../shared/remind";
@@ -65,8 +65,17 @@ export function EventPage() {
     navigate(-1);
   }
 
-  const facts: [string, string][] = [
-    ["Formulier", kind.name],
+  const facts: [string, ReactNode][] = [
+    [
+      "Formulier",
+      e.partial || kind.system ? (
+        kind.name
+      ) : (
+        <Link to={`/formulieren/${e.kind}`} className="link-quiet">
+          {kind.name}
+        </Link>
+      ),
+    ],
     ["Wanneer", `${dayLabel(e.at.slice(0, 10))}${timeOf(e.at) ? ` om ${timeOf(e.at)}` : ""}${e.end_at ? ` tot ${timeOf(e.end_at)}` : ""}`],
     ...(minutes !== null && minutes > 0 ? ([["Duur", formatDuration(minutes)]] as [string, string][]) : []),
     ...(e.amount !== null ? ([["Bedrag", formatCents(e.amount)]] as [string, string][]) : []),
@@ -84,8 +93,8 @@ export function EventPage() {
       <PageHead
         title={title}
         badge={e.status !== "gebeurd" ? <span className="badge badge-secondary">{STATUSES[e.status].label}</span> : running ? <span className="badge badge-accent">Loopt</span> : undefined}
-        description={e.partial ? "Gelogd in een lijst die je niet ziet" : undefined}
-        back={{ to: -1, label: e.partial ? "Terug" : names.list(e.list_id) || "Terug" }}
+        description={e.partial ? "Gelogd met een formulier dat je niet ziet" : undefined}
+        back={{ to: -1, label: e.partial ? "Terug" : kind.name }}
         actions={
           data.can_edit && (
             <>
@@ -124,13 +133,18 @@ export function EventPage() {
                   <dd>{v}</dd>
                 </div>
               ))}
-              {!e.partial && (
+              {e.lists.length > 0 && (
                 <div>
-                  <dt>Lijst</dt>
+                  <dt>{e.lists.length === 1 ? "Lijst" : "Lijsten"}</dt>
                   <dd>
-                    <Link to={`/lijsten/${e.list_id}?tab=logboek`} className="link-quiet">
-                      {names.list(e.list_id)}
-                    </Link>
+                    {e.lists.map((l, i) => (
+                      <span key={l}>
+                        {i > 0 && ", "}
+                        <Link to={`/lijsten/${l}?tab=logboek`} className="link-quiet">
+                          {names.list(l)}
+                        </Link>
+                      </span>
+                    ))}
                   </dd>
                 </div>
               )}

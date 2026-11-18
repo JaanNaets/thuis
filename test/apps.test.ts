@@ -1,16 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, mutedBy, sameDestination, shownIn, type Reach, orderTags } from "../shared/apps.ts";
+import { aiAllowed, appPath, cleanAppSettings, cleanDestination, destinationLabel, destinationPath, keepReachable, legacyForm, mutedBy, sameDestination, shownIn, type Reach, type ReachForm, orderTags } from "../shared/apps.ts";
 
+const form = (name: string, base: string, fills: string[], edit = true, receipt = false): ReachForm => ({ name, base, fills, edit, receipt });
 const reach: Reach = {
   boards: [
     { id: "main", name: "Overzicht" },
     { id: "k1", name: "Keuken" },
   ],
   lists: new Map([
-    ["pel", { name: "Pellets", one: "Voorraad", edit: true, kinds: new Map([["bij", "Bijvulling"]]) }],
-    ["jaan", { name: "Jaan", one: null, edit: true, kinds: new Map([["gew", "Gewicht"]]) }],
-    ["wijn", { name: "Wijnen", one: "Wijn", edit: false, kinds: new Map() }],
+    ["pel", { name: "Pellets", one: "Voorraad", edit: true }],
+    ["wijn", { name: "Wijnen", one: "Wijn", edit: false }],
+  ]),
+  forms: new Map([
+    ["bij", form("Bijvulling", "aankoop", ["pel"], true, true)],
+    ["gew", form("Gewicht", "meting", [])],
+    ["wijn-aankoop", form("Aankoop", "aankoop", [], true, true)],
+    ["proef", form("Proeverij", "gebruik", ["wijn"], false)],
   ]),
 };
 
@@ -20,18 +26,21 @@ test("bestemmingen: nagekeken, als pad en met een naam", () => {
   // De vaste weergaven (Geld, Agenda, …) zijn borden geworden: zo'n bestemming valt weg.
   assert.equal(cleanDestination({ kind: "view", view: "geld" }), null);
   assert.equal(cleanDestination({ kind: "agenda" }), null);
-  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", type: "bij", text: "  3 zakken  pellets " }), { kind: "form", list: "pel", type: "bij", text: "3 zakken pellets" });
-  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", item: true, type: "bij" }), { kind: "form", list: "pel", item: true });
+  assert.deepEqual(cleanDestination({ kind: "form", form: "bij", text: "  3 zakken  pellets " }), { kind: "form", form: "bij", text: "3 zakken pellets" });
+  assert.deepEqual(cleanDestination({ kind: "item", list: "pel", text: "x" }), { kind: "item", list: "pel", text: "x" });
+  // Van vroeger: een lijst met een soort (de lijst blijft om het formulier terug te vinden), of een item toevoegen.
+  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", type: "aankoop" }), { kind: "form", form: "aankoop", list: "pel" });
+  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", item: true, type: "bij" }), { kind: "item", list: "pel" });
   assert.equal(destinationPath({ kind: "board", board: "k1" }), "/bord/k1");
   assert.equal(destinationPath({ kind: "list", list: "pel" }), "/lijsten/pel");
-  assert.equal(destinationPath({ kind: "form", list: "pel", type: "bij", text: "3 zakken" }), "/lijsten/pel/loggen?soort=bij&tekst=3+zakken");
-  assert.equal(destinationPath({ kind: "form", list: "pel", item: true }), "/lijsten/pel/nieuw");
+  assert.equal(destinationPath({ kind: "form", form: "bij", text: "3 zakken" }), "/loggen?formulier=bij&tekst=3+zakken");
+  assert.equal(destinationPath({ kind: "item", list: "pel" }), "/lijsten/pel/nieuw");
   assert.equal(destinationLabel({ kind: "board", board: "k1" }, reach), "Keuken");
   assert.equal(destinationLabel({ kind: "list", list: "pel" }, reach), "Pellets");
-  assert.equal(destinationLabel({ kind: "form", list: "pel", type: "bij" }, reach), "Bijvulling loggen");
-  assert.equal(destinationLabel({ kind: "form", list: "pel", item: true }, reach), "Voorraad toevoegen");
+  assert.equal(destinationLabel({ kind: "form", form: "bij" }, reach), "Bijvulling loggen");
+  assert.equal(destinationLabel({ kind: "item", list: "pel" }, reach), "Voorraad toevoegen");
   assert.equal(appPath("a1"), "/app/a1");
-  assert.equal(sameDestination({ kind: "form", list: "pel", type: "bij", text: "x " }, { kind: "form", list: "pel", type: "bij", text: "x" }), true);
+  assert.equal(sameDestination({ kind: "form", form: "bij", text: "x " }, { kind: "form", form: "bij", text: "x" }), true);
   assert.equal(sameDestination({ kind: "list", list: "pel" }, { kind: "list", list: "jaan" }), false);
 });
 
@@ -40,7 +49,7 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   const s = cleanAppSettings(
     {
       apps: [
-        { id: "a1", name: " Pellets ", to: { kind: "form", list: "pel", type: "bij" } },
+        { id: "a1", name: " Pellets ", to: { kind: "form", list: "pel", type: "aankoop" } },
         { id: "a1", name: "Dubbel", to: { kind: "board", board: "main" } },
         { name: "Geld", to: { kind: "view", view: "geld" } },
         { name: "Geen bestemming" },
@@ -55,10 +64,13 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
   assert.deepEqual(s.apps.map((a) => [a.id, a.name]), [["a1", "Pellets"], ["n1", "Dubbel"], ["n2", "Wijn"], ["n3", "Weg"]]);
   assert.deepEqual(s.shortcuts, [{ name: "Keuken", to: { kind: "board", board: "k1" } }]);
   const kept = keepReachable(s, reach);
-  // Wijn: geen recht om toe te voegen; Weg: geen lijst meer.
+  // Wijn: geen recht om toe te voegen; Weg: geen lijst meer. Pellets van vroeger (een lijst met een vertrekpunt) wordt
+  // het formulier dat die lijst invult met dat vertrekpunt.
   assert.deepEqual(kept.apps.map((a) => a.name), ["Pellets", "Dubbel"]);
-  assert.deepEqual(kept.share, { kind: "receipt", list: "pel" });
-  assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", list: "wijn" } }, reach).share, { kind: "ask" });
+  assert.deepEqual(kept.apps[0].to, { kind: "form", form: "bij" });
+  assert.deepEqual(kept.share, { kind: "receipt", form: "bij" });
+  assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", form: "aankoop", list: "wijn" } }, reach).share, { kind: "receipt", form: "wijn-aankoop" });
+  assert.deepEqual(keepReachable({ ...s, share: { kind: "receipt", form: "gew" } }, reach).share, { kind: "ask" }, "Gewicht leest geen kasticket");
   assert.deepEqual(cleanAppSettings(null), { apps: [], shortcuts: null, share: { kind: "ask" }, ai: true, muted: [], hidden: { menu: [], add: [] }, tag_order: [] });
   assert.deepEqual(cleanAppSettings({ muted: ["pel", "pel", "../x", 3] }).muted, ["pel"]);
 });
@@ -81,16 +93,25 @@ test("lijsten verbergen: per plek, nagekeken, en wat je niet meer ziet valt weg"
   assert.equal(shownIn(s.hidden, "menu", "l1"), false);
   assert.equal(shownIn(s.hidden, "add", "l1"), true);
   assert.deepEqual(cleanAppSettings(null).hidden, { menu: [], add: [] });
-  const reach = { boards: [], lists: new Map([["l1", { name: "Winkels", one: "Winkel", edit: true, kinds: new Map() }]]) };
+  const reach = { boards: [], lists: new Map([["l1", { name: "Winkels", one: "Winkel", edit: true }]]), forms: new Map() };
   assert.deepEqual(keepReachable(s, reach).hidden, { menu: ["l1"], add: [] });
 });
 
-test("stil: de lijst zelf, of via een van haar tags", () => {
-  const list = { id: "wijn", tags: ["huis", "eten"] };
-  assert.equal(mutedBy([], list), null);
-  assert.equal(mutedBy(["wijn", "eten"], list), "list");
-  assert.equal(mutedBy(["eten"], list), "eten");
-  assert.equal(mutedBy(["ander"], list), null);
+test("stil: het formulier zelf, of via een van zijn tags", () => {
+  const form = { id: "proef", tags: ["huis", "eten"] };
+  assert.equal(mutedBy([], form), null);
+  assert.equal(mutedBy(["proef", "eten"], form), "self");
+  assert.equal(mutedBy(["eten"], form), "eten");
+  assert.equal(mutedBy(["ander"], form), null);
+});
+
+test("een formulier van vroeger terugvinden: het zelf, dat van de omzetting, of een dat de lijst invult", () => {
+  assert.equal(legacyForm(reach.forms, "bij", undefined), "bij");
+  assert.equal(legacyForm(reach.forms, "aankoop", "wijn"), "wijn-aankoop");
+  assert.equal(legacyForm(reach.forms, "aankoop", "pel"), "bij");
+  assert.equal(legacyForm(reach.forms, "", "wijn"), "proef");
+  assert.equal(legacyForm(reach.forms, "", "wijn", (f) => f.edit), null);
+  assert.equal(legacyForm(reach.forms, "dienst", "pel"), null);
 });
 
 test("tags: jouw volgorde (de rest op naam), en een verborgen tag blijft verborgen zolang je ze ziet", () => {

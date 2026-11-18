@@ -1,5 +1,4 @@
-// Een foto lezen voor een gebeurtenis (✨): POST /lists/:id/events/read-photo met de foto en de soort van het
-// formulier. Een aankoop leest een kasticket: elke lijn gekoppeld aan een item uit een voorraad die de lezer ziet (zie
+// Een foto lezen voor een gebeurtenis (✨): POST /forms/:id/read-photo met de foto. Een aankoop leest een kasticket: elke lijn gekoppeld aan een item uit een voorraad die de lezer ziet (zie
 // shared/receipt.ts), de winkel aan een item dat hij ziet. Een andere soort vult haar eigen velden in (en de
 // omschrijving, de datum, het bedrag); met voedingswaarden is de foto een gerecht en schat de AI de portie (dat zegt de
 // app ook). Enkel als het formulier foto's leest (shared/photoread.ts). Bewaart niets: het formulier toont het om na
@@ -10,19 +9,19 @@ import { buysWith } from "../../shared/targets";
 import { syncFrom } from "../mirrors";
 import { Hono } from "hono";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { baseKind, canEdit, isBase, type KindInfo, type ItemRef } from "../../shared/model";
+import { canEdit, type KindInfo, type ItemRef } from "../../shared/model";
 import { cleanAttributes } from "../../shared/fields";
-import { isFoodKind, readsPhoto } from "../../shared/photoread";
+import { formReads, isFoodKind } from "../../shared/photoread";
 import { aliasesOf, matchName, readLines, validDate, cents, withAlias, type Candidate } from "../../shared/receipt";
 import { measureFor, type StockDef } from "../../shared/stock";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
-import { ids, kindsFor, needEdit, parseJson, requireList, requireItem, seenLists } from "../access";
+import { ids, needEdit, parseJson, requireForm, requireItem, seenLists } from "../access";
 import { describeField, labelSchema, READABLE } from "./photo";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { asObject, requiredString, ValidationError } from "../validate";
 
-export const listReceipt = new Hono<AppEnv>();
+export const formReceipt = new Hono<AppEnv>();
 export const itemAlias = new Hono<AppEnv>();
 
 type Read = {
@@ -58,19 +57,14 @@ type FormRead = {
   message?: string;
 };
 
-listReceipt.post("/:id/events/read-photo", async (c) => {
+formReceipt.post("/:id/read-photo", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
-  const { list, role } = await requireList(db, me, c.req.param("id"));
-  needEdit(role);
+  const { form: kind, role } = await requireForm(db, me, c.req.param("id"));
+  needEdit(role, "Je mag met dit formulier enkel kijken.");
   const form = await c.req.formData();
   const image = form.get("image");
-  const wanted = String(form.get("kind") ?? "aankoop");
-  // Het formulier: een vertrekpunt, of een eigen formulier van een lijst die je ziet.
-  const seen = await seenLists(db, me);
-  const kind: KindInfo | undefined = isBase(wanted) ? baseKind(wanted) : (await kindsFor(db, seen.keys())).find((k) => k.id === wanted);
-  if (!kind) throw new ValidationError("Onbekend formulier");
-  if (!readsPhoto(list.read_photo, kind.id, kind)) throw new ValidationError("Dit formulier leest geen foto's.");
+  if (!formReads(kind)) throw new ValidationError("Dit formulier leest geen foto's.");
   if (!(image instanceof File)) throw new ValidationError("Geen foto ontvangen");
   // Een kasticket: een formulier met geld waarvan wat erop staat bijtelt in een voorraad (Aankoop).
   const receipt = buysWith(kind);
@@ -80,7 +74,7 @@ listReceipt.post("/:id/events/read-photo", async (c) => {
   if (!AI_IMAGE_TYPES.includes(image.type) || image.size > MAX_IMAGE_BYTES) return c.json({ ...none, message: "Deze foto kan niet gelezen worden." });
   const limit = await useAiBudget(c.env, me);
   if (limit) return c.json({ ...none, message: limit });
-  if (!receipt) return c.json(await readForm(c.env, image, kind, list.name));
+  if (!receipt) return c.json(await readForm(c.env, image, kind));
 
   let parsed: { store?: unknown; date?: unknown; total?: unknown; lines?: unknown } = {};
   try {
@@ -138,7 +132,7 @@ listReceipt.post("/:id/events/read-photo", async (c) => {
 });
 
 /** Een foto voor een soort zonder kasticket: haar velden, en bij eten een schatting van de portie. */
-async function readForm(env: Env, image: File, kind: KindInfo, listName: string): Promise<FormRead> {
+async function readForm(env: Env, image: File, kind: KindInfo): Promise<FormRead> {
   const fields = kind.fields.filter((f) => READABLE.includes(f.type));
   const food = isFoodKind(kind);
   const money = kind.parts.money;
@@ -157,7 +151,7 @@ async function readForm(env: Env, image: File, kind: KindInfo, listName: string)
 - date: null
 ${money ? "- amount: wat het kostte in euro als dat op de foto staat, anders null\n" : ""}${lines}
 ${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in voor alles wat op de foto staat, geschat zoals een voedingstabel.\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.`
-    : `Je leest een foto voor "${kind.name}" in de lijst "${listName}": een bon, factuur, scherm, meter of etiket. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit een getal of datum.
+    : `Je leest een foto voor "${kind.name}": een bon, factuur, scherm, meter of etiket. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit een getal of datum.
 - name: een korte omschrijving (bv. de winkel of wat het is)
 - date: de datum als JJJJ-MM-DD
 ${money ? "- amount: het totaalbedrag in euro\n" : ""}${lines}`;

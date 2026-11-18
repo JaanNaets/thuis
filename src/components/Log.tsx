@@ -1,17 +1,21 @@
-// Het logboek: gebeurtenissen als rijen, per dag, met de soort als tegel, de titel (de naam, of de soort met het
-// eerste item), wat erbij hoort (lijst, waar, wie) en rechts het bedrag. Geplande gebeurtenissen krijgen een vinkje.
-// Een gebeurtenis die je enkel via een item ziet (`partial`), toont geen naam of bedrag. Zie STIJLBOEK.md → Logboek.
+// Het logboek: gebeurtenissen als rijen, per dag, met het formulier als tegel, de titel (de naam, of het formulier met
+// het eerste item), wat erbij hoort (de lijsten die het raakte, waar, wie) en rechts het bedrag. Geplande gebeurtenissen
+// krijgen een vinkje. Een gebeurtenis die je enkel via een item ziet (`partial`), toont geen naam of bedrag. Zie
+// STIJLBOEK.md → Logboek.
 
-import { useMemo } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { stockOp } from "../../shared/cells";
 import { baseKind, BASES, dayOf, eventTitle, minutesBetween, timeOf, type EventView, type KindInfo, type ItemRef } from "../../shared/model";
 import { formatDuration, formatFieldValue } from "../../shared/fields";
 import { formatAmount } from "../../shared/units";
 import type { Person, Tone } from "../../shared/types";
+import { api, useApi } from "../api";
 import { formatCents, formatDate, today } from "../format";
 import { Link } from "../router";
 import { Icon, type IconName } from "./Icon";
-import { stagger } from "./Motion";
+import { SkeletonRows, stagger } from "./Motion";
+import { EmptyState } from "./Page";
+import { useToast } from "./Toast";
 
 /** Wat het logboek terugkrijgt van de API (een bladzijde gebeurtenissen met de namen erbij). */
 export type EventPage = { events: EventView[]; items: ItemRef[]; people: Person[]; kinds: KindInfo[]; lists: { id: string; name: string }[]; more?: boolean };
@@ -54,7 +58,7 @@ export function dayLabel(day: string): string {
   return formatDate(day);
 }
 
-/** Wat onder de titel staat: het uur, de lijst (als het elders gelogd werd), waar, wie, de duur. */
+/** Wat onder de titel staat: het uur, de duur, de lijsten die het raakte (behalve die je bekijkt), waar, wie. */
 function metaOf(e: EventView, names: ReturnType<typeof usePageNames>, home: string | null): string {
   const parts: string[] = [];
   const time = timeOf(e.at);
@@ -63,7 +67,8 @@ function metaOf(e: EventView, names: ReturnType<typeof usePageNames>, home: stri
     const m = minutesBetween(e.at, e.end_at);
     if (m !== null && m > 0) parts.push(formatDuration(m));
   }
-  if (e.list_id !== home) parts.push(e.partial ? `${names.kind(e).name} in een andere lijst` : names.list(e.list_id));
+  const lists = e.lists.filter((l) => l !== home).map(names.list).filter(Boolean);
+  if (lists.length) parts.push(lists.join(", "));
   const store = e.lines.find((l) => l.role === "bij");
   if (store) parts.push(store.item_id ? (names.item(store.item_id)?.name ?? "") : (store.text ?? ""));
   if (e.paid_by) parts.push(names.person(e.paid_by));
@@ -89,7 +94,7 @@ function endOf(e: EventView, names: ReturnType<typeof usePageNames>): string {
 }
 
 /**
- * Gebeurtenissen per dag. `home`: de lijst die je bekijkt (dan staat de lijstnaam enkel bij wat elders gelogd werd).
+ * Gebeurtenissen per dag. `home`: de lijst die je bekijkt (dan staan enkel de andere lijsten erbij).
  * `onTick`: een vinkje bij wat gepland staat. `only`: enkel de lijnen over dit item tonen (de tijdlijn van een item).
  */
 export function LogList({
@@ -175,5 +180,53 @@ export function EventRow({
         <span className="row-end">{e.partial ? "" : endOf(e, names)}</span>
       </Link>
     </div>
+  );
+}
+
+/**
+ * Een logboek (of wat gepland staat) van een lijst of een formulier (`path`: zijn GET …/events), met Meer laden en
+ * afvinken. `home`: de lijst die je bekijkt.
+ */
+export function EventLog({ path, home = null, planned, edit, onChanged, empty }: { path: string; home?: string | null; planned: boolean; edit: boolean; onChanged?: () => void; empty: string }) {
+  const toast = useToast();
+  const [before, setBefore] = useState<string | null>(null);
+  const [older, setOlder] = useState<EventPage[]>([]);
+  const base = `${path}?status=${planned ? "gepland" : "klaar"}&limit=40`;
+  const { data, error, reload } = useApi<EventPage>(base);
+  const { data: next } = useApi<EventPage>(before ? `${base}&before=${encodeURIComponent(before)}` : null);
+  if (next && !older.includes(next)) setOlder((o) => [...o, next]);
+  const pages = data ? [data, ...older] : [];
+  const page: EventPage | undefined = data && {
+    events: pages.flatMap((p) => p.events),
+    items: pages.flatMap((p) => p.items),
+    people: pages.flatMap((p) => p.people),
+    kinds: pages.flatMap((p) => p.kinds),
+    lists: pages.flatMap((p) => p.lists),
+    more: pages[pages.length - 1].more,
+  };
+  async function tick(e: EventView) {
+    try {
+      await api.post(`/events/${e.id}/tick`, e.status === "gepland" ? {} : { undo: true });
+      setOlder([]);
+      setBefore(null);
+      reload();
+      onChanged?.();
+    } catch (err) {
+      toast((err as Error).message, "alert");
+    }
+  }
+  if (error) return <p className="error">{error}</p>;
+  if (!page) return <SkeletonRows rows={5} />;
+  if (!page.events.length) return <EmptyState icon={planned ? "check" : "note"} title={empty} />;
+  const last = page.events[page.events.length - 1];
+  return (
+    <>
+      <LogList page={page} home={home} onTick={edit ? tick : undefined} grouped={!planned} />
+      {page.more && (
+        <button type="button" className="btn btn-ghost" style={{ justifySelf: "center" } as CSSProperties} onClick={() => setBefore(`${last.at}|${last.id}`)}>
+          Meer laden
+        </button>
+      )}
+    </>
   );
 }

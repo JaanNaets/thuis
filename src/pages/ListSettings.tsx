@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { NOTIFY_CHOICES } from "../../shared/alerts";
-import { BALANCE, presetDoes } from "../../shared/cells";
-import { baseParts, BASES, canManage, formsOf, isBase, LINE_ROLES, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson, type Parts } from "../../shared/model";
+import { canManage, fillsLists, type ListDetail } from "../../shared/model";
 import { readsPhoto, ITEMS_FORM, withReads } from "../../shared/photoread";
 import type { LedgerDef } from "../../shared/ledger";
 import type { StockDef } from "../../shared/stock";
@@ -10,23 +8,21 @@ import { templateFile } from "../../shared/template-file";
 import type { IconKey } from "../../shared/icons";
 import type { Person, Tone } from "../../shared/types";
 import { api, useApi } from "../api";
-import { Avatar, CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
-import type { ListColumns } from "../../shared/cells";
-import { buildDoes, DoesEditor, doesDraft, GroupsEditor, type DoesDraft } from "../components/Does";
+import { CardHead, Switch, Tabs, ToneSwatches } from "../components/Controls";
 import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
-import { Icon, type IconName } from "../components/Icon";
+import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
 import { PageHead } from "../components/Page";
-import { Sheet } from "../components/Sheet";
+import { PeopleEditor } from "../components/People";
 import { TagChooser } from "../components/TagChooser";
 import { useConfirm } from "../components/ConfirmDialog";
 import { useToast } from "../components/Toast";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 
-type Tab = "algemeen" | "velden" | "voorraad" | "soorten" | "mensen";
+type Tab = "algemeen" | "velden" | "voorraad" | "mensen";
 
-/** Een lijst instellen (enkel een beheerder): Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). */
+/** Een lijst instellen (enkel een beheerder): Algemeen · Velden · Tellen · Mensen (`?tab=`). */
 export function ListSettings() {
   const { id } = useParams();
   const { data: detail, error, reload } = useApi<ListDetail>(`/lists/${id}`);
@@ -36,13 +32,8 @@ export function ListSettings() {
   if (!canManage(detail.role)) return <p className="page muted">Enkel een beheerder kan deze lijst instellen.</p>;
   const tabs: { value: Tab; label: string }[] = [
     { value: "algemeen", label: "Algemeen" },
-    ...(detail.list.one
-      ? [
-          { value: "velden" as const, label: "Velden" },
-          { value: "voorraad" as const, label: "Tellen" },
-        ]
-      : []),
-    { value: "soorten", label: "Formulieren" },
+    { value: "velden", label: "Velden" },
+    { value: "voorraad", label: "Tellen" },
     { value: "mensen", label: "Mensen" },
   ];
   const asked = params.get("tab") as Tab | null;
@@ -54,8 +45,7 @@ export function ListSettings() {
       {tab === "algemeen" && <General detail={detail} onSaved={reload} />}
       {tab === "velden" && <Fields detail={detail} onSaved={reload} />}
       {tab === "voorraad" && <Stock detail={detail} onSaved={reload} />}
-      {tab === "soorten" && <Kinds detail={detail} onSaved={reload} />}
-      {tab === "mensen" && <People detail={detail} onSaved={reload} />}
+      {tab === "mensen" && <PeopleEditor base={`/lists/${detail.list.id}`} people={detail.people} onSaved={reload} />}
     </div>
   );
 }
@@ -124,7 +114,6 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
   const [color, setColor] = useState<Tone | null>(list.color);
   const [tagIds, setTagIds] = useState(detail.tags.map((t) => t.id));
   const [fresh, setFresh] = useState<string[]>([]);
-  const [notify, setNotify] = useState<keyof typeof NOTIFY_CHOICES>(list.notify?.to ?? "none");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -132,10 +121,9 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
     try {
       await api.put(`/lists/${list.id}`, {
         name,
-        one: one.trim() || (detail.counts.items ? list.one : null),
+        one: one.trim() || list.one,
         icon,
         color,
-        notify: notify === "none" ? null : { to: notify },
       });
       await api.put(`/lists/${list.id}/tags`, {
         tag_ids: tagIds,
@@ -160,7 +148,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
   async function remove() {
     const ok = await confirm({
       title: `${list.name} verwijderen?`,
-      body: "Met alle items en het hele logboek. Dat kan niet terug.",
+      body: "Met alle items. Wat ermee gelogd is, blijft in het logboek van zijn formulier. Dat kan niet terug.",
       confirmLabel: "Verwijderen",
       danger: true,
     });
@@ -171,9 +159,9 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
     navigate("/", { replace: true });
   }
 
-  /** De opbouw van de lijst als bestand (zonder items, logboek of mensen), om te delen. */
+  /** De opbouw van de lijst als bestand, met de formulieren die haar invullen (zonder items, logboek of mensen), om te delen. */
   function downloadTemplate() {
-    const own = detail.kinds.filter((k) => k.list_id === list.id);
+    const own = detail.kinds.filter((k) => fillsLists(k).includes(list.id));
     const file = templateFile(list, own);
     const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
     const a = document.createElement("a");
@@ -205,21 +193,11 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
       </section>
       <section className="card form-section">
         <TagChooser tags={tags} value={tagIds} onChange={setTagIds} fresh={fresh} onFresh={setFresh} />
-        <label className="field">
-          <span className="label">Melding bij iets nieuws</span>
-          <select value={notify} onChange={(e) => setNotify(e.target.value as keyof typeof NOTIFY_CHOICES)}>
-            {Object.entries(NOTIFY_CHOICES).map(([k, label]) => (
-              <option key={k} value={k}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
       </section>
       <button type="button" className="btn btn-primary btn-lg" disabled={busy || !name.trim()} onClick={save}>
         Opslaan
       </button>
-      {list.one && <Mirrors listId={list.id} manage={canManage(detail.role)} />}
+      <Mirrors listId={list.id} manage={canManage(detail.role)} />
       <div className="btn-row" style={{ justifySelf: "start" }}>
         <button type="button" className="btn btn-ghost" onClick={downloadTemplate}>
           <Icon name="download" size={15} /> Als sjabloon
@@ -248,7 +226,7 @@ function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }
     if ("error" in built) return toast(built.error, "alert");
     setBusy(true);
     try {
-      await api.put(`/lists/${list.id}`, { fields: built.fields, ...(list.one ? { read_photo: withReads(list.read_photo, ITEMS_FORM, null, reads) } : {}) });
+      await api.put(`/lists/${list.id}`, { fields: built.fields, read_photo: withReads(list.read_photo, ITEMS_FORM, null, reads) });
       toast("Velden bewaard");
       onSaved();
     } catch (err) {
@@ -262,11 +240,9 @@ function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }
       <section className="card form-section">
         <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={list.name} selfId={list.id} people={people ?? []} meId={person.id} />
       </section>
-      {list.one && (
-        <section className="card form-section">
-          <Switch checked={reads} onChange={setReads} label={<>Foto lezen met AI <AiMark /></>} />
-        </section>
-      )}
+      <section className="card form-section">
+        <Switch checked={reads} onChange={setReads} label={<>Foto lezen met AI <AiMark /></>} />
+      </section>
       <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={save}>
         Opslaan
       </button>
@@ -370,364 +346,3 @@ function Stock({ detail, onSaved }: { detail: ListDetail; onSaved: () => void })
   );
 }
 
-function Kinds({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
-  const own = detail.kinds.filter((k) => k.list_id === detail.list.id);
-  const [editing, setEditing] = useState<KindInfo | "new" | null>(null);
-  return (
-    <>
-      <section className="card">
-        <CardHead
-          title="Formulieren"
-          action={
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing("new")}>
-              <Icon name="plus" size={15} /> Formulier
-            </button>
-          }
-        />
-        {own.length === 0 ? (
-          <p className="card-body muted">{Object.values(BASES).map((b) => b.label).join(", ")}</p>
-        ) : (
-          <ul className="rows">
-            {own.map((k) => (
-              <li key={k.id}>
-                <button type="button" className="row" onClick={() => setEditing(k)}>
-                  <span className="cell-main">
-                    <span className="row-media">
-                      <Icon name={k.icon as IconName} size={16} />
-                    </span>
-                    <span className="row-main">
-                      <span className="row-title">{k.name}</span>
-                      <span className="row-meta">
-                        <span>
-                          {BASES[k.base].label}
-                          {k.fields.length ? ` · ${k.fields.map((f) => f.label).join(", ")}` : ""}
-                        </span>
-                      </span>
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <PhotoForms detail={detail} onSaved={onSaved} />
-      <Sheet open={editing !== null} title={editing === "new" ? "Nieuw formulier" : (editing?.name ?? "")} onClose={() => setEditing(null)}>
-        {editing !== null && (
-          <KindForm
-            list={detail.list}
-            kind={editing === "new" ? null : editing}
-            onDone={() => {
-              setEditing(null);
-              onSaved();
-            }}
-          />
-        )}
-      </Sheet>
-    </>
-  );
-}
-
-/** Welke formulieren een foto lezen met de AI: die van de lijst (`formsOf`), elk met een schakelaar (meteen bewaard). */
-function PhotoForms({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
-  const { list } = detail;
-  const toast = useToast();
-  const forms = formsOf(detail.kinds, list.id).shown;
-  const [setting, setSetting] = useState(list.read_photo);
-  async function toggle(k: KindInfo, on: boolean) {
-    const before = setting;
-    const next = withReads(setting, k.id, k, on);
-    setSetting(next);
-    try {
-      await api.put(`/lists/${list.id}`, { read_photo: next });
-      onSaved();
-    } catch (err) {
-      setSetting(before);
-      toast((err as Error).message, "alert");
-    }
-  }
-  return (
-    <section className="card">
-      <CardHead
-        title={
-          <>
-            Foto lezen met AI <AiMark />
-          </>
-        }
-      />
-      <div className="card-body switch-list">
-        {forms.map((k) => (
-          <Switch key={k.id} checked={readsPhoto(setting, k.id, k)} onChange={(on) => toggle(k, on)} label={k.name} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; onDone: () => void }) {
-  const listId = list.id;
-  const { person, lists } = useSession();
-  const toast = useToast();
-  const confirm = useConfirm();
-  // Een nieuw formulier begint van een vertrekpunt (Aankoop, Gebruik, …): wat het vraagt en doet, pas je daarna aan.
-  const [base, setBase] = useState<Base>(kind?.base ?? "gebruik");
-  const [parts, setParts] = useState<Parts>(() => kind?.parts ?? baseParts("gebruik"));
-  const [name, setName] = useState(kind?.name ?? "");
-  const [icon, setIcon] = useState<IconKey | null>((kind?.icon as IconKey) ?? null);
-  const [goal, setGoal] = useState(kind?.goal ? String(Math.round(kind.goal / 60)) : "");
-  const [planned, setPlanned] = useState(kind?.planned ?? false);
-  const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
-  const [does, setDoes] = useState<DoesDraft[]>(() => doesDraft(kind?.does ?? presetDoes("gebruik")));
-  const { data: columns } = useApi<ListColumns[]>("/me/columns");
-  const items = lists.filter((l) => l.one && !l.archived);
-  // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
-  const [readChoice, setReadChoice] = useState<boolean | null>(null);
-  const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { parts, fields: kind?.fields ?? [] });
-  /**
-   * Geld aan of uit, naar iemand of gedeeld: het saldo volgt mee (wie betaalde telt bij, wie deelt of naar wie telt af),
-   * tenzij je dat zelf al anders instelde.
-   */
-  function money(on: boolean, to: boolean) {
-    setParts({ ...parts, money: on, to: on && to });
-    const people = does.filter((h) => h.rows.from !== "lines");
-    const standard = people.every((h) => h.field === BALANCE && !h.list && h.value.from === "amount");
-    if (!standard) return;
-    const rest = does.filter((h) => h.rows.from === "lines");
-    setDoes(on ? [...rest, ...doesDraft(presetDoes(to ? "overdracht" : "dienst"))] : rest);
-  }
-  function start(b: Base) {
-    setBase(b);
-    setParts(baseParts(b));
-    setDoes(doesDraft(presetDoes(b)));
-  }
-  async function save() {
-    const built = buildFields(drafts, "self");
-    if ("error" in built) return toast(built.error, "alert");
-    // Een nieuw veld krijgt zijn sleutel pas nu: wat het formulier ermee invult, volgt mee.
-    const keyOf = new Map(drafts.map((d, i) => [d.key, built.fields[i]?.key ?? d.key]));
-    const groups = parts.groups.map((g) => ({ ...g, label: g.label.trim() || LINE_ROLES[g.role].label }));
-    const body = {
-      base,
-      name,
-      icon,
-      fields: built.fields,
-      parts: { ...parts, groups },
-      does: buildDoes(does).map((h) => (h.value.from === "field" ? { ...h, value: { from: "field" as const, key: keyOf.get(h.value.key) ?? h.value.key } } : h)),
-      goal: parts.duration && goal.trim() ? Math.round(Number(goal.replace(",", ".")) * 60) : null,
-      planned,
-    };
-    try {
-      const id = kind ? (await api.put(`/kinds/${kind.id}`, body), kind.id) : (await api.post<{ id: string }>(`/lists/${listId}/kinds`, body)).id;
-      if (readChoice !== null) await api.put(`/lists/${listId}`, { read_photo: withReads(list.read_photo, id, { parts, fields: built.fields }, readChoice) });
-      toast(`${name} bewaard`);
-      onDone();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  async function remove() {
-    if (
-      !kind ||
-      !(await confirm({
-        title: `${kind.name} weghalen?`,
-        body: `Wat ermee gelogd is, blijft, als ${BASES[kind.base].label.toLowerCase()}.`,
-        confirmLabel: "Weghalen",
-        danger: true,
-      }))
-    )
-      return;
-    await api.delete(`/kinds/${kind.id}`);
-    toast(`${kind.name} weggehaald`);
-    onDone();
-  }
-  return (
-    <div className="form">
-      {!kind && (
-        <label className="field">
-          <span className="label">Begin van</span>
-          <select value={base} onChange={(e) => isBase(e.target.value) && start(e.target.value)}>
-            {Object.entries(BASES).map(([k, b]) => (
-              <option key={k} value={k} title={b.hint}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <label className="field">
-        <span className="label">Naam</span>
-        <input value={name} maxLength={40} required placeholder="bv. Gegeten, Schilderwerk" onChange={(e) => setName(e.target.value)} />
-      </label>
-      <div className="field">
-        <span className="label">Icoon</span>
-        <IconPicker value={icon} onChange={setIcon} />
-      </div>
-      <div className="switch-list">
-        <Switch checked={parts.money} onChange={(on) => money(on, false)} label="Met een bedrag" />
-        {parts.money && <Switch checked={parts.to} onChange={(on) => money(true, on)} label="Naar iemand" />}
-        <Switch checked={parts.duration} onChange={(on) => setParts({ ...parts, duration: on })} label="Met een einde" />
-      </div>
-      {parts.duration && (
-        <label className="field">
-          <span className="label">Melding na (uren)</span>
-          <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
-        </label>
-      )}
-      <GroupsEditor value={parts.groups} onChange={(groups) => setParts({ ...parts, groups })} lists={items} />
-      <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
-      {columns && <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} parts={parts} />}
-      <Switch checked={planned} onChange={setPlanned} label="Gepland" />
-      <Switch checked={reads} onChange={setReadChoice} label={<>Foto lezen met AI <AiMark /></>} />
-      <div className="btn-row">
-        <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={save}>
-          Opslaan
-        </button>
-        {kind && (
-          <button type="button" className="btn btn-danger-ghost" onClick={remove}>
-            Weghalen
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function People({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }) {
-  const { list } = detail;
-  const { person: me } = useSession();
-  const toast = useToast();
-  const [adding, setAdding] = useState(false);
-  async function setRole(p: ListPerson, role: DirectRole | null) {
-    try {
-      await api.put(`/lists/${list.id}/people/${p.person.id}`, { role });
-      toast(role === null ? `${p.person.name} weggehaald` : `${p.person.name}: ${role === "geen" ? "geen toegang" : ROLES[role].label.toLowerCase()}`);
-      onSaved();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  return (
-    <>
-      <section className="card">
-        <CardHead
-          title="Wie"
-          action={
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setAdding(true)}>
-              <Icon name="plus" size={15} /> Iemand
-            </button>
-          }
-        />
-        <ul className="rows">
-          {detail.people.map((p) => (
-            <li key={p.person.id}>
-              <div className="row">
-                <span className="cell-main">
-                  <Avatar member={p.person} />
-                  <span className="row-main">
-                    <span className="row-title">{p.person.id === me.id ? `${p.person.name} (jij)` : p.person.name}</span>
-                    <span className="row-meta">
-                      <span>{p.direct === "geen" ? "Geen toegang (uitzondering)" : p.via ? `Via ${p.via.tag}` : ROLES[p.role].label}</span>
-                    </span>
-                  </span>
-                </span>
-                <span className="member-actions">
-                  <select className="scope-select" aria-label={`Rol van ${p.person.name}`} value={p.direct ?? ""} onChange={(e) => setRole(p, (e.target.value || null) as DirectRole | null)}>
-                    {p.via && (
-                      <option value="">
-                        Via {p.via.tag} ({ROLES[p.role].label.toLowerCase()})
-                      </option>
-                    )}
-                    {!p.via && !p.direct && <option value="">—</option>}
-                    {Object.entries(ROLES).map(([k, r]) => (
-                      <option key={k} value={k}>
-                        {r.label}
-                      </option>
-                    ))}
-                    <option value="geen">Geen toegang</option>
-                  </select>
-                  {p.direct && !p.via && (
-                    <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${p.person.name} weghalen`} onClick={() => setRole(p, null)}>
-                      <Icon name="close" size={15} />
-                    </button>
-                  )}
-                </span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <Sheet open={adding} title="Iemand toevoegen" onClose={() => setAdding(false)}>
-        {adding && (
-          <AddPerson
-            listId={list.id}
-            onDone={() => {
-              setAdding(false);
-              onSaved();
-            }}
-          />
-        )}
-      </Sheet>
-    </>
-  );
-}
-
-function AddPerson({ listId, onDone }: { listId: string; onDone: () => void }) {
-  const toast = useToast();
-  const { data: known } = useApi<Person[]>("/me/people");
-  const [personId, setPersonId] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"beheerder" | "lid" | "gast">("lid");
-  useEffect(() => setPersonId(""), [known]);
-  async function save() {
-    try {
-      await api.post(`/lists/${listId}/people`, personId ? { person_id: personId, role } : { name, email: email || null, role });
-      toast("Toegevoegd");
-      onDone();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  return (
-    <div className="form">
-      {(known ?? []).length > 1 && (
-        <label className="field">
-          <span className="label">Iemand die je kent</span>
-          <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
-            <option value="">Iemand nieuw</option>
-            {(known ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {!personId && (
-        <>
-          <label className="field">
-            <span className="label">Naam</span>
-            <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="label">E-mailadres</span>
-            <input type="email" value={email} placeholder="Om zelf aan te melden" onChange={(e) => setEmail(e.target.value)} />
-          </label>
-        </>
-      )}
-      <label className="field">
-        <span className="label">Rol</span>
-        <select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-          {Object.entries(ROLES).map(([k, r]) => (
-            <option key={k} value={k}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="button" className="btn btn-primary" disabled={!personId && !name.trim()} onClick={save}>
-        Toevoegen
-      </button>
-    </div>
-  );
-}

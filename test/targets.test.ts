@@ -2,83 +2,80 @@
 // die erbij horen, en wat er van je tekst overblijft naast de naam van een item.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, type KindInfo } from "../shared/model.ts";
-import { buildTargets, logForms, logPath, pricedFirst, receiptLists, restAfter, withoutPrice, type Targets } from "../shared/targets.ts";
+import { presetDoes } from "../shared/cells.ts";
+import { baseKind, baseParts, type KindInfo, type LineRole } from "../shared/model.ts";
+import { buildTargets, logForms, logPath, pricedFirst, receiptForms, restAfter, withoutPrice, type Targets } from "../shared/targets.ts";
 
 const list = (id: string, name: string, one: string | null, stock = false) => ({ id, name, one, icon: null, color: null, stock });
-const kind = (id: string, list_id: string, base: KindInfo["base"], name: string, planned = false): KindInfo => ({ ...baseKind(base), id, list_id, name, planned });
+/** Een formulier met een groep lijnen uit één lijst (Proeverij: uit Wijnen). */
+const from = (id: string, base: KindInfo["base"], name: string, role: LineRole, listId: string): KindInfo => ({
+  ...baseKind(base),
+  id,
+  name,
+  parts: { ...baseParts(base), groups: [{ role, label: name, list: listId }] },
+});
 
 const t: Targets = {
   lists: [
     list("WIJNEN", "Wijnen", "Wijn", true),
     list("VOORRAAD", "Voorraad", "Product", true),
     list("RESTAURANTS", "Restaurants", "Restaurant"),
-    list("UITGAVEN", "Uitgaven", null),
-    list("BOODSCHAPPEN", "Boodschappen", null),
+    list("UITGAVEN", "Uitgaven", "Persoon"),
     list("KELDER", "Gedeelde wijnkelder", "Wijn", true),
     list("WINKELS", "Winkels", "Winkel"),
   ],
   kinds: [
-    ...(["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht"] as const).map(baseKind),
-    kind("proeverij", "WIJNEN", "gebruik", "Proeverij"),
-    kind("weg", "VOORRAAD", "gebruik", "Weggegooid"),
-    kind("uiteten", "RESTAURANTS", "dienst", "Uit eten"),
-    kind("aankoop-u", "UITGAVEN", "aankoop", "Aankoop"),
-    kind("boodschap", "BOODSCHAPPEN", "aankoop", "Boodschap", true),
-    kind("aankoop-k", "KELDER", "aankoop", "Aankoop"),
-    kind("proeverij-k", "KELDER", "gebruik", "Proeverij"),
-    // Een lijst die je enkel ziet (niet in `lists`): haar formulieren tellen niet mee.
-    kind("vreemd", "ANDERE", "aankoop", "Aankoop"),
+    from("proeverij", "gebruik", "Proeverij", "uit", "WIJNEN"),
+    from("weg", "gebruik", "Weggegooid", "uit", "VOORRAAD"),
+    from("uiteten", "dienst", "Uit eten", "voor", "RESTAURANTS"),
+    // Een aankoop die het saldo in Uitgaven bijhoudt en telt in elke voorraad.
+    { ...baseKind("aankoop"), id: "aankoop-u", name: "Aankoop", parts: baseParts("aankoop"), does: presetDoes("aankoop", "UITGAVEN") },
+    { ...baseKind("aankoop"), id: "boodschap", name: "Boodschap", planned: true },
+    from("proeverij-k", "gebruik", "Proeverij", "uit", "KELDER"),
   ],
-  used: [{ list_id: "BOODSCHAPPEN", kind: "boodschap", n: 5, last: "2026-11-09" }],
+  used: [{ list_id: null, kind: "boodschap", n: 5, last: "2026-11-09" }],
 };
 
-test("de +: geen Loggen in een lijst die eigen formulieren heeft, wel in een lijst zonder", () => {
-  const keys = buildTargets(t).map((x) => x.key);
-  assert.ok(!keys.includes("log:WIJNEN"));
-  assert.ok(!keys.includes("log:UITGAVEN"));
-  assert.ok(keys.includes("log:WINKELS"));
+test("de +: een formulier om te loggen, en per lijst met items een nieuw item", () => {
+  const all = buildTargets(t);
+  const keys = all.map((x) => x.key);
+  assert.ok(keys.includes("soort:proeverij"));
   assert.ok(keys.includes("item:RESTAURANTS"));
-  assert.equal(buildTargets(t).find((x) => x.key === "item:RESTAURANTS")?.name, "Restaurant");
+  assert.equal(all.find((x) => x.key === "item:RESTAURANTS")?.name, "Restaurant");
+  // Waar een formulier invult, staat erbij; wat je het meest gebruikt, eerst.
+  assert.equal(all.find((x) => x.key === "soort:aankoop-u")?.hint, "Uitgaven");
+  assert.equal(all[0].key, "soort:boodschap");
 });
 
-test("bij een item: de eigen formulieren, en met voorraad die van lijsten zonder eigen voorraad die de voorraad veranderen", () => {
+test("bij een item: de formulieren die de lijst invullen, en met voorraad die de voorraad veranderen", () => {
   const wijn = logForms(t, "WIJNEN");
-  // Eerst het eigen formulier, dan wat je het meest gebruikt (Boodschap), niet de Aankoop van de gedeelde wijnkelder.
+  // Eerst het formulier dat Wijnen uitdrukkelijk invult, dan wat je het meest gebruikt (Boodschap).
   assert.deepEqual(
-    wijn.map((f) => [f.label, f.list_id, f.hint]),
-    [
-      ["Proeverij", "WIJNEN", null],
-      ["Boodschap", "BOODSCHAPPEN", "Boodschappen"],
-      ["Aankoop", "UITGAVEN", "Uitgaven"],
-    ],
+    wijn.map((f) => f.kind.id),
+    ["proeverij", "boodschap", "aankoop-u"],
   );
-  // Zonder voorraad enkel het eigen formulier; zonder eigen formulieren Loggen (met de basissoorten).
+  // Zonder voorraad enkel wat de lijst invult; een lijst die niets invult, heeft niets.
   assert.deepEqual(logForms(t, "RESTAURANTS").map((f) => f.label), ["Uit eten"]);
-  assert.deepEqual(logForms(t, "WINKELS").map((f) => [f.label, f.kind]), [["Loggen", null]]);
-  // Twee formulieren met dezelfde naam: de lijst erbij. De eigen in hun volgorde (zoals de server ze geeft).
-  assert.deepEqual(logForms(t, "KELDER").map((f) => f.label), ["Aankoop · Gedeelde wijnkelder", "Proeverij", "Boodschap", "Aankoop · Uitgaven"]);
+  assert.deepEqual(logForms(t, "WINKELS"), []);
+  assert.deepEqual(logForms(t, "KELDER").map((f) => f.kind.id), ["proeverij-k", "boodschap", "aankoop-u"]);
   // Wat je bij de + verborg niet, en een lijst waar je niet logt heeft niets.
-  assert.deepEqual(logForms(t, "VOORRAAD", (id) => id !== "BOODSCHAPPEN").map((f) => f.label), ["Weggegooid", "Aankoop"]);
+  assert.deepEqual(logForms(t, "VOORRAAD", (id) => id !== "boodschap").map((f) => f.label), ["Weggegooid", "Aankoop"]);
   assert.deepEqual(logForms(t, "ANDERE"), []);
-  // Uitgaven met een rij per persoon (een saldo, geen voorraad): haar Aankoop blijft erbij.
-  const withPeople = { ...t, lists: t.lists.map((l) => (l.id === "UITGAVEN" ? { ...l, one: "Persoon" } : l)) };
-  assert.ok(logForms(withPeople, "WIJNEN").some((f) => f.list_id === "UITGAVEN"));
+  // Uitgaven: de aankoop houdt er het saldo bij.
+  assert.deepEqual(logForms(t, "UITGAVEN").map((f) => f.kind.id), ["aankoop-u"]);
 });
 
-test("het pad: de gebeurtenis komt in de lijst van het formulier, met het item als lijn en je tekst", () => {
-  const aankoop = logForms(t, "WIJNEN").find((f) => f.list_id === "UITGAVEN")!;
-  assert.equal(logPath(aankoop, "CHABLIS", "54 euro"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&item=CHABLIS&tekst=54+euro");
-  assert.equal(logPath(logForms(t, "WINKELS")[0], "COLRUYT"), "/lijsten/WINKELS/loggen?item=COLRUYT");
-  // Vanuit Wijnen een aankoop (in Uitgaven): een nieuwe wijn in een lijn komt in Wijnen.
-  assert.equal(logPath(aankoop, undefined, "", "WIJNEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&nieuw=WIJNEN");
-  assert.equal(logPath(aankoop, undefined, "", "UITGAVEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u");
+test("het pad: loggen met het formulier, met het item als lijn, je tekst en waar je vandaan komt", () => {
+  const aankoop = logForms(t, "WIJNEN").find((f) => f.kind.id === "aankoop-u")!;
+  assert.equal(logPath(aankoop.kind, "CHABLIS", "54 euro"), "/loggen?formulier=aankoop-u&item=CHABLIS&tekst=54+euro");
+  // Vanuit Wijnen een aankoop: een nieuwe wijn in een lijn komt in Wijnen.
+  assert.equal(logPath(aankoop.kind, undefined, "", "WIJNEN"), "/loggen?formulier=aankoop-u&nieuw=WIJNEN");
 });
 
 test("met een bedrag eerst de formulieren met geld; een nieuwe naam zonder bedrag", () => {
   const wijn = logForms(t, "WIJNEN");
-  assert.deepEqual(pricedFirst(wijn, "chablis").map((f) => f.label), ["Proeverij", "Boodschap", "Aankoop"]);
-  assert.deepEqual(pricedFirst(wijn, "chablis 54 euro").map((f) => f.label), ["Aankoop", "Proeverij", "Boodschap"]);
+  assert.deepEqual(pricedFirst(wijn, "chablis").map((f) => f.kind.id), ["proeverij", "boodschap", "aankoop-u"]);
+  assert.deepEqual(pricedFirst(wijn, "chablis 54 euro").map((f) => f.kind.id), ["aankoop-u", "proeverij", "boodschap"]);
   assert.equal(withoutPrice("chablis 54 euro"), "chablis");
   assert.equal(withoutPrice("€ 4,99 yoghurt"), "yoghurt");
   assert.equal(withoutPrice("melk 2"), "melk 2");
@@ -92,8 +89,6 @@ test("wat er van je tekst overblijft naast een item", () => {
   assert.equal(restAfter("halfvolle melk", "Melk"), "halfvolle");
 });
 
-test("een kasticket: in een lijst met een eigen aankoop die niet gepland begint", () => {
-  assert.deepEqual(receiptLists(t).map((l) => l.id), ["UITGAVEN", "KELDER"]);
-  // Zonder zo'n lijst: de lijsten die voorraad tellen.
-  assert.deepEqual(receiptLists({ ...t, kinds: t.kinds.filter((k) => k.base !== "aankoop" || !k.list_id) }).map((l) => l.id), ["WIJNEN", "VOORRAAD", "KELDER"]);
+test("een kasticket: met een formulier dat koopt en niet gepland begint", () => {
+  assert.deepEqual(receiptForms(t).map((k) => k.id), ["aankoop-u"]);
 });

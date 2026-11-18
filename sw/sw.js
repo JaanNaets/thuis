@@ -6,7 +6,7 @@ const PRECACHE = __PRECACHE__;
 
 const SHELL_CACHE = `shell-${VERSION}`;
 // Een nieuwe naam als de routes hieronder veranderen: bij het activeren gaat de oude cache weg.
-const DATA_CACHE = "data-v3";
+const DATA_CACHE = "data-v4";
 
 // API-routes die offline beschikbaar blijven (wat je eerder bekeek): jij, je borden en hun weergaven, een lijst met
 // haar items en logboek, een item of gebeurtenis, en wat een formulier nodig heeft (palet, mensen, de keuzelijst van
@@ -19,6 +19,8 @@ const OFFLINE_API = [
   /^\/api\/insights\/view$/,
   /^\/api\/lists\/[\w-]+$/,
   /^\/api\/lists\/[\w-]+\/(items|events)$/,
+  /^\/api\/forms\/[\w-]+$/,
+  /^\/api\/forms\/[\w-]+\/events$/,
   /^\/api\/items$/,
   /^\/api\/items\/[\w-]+$/,
   /^\/api\/events\/[\w-]+$/,

@@ -123,11 +123,9 @@ export function cleanDoes(raw: unknown, lists: ListColumns[], fields: FieldDef[]
     } else if (field === BALANCE) {
       if (!person) throw new Error("Een saldo hoort bij een persoon");
       type = "money";
-      if (typeof o.list === "string" && o.list) {
-        const l = lists.find((x) => x.id === o.list);
-        if (!l || !l.ledger) throw new Error("Die lijst houdt geen saldo bij, of je mag er niets aanpassen");
-        list = l.id;
-      }
+      const l = lists.find((x) => x.id === o.list);
+      if (!l || !l.ledger) throw new Error("Kies een lijst met een saldo per persoon waarin je mag aanpassen");
+      list = l.id;
     } else {
       const l = lists.find((x) => x.id === o.list);
       if (!l) throw new Error("Kies een lijst waarin je mag aanpassen");
@@ -170,31 +168,40 @@ function cleanValue(raw: unknown, fields: FieldDef[], op: Op): Value {
   }
 }
 
-/** Wat een vertrekpunt doet (een nieuw formulier begint ermee; een formulier zonder eigen onderdelen doet het ook). */
-export function presetDoes(base: string): Handeling[] {
+/**
+ * Wat een vertrekpunt doet (een nieuw formulier begint ermee; een formulier zonder eigen onderdelen doet het ook).
+ * `ledger`: de lijst met een saldo per persoon waar het geld komt; zonder die lijst houdt het geen saldo bij.
+ */
+export function presetDoes(base: string, ledger: string | null = null): Handeling[] {
   const qty: Value = { from: "qty" };
   const amount: Value = { from: "amount" };
   const lines = (role: LineRole, op: Op): Handeling => ({ rows: { from: "lines", role }, list: null, field: STOCK, op, value: qty });
-  const money = (from: PersonRows, op: Op): Handeling => ({ rows: { from }, list: null, field: BALANCE, op, value: amount });
+  const money = (from: PersonRows, op: Op): Handeling[] => (ledger ? [{ rows: { from }, list: ledger, field: BALANCE, op, value: amount }] : []);
   switch (base) {
     case "aankoop":
-      return [lines("in", "bij"), money("payer", "bij"), money("sharers", "af")];
+      return [lines("in", "bij"), ...money("payer", "bij"), ...money("sharers", "af")];
     case "gebruik":
       return [lines("uit", "af")];
     case "dienst":
-      return [money("payer", "bij"), money("sharers", "af")];
+      return [...money("payer", "bij"), ...money("sharers", "af")];
     case "meting":
       return [lines("voor", "zet")];
     case "overdracht":
-      return [money("payer", "bij"), money("to", "af")];
+      return [...money("payer", "bij"), ...money("to", "af")];
     default:
       return [];
   }
 }
 
-/** Het formulier waarmee je een cel rechtstreeks aanpast (in het item): het zet elk ingevuld veld op dat item. */
+/**
+ * Het formulier waarmee je een cel rechtstreeks aanpast (in het item): het zet elk ingevuld veld op dat item, en een
+ * hoeveelheid zet zijn voorraad (− en + in een lijst die telt).
+ */
 export const ADJUST = "aanpassing";
-export const ADJUST_DOES: Handeling[] = [{ rows: { from: "lines", role: "voor" }, list: null, field: EACH, op: "zet", value: { from: "field", key: EACH } }];
+export const ADJUST_DOES: Handeling[] = [
+  { rows: { from: "lines", role: "voor" }, list: null, field: EACH, op: "zet", value: { from: "field", key: EACH } },
+  { rows: { from: "lines", role: "voor" }, list: null, field: STOCK, op: "zet", value: { from: "qty" } },
+];
 
 /**
  * Raakt een lijn met deze rol een cel van een item in deze lijst? Dan moet wie bewaart die lijst mogen wijzigen.
@@ -208,8 +215,8 @@ export function touchesCell(does: Handeling[], role: LineRole, list: string, cou
 export const stockOp = (does: Handeling[], role: LineRole): Op | null =>
   does.find((h) => h.rows.from === "lines" && h.rows.role === role && h.field === STOCK)?.op ?? null;
 
-/** In welke lijsten een gebeurtenis in `list` een saldo bijhoudt (handelingen op personen). */
-export const ledgerLists = (does: Handeling[], list: string): string[] => [...new Set(does.filter((h) => h.rows.from !== "lines").map((h) => h.list ?? list))];
+/** In welke lijsten een formulier een saldo bijhoudt (handelingen op personen). */
+export const ledgerLists = (does: Handeling[]): string[] => [...new Set(does.flatMap((h) => (h.rows.from !== "lines" && h.list ? [h.list] : [])))];
 
 // ---------- wat een gebeurtenis doet ----------
 
@@ -240,7 +247,6 @@ export type EffectLine = {
 };
 
 export type EffectEvent = {
-  list_id: string;
   at: string;
   amount: number | null;
   data: Attributes;
@@ -279,7 +285,7 @@ export function effectsOf(does: Handeling[], e: EffectEvent, ledgers: Map<string
   const out: Effect[] = [];
   for (const h of does) {
     if (h.rows.from !== "lines") {
-      const ledger = ledgers.get(h.list ?? e.list_id);
+      const ledger = h.list ? ledgers.get(h.list) : undefined;
       if (!ledger) continue;
       const field = h.field === BALANCE ? ledger.field : h.field;
       for (const [person, cents] of personAmounts(h.rows.from, e)) {

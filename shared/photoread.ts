@@ -1,7 +1,7 @@
-// Een foto lezen met de AI (✨), per formulier van een lijst: "items" (een item toevoegen: een etiket, een product of
-// een gerecht) of een formulier (een vertrekpunt zoals Aankoop, of een eigen formulier zoals Gegeten). Een beheerder zet het per
-// formulier aan of uit (Instellen); wat niemand koos, volgt de standaard: een item, een formulier met geld (een kasticket
-// of factuur) en een formulier met voedingswaarden (een gerecht) lezen de foto. Bij elke foto kan je het lezen nog
+// Een foto lezen met de AI (✨): om een item toe te voegen (per lijst, `lists.read_photo` met "items": een etiket, een
+// product of een gerecht) of met een formulier (`kinds.reads`, zoals Aankoop of Gegeten). Een beheerder zet het aan of
+// uit (Instellen); wat niemand koos, volgt de standaard: een item, een formulier met geld (een kasticket of factuur) en
+// een formulier met voedingswaarden (een gerecht) lezen de foto. Bij elke foto kan je het lezen nog
 // uitzetten (de fotokiezer), en de AI start enkel na die keuze.
 
 import type { FieldDef } from "./fields.ts";
@@ -31,6 +31,9 @@ export function readsPhoto(setting: ReadPhoto | null, form: string, kind: KindLi
   if (setting?.off.includes(form)) return false;
   return readsByDefault(form, kind);
 }
+
+/** Leest dit formulier een foto: wat zijn beheerder koos (`reads`), anders de standaard. */
+export const formReads = (kind: KindLike & { id: string; reads: boolean | null }): boolean => kind.reads ?? readsByDefault(kind.id, kind);
 
 /** Zet het lezen voor één formulier aan of uit; gelijk aan de standaard = geen uitdrukkelijke keuze meer. */
 export function withReads(setting: ReadPhoto | null, form: string, kind: KindLike | null, on: boolean): ReadPhoto | null {

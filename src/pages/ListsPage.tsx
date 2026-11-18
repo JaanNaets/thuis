@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
-import { LIST_PLACES, mutedBy, type AppSettings, type ListPlace } from "../../shared/apps";
+import { LIST_PLACES, type ListPlace } from "../../shared/apps";
 import {
   betweenLists,
   groupLinkLists,
@@ -51,29 +51,12 @@ const toggled = (set: Set<string>, key: string) => {
   return next;
 };
 
-/** Stilzetten per lijst (of tag), meteen bewaard met PUT /me/muted. */
-function useMuted() {
-  const toast = useToast();
-  const { data: settings, mutate } = useApi<AppSettings>("/me/app");
-  async function set(id: string, muted: boolean) {
-    if (!settings) return;
-    try {
-      const res = await api.put<{ muted: string[] }>("/me/muted", { id, muted });
-      mutate({ ...settings, muted: res.muted });
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  return { muted: settings?.muted ?? null, set };
-}
-
 type Places = ReturnType<typeof useListPlaces>;
-type Muting = ReturnType<typeof useMuted>;
 
 /**
  * Lijsten (`/lijsten`, zie STIJLBOEK.md → Lijsten): al je lijsten op één plek, en hoe ze samenhangen, zoals jij ze
  * ziet. Als lijst (per tag, of per soort verband of weergave): de naam opent de lijst, ▸ klapt open met wat ze
- * binnenkrijgt en doorgeeft, en rechts staat waar ze voor jou staat (menu, +, meldingen) en wie er nog bij is; op een
+ * binnenkrijgt en doorgeeft, en rechts staat waar ze voor jou staat (menu, +) en wie er nog bij is; op een
  * gsm zit dat in ⋯. Op tablet ook als metrokaart. Zoeken licht op de kaart op wat overeenkomt en filtert de lijst. De
  * weergave, de gekozen lijst, je selectie, groeperen en sorteren staan in het adres (`?weergave=kaart&lijst=…&keuze=`),
  * zodat terug ook echt terug is. Ook verborgen en (met Archief) gearchiveerde lijsten staan hier altijd.
@@ -82,7 +65,6 @@ export function ListsPage() {
   const { lists, tags, person: me } = useSession();
   const { data, error } = useApi<LinksResponse>("/insights/links");
   const places = useListPlaces();
-  const muting = useMuted();
   const [params, setParams] = useSearchParams();
   const [off, setOff] = useState<Set<LinkKind>>(new Set());
   const [query, setQuery] = useState("");
@@ -225,7 +207,6 @@ export function ListsPage() {
     const addOn = places.shown(id, "add");
     return [
       l.archived ? "" : !menuOn && !addOn ? "verborgen" : !menuOn ? "niet in het menu" : !addOn ? "niet bij de +" : "",
-      data?.alerts.includes(id) && muting.muted && mutedBy(muting.muted, l) ? "stil" : "",
       l.role === "gast" ? "enkel kijken" : "",
     ].filter(Boolean);
   };
@@ -233,7 +214,7 @@ export function ListsPage() {
     const l = byId.get(id);
     if (!l || !data) return null;
     const others = l.tags.filter((t) => t !== group.key).flatMap((t) => tagById.get(t) ?? []);
-    return <RowEnd list={l} others={others} data={data} me={me.id} muting={muting} places={places} onMore={() => setOpened(id)} />;
+    return <RowEnd list={l} others={others} data={data} me={me.id} places={places} onMore={() => setOpened(id)} />;
   };
   const current = opened ? byId.get(opened) : undefined;
 
@@ -268,8 +249,6 @@ export function ListsPage() {
         {current && (
           <ListSheet
             list={current}
-            data={data}
-            muting={muting}
             places={places}
             links={
               wide
@@ -509,7 +488,6 @@ function RowEnd({
   others,
   data,
   me,
-  muting,
   places,
   onMore,
 }: {
@@ -517,14 +495,10 @@ function RowEnd({
   others: Tag[];
   data: LinksResponse;
   me: string;
-  muting: Muting;
   places: Places;
   onMore: () => void;
 }) {
-  const { tags } = useSession();
   const people = (data.people[list.id] ?? []).filter((p) => p.id !== me);
-  const alerts = data.alerts.includes(list.id);
-  const quiet = muting.muted ? mutedBy(muting.muted, list) : null;
   return (
     <>
       {others.length > 0 && (
@@ -544,17 +518,6 @@ function RowEnd({
               {p === "menu" ? "Menu" : "Toevoegen"}
             </FilterToggle>
           ))}
-          {alerts &&
-            muting.muted &&
-            (quiet && quiet !== "list" ? (
-              <button type="button" className="filter" aria-pressed="false" disabled title={`Stil via ${tags.find((t) => t.id === quiet)?.name ?? "een tag"}`}>
-                Meldingen
-              </button>
-            ) : (
-              <FilterToggle on={!quiet} onChange={(on) => muting.set(list.id, !on)}>
-                Meldingen
-              </FilterToggle>
-            ))}
         </span>
       )}
       <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${list.name}: meer`} aria-haspopup="dialog" onClick={onMore}>
@@ -581,24 +544,16 @@ function People({ people }: { people: LinkPersonView[] }) {
 /** ⋯ van een lijst: openen, instellen, haar verbanden, en waar ze voor jou staat. */
 function ListSheet({
   list,
-  data,
-  muting,
   places,
   links,
   onClose,
 }: {
   list: ListNode;
-  data: LinksResponse | undefined;
-  muting: Muting;
   places: Places;
   /** Haar verbanden: op tablet op de kaart, op gsm een eigen scherm. */
   links: { label: string; go: () => void };
   onClose: () => void;
 }) {
-  const { tags } = useSession();
-  const alerts = data?.alerts.includes(list.id) ?? false;
-  const quiet = muting.muted ? mutedBy(muting.muted, list) : null;
-  const viaTag = quiet && quiet !== "list" ? tags.find((t) => t.id === quiet) : undefined;
   return (
     <>
       <ul className="rows sheet-menu">
@@ -618,12 +573,6 @@ function ListSheet({
           {(Object.keys(LIST_PLACES) as ListPlace[]).map((p) => (
             <Switch key={p} label={LIST_PLACES[p]} checked={places.shown(list.id, p)} onChange={(on) => places.set(list.id, p, on)} />
           ))}
-          {alerts && muting.muted && !viaTag && <Switch label="Meldingen" checked={!quiet} onChange={(on) => muting.set(list.id, !on)} />}
-          {alerts && viaTag && (
-            <button type="button" className="btn btn-outline" onClick={() => muting.set(viaTag.id, false)}>
-              {viaTag.name} weer laten melden
-            </button>
-          )}
         </div>
       )}
     </>

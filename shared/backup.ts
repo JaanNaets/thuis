@@ -1,19 +1,21 @@
-// Back-up en terugzetten (Jouw gegevens → Back-up, worker/routes/backup.ts): de lijsten die je beheert, met hun soorten,
-// items, logboek (gebeurtenissen met hun lijnen), tags en weergaven (de gedeelde en je eigen). Nooit een rekeningnummer,
-// app-instellingen of andermans eigen weergaven. Terugzetten maakt altijd een nieuwe kopie met nieuwe ids (`planRestore`)
+// Back-up en terugzetten (Jouw gegevens → Back-up, worker/routes/backup.ts): de lijsten die je beheert (met hun items,
+// tags en weergaven: de gedeelde en je eigen) en de formulieren die je beheert (met hun tags en logboek: gebeurtenissen
+// met hun lijnen), en de Aanpassingen van items in die lijsten. Nooit een rekeningnummer, app-instellingen of andermans
+// eigen weergaven. Terugzetten maakt altijd een nieuwe kopie met nieuwe ids (`planRestore`)
 // en kijkt alles na zoals bij gewoon invoeren; wat niet klopt, valt weg: een persoon die je niet kent, een verwijzing
 // naar iets dat er niet (meer) is of dat je niet ziet (een lijn wordt dan tekst met de naam).
 
-import { cleanDoes, type Handeling } from "./cells.ts";
+import { ADJUST, cleanDoes, presetDoes, type Handeling } from "./cells.ts";
+import { cleanNotify, type NotifyDef } from "./alerts.ts";
 import { cleanAttributes, type AmountEntry, type Attributes, type FieldDef, type Share } from "./fields.ts";
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
 import { cleanLedger, type LedgerDef } from "./ledger.ts";
-import { BASES, cleanParts, isLineRole, isStatus, type Base, type LineRole, type Parts, type Status } from "./model.ts";
+import { BASES, baseParts, cleanParts, isBase, isLineRole, isStatus, type Base, type LineRole, type Parts, type Status } from "./model.ts";
 import { cleanStock } from "./stock.ts";
 import { cleanReadPhoto, type ReadPhoto } from "./photoread.ts";
 
 export const BACKUP_KIND = "thuis-backup";
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 
 /**
  * Elke tabel uit migrations/: mee in de back-up (true, of hoe), of bewust niet (false, met de reden in een commentaar).
@@ -26,6 +28,8 @@ export const BACKUP_TABLES = {
   list_tags: true,
   list_tag_links: true,
   kinds: true,
+  form_people: "wie erbij is (bij terugzetten ben jij beheerder; de anderen voeg je opnieuw toe)",
+  form_tag_links: true,
   items: true,
   mirrors: "koppelingen tussen lijsten die allebei in de back-up zitten",
   events: true,
@@ -53,14 +57,28 @@ export type Backup = {
   people: { id: string; name: string; email: string | null; color: string | null }[];
   tags: { id: string; name: string; color: string | null }[];
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: unknown; stock: unknown; ledger?: unknown; notify: unknown; read_photo?: unknown; archived: 0 | 1; tag_ids: string[] }[];
-  /** `planned` ontbreekt in back-ups van vóór 2026-11-10 (dan: niet gepland). */
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: unknown; goal: number | null; planned?: boolean; parts?: unknown; does?: unknown; sort_order: number }[];
+  /** De formulieren (los van de lijsten), met hun tags. */
+  kinds: {
+    id: string;
+    base: Base;
+    name: string;
+    icon: string | null;
+    fields: unknown;
+    goal: number | null;
+    planned: boolean;
+    parts: unknown;
+    does: unknown;
+    notify: unknown;
+    reads: boolean | null;
+    archived: 0 | 1;
+    tag_ids: string[];
+  }[];
   items: { id: string; list_id: string; name: string; data: unknown; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id?: string | null; mirror_of?: string | null }[];
   /** Koppelingen (zie shared/transfer.ts) tussen lijsten die allebei in de back-up zitten; ontbreekt in oudere back-ups. */
   mirrors?: { id: string; list_id: string; source_id: string; plan: unknown }[];
+  /** Het logboek van de formulieren, en de Aanpassingen (`aanpassing`) van items in de lijsten. */
   events: {
     id: string;
-    list_id: string;
     kind: string;
     base: Base;
     name: string;
@@ -85,21 +103,84 @@ export type Backup = {
 const ID = /^[A-Za-z0-9-]{1,64}$/;
 const isId = (v: unknown): v is string => typeof v === "string" && ID.test(v);
 
+type Loose = Record<string, unknown>;
+const loose = (v: unknown): Loose[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === "object") as Loose[]) : []);
+
 /**
  * Een back-up van versie 2 (toen items nog "dingen" en `things` heetten) als versie 3: `items`, een lijn met `item_id`
  * en een weergave van de items.
  */
-function olderBackup(raw: unknown): unknown {
-  const b = raw as Record<string, unknown> | null;
-  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND || b.version !== 2) return raw;
-  const lines = (l: Record<string, unknown>) => {
+function fromV2(b: Loose): Loose {
+  const lines = (l: Loose) => {
     const { thing_id, ...rest } = l;
     return { ...rest, item_id: rest.item_id ?? thing_id ?? null };
   };
-  const events = Array.isArray(b.events) ? (b.events as Record<string, unknown>[]).map((e) => ({ ...e, lines: Array.isArray(e.lines) ? (e.lines as Record<string, unknown>[]).map(lines) : e.lines })) : b.events;
-  const views = Array.isArray(b.views) ? (b.views as Record<string, unknown>[]).map((v) => ({ ...v, target: v.target === "dingen" ? "items" : v.target })) : b.views;
+  const events = loose(b.events).map((e) => ({ ...e, lines: loose(e.lines).map(lines) }));
+  const views = loose(b.views).map((v) => ({ ...v, target: v.target === "dingen" ? "items" : v.target }));
   const { things, ...rest } = b;
   return { ...rest, version: 3, items: b.items ?? things, events, views };
+}
+
+/**
+ * Een back-up van versie 3 (toen een formulier bij een lijst hoorde) als versie 4, zoals migrations/0037: een formulier
+ * krijgt de tags, melding en fotokeuze van zijn lijst; in een lijst met een saldo per persoon telt zijn geld daar
+ * (uitdrukkelijk). Een gebeurtenis met een vertrekpunt gaat naar het eigen formulier van de lijst met dat vertrekpunt,
+ * anders naar een nieuw formulier per lijst en vertrekpunt (`<lijst>-<vertrekpunt>`); een telling zonder meer wordt een
+ * Aanpassing.
+ */
+function fromV3(b: Loose): Loose {
+  const lists = new Map(loose(b.lists).map((l) => [String(l.id), l]));
+  const reads = (l: Loose | undefined, form: string): boolean | null => {
+    const r = cleanReadPhoto(l?.read_photo);
+    return r?.on.includes(form) ? true : r?.off.includes(form) ? false : null;
+  };
+  const form = (k: Loose, list: Loose | undefined): Loose => {
+    const { list_id: _l, sort_order: _s, ...rest } = k;
+    const base = isBase(k.base) ? k.base : "aankoop";
+    // Geld in een lijst met een saldo per persoon: wat het vertrekpunt deed, nu uitdrukkelijk.
+    const money = list?.ledger && (k.parts === undefined || k.parts === null) && ["aankoop", "dienst", "overdracht"].includes(base);
+    return {
+      ...rest,
+      icon: typeof k.icon === "string" ? k.icon : null,
+      planned: k.planned === true,
+      parts: money ? baseParts(base) : (k.parts ?? null),
+      does: money ? [...presetDoes(base, String(list!.id)), ...(Array.isArray(k.does) ? k.does : [])] : (k.does ?? []),
+      notify: list?.notify ?? null,
+      reads: reads(list, String(k.id)),
+      archived: 0,
+      tag_ids: Array.isArray(list?.tag_ids) ? list.tag_ids : [],
+    };
+  };
+  const kinds = loose(b.kinds);
+  const out = kinds.map((k) => form(k, lists.get(String(k.list_id))));
+  const made = new Set(out.map((k) => String(k.id)));
+  const events = loose(b.events).map((e) => {
+    const { list_id, ...rest } = e;
+    const kind = String(e.kind);
+    if (!isBase(kind)) return rest;
+    const lines = loose(e.lines);
+    const data = e.data && typeof e.data === "object" ? Object.keys(e.data) : [];
+    if (kind === "meting" && !data.length && lines.length && lines.every((l) => l.role === "voor" && typeof l.amount === "number")) return { ...rest, kind: ADJUST, name: e.name || "Telling" };
+    const own = kinds.find((k) => k.list_id === list_id && k.base === kind);
+    if (own) return { ...rest, kind: own.id };
+    const id = `${String(list_id)}-${kind}`;
+    if (!made.has(id)) {
+      made.add(id);
+      const fields = kind === "meting" ? [{ key: "waarde", label: "Waarde", type: "number" }] : [];
+      out.push(form({ id, base: kind, name: BASES[kind].label, icon: BASES[kind].icon, fields, goal: null, planned: false, parts: null, does: [] }, lists.get(String(list_id))));
+    }
+    return { ...rest, kind: id };
+  });
+  return { ...b, version: 4, kinds: out, events };
+}
+
+/** Een back-up van een vorige versie, omgezet naar deze. */
+function olderBackup(raw: unknown): unknown {
+  let b = raw as Loose | null;
+  if (!b || typeof b !== "object" || b.kind !== BACKUP_KIND) return raw;
+  if (b.version === 2) b = fromV2(b);
+  if (b.version === 3) b = fromV3(b);
+  return b;
 }
 
 /** Is dit een back-up van Heystack? Gooit een fout met uitleg als het niet klopt. */
@@ -111,8 +192,8 @@ export function parseBackup(raw: unknown): Backup {
   const all = [...b.lists!, ...b.kinds!, ...b.items!, ...b.events!, ...b.tags!];
   if (!all.every((x) => isId((x as { id?: unknown })?.id))) throw new Error("Deze back-up is beschadigd.");
   const lists = new Set(b.lists!.map((l) => l.id));
-  if (!lists.size) throw new Error("Er staan geen lijsten in deze back-up.");
-  if ([...b.kinds!, ...b.items!, ...b.events!].some((x) => !lists.has(x.list_id))) throw new Error("Deze back-up is beschadigd.");
+  if (!lists.size && !b.kinds!.length) throw new Error("Er staan geen lijsten of formulieren in deze back-up.");
+  if (b.items!.some((x) => !lists.has(x.list_id))) throw new Error("Deze back-up is beschadigd.");
   return b as Backup;
 }
 
@@ -152,7 +233,21 @@ export type RestoreContext = {
 
 export type RestorePlan = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; fields: FieldDef[]; stock: unknown; ledger: LedgerDef | null; notify: unknown; read_photo: ReadPhoto | null; archived: 0 | 1; tags: string[] }[];
-  kinds: { id: string; list_id: string; base: Base; name: string; icon: string; fields: FieldDef[]; goal: number | null; planned: boolean; parts: Parts | null; does: Handeling[]; sort_order: number }[];
+  kinds: {
+    id: string;
+    base: Base;
+    name: string;
+    icon: string | null;
+    fields: FieldDef[];
+    goal: number | null;
+    planned: boolean;
+    parts: Parts | null;
+    does: Handeling[];
+    notify: NotifyDef | null;
+    reads: boolean | null;
+    archived: 0 | 1;
+    tags: string[];
+  }[];
   items: { id: string; old: string; list_id: string; name: string; data: Attributes; part_of: string | null; archived: 0 | 1; photo: boolean; mirror_id: string | null; mirror_of: string | null }[];
   mirrors: { id: string; list_id: string; source_id: string; plan: unknown }[];
   events: (Omit<Backup["events"][number], "lines" | "data"> & { old: string; data: Attributes; lines: BackupLine[] })[];
@@ -194,7 +289,6 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       stock: cleanStock(l.stock, fields),
       ledger: cleanLedger(l.ledger, fields),
       notify: l.notify ?? null,
-      // Een eigen soort krijgt een nieuwe id; een basissoort en "items" blijven.
       read_photo: remapReadPhoto(cleanReadPhoto(l.read_photo), map),
       archived: l.archived ? 1 : 0,
       tags: [...new Set((l.tag_ids ?? []).map((t) => tagName.get(t)).filter((n): n is string => Boolean(n)))],
@@ -226,8 +320,23 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
     const parts = cleanParts(k.parts === undefined || k.parts === null ? null : remap(k.parts, map));
     const back = new Set(lists.map((l) => l.id));
     if (parts) parts.groups = parts.groups.map((g) => (g.list && !back.has(g.list) ? { ...g, list: null } : g));
-    kinds.push({ id, list_id: map.get(k.list_id)!, base: k.base, name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label, icon: k.icon, fields, goal: typeof k.goal === "number" ? k.goal : null, planned: k.planned === true, parts, does, sort_order: k.sort_order ?? 0 });
+    kinds.push({
+      id,
+      base: k.base,
+      name: String(k.name ?? "").slice(0, 40) || BASES[k.base].label,
+      icon: typeof k.icon === "string" ? k.icon : null,
+      fields,
+      goal: typeof k.goal === "number" ? k.goal : null,
+      planned: k.planned === true,
+      parts,
+      does,
+      notify: cleanNotify(k.notify),
+      reads: typeof k.reads === "boolean" ? k.reads : null,
+      archived: k.archived ? 1 : 0,
+      tags: [...new Set((k.tag_ids ?? []).map((t) => tagName.get(t)).filter((n): n is string => Boolean(n)))],
+    });
   }
+  const restoredKinds = new Set(kinds.map((k) => k.id));
 
   // Een koppeling enkel tussen twee lijsten die terugkomen; de bron en de doellijst met hun nieuwe ids.
   const restored = new Set(backup.lists.map((l) => map.get(l.id)!));
@@ -258,7 +367,9 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
   const events: RestorePlan["events"] = [];
   for (const e of backup.events) {
     if (!Object.hasOwn(BASES, e.base) || !isStatus(e.status)) continue;
-    const kind = map.get(e.kind) ?? (Object.hasOwn(BASES, e.kind) ? e.kind : e.base);
+    // Enkel met een formulier dat terugkomt, of een Aanpassing.
+    const kind = e.kind === ADJUST ? ADJUST : map.get(e.kind);
+    if (!kind || (kind !== ADJUST && !restoredKinds.has(kind))) continue;
     const fields = kindFields.get(kind) ?? [];
     const lines: BackupLine[] = [];
     for (const l of e.lines ?? []) {
@@ -275,7 +386,6 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       ...e,
       id: map.get(e.id)!,
       old: e.id,
-      list_id: map.get(e.list_id)!,
       kind,
       paid_by: e.paid_by && personOk(e.paid_by) ? e.paid_by : null,
       to_person: e.to_person && personOk(e.to_person) ? e.to_person : null,

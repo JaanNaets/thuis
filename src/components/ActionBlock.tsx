@@ -4,13 +4,14 @@
 // (`planned`) opent het formulier met Gepland aan of bewaart meteen gepland: een boodschap, iets te doen.
 
 import { useEffect, useState } from "react";
-import { actionPlans, type ActionBlock, type ViewBlock, type ViewResponse } from "../../shared/blocks";
+import { actionForm, actionPlans, type ActionBlock, type ViewBlock, type ViewResponse } from "../../shared/blocks";
 import { blockKey } from "../../shared/board";
 import { formatDuration, type Attributes } from "../../shared/fields";
-import { brusselsNow, minutesBetween, STATUSES, type KindInfo, type ListDetail } from "../../shared/model";
+import { brusselsNow, minutesBetween, STATUSES, type KindInfo } from "../../shared/model";
+import { logPath, type Targets } from "../../shared/targets";
 import { api, useApi } from "../api";
-import { listIcon, listTone } from "../lists";
 import { Link } from "../router";
+import { BASE_TONES } from "./Log";
 import { Icon, type IconName } from "./Icon";
 import { stagger } from "./Motion";
 import { useToast } from "./Toast";
@@ -29,12 +30,7 @@ export function ActionGroup({ blocks, index }: { blocks: ActionBlock[]; index: n
   );
 }
 
-/** De soort van een actie: de gekozen, anders de eerste eigen soort van de lijst. */
-export function actionKind(block: Pick<ActionBlock, "type" | "list">, detail: ListDetail): KindInfo | undefined {
-  return detail.kinds.find((k) => k.id === block.type) ?? detail.kinds.find((k) => k.list_id === block.list) ?? detail.kinds[0];
-}
-
-/** Wat een actie bewaart: de soort, nu, en wat vooraf ingevuld is (de omschrijving apart). */
+/** Wat een actie bewaart: het formulier, nu, en wat vooraf ingevuld is (de omschrijving apart). */
 function eventOf(kind: KindInfo, values: Attributes, running = false, planned = false) {
   const { name, ...data } = values as Attributes & { name?: string };
   const now = brusselsNow();
@@ -42,13 +38,13 @@ function eventOf(kind: KindInfo, values: Attributes, running = false, planned = 
   return { kind: kind.id, name: typeof name === "string" ? name : "", status: planned ? "gepland" : "gebeurd", at, data, lines: [] };
 }
 
-/** Vandaag in deze lijst met deze soort: hoeveel keer (teller), of wat nu loopt (timer). */
-function todayView(block: ActionBlock, kind: KindInfo, running: boolean): ViewBlock {
+/** Vandaag met dit formulier: hoeveel keer (teller), of wat nu loopt (timer). */
+function todayView(kind: KindInfo, running: boolean): ViewBlock {
   return {
     kind: "view",
     name: "",
     source: "logboek",
-    lists: [block.list],
+    lists: [],
     where: {
       match: "all",
       conditions: running
@@ -68,20 +64,20 @@ function todayView(block: ActionBlock, kind: KindInfo, running: boolean): ViewBl
 }
 
 export function ActionTile({ block, preview = false }: { block: ActionBlock; preview?: boolean }) {
-  const { data: detail } = useApi<ListDetail>(`/lists/${block.list}`);
-  if (!detail) return <span className="quick-tile is-loading" aria-hidden="true" />;
-  const kind = actionKind(block, detail);
+  const { data: targets } = useApi<Targets>("/me/targets");
+  if (!targets) return <span className="quick-tile is-loading" aria-hidden="true" />;
+  const kind = actionForm(block, targets.kinds);
   if (!kind) return null;
   const label = block.name || kind.name;
   const media = (
-    <span className={`row-media tone-${listTone(detail.list)}`}>
-      <Icon name={(kind.icon ?? listIcon(detail.list)) as IconName} size={16} />
+    <span className={`row-media tone-${BASE_TONES[kind.base]}`}>
+      <Icon name={kind.icon as IconName} size={16} />
     </span>
   );
   if (block.does === "form" || (block.does === "timer" && !kind.parts.duration)) {
     const values = Object.keys(block.values).length ? `&vooraf=${encodeURIComponent(JSON.stringify(block.values))}` : "";
     const planned = actionPlans(block, kind);
-    const to = `/lijsten/${block.list}/loggen?soort=${kind.id}${planned ? "&gepland=1" : ""}${values}`;
+    const to = `${logPath(kind)}${planned ? "&gepland=1" : ""}${values}`;
     const inner = (
       <>
         {media}
@@ -105,7 +101,7 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
   const toast = useToast();
   const timer = block.does === "timer";
   const watch = block.does === "count" || timer;
-  const { data: today, reload } = useApi<ViewResponse>(watch ? viewUrl(todayView(block, kind, timer)) : null);
+  const { data: today, reload } = useApi<ViewResponse>(watch ? viewUrl(todayView(kind, timer)) : null);
   const [busy, setBusy] = useState(false);
   const [, tick] = useState(0);
   const running = timer ? today?.rows[0] : undefined;
@@ -124,7 +120,7 @@ function LiveTile({ block, kind, label, media, preview }: { block: ActionBlock; 
         toast(`${label} gestopt`);
       } else {
         const planned = actionPlans(block, kind);
-        const { id } = await api.post<{ id: string }>(`/lists/${block.list}/events`, eventOf(kind, block.values, timer, planned));
+        const { id } = await api.post<{ id: string }>(`/forms/${kind.id}/events`, eventOf(kind, block.values, timer, planned));
         toast(timer ? `${label} gestart` : planned ? `${label} gepland` : `${label} bewaard`, "check", {
           label: "Ongedaan maken",
           run: async () => {

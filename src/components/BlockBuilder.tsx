@@ -31,13 +31,14 @@ import {
   type ViewBlock,
   type ViewResponse,
 } from "../../shared/blocks";
+import { actionForm } from "../../shared/blocks";
 import { CHART_STEPS, isGroupField, isNumberField, type ChartAgg, type ChartStep } from "../../shared/charts";
 import type { FieldDef, FieldValue } from "../../shared/fields";
-import type { ListDetail } from "../../shared/model";
+import type { Targets } from "../../shared/targets";
 import { kindOfKey, NAME, OPS, OPS_FOR, PERIODS, WEEKDAYS, type Condition, type Op, type Period, type PeriodKind } from "../../shared/views";
 import { useApi } from "../api";
 import { useSession } from "../session";
-import { actionKind, ActionTile } from "./ActionBlock";
+import { ActionTile } from "./ActionBlock";
 import { CardHead, Switch } from "./Controls";
 import { FormPicker } from "./FormPicker";
 import { Icon, type IconName } from "./Icon";
@@ -690,10 +691,9 @@ function RulesEditor({ draft, fields, choices, onChange }: { draft: ViewBlock; f
 const DOES_ICONS: Record<ActionDoes, IconName> = { form: "file", save: "check", count: "plus", timer: "clock" };
 
 export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initial: ActionBlock; saveLabel: string; onSave: (b: ActionBlock) => void; onCancel: () => void }) {
-  const { lists } = useSession();
   const [draft, setDraft] = useState<ActionBlock>(initial);
-  const { data: detail } = useApi<ListDetail>(draft.list ? `/lists/${draft.list}` : null);
-  const kind = detail ? actionKind(draft, detail) : undefined;
+  const { data: targets } = useApi<Targets>("/me/targets");
+  const kind = targets ? actionForm(draft, targets.kinds) : undefined;
   const set = (patch: Partial<ActionBlock>) => setDraft((d) => ({ ...d, ...patch }));
   const setValue = (key: string, v: FieldValue | undefined) => {
     const values = { ...draft.values };
@@ -706,26 +706,15 @@ export function ActionBuilder({ initial, saveLabel, onSave, onCancel }: { initia
   return (
     <div className="builder builder-narrow">
       <div className="builder-main">
-        <div className="builder-preview-tile">{draft.list && <ActionTile block={draft} preview />}</div>
+        <div className="builder-preview-tile">{kind && <ActionTile block={draft} preview />}</div>
 
-        <label className="field">
-          <span className="label">Lijst</span>
-          <select value={draft.list} onChange={(e) => set({ list: e.target.value, type: "", values: {} })}>
-            {lists.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {detail && (
+        {targets && (
           <FormPicker
-            kinds={detail.kinds}
+            kinds={targets.kinds}
             listId={draft.list}
             value={kind?.id ?? ""}
             wrap
-            onChange={(k) => set({ type: k.id, values: {}, ...(draft.does === "timer" && !k.parts.duration ? { does: "save" as const } : {}) })}
+            onChange={(k) => set({ type: k.id, list: "", values: {}, ...(draft.does === "timer" && !k.parts.duration ? { does: "save" as const } : {}) })}
           />
         )}
 

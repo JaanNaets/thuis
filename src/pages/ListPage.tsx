@@ -1,22 +1,21 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { appPath, sameDestination, type AppSettings, type Destination } from "../../shared/apps";
-import { canEdit, canManage, ROLES, type EventView, type ListDetail } from "../../shared/model";
+import { canEdit, canManage, fillsLists, type ListDetail } from "../../shared/model";
 import { api, useApi } from "../api";
-import { Avatar, CardHead, Tabs } from "../components/Controls";
+import { CardHead, Tabs } from "../components/Controls";
+import { PeopleCard } from "../components/People";
 import { usePalette } from "../components/CommandPalette";
 import { ListPlaceSwitches } from "../components/ListPlaces";
 import { Icon, type IconName } from "../components/Icon";
-import { LogList, type EventPage } from "../components/Log";
+import { EventLog } from "../components/Log";
 import { LogButtons } from "../components/LogButtons";
-import { SkeletonRows } from "../components/Motion";
-import { EmptyState, PageHead } from "../components/Page";
+import { PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
 import { ItemsView } from "../components/ItemsView";
 import { useToast } from "../components/Toast";
 import { listIcon } from "../lists";
 import { Link, useNavigate } from "../router";
-import { useSession } from "../session";
 import { PhoneAdd } from "../shell";
 
 type Tab = "items" | "logboek" | "gepland";
@@ -36,8 +35,8 @@ export function ListPage() {
   if (error && !detail) return <p className="error page">{error}</p>;
   if (!detail) return <p className="page muted">Laden…</p>;
   const { list, role } = detail;
-  // Gepland als er iets gepland staat of een eigen formulier gepland begint (Boodschappen); dan ook vóór het logboek.
-  const plans = detail.kinds.some((k) => k.list_id === list.id && k.planned);
+  // Gepland als er iets gepland staat of een formulier dat deze lijst invult gepland begint; dan ook vóór het logboek.
+  const plans = detail.kinds.some((k) => k.planned && fillsLists(k).includes(list.id));
   const planTab = detail.counts.planned || plans ? [{ value: "gepland" as const, label: "Gepland" }] : [];
   const logTab = [{ value: "logboek" as const, label: "Logboek" }];
   const tabs: { value: Tab; label: string }[] = [
@@ -101,7 +100,7 @@ export function ListPage() {
       {tabs.length > 1 && <Tabs label="Weergaven" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={tabs} />}
       <div className="split split-main-first">
         <aside className="split-aside">
-          <PeopleCard detail={detail} />
+          <PeopleCard people={detail.people} />
           {detail.tags.length > 0 && (
             <section className="card">
               <CardHead title="Tags" />
@@ -118,12 +117,15 @@ export function ListPage() {
         <div className="split-main">
           {tab === "items" && <ItemsView key={list.id} list={list} role={role} onChanged={reload} />}
           {tab !== "items" && edit && <LogButtons listId={list.id} planned={tab === "gepland"} row />}
-          {tab !== "items" && <ListLog key={`${list.id}-${tab}`} listId={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />}
+          {tab !== "items" && (
+            <EventLog key={`${list.id}-${tab}`} path={`/lists/${list.id}/events`} home={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />
+          )}
         </div>
       </div>
       <Sheet open={menu} title={list.name} onClose={() => setMenu(false)}>
         <ul className="rows sheet-menu">
           {canManage(role) && menuLink("sliders", "Instellen", `/lijsten/${list.id}/instellingen`)}
+          {edit && menuLink("note", "Nieuw formulier", `/formulieren/nieuw?lijst=${list.id}`)}
           {edit && list.one && menuLink("upload", "Importeren", `/lijsten/${list.id}/importeren`)}
           {edit && menuLink("scan", "QR-sticker", `/lijsten/${list.id}/sticker${tab === "items" ? "?item=1" : ""}`)}
           {menuLink("links", "Verbanden", `/lijsten?lijst=${list.id}`)}
@@ -144,80 +146,6 @@ export function ListPage() {
       </Sheet>
       {edit && <PhoneAdd label={addLabel} onClick={addHere} />}
     </div>
-  );
-}
-
-/** Wie bij de lijst kan: rechtstreeks met een rol, of via een tag. */
-function PeopleCard({ detail }: { detail: ListDetail }) {
-  const { person: me } = useSession();
-  const people = detail.people.filter((p) => p.direct !== "geen");
-  if (people.length <= 1 && people[0]?.person.id === me.id) return null;
-  return (
-    <section className="card">
-      <CardHead title="Wie" />
-      <ul className="rows">
-        {people.map((p) => (
-          <li key={p.person.id}>
-            <div className="row">
-              <span className="cell-main">
-                <Avatar member={p.person} />
-                <span className="row-main">
-                  <span className="row-title">{p.person.id === me.id ? `${p.person.name} (jij)` : p.person.name}</span>
-                  <span className="row-meta">
-                    <span>{p.via ? `${ROLES[p.role].label} · via ${p.via.tag}` : ROLES[p.role].label}</span>
-                  </span>
-                </span>
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Het logboek (of wat gepland staat) van een lijst, met Meer laden en afvinken. */
-export function ListLog({ listId, planned, edit, onChanged, empty }: { listId: string; planned: boolean; edit: boolean; onChanged?: () => void; empty: string }) {
-  const toast = useToast();
-  const [before, setBefore] = useState<string | null>(null);
-  const [older, setOlder] = useState<EventPage[]>([]);
-  const base = `/lists/${listId}/events?status=${planned ? "gepland" : "klaar"}&limit=40`;
-  const { data, error, reload } = useApi<EventPage>(base);
-  const { data: next } = useApi<EventPage>(before ? `${base}&before=${encodeURIComponent(before)}` : null);
-  if (next && !older.includes(next)) setOlder((o) => [...o, next]);
-  const pages = data ? [data, ...older] : [];
-  const page: EventPage | undefined = data && {
-    events: pages.flatMap((p) => p.events),
-    items: pages.flatMap((p) => p.items),
-    people: pages.flatMap((p) => p.people),
-    kinds: pages.flatMap((p) => p.kinds),
-    lists: pages.flatMap((p) => p.lists),
-    more: pages[pages.length - 1].more,
-  };
-  async function tick(e: EventView) {
-    try {
-      await api.post(`/events/${e.id}/tick`, e.status === "gepland" ? {} : { undo: true });
-      setOlder([]);
-      setBefore(null);
-      reload();
-      onChanged?.();
-    } catch (err) {
-      toast((err as Error).message, "alert");
-    }
-  }
-  if (error) return <p className="error">{error}</p>;
-  if (!page) return <SkeletonRows rows={5} />;
-  if (!page.events.length) return <EmptyState icon={planned ? "check" : "note"} title={empty} />;
-  const last = page.events[page.events.length - 1];
-  return (
-    <>
-      <LogList page={page} home={listId} onTick={edit ? tick : undefined} grouped={!planned} />
-      {page.more && (
-        <button type="button" className="btn btn-ghost" style={{ justifySelf: "center" } as CSSProperties} onClick={() => setBefore(`${last.at}|${last.id}`)}>
-          Meer laden
-        </button>
-      )}
-    </>
   );
 }
 

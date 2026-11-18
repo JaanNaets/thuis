@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { actionPlans, agendaDays, cleanActionBlock, tagView, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
+import { actionForm, actionPlans, agendaDays, cleanActionBlock, tagView, cleanViewBlock, columnsOf, evaluateView, chartOf, rangeLabel, sourceDate, sourceFields, upgradeBlock, viewName, viewSpan, type SourceItem, type ViewBlock } from "../shared/blocks.ts";
 import { cleanBlock, cleanBlocks, cleanBoards, defaultBlocks, renameBoards, segmentBlocks, type Block } from "../shared/board.ts";
 import type { FieldDef } from "../shared/fields.ts";
 import { NAME } from "../shared/views.ts";
@@ -105,7 +105,10 @@ test("een weergave nakijken: wat niet klopt valt weg, de items vragen een lijst"
   assert.equal(v.rules?.length, 2);
   const a = cleanActionBlock({ list: "L1", type: "k1", does: "save", values: { ml: 250, name: "Glas water", "x y": 1, obj: { a: 1 } } })!;
   assert.deepEqual(a, { kind: "action", name: "", list: "L1", type: "k1", does: "save", values: { ml: 250, name: "Glas water" } });
-  assert.equal(cleanActionBlock({ type: "k1" }), null);
+  // Een actie heeft een formulier; van vroeger soms enkel een lijst (zie `actionForm`).
+  assert.equal(cleanActionBlock({ type: "k1" })?.type, "k1");
+  assert.equal(cleanActionBlock({ list: "L1" })?.list, "L1");
+  assert.equal(cleanActionBlock({ does: "form" }), null);
   // Gepland: bij formulier en bewaren (een boodschap, iets te doen), niet bij tellen of een timer.
   assert.equal(cleanActionBlock({ list: "L1", type: "aankoop", does: "form", planned: true })?.planned, true);
   assert.equal(cleanActionBlock({ list: "L1", type: "k1", does: "save", planned: true })?.planned, true);
@@ -316,4 +319,18 @@ test("borden: met een naam en een icoon, nieuw of hernoemd", () => {
   const next = renameBoards(boards, [{ id: "main", name: "Thuis" }, { id: "g", name: "Geld", icon: "wallet" }, { name: "Agenda", icon: "calendar" }], () => "n1");
   assert.deepEqual(next.map((b) => [b.id, b.name, b.icon]), [["main", "Thuis", "home"], ["g", "Geld", "wallet"], ["n1", "Agenda", "calendar"]]);
   assert.deepEqual(cleanBoards(null).map((b) => [b.name, b.icon]), [["Overzicht", "project"]]);
+});
+
+test("het formulier van een actie: het gekozen, of van vroeger dat van de lijst en het vertrekpunt", () => {
+  const groups = (list: string | null) => ({ money: false, to: false, duration: false, groups: [{ role: "voor" as const, label: "Voor", list }] });
+  const kinds = [
+    { id: "k1", base: "gebruik" as const, parts: groups(null), does: [] },
+    { id: "L1-aankoop", base: "aankoop" as const, parts: groups(null), does: [] },
+    { id: "k2", base: "meting" as const, parts: groups("L2"), does: [] },
+  ];
+  assert.equal(actionForm({ type: "k1", list: "" }, kinds)?.id, "k1");
+  assert.equal(actionForm({ type: "aankoop", list: "L1" }, kinds)?.id, "L1-aankoop");
+  assert.equal(actionForm({ type: "meting", list: "L2" }, kinds)?.id, "k2");
+  assert.equal(actionForm({ type: "", list: "L2" }, kinds)?.id, "k2");
+  assert.equal(actionForm({ type: "weg", list: "" }, kinds), undefined);
 });

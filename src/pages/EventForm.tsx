@@ -4,10 +4,10 @@ import type { Attributes, Interval } from "../../shared/fields";
 import { defaultSharers } from "../../shared/ledger";
 import { stockOp } from "../../shared/cells";
 import { formEats } from "../../shared/food";
-import { brusselsNow, canEdit, mainGroup, startsPlanned, type EventView, type KindInfo, type LineRole, type ListDetail, type Status, type ItemRef } from "../../shared/model";
+import { brusselsNow, fillsLists, mainGroup, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineRole, type Status, type ItemRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
-import { readsPhoto } from "../../shared/photoread";
-import { buysWith, hasPrice } from "../../shared/targets";
+import { formReads } from "../../shared/photoread";
+import { buysWith, hasPrice, receiptForms, type Targets } from "../../shared/targets";
 import { niceName } from "../../shared/receipt";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -17,13 +17,13 @@ import { AiMark } from "../components/Fields";
 import { FormPicker } from "../components/FormPicker";
 import { Icon } from "../components/Icon";
 import { buildLine, emptyLine, lineDraft, LinesEditor, renamed, type LineDraft } from "../components/Lines";
-import { PageHead } from "../components/Page";
+import { EmptyState, PageHead } from "../components/Page";
 import { PhotoButton } from "../components/PhotoPicker";
 import { useToast } from "../components/Toast";
 import { centsToInput, parseEuro } from "../format";
 import { prepareUpload } from "../image";
 import { enqueue, isOffline } from "../outbox";
-import { useNavigate } from "../router";
+import { Link, useNavigate } from "../router";
 import { clearShared, sharedFile } from "../shared-file";
 import { useSession } from "../session";
 import { allEdit } from "./ItemForm";
@@ -31,7 +31,7 @@ import type { EventPage } from "../components/Log";
 
 type EventDetail = EventPage & { event: EventView; can_edit: boolean };
 
-/** Wat een foto opleverde (POST /lists/:id/events/read-photo): een kasticket bij een aankoop, anders de velden. */
+/** Wat een foto opleverde (POST /forms/:id/read-photo): een kasticket bij een aankoop, anders de velden. */
 type ReceiptRead = {
   kind: "receipt";
   store: ItemRef | null;
@@ -61,21 +61,38 @@ const EVERY: { value: string; label: string; every: Interval | null }[] = [
 ];
 
 /**
- * Loggen in een lijst (`/lijsten/:id/loggen`, met `?soort=`, `?item=`, `?tekst=` of `?gepland=1`), of een gebeurtenis
- * bewerken (`/gebeurtenissen/:eventId/bewerken`). Zie STIJLBOEK.md → Formulier en Lijnen.
+ * Loggen met een formulier (`/loggen`, met `?formulier=`, `?item=`, `?tekst=`, `?nieuw=<lijst>` of `?gepland=1`), of een
+ * gebeurtenis bewerken (`/gebeurtenissen/:eventId/bewerken`). Je kiest uit de formulieren waarmee je mag loggen. Zie
+ * STIJLBOEK.md → Formulier en Lijnen.
  */
 export function EventFormPage() {
-  const { id, eventId } = useParams();
+  const { eventId } = useParams();
   const { data: existing, error: loadError } = useApi<EventDetail>(eventId ? `/events/${eventId}` : null);
-  const listId = id ?? existing?.event.list_id ?? null;
-  const { data: detail, error } = useApi<ListDetail>(listId ? `/lists/${listId}` : null);
+  const { data: targets, error } = useApi<Targets>("/me/targets");
   if (error || loadError) return <p className="error page">{error ?? loadError}</p>;
-  if (!detail || (eventId && !existing)) return <p className="page muted">Laden…</p>;
-  return <EventForm key={eventId ?? listId} detail={detail} existing={existing ?? null} />;
+  if (!targets || (eventId && !existing)) return <p className="page muted">Laden…</p>;
+  if (existing && !existing.can_edit) return <p className="page muted">Je mag met dit formulier enkel kijken.</p>;
+  // De formulieren waarmee je mag loggen, en dat van de gebeurtenis die je bewerkt (ook een Aanpassing).
+  const kinds = [...targets.kinds, ...(existing?.kinds ?? []).filter((k) => k.id === existing!.event.kind && !targets.kinds.some((t) => t.id === k.id))];
+  if (!kinds.length)
+    return (
+      <div className="page">
+        <PageHead title="Loggen" back={{ to: -1, label: "Terug" }} />
+        <EmptyState
+          icon="note"
+          title="Nog geen formulier"
+          action={
+            <Link to="/formulieren/nieuw" className="btn btn-primary">
+              <Icon name="plus" size={16} /> Formulier
+            </Link>
+          }
+        />
+      </div>
+    );
+  return <EventForm key={eventId ?? "nieuw"} kinds={kinds} targets={targets} existing={existing ?? null} />;
 }
 
-function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDetail | null }) {
-  const { list, role } = detail;
+function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]; targets: Targets; existing: EventDetail | null }) {
   const event = existing?.event ?? null;
   const toast = useToast();
   const navigate = useNavigate();
@@ -84,21 +101,23 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const { data: people } = useApi<Person[]>("/me/people");
   const itemParam = params.get("item");
   const { data: preset } = useApi<{ items: ItemRef[] }>(itemParam && !event ? `/items?ids=${itemParam}` : null);
+  // Waar je vandaan komt: de lijst (`?nieuw=`) of die van het item; de formulieren die haar invullen, eerst.
+  const home = params.get("nieuw") ?? preset?.items[0]?.list_id ?? null;
+  const homeList = lists.find((l) => l.id === home) ?? null;
+  const fillsHome = (k: KindInfo) => Boolean(home) && fillsLists(k).includes(home!);
 
-  // De soorten: die van deze lijst eerst, dan de basissoorten, dan die van andere lijsten.
-  const own = detail.kinds.filter((k) => k.list_id === list.id);
-  const bases = detail.kinds.filter((k) => !k.list_id);
-  const wantedKind = params.get("soort");
-  const [kindId, setKindId] = useState<string>(
-    () => event?.kind ?? (wantedKind && detail.kinds.some((k) => k.id === wantedKind) ? wantedKind : (own[0]?.id ?? (list.stock ? "aankoop" : "activiteit"))),
-  );
+  const wantedKind = params.get("formulier") ?? params.get("soort");
+  const [kindId, setKindId] = useState<string>(() => event?.kind ?? (wantedKind && kinds.some((k) => k.id === wantedKind) ? wantedKind : (kinds.find(fillsHome) ?? kinds[0]).id));
   const chosenKind = useRef(Boolean(event || wantedKind));
-  const kind: KindInfo = detail.kinds.find((k) => k.id === kindId) ?? existing?.kinds.find((k) => k.id === kindId) ?? bases[0];
+  const kind: KindInfo = kinds.find((k) => k.id === kindId) ?? kinds[0];
+  // Wie bij het formulier is (een uitgave is standaard gelijk verdeeld over hen).
+  const { data: form } = useApi<FormDetail>(kind.system ? null : `/forms/${kind.id}`);
   // Waar een item komt als je logt vanaf dat item, en wat erbij komt in een voorraad (een aankoop).
   const main = mainGroup(kind).role;
   const adds = kind.parts.groups.find((g) => stockOp(kind.does, g.role) === "bij")?.role ?? null;
-  // Een formulier dat koopt (een kasticket, een prijs in je tekst): het eigen van de lijst, anders een vertrekpunt.
-  const buyKind = own.find(buysWith) ?? bases.find(buysWith) ?? null;
+  // Een formulier dat koopt (een kasticket, een prijs in je tekst): een dat de lijst invult eerst, dan je meestgebruikte.
+  const buyers = receiptForms(logTargets);
+  const buyKind = buyers.find(fillsHome) ?? buyers[0] ?? null;
 
   const now = brusselsNow();
   // Vooraf ingevuld door een actie op het overzicht (`?vooraf=`): de omschrijving en velden van de soort.
@@ -123,14 +142,14 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   // waar je vandaan kwam (`?nieuw=`), anders in deze. Niet bij iets gepland: een wijn op de boodschappenlijst komt pas in
   // Wijnen als je hem koopt.
   const targets = lists.filter((l) => l.one && (l.role === "lid" || l.role === "beheerder") && !l.archived);
-  const defaultNew = [params.get("nieuw"), list.stock ? list.id : ""].find((id) => id && targets.some((t) => t.id === id)) ?? "";
+  const defaultNew = [params.get("nieuw")].find((id) => id && targets.some((t) => t.id === id)) ?? "";
   const newIn = status === "gepland" ? "" : defaultNew;
   // Vooraf ingevuld in het palet (stap voor stap, Alles invullen): het bedrag ($amount) en hoeveel van het item ($qty).
   const [amount, setAmount] = useState(centsToInput(event?.amount ?? (typeof prefill.$amount === "number" ? prefill.$amount : null)));
   const [paidBy, setPaidBy] = useState(event ? (event.paid_by ?? "") : person.id);
   const [toPerson, setToPerson] = useState(event?.to_person ?? "");
-  // Een nieuwe uitgave in een gedeelde lijst: gelijk over wie er logt (shared/ledger.ts), tot je de verdeling zelf kiest.
-  const sharers = detail.people.filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, role: p.role }));
+  // Een nieuwe uitgave met een gedeeld formulier: gelijk over wie ermee logt (shared/ledger.ts), tot je de verdeling zelf kiest.
+  const sharers = (form?.people ?? []).filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, role: p.role }));
   const defaultShares = (k: KindInfo): SharesDraft => {
     const ids = defaultSharers(k.parts, sharers);
     return ids.length ? { mode: "equal", people: ids, values: {} } : sharesDraft(undefined);
@@ -138,10 +157,10 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [shares, setShares] = useState<SharesDraft>(() => (event ? sharesDraft(event.split ?? undefined) : defaultShares(kind)));
   const sharesChosen = useRef(Boolean(event));
   useEffect(() => {
-    if (!sharesChosen.current) setShares(defaultShares(kind));
-    // Enkel bij een ander formulier; de mensen van de lijst veranderen niet terwijl je invult.
+    if (!sharesChosen.current && !event) setShares(defaultShares(kind));
+    // Bij een ander formulier en als zijn mensen er zijn; die veranderen niet terwijl je invult.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind.id]);
+  }, [kind.id, form]);
   const [draft, setDraft] = useState<AttributeDraft>(() => attributesDraft(kind.fields, event?.data ?? (Object.fromEntries(Object.entries(prefill).filter(([k]) => k !== "name")) as Attributes)));
   const [lines, setLines] = useState<LineDraft[]>(() =>
     event
@@ -168,8 +187,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   const access = useMemo(() => allEdit(kind.fields), [kind.fields]);
-  // Leest dit formulier een foto (Instellen van de lijst, en de AI staat voor jou aan)?
-  const reads = Boolean(ai && !event && readsPhoto(list.read_photo, kind.id, kind));
+  // Leest dit formulier een foto (Instellen van het formulier, en de AI staat voor jou aan)?
+  const reads = Boolean(ai && !event && formReads(kind));
 
   // Een item uit het adres (Loggen vanaf een item): meteen als eerste lijn.
   useEffect(() => {
@@ -185,8 +204,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
     if (sharedTaken.current || event || (!receipt && params.get("foto") !== "gedeeld")) return;
     sharedTaken.current = true;
-    // Een kasticket: het eigen formulier van de lijst dat koopt, anders een vertrekpunt dat koopt (Aankoop).
-    const buy = buyKind?.id ?? null;
+    // Een kasticket: het gekozen formulier als het koopt, anders een formulier dat koopt (Aankoop).
+    const buy = buysWith(kind) ? kind.id : (buyKind?.id ?? null);
     if (receipt && buy) {
       chosenKind.current = true;
       setKindId(buy);
@@ -226,8 +245,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
   useEffect(() => {
     if (event) return;
     let text = typed.trim();
-    // Begint de tekst met een soort ("gegeten pasta"), dan die soort.
-    const lead = [...own, ...bases].find((k) => fold(text) === fold(k.name) || fold(text).startsWith(`${fold(k.name)} `));
+    // Begint de tekst met een formulier ("gegeten pasta"), dan dat formulier.
+    const lead = kinds.find((k) => fold(text) === fold(k.name) || fold(text).startsWith(`${fold(k.name)} `));
     if (lead) {
       text = text.slice(lead.name.length).trim();
       if (lead.id !== kindId) {
@@ -235,7 +254,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         setKindId(lead.id);
         return;
       }
-    } else if (!chosenKind.current && !money && hasPrice(text) && buyKind) {
+    } else if (!chosenKind.current && !kind.parts.money && hasPrice(text) && buyKind) {
       // Een prijs zonder gekozen formulier: een formulier dat koopt.
       setKindId(buyKind.id);
       return;
@@ -334,7 +353,6 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     };
   }
 
-  if (!canEdit(role)) return <p className="page muted">Je mag in deze lijst enkel kijken.</p>;
   const shareWith = (people ?? []).filter((p) => shares.people.includes(p.id));
   const money = kind.parts.money;
   const eats = formEats(kind);
@@ -345,8 +363,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
     try {
       const form = new FormData();
       form.set("image", await prepareUpload(file));
-      form.set("kind", kind.id);
-      const read = await api.post<ReceiptRead | FormRead>(`/lists/${list.id}/events/read-photo`, form);
+      const read = await api.post<ReceiptRead | FormRead>(`/forms/${kind.id}/read-photo`, form);
       setPending(null);
       clearShared();
       if (read.kind === "form") {
@@ -427,7 +444,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
           id: string;
           made: { name: string }[];
           ticked: { name: string }[];
-        }>(`/lists/${list.id}/events`, body);
+        }>(`/forms/${kind.id}/events`, body);
         id = saved.id;
         if (saved.made.length) extra += `, nieuw: ${saved.made.map((m) => m.name).join(", ")}`;
         if (saved.ticked.length) extra += `, afgevinkt: ${saved.ticked.length === 1 ? "1 boodschap" : `${saved.ticked.length} boodschappen`}`;
@@ -441,12 +458,14 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
         await api.put(`/events/${id}/photo`, form).catch((err: Error) => toast(err.message, "alert"));
       }
       toast(`${kind.name} ${!event && status === "gepland" ? "gepland" : "bewaard"}${extra}`);
-      navigate(event ? `/gebeurtenissen/${event.id}` : `/lijsten/${list.id}?tab=${status === "gepland" ? "gepland" : "logboek"}`, { replace: true });
+      // Terug naar de lijst waar je vandaan kwam, anders naar het formulier.
+      const tab = `?tab=${status === "gepland" ? "gepland" : "logboek"}`;
+      navigate(event ? `/gebeurtenissen/${event.id}` : homeList ? `/lijsten/${homeList.id}${tab}` : `/formulieren/${kind.id}${tab}`, { replace: true });
     } catch (err) {
       if (!event && isOffline(err)) {
-        await enqueue("event", list.id, name.trim() || kind.name, body, photo);
+        await enqueue("event", kind.id, name.trim() || kind.name, body, photo);
         toast(`${kind.name} wacht op internet`);
-        navigate(`/lijsten/${list.id}`, { replace: true });
+        navigate(homeList ? `/lijsten/${homeList.id}` : `/formulieren/${kind.id}`, { replace: true });
         return;
       }
       setProblem((err as Error).message);
@@ -458,7 +477,7 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
 
   return (
     <form className="form page" onSubmit={save}>
-      <PageHead title={event ? `${kind.name} bewerken` : status === "gepland" ? "Plannen" : "Loggen"} back={{ to: -1, label: list.name }} />
+      <PageHead title={event ? `${kind.name} bewerken` : status === "gepland" ? "Plannen" : "Loggen"} back={{ to: -1, label: homeList?.name ?? kind.name }} />
       <section className="card form-section">
         {!event && <input value={typed} maxLength={300} autoFocus={!typed} aria-label="Typ wat je weet" placeholder="Typ wat je weet…" onChange={(e) => setTyped(e.target.value)} />}
         {!event?.photo_version && (
@@ -501,8 +520,8 @@ function EventForm({ detail, existing }: { detail: ListDetail; existing: EventDe
           </div>
         )}
         <FormPicker
-          kinds={detail.kinds}
-          listId={list.id}
+          kinds={kinds}
+          listId={home}
           value={kindId}
           onChange={(k) => {
             chosenKind.current = true;

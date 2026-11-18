@@ -24,9 +24,9 @@ export function eventPeople(e: { paid_by: string | null; split: { person_id: str
 /** Staat deze lijst (of een van haar tags) stil voor iemand? */
 export const isMuted = (muted: string[], listId: string, tagIds: string[] = []) => muted.includes(listId) || tagIds.some((t) => muted.includes(t));
 
-/** De tekst: "Jana logde een aankoop" / "Jana logde 3 keer in Voorraad", met de titel en het bedrag eronder. */
-export function notifyMessage(o: { author: string; kind: string; list: string; title: string; count: number; detail?: string }): { title: string; body: string } {
+/** De tekst: "Jana logde aankoop" / "Jana logde 3 keer gegeten", met de titel en het bedrag eronder. */
+export function notifyMessage(o: { author: string; kind: string; title: string; count: number; detail?: string }): { title: string; body: string } {
   const body = `${o.title}${o.detail ? ` · ${o.detail}` : ""}`;
-  if (o.count > 1) return { title: `${o.author} logde ${o.count} keer in ${o.list}`, body: `Laatst: ${body}` };
-  return { title: `${o.author} logde ${o.kind.toLowerCase()} in ${o.list}`, body };
+  if (o.count > 1) return { title: `${o.author} logde ${o.count} keer ${o.kind.toLowerCase()}`, body: `Laatst: ${body}` };
+  return { title: `${o.author} logde ${o.kind.toLowerCase()}`, body };
 }

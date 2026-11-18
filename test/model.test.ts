@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, brusselsNow, eventTitle, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
+import { baseKind, brusselsNow, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
 import { keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
@@ -104,26 +104,26 @@ test("lijnen zien en bewaren", () => {
 });
 
 test("een nieuwe gebeurtenis begint gepland als je erom vraagt of als haar formulier dat doet", () => {
-  const boodschap: KindInfo = { ...baseKind("aankoop"), id: "k1", name: "Boodschap", list_id: "BOODSCHAPPEN", planned: true };
+  const boodschap: KindInfo = { ...baseKind("aankoop"), id: "k1", name: "Boodschap", planned: true };
   assert.equal(baseKind("aankoop").planned, false);
   assert.equal(startsPlanned(baseKind("aankoop"), false), false);
   assert.equal(startsPlanned(baseKind("aankoop"), true), true);
   assert.equal(startsPlanned(boodschap, false), true);
 });
 
-test("de formulieren van een lijst: haar eigen, anders de basissoorten; de rest onder Ander formulier", () => {
-  const bases = (["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht"] as const).map(baseKind);
-  const own = (id: string, name: string, list: string): KindInfo => ({ ...baseKind("gebruik"), id, name, list_id: list });
-  const kinds = [...bases, own("k1", "Gegeten", "DIEET"), own("k2", "Gewicht", "DIEET"), own("k3", "Proeverij", "WIJN")];
+test("de formulieren van een lijst: die haar invullen, anders alle; de rest onder Ander formulier", () => {
+  const form = (id: string, name: string, list: string): KindInfo => ({ ...baseKind("gebruik"), id, name, parts: { ...baseKind("gebruik").parts, groups: [{ role: "uit", label: "Uit", list }] } });
+  const kinds = [baseKind("aankoop"), form("k1", "Gegeten", "VOORRAAD"), form("k2", "Gewicht", "VOORRAAD"), form("k3", "Proeverij", "WIJN")];
   const ids = (xs: KindInfo[]) => xs.map((k) => k.id);
-  assert.deepEqual(ids(formsOf(kinds, "DIEET").shown), ["k1", "k2"]);
-  assert.deepEqual(ids(formsOf(kinds, "DIEET").more), ["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht", "k3"]);
-  // Zonder eigen formulieren: de basissoorten.
-  assert.deepEqual(ids(formsOf(kinds, "LEEG").shown), ["aankoop", "gebruik", "dienst", "activiteit", "meting", "overdracht"]);
-  assert.deepEqual(ids(formsOf(kinds, "LEEG").more), ["k1", "k2", "k3"]);
-  // Wat al gekozen is, staat erbij (een boodschap als aankoop, een gebeurtenis van vroeger) en niet nog eens onderaan.
-  const chosen = formsOf(kinds, "DIEET", "aankoop");
+  const fills = (list: string) => (k: KindInfo) => fillsLists(k).includes(list);
+  assert.deepEqual(ids(formsOf(kinds, fills("VOORRAAD")).shown), ["k1", "k2"]);
+  assert.deepEqual(ids(formsOf(kinds, fills("VOORRAAD")).more), ["aankoop", "k3"]);
+  // Vult niets de lijst in: alle formulieren.
+  assert.deepEqual(ids(formsOf(kinds, fills("LEEG")).shown), ["aankoop", "k1", "k2", "k3"]);
+  assert.deepEqual(ids(formsOf(kinds, fills("LEEG")).more), []);
+  // Wat al gekozen is, staat erbij (een gebeurtenis die je bewerkt) en niet nog eens onderaan.
+  const chosen = formsOf(kinds, fills("VOORRAAD"), "aankoop");
   assert.deepEqual(ids(chosen.shown), ["k1", "k2", "aankoop"]);
   assert.ok(!ids(chosen.more).includes("aankoop"));
-  assert.deepEqual(ids(formsOf(kinds, "DIEET", "k1").shown), ["k1", "k2"]);
+  assert.deepEqual(ids(formsOf(kinds, fills("VOORRAAD"), "k1").shown), ["k1", "k2"]);
 });

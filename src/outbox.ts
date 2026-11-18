@@ -7,8 +7,11 @@ import { api, ApiError } from "./api";
 import { useToast } from "./components/Toast";
 import { REFRESH_EVENT } from "./device";
 
-/** Wat wacht: een gebeurtenis (`event`) of een item (`item`) in een lijst, met wat het formulier zou sturen. */
-export type Waiting = { id: string; what: "event" | "item"; list_id: string; label: string; input: unknown; photo?: Blob; created_at: string };
+/**
+ * Wat wacht: een gebeurtenis (`event`, met haar formulier in `form`) of een item (`item`, in de lijst `list_id`), met wat
+ * het formulier zou sturen.
+ */
+export type Waiting = { id: string; what: "event" | "item"; list_id?: string; form?: string; label: string; input: unknown; photo?: Blob; created_at: string };
 
 const DB_NAME = "thuis";
 const STORE = "outbox";
@@ -39,8 +42,9 @@ async function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) =>
 /** Is een fout "geen internet" (dan wachten), of zegt de server nee (dan niet)? */
 export const isOffline = (err: unknown) => err instanceof ApiError && err.status === 0 && !navigator.onLine;
 
-export async function enqueue(what: Waiting["what"], listId: string, label: string, input: unknown, photo?: Blob | null): Promise<void> {
-  const entry: Waiting = { id: crypto.randomUUID(), what, list_id: listId, label, input, ...(photo ? { photo } : {}), created_at: new Date().toISOString() };
+/** `to`: het formulier van een gebeurtenis, of de lijst van een item. */
+export async function enqueue(what: Waiting["what"], to: string, label: string, input: unknown, photo?: Blob | null): Promise<void> {
+  const entry: Waiting = { id: crypto.randomUUID(), what, ...(what === "event" ? { form: to } : { list_id: to }), label, input, ...(photo ? { photo } : {}), created_at: new Date().toISOString() };
   await run("readwrite", (s) => s.put(entry));
   window.dispatchEvent(new Event(CHANGED));
 }
@@ -64,7 +68,10 @@ export function flush(): Promise<{ sent: number; refused: string[] }> {
     for (const entry of await waiting()) {
       try {
         const path = entry.what === "event" ? "events" : "items";
-        const saved = await api.post<{ id: string }>(`/lists/${entry.list_id}/${path}`, entry.input);
+        // Een gebeurtenis van vroeger wachtte met een lijst (toen een formulier bij een lijst hoorde): die kan niet meer.
+        const to = entry.what === "event" ? (entry.form ? `/forms/${entry.form}` : null) : `/lists/${entry.list_id}`;
+        if (!to) throw new ApiError(410, "Dit wachtte nog van voor de losse formulieren. Log het opnieuw.");
+        const saved = await api.post<{ id: string }>(`${to}/${path}`, entry.input);
         if (entry.photo) {
           const body = new FormData();
           body.set("file", entry.photo);

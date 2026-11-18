@@ -3,40 +3,31 @@ import { Hono } from "hono";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields, cleanListFields } from "../../shared/listdef";
 import { withSelf } from "../../shared/template-file";
-import { cleanDoes, type Handeling, type ListColumns } from "../../shared/cells";
-import type { FieldDef } from "../../shared/fields";
+import { BALANCE, cleanDoes, presetDoes, type ListColumns } from "../../shared/cells";
 import { cleanLedger } from "../../shared/ledger";
-import { baseParts, canEdit, cleanParts, isBase, isDirectRole, isRole, ROLES, type Base, type DirectRole, type ListDetail, type ListNode, type ListPerson, type Parts, type Role, type Tag } from "../../shared/model";
+import { BASES, baseParts, canEdit, fillsLists, isBase, type Base, type FormNode, type ListDetail, type ListNode, type Role, type Tag } from "../../shared/model";
 import { cleanNotify } from "../../shared/alerts";
 import { cleanReadPhoto } from "../../shared/photoread";
-import { keepsAdmin } from "../../shared/rights";
 import { cleanStock } from "../../shared/stock";
-import { isTone, type Person } from "../../shared/types";
-import { ids, kindsFor, listRoles, needManage, parseJson, requireList, seenLists, toKind, toList, type KindRowDb, type ListRow } from "../access";
+import { isTone } from "../../shared/types";
+import { ids, kindsFor, needEdit, needManage, requireList, seenForms, seenLists, toList, type ListRow } from "../access";
 import { rebuildEffects } from "../cells";
+import { touchesLists } from "../events-view";
+import { addPerson, peopleOf, setPerson, tagsOn, tagStatements } from "../members";
 import type { AppEnv } from "../types";
-import { asObject, ConflictError, idList, NotFoundError, optionalString, requiredString, ValidationError } from "../validate";
+import { asObject, cleaned as clean, optionalString, requiredString, ValidationError } from "../validate";
+import { columnsOf, goalOf, partsOf, plannedOf } from "./forms";
 
 export const lists = new Hono<AppEnv>();
-export const kinds = new Hono<AppEnv>();
 
-const MAX_TAGS = 12;
 const MAX_KINDS = 30;
 
-/** Een fout van het nakijken van velden wordt een gewone fout voor de gebruiker. */
-function clean<T>(fn: () => T): T {
-  try {
-    return fn();
-  } catch (err) {
-    throw new ValidationError(err instanceof Error ? err.message : "Ongeldige velden");
-  }
-}
-
-/** Al je lijsten (met je rol, tags en jouw volgorde) en de tags die je ziet. */
-export async function myLists(db: D1Database, personId: string): Promise<{ lists: ListNode[]; tags: Tag[] }> {
-  const seen = await seenLists(db, personId);
+/** Al je lijsten (met je rol, tags en jouw volgorde), je formulieren en de tags die je ziet. */
+export async function myLists(db: D1Database, personId: string): Promise<{ lists: ListNode[]; forms: FormNode[]; tags: Tag[] }> {
+  const [seen, seenF] = await Promise.all([seenLists(db, personId), seenForms(db, personId)]);
   const list = ids(seen.keys());
-  const [rows, links, order, tags] = (await db.batch([
+  const formIds = ids(seenF.keys());
+  const [rows, links, order, tags, formRows, formLinks] = (await db.batch([
     db.prepare("SELECT id, name, one, icon, color, archived, stock FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(list),
     db.prepare("SELECT list_id, tag_id FROM list_tag_links WHERE list_id IN (SELECT value FROM json_each(?))").bind(list),
     db.prepare("SELECT list_id, position FROM list_order WHERE person_id = ?").bind(personId),
@@ -44,14 +35,19 @@ export async function myLists(db: D1Database, personId: string): Promise<{ lists
       .prepare(
         `SELECT DISTINCT t.id, t.name, t.color, t.created_by FROM list_tags t
          WHERE t.created_by = ?1 OR t.id IN (SELECT tag_id FROM list_tag_links WHERE list_id IN (SELECT value FROM json_each(?2)))
+           OR t.id IN (SELECT tag_id FROM form_tag_links WHERE form_id IN (SELECT value FROM json_each(?3)))
          ORDER BY t.name COLLATE NOCASE`,
       )
-      .bind(personId, list),
+      .bind(personId, list, formIds),
+    db.prepare("SELECT id, name, icon, base, archived FROM kinds WHERE id IN (SELECT value FROM json_each(?))").bind(formIds),
+    db.prepare("SELECT form_id, tag_id FROM form_tag_links WHERE form_id IN (SELECT value FROM json_each(?))").bind(formIds),
   ])) as [
     D1Result<{ id: string; name: string; one: string | null; icon: string | null; color: string | null; archived: number; stock: string | null }>,
     D1Result<{ list_id: string; tag_id: string }>,
     D1Result<{ list_id: string; position: number }>,
     D1Result<{ id: string; name: string; color: string | null; created_by: string }>,
+    D1Result<{ id: string; name: string; icon: string | null; base: Base; archived: number }>,
+    D1Result<{ form_id: string; tag_id: string }>,
   ];
   const tagsOf = new Map<string, string[]>();
   for (const l of links.results) tagsOf.set(l.list_id, [...(tagsOf.get(l.list_id) ?? []), l.tag_id]);
@@ -69,7 +65,20 @@ export async function myLists(db: D1Database, personId: string): Promise<{ lists
     position: pos.get(r.id) ?? 1_000_000,
   }));
   nodes.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, "nl"));
-  return { lists: nodes, tags: tags.results.map((t) => ({ ...t, color: isTone(t.color) ? t.color : null })) };
+  const formTags = new Map<string, string[]>();
+  for (const l of formLinks.results) formTags.set(l.form_id, [...(formTags.get(l.form_id) ?? []), l.tag_id]);
+  const forms: FormNode[] = formRows.results
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      icon: isIconKey(r.icon) ? r.icon : (BASES[r.base]?.icon ?? "note"),
+      base: r.base,
+      role: seenF.get(r.id)!,
+      tags: formTags.get(r.id) ?? [],
+      archived: (r.archived ? 1 : 0) as 0 | 1,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  return { lists: nodes, forms, tags: tags.results.map((t) => ({ ...t, color: isTone(t.color) ? t.color : null })) };
 }
 
 lists.get("/", async (c) => c.json(await myLists(c.env.DB, c.get("person").id)));
@@ -84,11 +93,12 @@ lists.post("/", async (c) => {
   // Uit een sjabloon: een verwijzing naar de lijst zelf ("self") wordt deze nieuwe lijst.
   const fields = withSelf(clean(() => cleanListFields(body.fields)), id);
   const one = optionalString(body, "one", 40);
+  if (!one) throw new ValidationError("Hoe heet één item van deze lijst?");
   const stock = cleanStock(body.stock, fields);
   const ledger = cleanLedger(body.ledger, fields);
   const statements: D1PreparedStatement[] = [
     db
-      .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, ledger, notify, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO lists (id, name, one, icon, color, fields, stock, ledger, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(
         id,
         name,
@@ -98,32 +108,32 @@ lists.post("/", async (c) => {
         JSON.stringify(fields),
         stock ? JSON.stringify(stock) : null,
         ledger ? JSON.stringify(ledger) : null,
-        JSON.stringify(cleanNotify(body.notify)),
         me.id,
       ),
     db.prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(id, me.id),
   ];
-  statements.push(...(await tagStatements(db, me.id, id, body)));
+  statements.push(...(await tagStatements(db, me.id, "list", id, body)));
   // Eigen soorten uit een sjabloon (Gegeten, Bijvulling).
   const rawKinds = Array.isArray(body.kinds) ? body.kinds.slice(0, MAX_KINDS) : [];
-  // Wat ze invullen: kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij items mag aanpassen.
+  // Formulieren uit het sjabloon: los van de lijst, met jou als beheerder en de tags van de lijst. Wat ze invullen:
+  // kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij items mag aanpassen.
   const seen = await seenLists(db, me.id);
   const columns: ListColumns[] = rawKinds.some((k) => Array.isArray(asObject(k).does) && (asObject(k).does as unknown[]).length)
     ? [{ id, name, stock: Boolean(stock), ledger: Boolean(ledger), fields }, ...(await columnsOf(db, seen, true))]
     : [];
-  rawKinds.forEach((raw, i) => {
+  for (const raw of rawKinds) {
     const k = asObject(raw);
     if (!isBase(k.base)) throw new ValidationError("Onbekende basissoort");
     const kindFields = withSelf(clean(() => cleanKindFields(k.fields)), id);
     const rawDoes: unknown[] = Array.isArray(k.does) ? k.does : [];
     const does = clean(() => cleanDoes(rawDoes.map((h) => (asObject(h).list === "self" ? { ...asObject(h), list: id } : h)), columns, kindFields));
     const parts = k.parts === undefined ? null : partsOf(k.parts, k.base, seen, id);
+    const formId = crypto.randomUUID();
     statements.push(
       db
-        .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("INSERT INTO kinds (id, base, name, icon, fields, goal, planned, parts, does, notify, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(
-          crypto.randomUUID(),
-          id,
+          formId,
           k.base,
           requiredString(k, "name", 40),
           isIconKey(k.icon) ? k.icon : null,
@@ -132,90 +142,42 @@ lists.post("/", async (c) => {
           plannedOf(k),
           parts ? JSON.stringify(parts) : null,
           does.length ? JSON.stringify(does) : null,
-          i,
+          JSON.stringify(cleanNotify(body.notify)),
+          me.id,
         ),
+      db.prepare("INSERT INTO form_people (form_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(formId, me.id),
+      db.prepare("INSERT INTO form_tag_links (form_id, tag_id) SELECT ?, tag_id FROM list_tag_links WHERE list_id = ?").bind(formId, id),
     );
-  });
+  }
   await db.batch(statements);
   return c.json({ id }, 201);
 });
-
-/**
- * De tags van een lijst zetten: bestaande tags die je ziet (`tag_ids`) en nieuwe namen (`new_tags`). Een tag met
- * dezelfde naam die je al ziet, wordt hergebruikt.
- */
-async function tagStatements(db: D1Database, personId: string, listId: string, body: Record<string, unknown>): Promise<D1PreparedStatement[]> {
-  const wanted = idList(body, "tag_ids", MAX_TAGS);
-  const names = Array.isArray(body.new_tags)
-    ? [...new Set(body.new_tags.filter((n): n is string => typeof n === "string").map((n) => n.trim().slice(0, 40)).filter(Boolean))].slice(0, MAX_TAGS)
-    : [];
-  const { tags } = await myLists(db, personId);
-  const byId = new Map(tags.map((t) => [t.id, t]));
-  const byName = new Map(tags.map((t) => [t.name.toLocaleLowerCase("nl"), t]));
-  const out: D1PreparedStatement[] = [db.prepare("DELETE FROM list_tag_links WHERE list_id = ?").bind(listId)];
-  const chosen = new Set(wanted.filter((t) => byId.has(t)));
-  for (const n of names) {
-    const known = byName.get(n.toLocaleLowerCase("nl"));
-    if (known) {
-      chosen.add(known.id);
-      continue;
-    }
-    const tagId = crypto.randomUUID();
-    out.push(db.prepare("INSERT INTO list_tags (id, name, created_by) VALUES (?, ?, ?)").bind(tagId, n, personId));
-    chosen.add(tagId);
-  }
-  if (chosen.size > MAX_TAGS) throw new ValidationError(`Hoogstens ${MAX_TAGS} tags per lijst`);
-  for (const t of chosen) out.push(db.prepare("INSERT INTO list_tag_links (list_id, tag_id) VALUES (?, ?)").bind(listId, t));
-  return out;
-}
-
-/** Iedereen bij een lijst, met hoe (rechtstreeks of via een tag). */
-export async function listPeople(db: D1Database, listId: string): Promise<ListPerson[]> {
-  const { index, candidates } = await listRoles(db, listId);
-  const people = index.people(listId, candidates);
-  if (!people.length) return [];
-  const [persons, tags] = (await db.batch([
-    db.prepare("SELECT id, name, email, color, iban FROM people WHERE id IN (SELECT value FROM json_each(?))").bind(ids(people.map((p) => p.person_id))),
-    db.prepare("SELECT id, name FROM list_tags WHERE id IN (SELECT value FROM json_each(?))").bind(ids(people.flatMap((p) => (p.tag_id ? [p.tag_id] : [])))),
-  ])) as [D1Result<Person>, D1Result<{ id: string; name: string }>];
-  const byId = new Map(persons.results.map((p) => [p.id, p]));
-  const tagName = new Map(tags.results.map((t) => [t.id, t.name]));
-  return people
-    .filter((p) => byId.has(p.person_id))
-    .map((p) => ({
-      person: { ...byId.get(p.person_id)!, iban: null },
-      role: p.role ?? "gast",
-      direct: p.direct,
-      via: p.tag_id ? { tag_id: p.tag_id, tag: tagName.get(p.tag_id) ?? "" } : null,
-    }))
-    .sort((a, b) => (a.direct === "geen" ? 1 : 0) - (b.direct === "geen" ? 1 : 0) || a.person.name.localeCompare(b.person.name, "nl"));
-}
 
 lists.get("/:id", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
-  const seen = await seenLists(db, me.id);
-  const [tags, counts] = (await db.batch([
-    db.prepare("SELECT t.id, t.name, t.color, t.created_by FROM list_tags t JOIN list_tag_links l ON l.tag_id = t.id WHERE l.list_id = ? ORDER BY t.name").bind(list.id),
-    db
-      .prepare(
-        `SELECT (SELECT count(*) FROM items WHERE list_id = ?1 AND archived = 0) AS items,
-                (SELECT count(*) FROM events WHERE list_id = ?1 AND status != 'gepland') AS events,
-                (SELECT count(*) FROM events WHERE list_id = ?1 AND status = 'gepland') AS planned`,
-      )
-      .bind(list.id),
-  ])) as [D1Result<Tag>, D1Result<{ items: number; events: number; planned: number }>];
-  // Eigen soorten van deze lijst eerst, dan die van andere lijsten die je ziet.
-  const all = await kindsFor(db, seen.keys());
-  const kinds = [...all.filter((k) => !k.list_id), ...all.filter((k) => k.list_id === list.id), ...all.filter((k) => k.list_id && k.list_id !== list.id)];
+  const forms = await seenForms(db, me.id);
+  // Het logboek van een lijst: wat haar items raakte (een lijn of een verandering van een cel, zie events-view.ts).
+  const counts = await db
+    .prepare(
+      `SELECT (SELECT count(*) FROM items WHERE list_id = ?1 AND archived = 0) AS items,
+              (SELECT count(*) FROM events e WHERE ${touchesLists("?2")} AND e.status != 'gepland') AS events,
+              (SELECT count(*) FROM events e WHERE ${touchesLists("?2")} AND e.status = 'gepland') AS planned`,
+    )
+    .bind(list.id, ids([list.id]))
+    .first<{ items: number; events: number; planned: number }>();
+  // De formulieren die je ziet: die deze lijst invullen eerst.
+  const all = await kindsFor(db, forms.keys());
+  const fills = (k: (typeof all)[number]) => fillsLists(k).includes(list.id);
+  const kinds = [...all.filter(fills), ...all.filter((k) => !fills(k))];
   const detail: ListDetail = {
     list,
     role,
-    tags: tags.results.map((t) => ({ ...t, color: isTone(t.color) ? t.color : null })),
-    people: await listPeople(db, list.id),
+    tags: await tagsOn(db, "list", list.id),
+    people: await peopleOf(db, "list", list.id),
     kinds,
-    counts: counts.results[0] ?? { items: 0, events: 0, planned: 0 },
+    counts: counts ?? { items: 0, events: 0, planned: 0 },
   };
   return c.json(detail);
 });
@@ -250,7 +212,7 @@ lists.put("/:id", async (c) => {
     const { results } = await db
       .prepare(
         `SELECT id FROM events WHERE amount IS NOT NULL AND paid_by IS NOT NULL
-           AND (list_id = ?1 OR kind IN (SELECT id FROM kinds WHERE instr(does, ?1) > 0))`,
+           AND kind IN (SELECT id FROM kinds WHERE instr(does, ?1) > 0)`,
       )
       .bind(list.id)
       .all<{ id: string }>();
@@ -273,14 +235,14 @@ lists.put("/:id/archived", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Een lijst verwijderen: met haar items, logboek en soorten. Lijnen elders naar haar items worden tekst. */
+/** Een lijst verwijderen: met haar items. Lijnen naar haar items worden tekst; de formulieren en hun logboek blijven. */
 lists.delete("/:id", async (c) => {
   const db = c.env.DB;
   const { list, role } = await requireList(db, c.get("person").id, c.req.param("id"));
   needManage(role);
   await db.batch([
     db.prepare("UPDATE lines SET text = (SELECT name FROM items WHERE items.id = lines.item_id), item_id = NULL WHERE item_id IN (SELECT id FROM items WHERE list_id = ?)").bind(list.id),
-    db.prepare("DELETE FROM attachments WHERE (owner_kind = 'item' AND owner_id IN (SELECT id FROM items WHERE list_id = ?1)) OR (owner_kind = 'event' AND owner_id IN (SELECT id FROM events WHERE list_id = ?1))").bind(list.id),
+    db.prepare("DELETE FROM attachments WHERE owner_kind = 'item' AND owner_id IN (SELECT id FROM items WHERE list_id = ?)").bind(list.id),
     db.prepare("DELETE FROM lists WHERE id = ?").bind(list.id),
   ]);
   return c.body(null, 204);
@@ -291,8 +253,38 @@ lists.put("/:id/tags", async (c) => {
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needManage(role, "Enkel een beheerder zet tags op deze lijst.");
-  await db.batch(await tagStatements(db, me.id, list.id, asObject(await c.req.json())));
+  await db.batch(await tagStatements(db, me.id, "list", list.id, asObject(await c.req.json())));
   return c.json({ ok: true });
+});
+
+// ---------- terugbetalen ----------
+
+/**
+ * Het formulier om in deze lijst (met een saldo per persoon) een terugbetaling te loggen: een formulier dat je ziet en
+ * waarmee je mag loggen, dat naar iemand gaat en het saldo hier aftrekt van wie krijgt. Is er geen, dan maakt het er een
+ * (Terugbetaling, met jou als beheerder en de tags van de lijst).
+ */
+lists.post("/:id/settle-form", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { list, role } = await requireList(db, me.id, c.req.param("id"));
+  needEdit(role);
+  if (!list.ledger) throw new ValidationError("Deze lijst houdt geen saldo per persoon bij.");
+  const forms = await seenForms(db, me.id);
+  const editable = [...forms].filter(([, r]) => canEdit(r)).map(([id]) => id);
+  const found = (await kindsFor(db, editable, true)).find(
+    (k) => k.parts.to && k.does.some((h) => h.rows.from === "to" && h.list === list.id && h.field === BALANCE && h.op === "af"),
+  );
+  if (found) return c.json({ id: found.id });
+  const id = crypto.randomUUID();
+  await db.batch([
+    db
+      .prepare("INSERT INTO kinds (id, base, name, icon, fields, parts, does, created_by) VALUES (?, 'overdracht', 'Terugbetaling', ?, '[]', ?, ?, ?)")
+      .bind(id, BASES.overdracht.icon, JSON.stringify(baseParts("overdracht")), JSON.stringify(presetDoes("overdracht", list.id)), me.id),
+    db.prepare("INSERT INTO form_people (form_id, person_id, role) VALUES (?, ?, 'beheerder')").bind(id, me.id),
+    db.prepare("INSERT INTO form_tag_links (form_id, tag_id) SELECT ?, tag_id FROM list_tag_links WHERE list_id = ?").bind(id, list.id),
+  ]);
+  return c.json({ id }, 201);
 });
 
 // ---------- mensen ----------
@@ -303,213 +295,19 @@ lists.post("/:id/people", async (c) => {
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needManage(role, "Enkel een beheerder voegt mensen toe.");
-  const body = asObject(await c.req.json());
-  const wanted = body.role;
-  if (!isRole(wanted)) throw new ValidationError(`Kies een rol: ${Object.values(ROLES).map((r) => r.label).join(", ")}`);
-  const personId = await findOrCreatePerson(db, me.id, body);
-  await db
-    .prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, ?) ON CONFLICT (list_id, person_id) DO UPDATE SET role = excluded.role")
-    .bind(list.id, personId, wanted)
-    .run();
+  const personId = await addPerson(db, me.id, "list", list.id, asObject(await c.req.json()));
   return c.json({ person_id: personId }, 201);
 });
-
-/** Een persoon die je kent (`person_id`), of een nieuwe; bestaat het e-mailadres al, dan is het die persoon. */
-export async function findOrCreatePerson(db: D1Database, meId: string, body: Record<string, unknown>): Promise<string> {
-  const known = optionalString(body, "person_id", 64);
-  if (known) {
-    const mine = await knownPeople(db, meId);
-    if (!mine.some((p) => p.id === known)) throw new NotFoundError("Die persoon ken je niet.");
-    return known;
-  }
-  const name = requiredString(body, "name", 60);
-  const email = optionalString(body, "email", 200)?.toLowerCase() ?? null;
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError("Dat e-mailadres klopt niet");
-  if (email) {
-    const existing = await db.prepare("SELECT id FROM people WHERE email = ?").bind(email).first<{ id: string }>();
-    if (existing) return existing.id;
-  }
-  const id = crypto.randomUUID();
-  await db.prepare("INSERT INTO people (id, name, email, created_by) VALUES (?, ?, ?, ?)").bind(id, name, email, meId).run();
-  return id;
-}
-
-/** Wie je kent: jezelf, wie je toevoegde, en iedereen bij een lijst die je ziet (ook via regels). */
-export async function knownPeople(db: D1Database, meId: string): Promise<Person[]> {
-  const seen = await seenLists(db, meId);
-  const { results } = await db
-    .prepare(
-      `SELECT id, name, email, color, NULL AS iban FROM people WHERE id = ?1 OR created_by = ?1
-         OR id IN (SELECT person_id FROM list_people WHERE list_id IN (SELECT value FROM json_each(?2)) AND role != 'geen')
-         OR id IN (SELECT r.person_id FROM tag_rules r JOIN list_tag_links l ON l.tag_id = r.tag_id WHERE l.list_id IN (SELECT value FROM json_each(?2)))
-       ORDER BY name COLLATE NOCASE`,
-    )
-    .bind(meId, ids(seen.keys()))
-    .all<Person>();
-  return results;
-}
 
 /** Iemands rol rechtstreeks zetten (`role`), een uitzondering maken (`geen`) of de rechtstreekse rij weghalen (null). */
 lists.put("/:id/people/:personId", async (c) => {
   const db = c.env.DB;
-  const me = c.get("person");
-  const { list, role } = await requireList(db, me.id, c.req.param("id"));
+  const { list, role } = await requireList(db, c.get("person").id, c.req.param("id"));
   needManage(role, "Enkel een beheerder beheert de mensen.");
-  const personId = c.req.param("personId");
-  const wanted = asObject(await c.req.json()).role;
-  if (wanted !== null && !isDirectRole(wanted)) throw new ValidationError("Onbekende rol");
-  const { results } = await db.prepare("SELECT person_id, role FROM list_people WHERE list_id = ?").bind(list.id).all<{ person_id: string; role: DirectRole }>();
-  const after = results.filter((r) => r.person_id !== personId).map((r) => ({ role: r.role }));
-  if (wanted) after.push({ role: wanted as DirectRole });
-  if (!keepsAdmin(after)) throw new ConflictError("Er moet altijd iemand rechtstreeks beheerder blijven.");
-  if (wanted === null) await db.prepare("DELETE FROM list_people WHERE list_id = ? AND person_id = ?").bind(list.id, personId).run();
-  else
-    await db
-      .prepare("INSERT INTO list_people (list_id, person_id, role) VALUES (?, ?, ?) ON CONFLICT (list_id, person_id) DO UPDATE SET role = excluded.role")
-      .bind(list.id, personId, wanted)
-      .run();
+  await setPerson(db, "list", list.id, c.req.param("personId"), asObject(await c.req.json()).role);
   return c.json({ ok: true });
-});
-
-// ---------- soorten ----------
-
-/** Het doel in minuten van iets dat loopt (een formulier met een einde: een timer), of null. */
-const goalOf = (o: Record<string, unknown>, parts: Parts): number | null =>
-  parts.duration && typeof o.goal === "number" && Number.isInteger(o.goal) && o.goal > 0 && o.goal < 100_000 ? o.goal : null;
-
-/**
- * De onderdelen van een formulier: wat binnenkomt (nagekeken; een groep uit een lijst enkel uit een lijst die je ziet,
- * of de lijst zelf), anders die van het vertrekpunt. `self`: de lijst van het formulier.
- */
-function partsOf(raw: unknown, base: Base, seen: Map<string, Role>, self: string): Parts {
-  const parts = cleanParts(raw) ?? baseParts(base);
-  return { ...parts, groups: parts.groups.map((g) => (g.list === "self" ? { ...g, list: self } : g)).filter((g) => !g.list || g.list === self || seen.has(g.list)) };
-}
-
-/** Begint een nieuwe gebeurtenis met dit formulier gepland (een boodschap)? Als 0 of 1 voor de databank. */
-const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 1 : 0);
-
-/**
- * De lijsten met hun kolommen: welke die je ziet (`edit`: enkel waar je items mag aanpassen), om handelingen van een
- * formulier te kiezen en na te kijken (shared/cells.ts).
- */
-export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: boolean): Promise<ListColumns[]> {
-  const wanted = [...seen].filter(([, r]) => !edit || canEdit(r)).map(([id]) => id);
-  const { results } = await db
-    .prepare("SELECT id, name, fields, stock, ledger FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
-    .bind(ids(wanted))
-    .all<{ id: string; name: string; fields: string; stock: string | null; ledger: string | null }>();
-  return results.map((r) => ({
-    id: r.id,
-    name: r.name,
-    stock: Boolean(r.stock),
-    ledger: Boolean(r.ledger),
-    fields: parseJson<FieldDef[]>(r.fields, []).map((f) => ({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}) })),
-  }));
-}
-
-/** Wat een formulier doet, nagekeken: enkel kolommen in lijsten waar jij items mag aanpassen. */
-async function doesOf(db: D1Database, personId: string, raw: unknown, fields: FieldDef[]): Promise<Handeling[]> {
-  if (raw === undefined || raw === null) return [];
-  const editable = await columnsOf(db, await seenLists(db, personId), true);
-  return clean(() => cleanDoes(raw, editable, fields));
-}
-
-/** Wat de gebeurtenissen met dit formulier doen opnieuw uitrekenen (het formulier veranderde). */
-async function rebuildKind(db: D1Database, kindId: string) {
-  const { results } = await db.prepare("SELECT id FROM events WHERE kind = ?").bind(kindId).all<{ id: string }>();
-  await rebuildEffects(
-    db,
-    results.map((r) => r.id),
-  );
-}
-
-lists.post("/:id/kinds", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const { list, role } = await requireList(db, me.id, c.req.param("id"));
-  needManage(role, "Enkel een beheerder maakt formulieren.");
-  const body = asObject(await c.req.json());
-  if (!isBase(body.base)) throw new ValidationError("Kies een basissoort");
-  const count = await db.prepare("SELECT count(*) AS n FROM kinds WHERE list_id = ?").bind(list.id).first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_KINDS) throw new ValidationError(`Hoogstens ${MAX_KINDS} formulieren per lijst`);
-  const id = crypto.randomUUID();
-  const fields = clean(() => cleanKindFields(body.fields));
-  const does = await doesOf(db, me.id, body.does, fields);
-  const parts = body.parts === undefined ? null : partsOf(body.parts, body.base, await seenLists(db, me.id), list.id);
-  await db
-    .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(
-      id,
-      list.id,
-      body.base,
-      requiredString(body, "name", 40),
-      isIconKey(body.icon) ? body.icon : null,
-      JSON.stringify(fields),
-      goalOf(body, parts ?? baseParts(body.base)),
-      plannedOf(body),
-      parts ? JSON.stringify(parts) : null,
-      does.length ? JSON.stringify(does) : null,
-      count?.n ?? 0,
-    )
-    .run();
-  return c.json({ id }, 201);
-});
-
-async function requireKind(db: D1Database, personId: string, kindId: string) {
-  const row = await db.prepare("SELECT * FROM kinds WHERE id = ?").bind(kindId).first<KindRowDb>();
-  if (!row) throw new NotFoundError("Die soort bestaat niet (meer).");
-  const { role } = await requireList(db, personId, row.list_id);
-  needManage(role, "Enkel een beheerder van de lijst past deze soort aan.");
-  return toKind(row);
-}
-
-kinds.put("/:id", async (c) => {
-  const db = c.env.DB;
-  const me = c.get("person");
-  const kind = await requireKind(db, me.id, c.req.param("id"));
-  const body = asObject(await c.req.json());
-  const fields = body.fields === undefined ? kind.fields : clean(() => cleanKindFields(body.fields));
-  const seen = await seenLists(db, me.id);
-  const parts = body.parts === undefined ? kind.parts : partsOf(body.parts, kind.base, seen, kind.list_id);
-  // Handelingen die al bestonden in een lijst waar jij niets mag aanpassen, blijven; nieuwe moeten jouw lijsten zijn.
-  let does = kind.does;
-  if (body.does !== undefined) {
-    const editable = await columnsOf(db, seen, true);
-    const raw = Array.isArray(body.does) ? body.does : [];
-    const kept = kind.does.filter((h) => h.list && !editable.some((l) => l.id === h.list) && raw.some((r) => JSON.stringify(r) === JSON.stringify(h)));
-    const fresh = raw.filter((r) => !kept.some((h) => JSON.stringify(r) === JSON.stringify(h)));
-    does = [...kept, ...clean(() => cleanDoes(fresh, editable, fields))];
-  }
-  await db
-    .prepare("UPDATE kinds SET name = ?, icon = ?, fields = ?, goal = ?, planned = ?, parts = ?, does = ? WHERE id = ?")
-    .bind(
-      body.name === undefined ? kind.name : requiredString(body, "name", 40),
-      body.icon === undefined ? kind.icon : isIconKey(body.icon) ? body.icon : null,
-      JSON.stringify(fields),
-      body.goal === undefined ? ((parts ?? baseParts(kind.base)).duration ? kind.goal : null) : goalOf(body, parts ?? baseParts(kind.base)),
-      body.planned === undefined ? (kind.planned ? 1 : 0) : plannedOf(body),
-      parts ? JSON.stringify(parts) : null,
-      does.length ? JSON.stringify(does) : null,
-      kind.id,
-    )
-    .run();
-  if (JSON.stringify(does) !== JSON.stringify(kind.does) || JSON.stringify(parts) !== JSON.stringify(kind.parts)) await rebuildKind(db, kind.id);
-  return c.json({ ok: true });
-});
-
-/** Een formulier weghalen: gebeurtenissen ervan blijven, als hun basissoort (en doen dan enkel wat hun lijnen doen). */
-kinds.delete("/:id", async (c) => {
-  const db = c.env.DB;
-  const kind = await requireKind(db, c.get("person").id, c.req.param("id"));
-  const { results } = await db.prepare("SELECT id FROM events WHERE kind = ?").bind(kind.id).all<{ id: string }>();
-  await db.batch([db.prepare("UPDATE events SET kind = base WHERE kind = ?").bind(kind.id), db.prepare("DELETE FROM kinds WHERE id = ?").bind(kind.id)]);
-  await rebuildEffects(
-    db,
-    results.map((r) => r.id),
-  );
-  return c.body(null, 204);
 });
 
 export type { Role };
 export { toList, type ListRow };
+export { findOrCreatePerson, knownPeople, peopleOf as listPeopleOf } from "../members";

@@ -138,7 +138,7 @@ test("geld als cellen: wie betaalde telt het bedrag bij, wie deelt zijn deel af,
     { person_id: "jana", share: 50 },
   ];
   const money = (o: object) => ({ ...event({}, []), ...o });
-  const saldo = (events: object[], does = presetDoes("aankoop")) => {
+  const saldo = (events: object[], does = presetDoes("aankoop", "uitgaven")) => {
     const all = events.flatMap((e, i) => effectsOf(does, money(e), ledgers).map((f) => ({ ...f, at: `2026-11-0${i + 1}`, created_at: "", position: 0, event_id: `e${i}` })));
     return new Map(["rij-jaan", "rij-jana"].map((r) => [r, foldCell(all.filter((f) => f.item_id === r), undefined).value ?? 0]));
   };
@@ -156,20 +156,23 @@ test("geld als cellen: wie betaalde telt het bedrag bij, wie deelt zijn deel af,
   ]);
   assert.deepEqual(settleUp(new Map([["jaan", net.get("rij-jaan") as number], ["jana", net.get("rij-jana") as number]])), [{ from: "jana", to: "jaan", amount: 600 }]);
   // Jana betaalt terug: alles in orde.
-  const back = effectsOf(presetDoes("overdracht"), money({ amount: 600, paid_by: "jana", to_person: "jaan" }), ledgers);
+  const back = effectsOf(presetDoes("overdracht", "uitgaven"), money({ amount: 600, paid_by: "jana", to_person: "jaan" }), ledgers);
   assert.deepEqual(back.map((f) => [f.item_id, f.field, f.op, f.num]), [
     ["rij-jana", "saldo", "bij", 600],
     ["rij-jaan", "saldo", "af", 600],
   ]);
-  // Zonder betaler, of in een lijst zonder saldo per persoon: niets.
-  assert.deepEqual(effectsOf(presetDoes("aankoop"), money({ amount: 1000, split: half }), ledgers), []);
-  assert.deepEqual(effectsOf(presetDoes("aankoop"), { ...money({ amount: 1000, paid_by: "jaan", split: half }), list_id: "wijnen" }, ledgers), []);
+  // Zonder betaler, zonder lijst met een saldo, of in een lijst zonder saldo per persoon: niets.
+  assert.deepEqual(effectsOf(presetDoes("aankoop", "uitgaven"), money({ amount: 1000, split: half }), ledgers), []);
+  assert.deepEqual(effectsOf(presetDoes("aankoop"), money({ amount: 1000, paid_by: "jaan", split: half }), ledgers), []);
+  assert.deepEqual(effectsOf(presetDoes("aankoop", "wijnen"), money({ amount: 1000, paid_by: "jaan", split: half }), ledgers), []);
 });
 
 test("geld nakijken: een saldo hoort bij een persoon, in een lijst met een saldo per persoon", () => {
   const uitgaven: ListColumns = { id: "uitgaven", name: "Uitgaven", stock: false, ledger: true, fields: [{ key: "saldo", label: "Saldo", type: "money" }] };
-  const payer: Handeling = { rows: { from: "payer" }, list: null, field: BALANCE, op: "bij", value: { from: "amount" } };
-  assert.deepEqual(cleanDoes([payer, { ...payer, list: "uitgaven" }], [uitgaven], []), [payer, { ...payer, list: "uitgaven" }]);
+  const payer: Handeling = { rows: { from: "payer" }, list: "uitgaven", field: BALANCE, op: "bij", value: { from: "amount" } };
+  assert.deepEqual(cleanDoes([payer], [uitgaven], []), [payer]);
+  // Een formulier hoort bij geen lijst: het saldo staat altijd in een gekozen lijst.
+  assert.throws(() => cleanDoes([{ ...payer, list: null }], [uitgaven], []), /saldo/);
   assert.throws(() => cleanDoes([{ ...payer, list: "huis" }], [uitgaven, HUIS], []), /saldo/);
   assert.throws(() => cleanDoes([{ ...payer, field: STOCK }], [uitgaven], []), /voorraad/);
   assert.throws(() => cleanDoes([{ ...payer, rows: voor }], [uitgaven], []), /persoon/);

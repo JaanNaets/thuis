@@ -161,14 +161,14 @@ export function NotificationsCard() {
   );
 }
 
-/** Stil: geen melding bij iets nieuws in een lijst, of in alle lijsten met een tag. */
+/** Stil: geen melding bij iets nieuws met een formulier, of met alle formulieren met een tag. */
 function MutedProjects() {
-  const { lists, tags } = useSession();
+  const { forms, tags } = useSession();
   const toast = useToast();
   const { data: settings, mutate } = useApi<AppSettings>("/me/app");
   if (!settings) return null;
   const muted = settings.muted ?? [];
-  const nameOf = (id: string) => tags.find((t) => t.id === id)?.name ?? lists.find((l) => l.id === id)?.name ?? "Verborgen";
+  const nameOf = (id: string) => tags.find((t) => t.id === id)?.name ?? forms.find((f) => f.id === id)?.name ?? "Verborgen";
   async function set(id: string, on: boolean) {
     try {
       const res = await api.put<{ muted: string[] }>("/me/muted", { id, muted: on });
@@ -208,12 +208,12 @@ function MutedProjects() {
               ))}
           </optgroup>
         )}
-        <optgroup label="Lijsten">
-          {lists
-            .filter((l) => !l.archived && !muted.includes(l.id))
-            .map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
+        <optgroup label="Formulieren">
+          {forms
+            .filter((f) => !f.archived && !muted.includes(f.id))
+            .map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
               </option>
             ))}
         </optgroup>

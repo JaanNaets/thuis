@@ -45,6 +45,17 @@ export function ListNew() {
     setBusy(true);
     setProblem(undefined);
     try {
+      // Een sjabloon zonder items (Dieet) maakt enkel zijn formulieren, met jouw tags.
+      if (!template.one) {
+        const made: string[] = [];
+        for (const k of template.kinds ?? []) {
+          made.push((await api.post<{ id: string }>("/forms", { ...k, notify: template.notify ?? null, tag_ids: tagIds, new_tags: newTags })).id);
+        }
+        reloadMe();
+        toast(`${(template.kinds ?? []).map((k) => k.name).join(" en ")} gemaakt`);
+        navigate(made[0] ? `/formulieren/${made[0]}` : "/", { replace: true });
+        return;
+      }
       const { id } = await api.post<{ id: string }>("/lists", {
         name: name.trim() || template.name,
         one: template.one,

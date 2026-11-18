@@ -1,7 +1,7 @@
 // Wat de app uitrekent voor een weergave op je overzicht (GET /insights/view: het logboek, de items, de voorraad, wie
 // moet wie, wat er gegeten is, alles met een datum), zoeken en Verbanden: op de server uit wat de lezer ziet, nooit
-// bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een item geeft geen
-// bedrag of verdeling).
+// bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (je ziet hun formulier; een lijn via
+// een item geeft geen bedrag of verdeling).
 
 import { linkedKeys, type TransferPlan } from "../../shared/transfer";
 import { Hono } from "hono";
@@ -10,30 +10,37 @@ import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
 import { eatenRoles, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
-import { buildLinks, linkProblems, type BoardUse, type LineItem, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
+import { buildLinks, linkProblems, type BoardUse, type LineItem, type LinkKindDef, type LinkPersonView, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
-import { baseKind, BASES, canEdit, dayOf, kindInfo, STATUSES, type Base, type KindInfo, type List, type Role, type Status } from "../../shared/model";
-
-const BASE_IDS = Object.keys(BASES) as Base[];
+import { canEdit, dayOf, fillsLists, kindInfo, STATUSES, type KindInfo, type List, type Role, type Status } from "../../shared/model";
 import { formatAmount } from "../../shared/units";
-import { ids, kindsFor, parseJson, seenLists, toKind, toList, toItem, type EventRowDb, type KindRowDb, type ListRow, type ItemRowDb } from "../access";
+import { ids, kindsFor, parseJson, seenAll, toKind, toList, toItem, type EventRowDb, type KindRowDb, type ListRow, type ItemRowDb, type Seen } from "../access";
 import { withCells } from "../cells";
-import { viewEvents } from "../events-view";
+import { touchesLists, viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
-import { listPeople } from "./lists";
+import { peopleOf } from "../members";
 import { boardsOf } from "./me";
 import { peopleByIds, stockOf, itemRefs } from "./items";
 
 export const insights = new Hono<AppEnv>();
 
-/** Gebeurtenissen in de lijsten die je ziet (helemaal), met een extra voorwaarde. */
-async function fullRows(db: D1Database, seen: Map<string, Role>, where: string, binds: unknown[], order = "e.at DESC, e.created_at DESC", limit = 2000): Promise<EventRowDb[]> {
+/**
+ * Gebeurtenissen die je helemaal ziet (je ziet hun formulier, of bij een Aanpassing de lijst van haar item), met een
+ * extra voorwaarde (`where`, met ?4, ?5, …). Met `lists`: enkel die een item van die lijsten raken.
+ */
+async function fullRows(db: D1Database, seen: Seen, lists: string[] | null, where: string, binds: unknown[], order = "e.at DESC, e.created_at DESC", limit = 2000): Promise<EventRowDb[]> {
   const { results } = await db
-    .prepare(`SELECT e.* FROM events e WHERE e.list_id IN (SELECT value FROM json_each(?1)) AND ${where} ORDER BY ${order} LIMIT ${limit}`)
-    .bind(ids(seen.keys()), ...binds)
+    .prepare(
+      `SELECT e.* FROM events e
+       WHERE (e.kind IN (SELECT value FROM json_each(?1))
+              OR (e.kind = 'aanpassing' AND e.id IN (SELECT f.event_id FROM effects f JOIN items t ON t.id = f.item_id WHERE t.list_id IN (SELECT value FROM json_each(?2)))))
+         AND (?3 IS NULL OR ${touchesLists("?3")})
+         AND ${where} ORDER BY ${order} LIMIT ${limit}`,
+    )
+    .bind(ids(seen.forms.keys()), ids(seen.lists.keys()), lists ? ids(lists) : null, ...binds)
     .all<EventRowDb>();
   return results;
 }
@@ -105,10 +112,10 @@ async function stockItems(db: D1Database, listIds: Iterable<string>): Promise<St
 
 // ---------- eten ----------
 
-/** Wat er gegeten werd van `from` tot `to` in de lijsten die je ziet: per dag en per persoon. */
-async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string, to: string) {
+/** Wat er gegeten werd van `from` tot `to` (met de formulieren die je ziet; met `lists` enkel wat die raakt): per dag en per persoon. */
+async function foodPeriod(db: D1Database, seen: Seen, lists: string[] | null, from: string, to: string) {
   // Zonder bedrag: een formulier met geld eet niet (shared/food.ts, `formEats`).
-  const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NULL AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
+  const rows = await fullRows(db, seen, lists, "e.status = 'gebeurd' AND e.amount IS NULL AND e.at >= ?4 AND e.at < ?5", [from, `${to}~`]);
   const page = await viewEvents(db, seen, rows);
   // De items met hun velden (productinfo) en voorraad-eenheden, ook uit lijsten die je niet ziet (enkel de getallen).
   const itemIds = [...new Set(page.events.flatMap((e) => e.lines.flatMap((l) => (l.item_id ? [l.item_id] : []))))];
@@ -184,7 +191,8 @@ insights.get("/view", async (c) => {
   const me = c.get("person");
   const block = cleanViewBlock(parseJson(c.req.query("def") ?? "", null));
   if (!block) throw new ValidationError("Deze weergave klopt niet");
-  const seen = await seenLists(db, me.id);
+  const seenBoth = await seenAll(db, me.id);
+  const seen = seenBoth.lists;
   const today = brusselsToday();
   // Bladeren: zoveel periodes terug (negatief) of vooruit; enkel die dagen worden geladen.
   const shift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, Number.parseInt(c.req.query("periode") ?? "0", 10) || 0));
@@ -194,6 +202,8 @@ insights.get("/view", async (c) => {
   const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(listIds)).all<ListRow>();
   const lists = listRows.map(toList);
   const only = new Map([...seen].filter(([id]) => lists.some((l) => l.id === id)));
+  // Gekozen lijsten: enkel wat die raakt; geen keuze: alles wat je ziet.
+  const chosen = block.lists.length ? lists.map((l) => l.id) : null;
 
   type ViewRow = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string }; settle?: { list: string; iban: string | null } };
   let fields: FieldDef[] = [];
@@ -202,19 +212,20 @@ insights.get("/view", async (c) => {
   let refs: Record<string, string> = {};
 
   if (block.source === "logboek") {
-    const own = await kindsFor(db, lists.map((l) => l.id));
-    const when = from && to ? "e.at >= ?2 AND e.at < ?3" : from ? "e.at >= ?2" : to ? "e.at < ?2" : "1 = 1";
+    // De formulieren die je ziet (bij gekozen lijsten: die ze invullen), en die van wat je ziet.
+    const forms = (await kindsFor(db, seenBoth.forms.keys())).filter((k) => !chosen || fillsLists(k).some((l) => chosen.includes(l)));
+    const when = from && to ? "e.at >= ?4 AND e.at < ?5" : from ? "e.at >= ?4" : to ? "e.at < ?4" : "1 = 1";
     const binds = [from, to && `${to}~`].filter((x): x is string => Boolean(x));
-    const rows = lists.length ? await fullRows(db, only, when, binds, "e.at DESC, e.created_at DESC", 2000) : [];
-    const page = await viewEvents(db, seen, rows);
-    const kinds = [...new Map([...own, ...page.kinds].map((k) => [k.id, k])).values()];
+    const rows = lists.length ? await fullRows(db, seenBoth, chosen, when, binds, "e.at DESC, e.created_at DESC", 2000) : [];
+    const page = await viewEvents(db, seenBoth, rows);
+    const kinds = [...new Map([...forms, ...page.kinds].map((k) => [k.id, k])).values()];
     const kindName = new Map(kinds.map((k) => [k.id, k.name]));
-    const listName = new Map(lists.map((l) => [l.id, l.name]));
+    const listName = new Map(page.lists.map((l) => [l.id, l.name]));
     fields = sourceFields("logboek", { lists, kinds });
     const fixed = new Set(LOG_KEYS as readonly string[]);
     items = page.events.map((e) => {
       const kind = kindName.get(e.kind) ?? e.kind;
-      const row = logItem(e, { kind, list: listName.get(e.list_id) ?? "", me: me.id, title: e.name || kind });
+      const row = logItem(e, { kind, list: listName.get(e.lists[0] ?? "") ?? "", me: me.id, title: e.name || kind });
       const running = Boolean(kinds.find((k) => k.id === e.kind)?.parts.duration) && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
       const own = Object.fromEntries(Object.entries(e.data).filter(([k]) => !fixed.has(k)));
       return { ...row, id: e.id, data: { ...own, ...row.data, ...(running ? { running: true } : {}) }, link: `/gebeurtenissen/${e.id}`, event: { status: e.status, running, at: e.at } };
@@ -273,10 +284,10 @@ insights.get("/view", async (c) => {
     // de komende maanden).
     const start = from ?? addDays(today, -31);
     const end = to ?? addDays(today, 366);
-    const rows = lists.length ? await fullRows(db, only, "e.at >= ?2 AND e.at < ?3 AND e.status != 'afgevinkt'", [start, `${end}~`], "e.at ASC", 1000) : [];
-    const page = await viewEvents(db, seen, rows);
+    const rows = lists.length ? await fullRows(db, seenBoth, chosen, "e.at >= ?4 AND e.at < ?5 AND e.status != 'afgevinkt'", [start, `${end}~`], "e.at ASC", 1000) : [];
+    const page = await viewEvents(db, seenBoth, rows);
     const kindName = new Map(page.kinds.map((k) => [k.id, k.name]));
-    const listName = new Map(lists.map((l) => [l.id, l.name]));
+    const listName = new Map([...lists, ...page.lists].map((l) => [l.id, l.name]));
     fields = sourceFields("datums", { lists, kinds: [] });
     items = [
       ...page.events.map((e) => {
@@ -285,7 +296,7 @@ insights.get("/view", async (c) => {
         return {
           id: e.id,
           name: e.name || kind,
-          data: { at: e.at, ...(e.end_at && e.end_at.slice(0, 10) > e.at.slice(0, 10) ? { end: e.end_at.slice(0, 10) } : {}), list: listName.get(e.list_id) ?? "", what: kind, status: STATUSES[e.status].label },
+          data: { at: e.at, ...(e.end_at && e.end_at.slice(0, 10) > e.at.slice(0, 10) ? { end: e.end_at.slice(0, 10) } : {}), list: listName.get(e.lists[0] ?? "") ?? "", what: kind, status: STATUSES[e.status].label },
           tag_ids: [],
           created_at: e.created_at,
           link: `/gebeurtenissen/${e.id}`,
@@ -306,7 +317,7 @@ insights.get("/view", async (c) => {
     // Wat er gegeten werd: in de periode, anders zoveel dagen terug als de zin telt (minstens een week, hoogstens een jaar).
     const t = block.tally;
     const back = Math.min(366, Math.max(7, t ? (t.n || 52) * ({ day: 1, week: 7, month: 31, year: 366 } as const)[t.step] : 93));
-    const { days, who } = await foodPeriod(db, only.size ? only : seen, from ?? addDays(today, -back), to ?? today);
+    const { days, who } = await foodPeriod(db, seenBoth, chosen, from ?? addDays(today, -back), to ?? today);
     const eaters = await peopleByIds(db, who);
     const name = (id: string) => (id === me.id ? "Jij" : (eaters.find((p) => p.id === id)?.name ?? "Iemand"));
     fields = sourceFields("voeding", { lists, kinds: [] });
@@ -331,11 +342,12 @@ insights.get("/search", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const q = c.req.query("q")?.trim() ?? "";
-  if (q.length < 2) return c.json({ lists: [], items: [], events: [] });
-  const seen = await seenLists(db, me.id);
+  if (q.length < 2) return c.json({ lists: [], forms: [], items: [], events: [] });
+  const { lists: seen, forms: seenForms } = await seenAll(db, me.id);
   const like = `%${q}%`;
-  const [lists, items, events] = (await db.batch([
+  const [lists, forms, items, events] = (await db.batch([
     db.prepare("SELECT id, name, icon, color FROM lists WHERE id IN (SELECT value FROM json_each(?1)) AND name LIKE ?2 LIMIT 8").bind(ids(seen.keys()), like),
+    db.prepare("SELECT id, name, icon, base FROM kinds WHERE id IN (SELECT value FROM json_each(?1)) AND name LIKE ?2 LIMIT 8").bind(ids(seenForms.keys()), like),
     db
       .prepare(
         `SELECT t.id, t.name, t.list_id, l.name AS list, l.icon FROM items t JOIN lists l ON l.id = t.list_id
@@ -344,12 +356,12 @@ insights.get("/search", async (c) => {
       .bind(ids(seen.keys()), like),
     db
       .prepare(
-        `SELECT e.id, e.name, e.at, e.kind, e.base, e.list_id, l.name AS list FROM events e JOIN lists l ON l.id = e.list_id
-         WHERE e.list_id IN (SELECT value FROM json_each(?1)) AND e.name LIKE ?2 ORDER BY e.at DESC LIMIT 12`,
+        `SELECT e.id, e.name, e.at, e.kind, e.base, k.name AS form FROM events e JOIN kinds k ON k.id = e.kind
+         WHERE e.kind IN (SELECT value FROM json_each(?1)) AND e.name LIKE ?2 ORDER BY e.at DESC LIMIT 12`,
       )
-      .bind(ids(seen.keys()), like),
-  ])) as [D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string; kind: string }>];
-  return c.json({ lists: lists.results, items: items.results, events: events.results, kinds: await kindsFor(db, seen.keys()) });
+      .bind(ids(seenForms.keys()), like),
+  ])) as [D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string; kind: string }>];
+  return c.json({ lists: lists.results, forms: forms.results, items: items.results, events: events.results });
 });
 
 // ---------- verbanden ----------
@@ -358,36 +370,39 @@ insights.get("/search", async (c) => {
 const LINK_PEOPLE_LISTS = 80;
 
 /**
- * Hoe je lijsten samenhangen (zie shared/links.ts): enkel je lijsten (niet gearchiveerd) en tellingen over
- * gebeurtenissen in die lijsten met lijnen naar items in die lijsten; wie een gebeurtenis in haar lijst ziet, ziet ze
- * helemaal. De problemen enkel waar je een van beide lijsten beheert.
+ * Hoe je lijsten samenhangen (zie shared/links.ts): enkel je lijsten (niet gearchiveerd) en de formulieren die je ziet,
+ * met tellingen over hun logboek en hun lijnen naar items in je lijsten. De problemen enkel waar je een van beide
+ * lijsten beheert.
  */
 insights.get("/links", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
-  const seen = await seenLists(db, me);
+  const seenBoth = await seenAll(db, me);
+  const seen = seenBoth.lists;
   const { results: listRows } = await db.prepare("SELECT * FROM lists WHERE archived = 0 AND id IN (SELECT value FROM json_each(?))").bind(ids(seen.keys())).all<ListRow>();
   const lists = listRows.map(toList).map((l) => ({ ...l, role: seen.get(l.id)! }));
   const listIds = ids(lists.map((l) => l.id));
 
-  // De soorten van je lijsten en die je gebeurtenissen gebruiken; wat als eten telt (kcal in de soort of het item).
+  // De formulieren die je ziet; wat als eten telt (kcal in het formulier of het item).
   const [kindRows, kcalRows] = (await db.batch([
-    db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?1)) OR id IN (SELECT DISTINCT kind FROM events WHERE list_id IN (SELECT value FROM json_each(?1)))").bind(listIds),
+    db.prepare("SELECT * FROM kinds WHERE archived = 0 AND id IN (SELECT value FROM json_each(?1))").bind(ids(seenBoth.forms.keys())),
     db.prepare(`SELECT id, fields FROM lists WHERE fields LIKE '%"product":"kcal"%'`),
   ])) as [D1Result<KindRowDb>, D1Result<{ id: string; fields: string }>];
-  const kinds: LinkKindDef[] = kindRows.results.map(toKind);
-  // Wat een formulier vraagt en doet (de vertrekpunten erbij): naar iemand, met een einde, eten.
-  const infos = [...BASE_IDS.map(baseKind), ...kindRows.results.map((r) => kindInfo(toKind(r)))];
+  const full = kindRows.results.map(toKind);
+  const kinds: LinkKindDef[] = full;
+  const infos = full.map(kindInfo);
+  const formIds = ids(infos.map((k) => k.id));
   const idsOf = (pick: (k: KindInfo) => boolean) => JSON.stringify(infos.filter(pick).map((k) => k.id));
   const kcalKinds = infos.filter((k) => hasKcal(k.fields)).map((k) => k.id);
   const kcalLists = kcalRows.results.filter((r) => hasKcal(parseJson<FieldDef[]>(r.fields, []))).map((r) => r.id);
 
   const done = "MAX(CASE WHEN e.status != 'gepland' THEN substr(e.at, 1, 10) END)";
   const inLists = "(SELECT value FROM json_each(?1))";
-  const [logRows, lineRows, pairRows, itemLineRows, itemRows] = (await db.batch([
+  const inForms = "(SELECT value FROM json_each(?2))";
+  const [logRows, lineRows, itemLineRows, itemRows, touchRows] = (await db.batch([
     db
       .prepare(
-        `SELECT e.list_id AS list, e.kind, e.base, COUNT(*) AS events,
+        `SELECT e.kind, e.base, COUNT(*) AS events,
            SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.kind NOT IN (SELECT value FROM json_each(?4))) AS money,
            SUM(e.status = 'gebeurd' AND e.amount IS NOT NULL AND e.paid_by IS NOT NULL
                AND (e.split IS NOT NULL OR e.kind IN (SELECT value FROM json_each(?4)) OR EXISTS (SELECT 1 FROM lines o WHERE o.event_id = e.id AND o.owner IS NOT NULL))) AS shared,
@@ -398,10 +413,10 @@ insights.get("/links", async (c) => {
                OR EXISTS (SELECT 1 FROM lines f JOIN items ft ON ft.id = f.item_id
                           WHERE f.event_id = e.id AND f.role != 'bij' AND ft.list_id IN (SELECT value FROM json_each(?3))))) AS food,
            ${done} AS last
-         FROM events e WHERE e.list_id IN ${inLists} GROUP BY e.list_id, e.kind, e.base`,
+         FROM events e WHERE e.kind IN (SELECT value FROM json_each(?1)) GROUP BY e.kind, e.base`,
       )
       .bind(
-        listIds,
+        formIds,
         JSON.stringify(kcalKinds),
         JSON.stringify(kcalLists),
         idsOf((k) => k.parts.to),
@@ -410,33 +425,38 @@ insights.get("/links", async (c) => {
       ),
     db
       .prepare(
-        `SELECT e.list_id AS list, e.kind, e.base, l.role, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
+        `SELECT e.kind, e.base, l.role, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
          FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
-         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists}
-         GROUP BY e.list_id, e.kind, e.base, l.role, t.list_id`,
+         WHERE e.kind IN ${inForms} AND t.list_id IN ${inLists}
+         GROUP BY e.kind, e.base, l.role, t.list_id`,
       )
-      .bind(listIds),
-    db
-      .prepare(
-        `SELECT e.list_id AS list, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
-         FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
-         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
-         GROUP BY e.list_id, t.list_id`,
-      )
-      .bind(listIds),
+      .bind(listIds, formIds),
     // Welke items er in een verband zitten (enkel items van lijsten die je ziet).
     db
       .prepare(
-        `SELECT e.list_id AS list, t.list_id AS "to", t.id AS item, t.name, COUNT(DISTINCT e.id) AS events
+        `SELECT e.kind, t.list_id AS "to", t.id AS item, t.name, COUNT(DISTINCT e.id) AS events
          FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
-         WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
-         GROUP BY e.list_id, t.id`,
+         WHERE e.kind IN ${inForms} AND t.list_id IN ${inLists}
+         GROUP BY e.kind, t.id`,
+      )
+      .bind(listIds, formIds),
+    db.prepare(`SELECT list_id, COUNT(*) AS n FROM items WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
+    // Het logboek van elke lijst: wat haar items raakte (zie events-view.ts).
+    db
+      .prepare(
+        `SELECT t.list_id AS list, COUNT(DISTINCT e.id) AS events, ${done} AS last
+         FROM (SELECT event_id, item_id FROM lines WHERE item_id IS NOT NULL UNION SELECT event_id, item_id FROM effects) x
+         JOIN events e ON e.id = x.event_id JOIN items t ON t.id = x.item_id
+         WHERE t.list_id IN ${inLists} GROUP BY t.list_id`,
       )
       .bind(listIds),
-    db.prepare(`SELECT list_id, COUNT(*) AS n FROM items WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
-  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<LineItem>, D1Result<{ list_id: string; n: number }>];
+  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LineItem>, D1Result<{ list_id: string; n: number }>, D1Result<{ list: string; events: number; last: string | null }>];
 
-  // Je overzichten: welke blokken een lijst tonen (een item: zijn lijst).
+  // De lijsten die een formulier raakt: wat het invult, dan waar zijn lijnen naartoe gingen.
+  const open = new Set(lists.map((l) => l.id));
+  const formLists = (k: KindInfo) => [...new Set([...fillsLists(k), ...lineRows.results.filter((r) => r.kind === k.id).map((r) => r.to)])].filter((l) => open.has(l));
+
+  // Je overzichten: welke blokken een lijst tonen (een item: zijn lijst; een actie: de lijst van haar formulier).
   const boards = await boardsOf(db, me);
   const itemIds = boards.flatMap((b) => (b.blocks ?? []).flatMap((x) => (x.kind === "item" ? [x.item] : [])));
   const itemList = new Map<string, string>();
@@ -447,7 +467,11 @@ insights.get("/links", async (c) => {
   const uses: BoardUse[] = boards.flatMap((b) =>
     (b.blocks ?? []).flatMap((x): BoardUse[] => {
       if (x.kind === "view") return x.lists.map((list) => ({ board: b.name, list, block: "view" as const }));
-      if (x.kind === "action") return [{ board: b.name, list: x.list, block: "action" }];
+      if (x.kind === "action") {
+        const form = infos.find((k) => k.id === x.type);
+        const list = x.list || (form ? formLists(form)[0] : undefined);
+        return list ? [{ board: b.name, list, block: "action" }] : [];
+      }
       const list = x.kind === "item" ? itemList.get(x.item) : undefined;
       return list ? [{ board: b.name, list, block: "item" }] : [];
     }),
@@ -465,11 +489,11 @@ insights.get("/links", async (c) => {
     return { list: m.list_id, source: m.source_id, fields: labels };
   });
 
-  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, items: itemLineRows.results, boards: uses, mirrors });
+  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, items: itemLineRows.results, boards: uses, mirrors });
 
   // Wie bij elke lijst is (zonder wie er rechtstreeks niet bij mag), en wat voor wie niet werkt.
   const peopleLists = lists.slice(0, LINK_PEOPLE_LISTS);
-  const listed = await Promise.all(peopleLists.map((l) => listPeople(db, l.id)));
+  const listed = await Promise.all(peopleLists.map((l) => peopleOf(db, "list", l.id)));
   const people: Record<string, LinkPersonView[]> = {};
   peopleLists.forEach((l, i) => {
     people[l.id] = listed[i]
@@ -482,15 +506,13 @@ insights.get("/links", async (c) => {
   const counts: LinksResponse["counts"] = {};
   for (const l of lists) counts[l.id] = { items: 0, events: 0, last: null };
   for (const r of itemRows.results) counts[r.list_id].items = r.n;
-  for (const r of logRows.results) {
-    const count = counts[r.list];
-    count.events += r.events;
-    if (r.last && (!count.last || r.last > count.last)) count.last = r.last;
-  }
-  // De eigen soorten van je lijsten (om op te zoeken).
-  const open = new Set(lists.map((l) => l.id));
-  const seenKinds = kinds.filter((k) => open.has(k.list_id)).map((k) => ({ id: k.id, list: k.list_id, name: k.name }));
-  const alerts = lists.filter((l) => l.notify).map((l) => l.id);
+  for (const r of touchRows.results) counts[r.list] = { ...counts[r.list], events: r.events, last: r.last };
+  // De formulieren die je ziet, bij de eerste lijst die ze raken (om op te zoeken).
+  const seenKinds = infos.flatMap((k) => {
+    const list = formLists(k)[0];
+    return list ? [{ id: k.id, list, name: k.name }] : [];
+  });
+  // De formulieren die een melding sturen bij iets nieuws (om ze per persoon stil te kunnen zetten).
+  const alerts = full.filter((k) => k.notify).map((k) => k.id);
   return c.json({ links, own, counts, people, alerts, problems, kinds: seenKinds } satisfies LinksResponse);
 });
-

@@ -11,7 +11,7 @@ import { bucketLabel, CHART_AGGS, CHART_STEPS, chartWindow, cleanChart, computeC
 import type { Attributes, FieldDef, FieldValue, Names } from "./fields.ts";
 import { NUTRIENTS } from "./food.ts";
 import { logFields } from "./logview.ts";
-import { STATUSES } from "./model.ts";
+import { fillsLists, STATUSES, type KindInfo } from "./model.ts";
 import { matchesView, NAME, PERIODS, periodRange, periodText, sortItems, type Condition, type Period, type PeriodKind, type ViewDef, type ViewItem } from "./views.ts";
 
 // ---------- bronnen ----------
@@ -203,10 +203,11 @@ export type ActionDoes = keyof typeof ACTION_DOES;
 
 export type ActionBlock = {
   kind: "action";
-  /** De naam op de knop; leeg: de naam van de soort. */
+  /** De naam op de knop; leeg: de naam van het formulier. */
   name: string;
+  /** Enkel van vroeger (leeg bij een nieuwe actie): de lijst om het formulier terug te vinden (`legacyForm`). */
   list: string;
-  /** De soort (een eigen soort of een basissoort); leeg: de eerste van de lijst. */
+  /** Het formulier; van vroeger soms een vertrekpunt of leeg (de eerste van de lijst). */
   type: string;
   does: ActionDoes;
   /** Vooraf ingevuld: velden van de soort (en `name`, de omschrijving). */
@@ -214,6 +215,21 @@ export type ActionBlock = {
   /** Gepland in plaats van gebeurd (een boodschap, iets te doen): enkel bij formulier en bewaren (`canPlan`). */
   planned?: true;
 };
+
+/**
+ * Het formulier van een actie: `type`; van vroeger (een lijst met een vertrekpunt of leeg) het formulier dat de omzetting
+ * voor die lijst en dat vertrekpunt maakte (`<lijst>-<vertrekpunt>`), of een formulier (met dat vertrekpunt) dat de
+ * lijst invult. Zie ook `legacyForm` in shared/apps.ts.
+ */
+export function actionForm<K extends Pick<KindInfo, "id" | "base" | "parts" | "does">>(block: Pick<ActionBlock, "type" | "list">, kinds: K[]): K | undefined {
+  const exact = kinds.find((k) => k.id === block.type);
+  if (exact || !block.list) return exact;
+  return (
+    kinds.find((k) => k.id === `${block.list}-${block.type}`) ??
+    kinds.find((k) => fillsLists(k).includes(block.list) && (!block.type || k.base === block.type)) ??
+    kinds.find((k) => fillsLists(k).includes(block.list))
+  );
+}
 
 /** Wat een tik doet en ook gepland kan: het formulier openen of meteen bewaren (tellen en een timer gaan over nu). */
 export const canPlan = (does: ActionDoes) => does === "form" || does === "save";
@@ -329,8 +345,10 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
 export function cleanActionBlock(raw: unknown): ActionBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const list = id(o.list);
-  if (!list) return null;
+  // Een formulier (`type`); van vroeger soms enkel een lijst, met een vertrekpunt of leeg (zie `legacyForm`).
+  const list = id(o.list) ?? "";
+  const type = id(o.type) ?? "";
+  if (!list && !type) return null;
   const does = Object.hasOwn(ACTION_DOES, String(o.does)) ? (o.does as ActionDoes) : "form";
   const values: Attributes = {};
   if (o.values && typeof o.values === "object" && !Array.isArray(o.values)) {
@@ -339,7 +357,7 @@ export function cleanActionBlock(raw: unknown): ActionBlock | null {
       if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") values[k] = (typeof v === "string" ? v.slice(0, 200) : v) as FieldValue;
     }
   }
-  return { kind: "action", name: text(o.name), list, type: id(o.type) ?? "", does, values, ...(o.planned === true && canPlan(does) ? { planned: true as const } : {}) };
+  return { kind: "action", name: text(o.name), list, type, does, values, ...(o.planned === true && canPlan(does) ? { planned: true as const } : {}) };
 }
 
 // ---------- oude blokken ----------

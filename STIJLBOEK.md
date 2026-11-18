@@ -409,11 +409,10 @@ met een wit vlak dat meeglijdt. Meer dan 4 opties: gebruik een `select`.
 Waarmee je logt bij een lijst of een item: een `btn btn-outline btn-sm` per formulier, met zijn icoon ("Uit eten",
 "Proeverij", "Aankoop"). Op een item in de `PageHead` (naast Bewerken; op een gsm links onder de titel, ze lopen door
 op een tweede regel), op een lijst bovenaan het logboek en Gepland (`.log-buttons`, niet uitgerekt; op Gepland met
-`gepland=1`). Welke formulieren: `logForms` (shared/targets.ts): de eigen formulieren van de lijst (zonder eigen
-formulieren één knop Loggen) en, telt de lijst voorraad, de formulieren van lijsten zonder items die de voorraad
-veranderen (Aankoop in Uitgaven, Boodschap, Gegeten). De gebeurtenis komt in de lijst van het formulier; heten twee
-formulieren hetzelfde, dan staat de lijst erbij ("Aankoop · Uitgaven"). Geen knop "Loggen" naast de formulieren: de
-knop zegt wat er gebeurde.
+`gepland=1`). Welke formulieren: `logForms` (shared/targets.ts): de formulieren die de lijst uitdrukkelijk invullen
+(een groep of handeling uit die lijst) eerst en, telt de lijst voorraad, de formulieren die de voorraad veranderen
+(Aankoop, Boodschap, Gegeten). De gebeurtenis komt in het logboek van het formulier. Vult niets de lijst in, dan geen
+knoppen. Geen knop "Loggen" naast de formulieren: de knop zegt wat er gebeurde.
 
 ### Zoekpalet: `CommandPalette`
 
@@ -482,12 +481,11 @@ iedereen**. Wat erna komt staat bij [Verbanden](#verbanden-linkmapview-linklist-
 - **Een rij** (`LinkList`, de lijst zelf): ▸ (klapt haar verbanden open; zonder verbanden een lege plek), tegeltje,
   naam (**opent de lijst**) en in grijs haar verbanden, wat erin zit en wanneer laatst ("2 buiten · 7 weergaven · 7
   items · laatst gisteren"). Rechts (`RowEnd`): vanaf 1100px haar andere tags, wie er nog bij is (letters, max. drie
-  en "+2") en de filterpillen **Menu**, **Toevoegen** en **Meldingen** (enkel als de lijst meldt; stil via een tag =
-  uitgegrijsd); altijd ⋯. Smaller staat in de grijze regel ook wat afwijkt ("niet in het menu", "verborgen", "stil",
-  "enkel kijken").
+  en "+2") en de filterpillen **Menu** en **Toevoegen**; altijd ⋯. Smaller staat in de grijze regel ook wat afwijkt
+  ("niet in het menu", "verborgen", "enkel kijken").
 - **⋯ van een lijst**: Openen, Instellen (beheerder), **Op de kaart** (tablet) of **Verbanden** (gsm: het eigen
-  scherm met het schema), en de schakelaars In het menu, Bij de + en Meldingen (stil via een tag: een knop "<tag>
-  weer laten melden").
+  scherm met het schema), en de schakelaars In het menu en Bij de +. Meldingen horen bij een formulier (⋯ van het
+  formulier).
 - **⋯ van de pagina**: Nieuwe lijst, **Volgorde** (een blad met eerst **Tags** en dan **Lijsten**, elk een
   `sort-list` met greep, en één Bewaren; je volgorde in het menu, hier en in de keuzelijsten; per persoon) en **Selecteren** (dan staat Klaar rechts boven de lijst).
 - De filterpil **Archief** (naast Groeperen en Sorteren) zet de gearchiveerde lijsten in een laatste groep.
@@ -495,7 +493,7 @@ iedereen**. Wat erna komt staat bij [Verbanden](#verbanden-linkmapview-linklist-
 Per persoon kies je zo waar een lijst staat: **in het menu** (zijbalk, menublad) en **bij de +** (`useListPlaces`,
 `ListPlaces.tsx`). Een hulplijst zoals Winkels verberg je; zoeken, Lijsten en de keuzelijsten tonen ze altijd, en
 de lijst die je bekijkt staat altijd in het menu. Dezelfde twee schakelaars staan in ⋯ van de lijst zelf
-(`ListPlaceSwitches`, `.sheet-switches`). De structuur van een lijst (velden, soorten, mensen) blijft in Instellen.
+(`ListPlaceSwitches`, `.sheet-switches`). De structuur van een lijst (velden, tellen, mensen) blijft in Instellen.
 
 ### Zijbalk: lijsten per tag (`Sidebar.tsx`)
 
@@ -506,8 +504,10 @@ verbanden, geen bord), dan per tag een
 rij met een pijltje (`TagTree`); open groeit ze van `0fr` naar `1fr` en staan haar lijsten eronder met een klein
 tegeltje in hun toon (`.place-dot`) en een hulplijn links. Een lijst met meer tags staat onder elke tag; zonder tag
 onder "Zonder tag". De tag van de lijst die je bekijkt, staat open; een tag tekent zijn lijsten pas als hij opengaat.
-Onderaan "+ Lijst". Op gsm staat dezelfde boom in het menublad (`MenuSheet`); onder een bord staan geen lijsten.
-Een sectiekop ("Lijsten") staat in kleine kapitalen.
+Onderaan "+ Lijst". Daaronder **Formulieren** (`FormTree`): je formulieren op naam, elk met zijn icoon in de toon van
+zijn vertrekpunt (`BASE_TONES`; een gearchiveerd formulier niet, tenzij je het bekijkt), en "+ Formulier". Op gsm
+staat hetzelfde in het menublad (`MenuSheet`); onder een bord staan geen lijsten. Een sectiekop ("Lijsten",
+"Formulieren") staat in kleine kapitalen.
 
 ### Formulier
 
@@ -591,7 +591,7 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
 | Barcode en Foto (`ItemForm`) | Onder de naam van een nieuw item: **Barcode** (lijsten met productinfo: `BarcodeScanner`, zoekt in Open Food Facts, zonder AI) en de [fotokiezer](#fotokiezer-photobutton-photopickertsx) (een etiket of product; lezen staat aan of uit in Instellen → Velden). Eronder in grijs waar het vandaan komt ("Uit Open Food Facts: …", "Uit NEVO: …", "Geschat met AI"). Een gedeelde foto staat klaar als **Foto lezen ✨**: de AI leest pas na die tik; de foto komt bij het item. |
 | `ItemPhoto` | De foto van een item of gebeurtenis bovenaan: toevoegen, vervangen, weghalen. Nog geen foto: enkel de knop **Foto toevoegen** (geen leeg vlak) |
 | `IconPicker` (`IconPicker.tsx`) | Een icoon kiezen voor een lijst (`ICONS` in `shared/icons.ts`): grijze tegeltjes, het gekozen is zwart |
-| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette lijsten en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser. Een melding toont het app-icoon (`icon-192.png`) en in de statusbalk de badge (`badge-96.png`: de stapel wit op doorzichtig; Android gebruikt enkel de doorzichtigheid, een icoon met achtergrond wordt een wit vierkant) |
+| `NotificationsCard` (`Notifications.tsx`) | Bij Jouw gegevens: "Meldingen" als `card` met `CardHead` en `card-body`. Een `Switch` "Meldingen op dit toestel" en daaronder "Testmelding sturen" (`btn-outline btn-sm`). Dan **Stil**: de stilgezette formulieren en tags als rijen met × (weer laten melden) en een `select` "Stilzetten…". Kan het niet, dan enkel een `Alert` die zegt waarom: op een iPhone eerst op het beginscherm zetten, of de meldingen staan uit in de browser. Een melding toont het app-icoon (`icon-192.png`) en in de statusbalk de badge (`badge-96.png`: de stapel wit op doorzichtig; Android gebruikt enkel de doorzichtigheid, een icoon met achtergrond wordt een wit vierkant) |
 | `RepeatForm`, `RepeatCard` (`Repeat.tsx`) | Herhalen: op de fiche een `btn-outline btn-sm` "Herhalen" (icoon `clock`, enkel met `can_repeat`) opent een `Sheet` met "Hoe vaak" (`.interval-input`) en "De eerste keer" (vandaag of later), en Stoppen als het al loopt. Loopt het, dan een kaart "Herhaalt zich" in de zijkolom ("Elke maand; de volgende keer op 30 nov 2026.") met Aanpassen |
 
 - "Eigenaar" is van wie iets is; "Van wie" is enkel de herkomst van iets dat je kreeg.
@@ -615,11 +615,12 @@ veldsoort krijgt daar een type, een controle (`cleanValue`), een opmaak (`format
   Zo'n lijst is een **logboek**: de naam mag leeg (placeholder "Weging 30/10/2026"; de API geeft die naam) en de
   lijst toont het nieuwste eerst.
 - Een nieuwe lijst begint met een **sjabloon** (`TEMPLATES` in `shared/catalog.ts`, `.template-picker`): velden,
-  voorraad, eigen soorten en wie een melding krijgt. Niet gekozen is een sjabloon een zacht grijs vlak; gekozen wordt
-  het het witte vlak met een zwart icoontegeltje. Er zijn er zo weinig mogelijk: **Lege lijst** (items met een
-  notitieveld), **Uitgaven** (zoals Splitwise: de soort Uitgave, gelijk verdeeld, een melding aan wie in de verdeling
-  staat), **Dieet** (zoals Yazio: Gegeten met kcal en Gewicht) en als laatste tegel **Uit bestand**. Elke lijst heeft
-  een logboek, dus geen sjabloon "Logboek". Alles daarbovenop voeg je zelf toe (Instellen); een sjabloon voor één
+  voorraad, formulieren die haar invullen en wie daarvan een melding krijgt. Niet gekozen is een sjabloon een zacht
+  grijs vlak; gekozen wordt het het witte vlak met een zwart icoontegeltje. Er zijn er zo weinig mogelijk: **Lege
+  lijst** (items met een notitieveld), **Uitgaven** (zoals Splitwise: Aankoop en Terugbetaling die het saldo
+  bijhouden, gelijk verdeeld, een melding aan wie in de verdeling staat), **Dieet** (zoals Yazio: enkel de formulieren
+  Gegeten met kcal en Gewicht) en als laatste tegel **Uit bestand**. Een formulier heeft altijd een logboek, dus geen
+  sjabloon "Logboek". Alles daarbovenop voeg je zelf toe (Instellen); een sjabloon voor één
   geval komt er niet, dat wordt een bestand dat iemand deelt.
 - **Opnieuw**: op de fiche een `btn-outline btn-sm` "Opnieuw" (icoon `repeat`, enkel met `can_create`): een nieuw
   item met de waarden van dit (`?van=`, `repeatData`). In een nieuw formulier stelt de naam eerdere items voor
@@ -740,8 +741,8 @@ een zwart ballonnetje bij aanwijzen, focus of tikken (gsm), en sluit met Escape,
 ### Sjabloon delen (`shared/template-file.ts`)
 
 Instellen → Algemeen → **Als sjabloon** (`btn-ghost`, icoon download) bewaart de opbouw van de lijst als bestand:
-naam, hoe één item heet, icoon, velden, voorraad, eigen soorten en wie een melding krijgt, zonder items, logboek of
-mensen. Bij een nieuwe
+naam, hoe één item heet, icoon, velden, voorraad, de formulieren die haar invullen en wie daarvan een melding krijgt,
+zonder items, logboek of mensen. Bij een nieuwe
 lijst is **Uit bestand** de laatste tegel van de sjablonen; het gekozen bestand staat daarna als eerste tegel.
 
 ### Volgorde: `useSortable` (`Sortable.tsx`)
@@ -770,19 +771,20 @@ const sortable = useSortable(order, save, (id) => naamVan(id)); // save zet de n
   geeft een toast en zet de volgorde terug.
 - Een lijst die je niet mag ordenen, toont geen greep.
 - Geen `stagger` op een sorteerbare lijst: een verplaatste rij zou opnieuw binnenkomen.
-- Wat de volgorde betekent: de volgorde van je lijsten is **jouw** volgorde (per persoon, `list_order`); velden en
-  soorten zijn die van de lijst (enkel voor een beheerder).
-- Volgorde is een instelling, geen knop op een overzicht: je lijsten bij **Jouw gegevens** (je letter rechtsboven),
-  velden en soorten bij **Instellen** van de lijst.
+- Wat de volgorde betekent: de volgorde van je lijsten is **jouw** volgorde (per persoon, `list_order`); velden zijn
+  die van de lijst of het formulier (enkel voor een beheerder).
+- Volgorde is een instelling, geen knop op een overzicht: je lijsten op **Lijsten** (⋯ → Volgorde), velden bij
+  **Instellen** van de lijst of het formulier.
 
 ### Kosten verdelen: Wie moet wie en `SettleForm`
 
-Een formulier met een bedrag heeft Bedrag, Betaald door (begint met jou) en Gedeeld met (`SharesField`; in een lijst
-waar meer mensen loggen begint dat op Gelijk over hen, `defaultSharers`, zoals Splitwise), en een lijn kan enkel van één
-persoon zijn. Wie moet wie volgt uit een **saldo per persoon**: een lijst (zoals Uitgaven) met een rij per persoon en een
-kolom Saldo (Instellen → Tellen → Saldo per persoon); wie betaalde krijgt het bedrag erbij, wie deelt zijn deel eraf. Een
-persoon zonder rij krijgt er vanzelf een. De app telt de saldo's van alles wat je ziet samen; een terugbetaling is een
-overdracht.
+Een formulier met een bedrag heeft Bedrag, Betaald door (begint met jou) en Gedeeld met (`SharesField`; met een
+formulier waarmee meer mensen loggen begint dat op Gelijk over hen, `defaultSharers`, zoals Splitwise), en een lijn kan
+enkel van één persoon zijn. Wie moet wie volgt uit een **saldo per persoon**: een lijst (zoals Uitgaven) met een rij per persoon en een
+kolom Saldo (Instellen → Tellen → Saldo per persoon); een formulier houdt het saldo daar bij met handelingen (wie
+betaalde krijgt het bedrag erbij, wie deelt zijn deel eraf). Een persoon zonder rij krijgt er vanzelf een. De app telt
+de saldo's van alles wat je ziet samen; een terugbetaling is een overdracht met een formulier dat dat saldo bijhoudt
+(Terugbetaling; is er geen, dan maakt Terugbetaald het).
 
 - Een bedrag verdeelt tot op de cent (`splitCents`): de cent die overschiet, draagt wie betaalde.
 - Wie moet wie is een weergave ("Toon wie moet wie", bron `saldo`). Per overschrijving één rij: "Jana → Jij", rechts
@@ -790,7 +792,7 @@ overdracht.
   minder mag). Moet jij betalen en heeft de ander een rekeningnummer (bij **Jouw gegevens**), dan staat daar een
   betaal-QR (`.pay-qr`, EPC, `shared/payment.ts`) om te scannen met je bank-app. Niets open: "Niets".
 - "Jij" in plaats van je eigen naam.
-- Telt enkel wat je helemaal ziet (een gebeurtenis in een lijst waar je bij bent); wat je niet ziet, telt niet mee.
+- Het saldo is een cel van de lijst: wie de lijst ziet, ziet wat het werd.
 - Een nieuwe use case (voorraad, ...) bouw je eerst uit velden, berekeningen en totalen, als sjabloon. Pas als dat
   echt niet gaat, een eigen onderdeel bovenop de kern.
 
@@ -805,15 +807,14 @@ logboek met een vinkje (`.row-check`, 44px); afgevinkt is doorstreept en stil (`
 ### Foto lezen in een gebeurtenis (`EventForm.tsx`)
 
 Onder "Typ wat je weet" staat de [fotokiezer](#fotokiezer-photobutton-photopickertsx). Wat de AI leest, hangt af van
-het formulier (`POST /lists/:id/events/read-photo`): een formulier dat **koopt** (`buysWith`: met een bedrag, en wat
+het formulier (`POST /forms/:id/read-photo`): een formulier dat **koopt** (`buysWith`: met een bedrag, en wat
 erop staat telt bij in een voorraad) leest een kasticket (de winkel als lijn **bij**, elk
 product als lijn **erbij** met hoeveel, eenheid en prijs, gekoppeld aan een item dat je ziet; wat nieuw is, krijgt
-**Nieuw in**; het totaal in Bedrag, de datum in Wanneer). Een soort met voedingswaarden (Gegeten) herkent een
-**gerecht** en schat de portie ("Geschat met AI"). Elke andere soort vult haar eigen velden, de omschrijving, datum en
-het bedrag in met wat er echt op de foto staat ("Gelezen met AI"). De foto komt altijd bij de gebeurtenis. Welke
-formulieren lezen, zet een beheerder in Instellen → Formulieren (**Foto lezen met AI ✨**, een schakelaar per formulier
-van de lijst, `formsOf`, ook in het formulier zelf); standaard een formulier met geld of voedingswaarden. Daar staat
-ook **Gepland** (`kinds.planned`): een nieuwe gebeurtenis met dat formulier begint gepland (een boodschap, een taak),
+**Nieuw in**; het totaal in Bedrag, de datum in Wanneer). Een formulier met voedingswaarden (Gegeten) herkent een
+**gerecht** en schat de portie ("Geschat met AI"). Elk ander formulier vult zijn eigen velden, de omschrijving, datum
+en het bedrag in met wat er echt op de foto staat ("Gelezen met AI"). De foto komt altijd bij de gebeurtenis. Of een
+formulier leest, zet een beheerder in Instellen van het formulier (**Foto lezen met AI ✨**, `kinds.reads`);
+standaard een formulier met geld of voedingswaarden. Daar staat ook **Gepland** (`kinds.planned`): een nieuwe gebeurtenis met dat formulier begint gepland (een boodschap, een taak),
 in het logformulier, het palet en een actie op een bord (de schakelaar Gepland van de actie staat dan vast aan).
 
 ### Items tonen: `ItemsView` en het logboek: `LogList`
@@ -823,18 +824,21 @@ in het logformulier, het palet en een actie op een bord (de schakelaar Gepland v
 kolommen als grijze meta), op tablet een tabel (`card table`, `--cols`; kolommen = velden met `column`, of die van de
 weergave; de cellen van de rij-link staan in de kolommen). Met een datumveld kan een weergave een agenda zijn.
 
-**Logboek** (`LogList`, `EventRow` in `Log.tsx`): per dag (Vandaag, Gisteren, "4 nov 2026") rijen met het icoon van
-de basissoort in zijn toon (`BASE_TONES`), de titel ("Gegeten: Yoghurt", of de omschrijving), als meta het uur, de
-lijst (enkel als het elders gelogd werd), waar en wie, en rechts het bedrag, een hoeveelheid (+2, −300 g) of de
-waarde van een meting (82,4 kg). Een lijn van elders zonder de rest ("gedeeltelijk") toont enkel wat jouw items
-raakt, zonder bedrag. Gepland: met een vinkje vooraan.
+**Logboek** (`EventLog`, `LogList`, `EventRow` in `Log.tsx`; van een lijst of een formulier): per dag (Vandaag,
+Gisteren, "4 nov 2026") rijen met het icoon van het formulier in de toon van zijn vertrekpunt (`BASE_TONES`), de titel
+("Gegeten: Yoghurt", of de omschrijving), als meta het uur, de lijsten die het raakte (behalve die je bekijkt), waar en
+wie, en rechts het bedrag, een hoeveelheid (+2, −300 g) of de waarde van een meting (82,4 kg). Een gebeurtenis met een
+formulier dat je niet ziet ("gedeeltelijk") toont enkel wat jouw items raakt, zonder bedrag. Gepland: met een vinkje
+vooraan.
 
 ### Een formulier instellen: `GroupsEditor` en `DoesEditor` (`Does.tsx`)
 
-In Instellen → Formulieren (een `Sheet`): bij een nieuw formulier eerst **Begin van** (een vertrekpunt: Aankoop,
-Gebruik, Dienst, Activiteit, Meting, Overdracht; het vult de rest voor), dan Naam en Icoon, de schakelaars **Met een
-bedrag**, **Naar iemand** (enkel met een bedrag) en **Met een einde** (dan Melding na), de groepen lijnen, de velden,
-**Wat het doet**, Gepland en Foto lezen met AI. Er is geen "Werkt als".
+In Instellen van het formulier (`FormSettings`, `/formulieren/:id/instellingen`, of `/formulieren/nieuw`; vanop een
+lijst ⋯ → Nieuw formulier, dan vult zijn eerste groep die lijst in), in grijze groepen: bij een nieuw formulier eerst
+**Begin van** (een vertrekpunt: Aankoop, Gebruik, Dienst, Activiteit, Meting, Overdracht; het vult de rest voor), dan
+Naam en Icoon; de schakelaars **Met een bedrag**, **Naar iemand** (enkel met een bedrag) en **Met een einde** (dan
+Melding na) met de groepen lijnen; de velden; **Wat het doet**; Gepland, Foto lezen met AI, Melding bij iets nieuws en
+de tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen "Werkt als".
 
 - **Lijnen** (`GroupsEditor`): per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan `.line-main.is-plain`:
   de naam van de groep, "bv. Ruimte, Winkel", met ×), eronder **Rol** (Wat erbij komt, Wat eraf gaat, Waarover, Waar of
@@ -843,8 +847,9 @@ bedrag**, **Naar iemand** (enkel met een bedrag) en **Met een einde** (dan Meldi
   Voorraad; bij een persoon Saldo) en ×; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal, de
   voorraad of een saldo), **Met** (een veld van het formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde,
   dan met **Waarde** erbij) en **Op** (een groep lijnen, of met een bedrag Wie betaalde, Wie deelt, Naar wie). Onderaan
-  "+ Handeling". Enkel kolommen van lijsten waar je items mag aanpassen (`GET /me/columns`). Met een bedrag aan- of
-  uitzetten neemt het saldo mee (wie betaalde telt bij, wie deelt of naar wie telt af).
+  "+ Handeling". Enkel kolommen van lijsten waar je items mag aanpassen (`GET /me/columns`); een saldo staat altijd in
+  een gekozen lijst. Met een bedrag aan- of uitzetten neemt het saldo mee (wie betaalde telt bij, wie deelt of naar wie
+  telt af).
 
 Een kolom die het logboek invult, toont in de lijst en de fiche gewoon haar waarde; pas je ze in het item aan, dan komt
 er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
@@ -866,9 +871,9 @@ wat je weet zet en geen item is ("Meursault 2019 32 euro"), wordt zo'n lijn in p
 
 ### Rechten in de app
 
-De API beslist wat iemand mag en weigert de rest; de app **verbergt** wat niet mag. Wat ze krijgt: de rol per lijst
-(`useSession().lists[].role`, `ListDetail.role`): **beheerder** (Instellen, mensen, soorten), **lid** (items
-toevoegen en loggen), **gast** (kijken). Toevoegen en loggen enkel met `canEdit`, Instellen enkel met `canManage`.
+De API beslist wat iemand mag en weigert de rest; de app **verbergt** wat niet mag. Wat ze krijgt: de rol per lijst en
+per formulier (`useSession().lists[].role`, `useSession().forms[].role`, `ListDetail.role`, `FormDetail.role`):
+**beheerder** (Instellen, mensen), **lid** (items toevoegen, met het formulier loggen), **gast** (kijken). Toevoegen en loggen enkel met `canEdit`, Instellen enkel met `canManage`.
 
 - **Mensen** (Instellen → Mensen): per persoon een rij met de rol als compacte keuzelijst (`member-actions` +
   `scope-select`) en ×; via een tag staat de keuze "Via Huis (beheerder)" bovenaan, en **Geen toegang** is een
@@ -1108,12 +1113,18 @@ Klaar.
 
 **Toevoegen** (het [zoekpalet](#zoekpalet-commandpalette)): typ wat er gebeurde ("gegeten pasta 300 g"); Loggen ·
 Nieuw · Openen. Staat er een item in je tekst, dan eerst dat item met zijn formulieren ("Aankoop · Chablis"); de rest van
-je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst als laatste.
+je tekst gaat mee naar het formulier (`?tekst=`). Nieuwe lijst en Nieuw formulier als laatste.
 
-**Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Importeren, Toevoegen uit andere lijst, QR-sticker, Op je beginscherm) en `primary`
-"<Wijn> toevoegen" of Loggen → `Tabs` <items> · Logboek · Gepland (enkel met iets gepland; heeft de lijst een
-formulier dat gepland begint, dan altijd en vóór het logboek: Boodschappen opent op wat je nog moet kopen) → `split
-split-main-first`: de items of het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
+**Lijst** (`/lijsten/:id`): `PageHead` met ⋯ (Instellen, Nieuw formulier, Importeren, Toevoegen uit andere lijst, QR-sticker, Op je beginscherm) en `primary`
+"<Wijn> toevoegen" of Loggen → `Tabs` <items> · Logboek (wat haar items raakte) · Gepland (enkel met iets gepland;
+vult een formulier dat gepland begint haar in, dan altijd en vóór het logboek) → `split split-main-first`: de items of
+het logboek, in de zijkolom Wie (enkel met meer dan jij) en Tags → `PhoneAdd`.
+
+**Formulier** (`/formulieren/:id`, `FormPage`): `PageHead` met ⋯ (Instellen voor een beheerder, de schakelaar
+Meldingen als het formulier meldt; stil via een tag: "<tag> weer laten melden") en `primary` Loggen (Plannen op
+Gepland) → `Tabs` Logboek · Gepland (zoals bij een lijst; begint het gepland, dan Gepland eerst: Boodschap opent op wat
+je nog moet kopen) → `split split-main-first`: het logboek, in de zijkolom Wie, de Lijsten die het invult en Tags →
+`PhoneAdd`.
 
 **Item** (`/items/:id`): `PageHead` met een knop per formulier ([`LogButtons`](#loggen-logbuttons), dit item al
 ingevuld) en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
@@ -1121,16 +1132,17 @@ velden (`dl`), rechts de **Tijdlijn** (alles wat ermee gebeurde: wanneer, waar, 
 gaat een gebeurtenis enkel over dit item, dan haar bedrag), de delen, wat ernaar verwijst en bestanden → onderaan
 Archiveren en Verwijderen.
 
-**Gebeurtenis** (`/gebeurtenissen/:id`): de velden (soort, wanneer, bedrag, betaald door, gedeeld met, gelogd door,
-lijst) in de zijkolom, rechts de **Lijnen** en wat ze afvinkte → Verwijderen.
+**Gebeurtenis** (`/gebeurtenissen/:id`): de velden (formulier, met een link, wanneer, bedrag, betaald door, gedeeld
+met, gelogd door, de lijsten die ze raakte) in de zijkolom, rechts de **Lijnen** en wat ze afvinkte → Verwijderen.
 
-**Loggen** (`/lijsten/:id/loggen`, `EventForm`): bovenaan **Typ wat je weet** (vult live in, zie `shared/parse.ts`)
-met Kasticket ✨, dan **Formulier** (`FormPicker`, filterpillen met icoon: de formulieren van de lijst, zonder eigen
-formulieren de zes basissoorten; de rest, dus de basissoorten naast eigen formulieren en de formulieren van andere
-lijsten, in "Ander formulier…"; zie `formsOf`), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland
+**Loggen** (`/loggen?formulier=…`, `EventForm`; vanuit een lijst met `&nieuw=<lijst>`): bovenaan **Typ wat je weet**
+(vult live in, zie `shared/parse.ts`) met Kasticket ✨, dan **Formulier** (`FormPicker`, filterpillen met icoon: de
+formulieren waarmee je mag loggen die de lijst invullen waar je vandaan komt; de rest in "Ander formulier…"; zie
+`formsOf`; zonder lijst alle), Omschrijving, Wanneer en Uur (bij een activiteit Van en Tot), Gepland
 (aan bij `?gepland=1` of een formulier dat gepland begint, `startsPlanned`; volgt een ander formulier tot je hem zelf zet); bij geld Bedrag, Betaald
-door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van de
-soort; Herhalen en Foto. Een prijs in de tekst zonder gekozen soort maakt er een aankoop van.
+door en Gedeeld met (bij gebruik: Wie at of gebruikte); de [Lijnen](#lijnen-lineseditor-linestsx); de velden van het
+formulier; Herhalen en Foto. Een prijs in de tekst zonder gekozen formulier kiest een formulier dat koopt. Heb je nog
+geen formulier: "Nog geen formulier" met + Formulier.
 
 **Een item toevoegen** (`/lijsten/:id/nieuw`, `ItemForm`): Naam, met eronder **Barcode** (lijsten met productinfo)
 en **Foto ✨**, en daaronder de bron ("Uit Open Food Facts: …", "Geschat met AI"); dan de velden, Deel van, Opslaan
@@ -1141,8 +1153,10 @@ Terugbetaald), Uitgaven deze maand (‹ › naar vorige maanden), per soort of p
 Agenda; wat gepland staat als lijst met een vinkje; de voorraad waar bijna op = ja; wat er gegeten is, vandaag (‹ ›
 naar gisteren).
 
-**Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Voorraad · Soorten · Mensen (`?tab=`). Algemeen:
-naam, hoe één item heet, icoon, kleur, tags, melding; onderaan Als sjabloon, Archiveren en Verwijderen.
+**Instellen** (`/lijsten/:id/instellingen`): `Tabs` Algemeen · Velden · Tellen · Mensen (`?tab=`). Algemeen: naam, hoe
+één item heet, icoon, kleur, tags; onderaan Als sjabloon, Archiveren en Verwijderen. Een formulier: `Tabs` Formulier ·
+Mensen (zie [Een formulier instellen](#een-formulier-instellen-groupseditor-en-doeseditor-doestsx)); Mensen is dezelfde
+`PeopleEditor` als bij een lijst.
 
 **Tag** (`/tags/:id`): hebben haar lijsten items, dan `Tabs` <naam van de tag> · Lijsten. Onder de naam al die items
 samen (`tagView`, via `ViewBody`): een zoekveld (`.toolbar .search`, "Zoek in wijn…", in de naam) en per item de
@@ -1151,9 +1165,10 @@ Gedeelde wijnkelder). Onder Lijsten: de lijsten met die tag (met jouw rol), Tag 
 persoon: uit = de groep van de tag staat niet in je menu; een lijst staat er nog onder haar andere tags, Lijsten en
 zoeken tonen alles) en **Altijd erbij** met Aanpassen.
 
-**Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en wat je stilzette), **App** (`AppCard`: Openen
-op, Apps, Snelkoppelingen, Gedeelde foto; een bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst
-of Formulier, met bij een formulier Loggen, een soort of "<Item> toevoegen" en Met tekst), **AI** en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst beheert).
+**Jouw gegevens** (`/ik`): naam, kleur en rekeningnummer, Meldingen (en welke formulieren en tags je stilzette), **App**
+(`AppCard`: Openen op, Apps, Snelkoppelingen, Gedeelde foto (Kasticket lezen · een formulier dat koopt); een
+bestemming kies je met `DestinationPicker`: Overzicht (een bord), Lijst, Formulier (loggen) of Nieuw item, met Met
+tekst), **AI** en **Back-up** (Downloaden, Terugzetten; enkel als je een lijst of formulier beheert).
 
 **Lijsten** (`/lijsten`, ook via ⋯ → Verbanden van een lijst): zie [Lijsten](#lijsten-listspage); `PageHead`, de filters, Werkt niet voor iedereen,
 Kaart of Lijst, en de kaart van wat je kiest; zie [Verbanden](#verbanden-linkmapview-linklist-linkdetail-linkproblems-linkmaptsx-en-listspage).

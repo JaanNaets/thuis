@@ -1,12 +1,11 @@
-// Een formulier kiezen (een soort, zie `formsOf` in shared/model.ts): de formulieren van de lijst als pillen, de rest
-// (de basissoorten naast eigen formulieren, de formulieren van andere lijsten) onder Ander formulier…. In het
-// logformulier en bij een actie op een bord.
+// Een formulier kiezen (zie `formsOf` in shared/model.ts): met een lijst de formulieren die haar invullen als pillen,
+// de rest onder Ander formulier…. In het logformulier en bij een actie op een bord.
 
-import { formsOf, type KindInfo } from "../../shared/model";
+import { fillsLists, formsOf, type KindInfo } from "../../shared/model";
 import { Icon, type IconName } from "./Icon";
 
-export function FormPicker({ kinds, listId, value, onChange, wrap = false }: { kinds: KindInfo[]; listId: string; value: string; onChange: (k: KindInfo) => void; wrap?: boolean }) {
-  const { shown, more } = formsOf(kinds, listId, value);
+export function FormPicker({ kinds, listId, value, onChange, wrap = false }: { kinds: KindInfo[]; listId?: string | null; value: string; onChange: (k: KindInfo) => void; wrap?: boolean }) {
+  const { shown, more } = formsOf(kinds, (k) => Boolean(listId) && fillsLists(k).includes(listId!), value);
   return (
     <div className="field">
       <span className="label">Formulier</span>

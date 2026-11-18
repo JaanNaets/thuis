@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { computeLocal, isLinkCalc } from "../../shared/calc";
 import { referencedItems, referencedPeople, type Attributes } from "../../shared/fields";
-import { canEdit, type LineRole, type List, type Role, type StockLevel, type ItemRef, type ItemRow } from "../../shared/model";
+import { brusselsNow, canEdit, type LineRole, type List, type Role, type StockLevel, type ItemRef, type ItemRow } from "../../shared/model";
 import { measureFor, unitPrice } from "../../shared/stock";
+import { normalizeUnit } from "../../shared/units";
 import type { Person } from "../../shared/types";
 import { brusselsToday } from "../today";
-import { ids, kindOf, needEdit, requireList, requireItem, seenLists, toItem, type ItemRowDb } from "../access";
+import { ADJUST } from "../../shared/cells";
+import { ids, kindOf, needEdit, requireList, requireItem, seenAll, seenForms, seenLists, toItem, type ItemRowDb } from "../access";
 import { adjust, cellsOf, rebuildEffects, withCells, withValues } from "../cells";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { lockedOf, syncFrom } from "../mirrors";
@@ -236,7 +238,7 @@ items.get("/", async (c) => {
         .sort((a, b) => Number(whole(b.name)) - Number(whole(a.name)) || b.name.length - a.name.length)
     : rows;
   const found = results.slice(0, limit);
-  const usual = text ? await usualRoles(db, seen, found) : new Map<string, LineRole>();
+  const usual = text ? await usualRoles(db, await seenForms(db, me.id), found) : new Map<string, LineRole>();
   return c.json({
     items: found.map(
       (r) =>
@@ -257,14 +259,14 @@ items.get("/", async (c) => {
  * Welke rol een item meestal heeft (Colruyt: bij, de wagen: voor), uit de lijnen in wat de lezer ziet; zonder
  * geschiedenis die van de andere items in zijn lijst (een nieuwe winkel in Winkels: bij).
  */
-async function usualRoles(db: D1Database, seen: Map<string, Role>, found: { id: string; list_id: string }[]): Promise<Map<string, LineRole>> {
+async function usualRoles(db: D1Database, forms: Map<string, Role>, found: { id: string; list_id: string }[]): Promise<Map<string, LineRole>> {
   if (!found.length) return new Map();
   const { results } = await db
     .prepare(
       `SELECT t.id AS item_id, t.list_id, l.role, COUNT(*) AS n FROM lines l JOIN items t ON t.id = l.item_id JOIN events e ON e.id = l.event_id
-       WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND e.list_id IN (SELECT value FROM json_each(?2)) GROUP BY t.id, l.role`,
+       WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND e.kind IN (SELECT value FROM json_each(?2)) GROUP BY t.id, l.role`,
     )
-    .bind(ids(new Set(found.map((f) => f.list_id))), ids(seen.keys()))
+    .bind(ids(new Set(found.map((f) => f.list_id))), ids(forms.keys()))
     .all<{ item_id: string; list_id: string; role: LineRole; n: number }>();
   const top = (rows: typeof results) => {
     const sums = new Map<LineRole, number>();
@@ -289,8 +291,6 @@ type TimelineEntry = {
   base: string;
   status: string;
   at: string;
-  list_id: string;
-  list: string | null;
   partial: boolean;
   name: string;
   role: string;
@@ -308,21 +308,23 @@ items.get("/:id", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { item, list, role } = await requireItem(db, me.id, c.req.param("id"));
-  const seen = await seenLists(db, me.id);
+  const { lists: seen, forms } = await seenAll(db, me.id);
   const today = brusselsToday();
   const [lines, parts] = (await db.batch([
     db
       .prepare(
-        `SELECT l.role, l.amount, l.unit, l.price, l.expires, e.id AS event_id, e.kind, e.base, e.status, e.at, e.list_id, e.name, e.created_by, ls.name AS list,
+        `SELECT l.role, l.amount, l.unit, l.price, l.expires, e.id AS event_id, e.kind, e.base, e.status, e.at, e.name, e.created_by,
                 e.amount AS event_amount, (SELECT COUNT(*) FROM lines x WHERE x.event_id = e.id AND x.role != 'bij') AS main_lines
-         FROM lines l JOIN events e ON e.id = l.event_id JOIN lists ls ON ls.id = e.list_id
+         FROM lines l JOIN events e ON e.id = l.event_id
          WHERE l.item_id = ? ORDER BY e.at DESC, e.created_at DESC LIMIT 300`,
       )
       .bind(item.id),
     db.prepare("SELECT id, name, list_id FROM items WHERE part_of = ?").bind(item.id),
   ])) as [D1Result<Omit<TimelineEntry, "partial" | "store" | "unit_price" | "kind_name"> & { event_amount: number | null; main_lines: number }>, D1Result<{ id: string; name: string; list_id: string }>];
-  const visible = lines.results.filter((l) => seen.has(l.list_id) || l.role !== "bij");
-  const full = visible.filter((l) => seen.has(l.list_id)).map((l) => l.event_id);
+  // Helemaal als je het formulier ziet (een Aanpassing: dit item zie je); anders zonder naam, bedrag of waar.
+  const whole = (kind: string) => kind === ADJUST || forms.has(kind);
+  const visible = lines.results.filter((l) => whole(l.kind) || l.role !== "bij");
+  const full = visible.filter((l) => whole(l.kind)).map((l) => l.event_id);
   const { results: stores } = await db
     .prepare(
       `SELECT l.event_id, COALESCE(t.name, l.text) AS name FROM lines l LEFT JOIN items t ON t.id = l.item_id
@@ -335,7 +337,7 @@ items.get("/:id", async (c) => {
   const kindNames = new Map<string, string>();
   for (const l of visible) if (!kindNames.has(l.kind)) kindNames.set(l.kind, (await kindOf(db, l.kind, l.base as never)).name);
   const timeline: TimelineEntry[] = visible.map(({ event_amount, main_lines, ...l }) => {
-    const partial = !seen.has(l.list_id);
+    const partial = !whole(l.kind);
     return {
       ...l,
       // Gaat de gebeurtenis enkel over dit item (een tankbeurt voor de wagen), dan is haar bedrag het zijne.
@@ -343,7 +345,6 @@ items.get("/:id", async (c) => {
       kind_name: kindNames.get(l.kind) ?? l.kind,
       partial,
       name: partial ? "" : l.name,
-      list: partial ? null : l.list,
       store: partial ? null : (storeOf.get(l.event_id) ?? null),
       unit_price: unitPrice(l.price, l.amount, l.unit, measure),
     };
@@ -429,6 +430,31 @@ items.put("/:id", async (c) => {
   if (adjusted.eventId) await rebuildEffects(db, [adjusted.eventId]);
   await syncFrom(db, list.id);
   return c.json({ ok: true, adjusted: adjusted.eventId });
+});
+
+/**
+ * Tellen (− en + in een lijst die voorraad telt): een Aanpassing "Telling" die de voorraad van het item op `amount` zet
+ * (in `unit`, anders die van het item). Geen formulier nodig: wie het item mag aanpassen, mag tellen.
+ */
+items.post("/:id/count", async (c) => {
+  const db = c.env.DB;
+  const me = c.get("person");
+  const { item, list, role } = await requireItem(db, me.id, c.req.param("id"));
+  needEdit(role);
+  if (!list.stock) throw new ValidationError("Deze lijst telt geen voorraad.");
+  const body = asObject(await c.req.json());
+  const amount = typeof body.amount === "number" && Number.isFinite(body.amount) && body.amount >= 0 && body.amount < 1e9 ? body.amount : null;
+  if (amount === null) throw new ValidationError("Hoeveel is er?");
+  const unit = normalizeUnit(optionalString(body, "unit", 20)) ?? measureFor(list.stock, item.data).unit ?? null;
+  const eventId = crypto.randomUUID();
+  await db.batch([
+    db
+      .prepare("INSERT INTO events (id, kind, base, name, status, at, data, created_by) VALUES (?, ?, 'meting', 'Telling', 'gebeurd', ?, '{}', ?)")
+      .bind(eventId, ADJUST, brusselsNow(), me.id),
+    db.prepare("INSERT INTO lines (id, event_id, position, role, item_id, amount, unit) VALUES (?, ?, 0, 'voor', ?, ?, ?)").bind(crypto.randomUUID(), eventId, item.id, amount, unit),
+  ]);
+  await rebuildEffects(db, [eventId]);
+  return c.json({ id: eventId }, 201);
 });
 
 items.put("/:id/archived", async (c) => {
