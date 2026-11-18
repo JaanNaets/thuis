@@ -296,18 +296,18 @@ function BlockView({ block, index }: { block: Block; index: number }) {
   if (block.kind === "action") return <ActionGroup blocks={[block]} index={index} />;
   return (
     <div className={`dash-block${block.wide ? " is-wide" : ""}`} style={stagger(index)}>
-      {block.kind === "view" ? <ViewCard block={block} /> : <ThingBlock id={block.thing} />}
+      {block.kind === "view" ? <ViewCard block={block} /> : <ItemBlock id={block.item} />}
     </div>
   );
 }
 
-/** Eén ding: zijn naam en voorraad (de pellets op zolder). */
-function ThingBlock({ id }: { id: string }) {
-  const { data } = useApi<{ thing: { id: string; name: string }; stock: { amount: number; unit: string | null; low: boolean } | null; list: { name: string } }>(`/things/${id}`);
+/** Eén item: zijn naam en voorraad (de pellets op zolder). */
+function ItemBlock({ id }: { id: string }) {
+  const { data } = useApi<{ item: { id: string; name: string }; stock: { amount: number; unit: string | null; low: boolean } | null; list: { name: string } }>(`/items/${id}`);
   if (!data) return null;
   return (
-    <Link to={`/dingen/${id}`} className="card dash-card dash-link">
-      <CardHead title={data.thing.name} description={data.list.name} />
+    <Link to={`/items/${id}`} className="card dash-card dash-link">
+      <CardHead title={data.item.name} description={data.list.name} />
       {data.stock && (
         <div className="card-body">
           <span className={`total-value${data.stock.low ? " is-low" : ""}`}>{formatAmount(data.stock.amount, data.stock.unit)}</span>
@@ -323,7 +323,7 @@ function blockLabel(b: Block, lists: { id: string; name: string }[]): string {
   const listName = (id: string) => lists.find((l) => l.id === id)?.name;
   if (b.kind === "view") return viewName(b, listName);
   if (b.kind === "action") return b.name || `${BLOCK_KINDS.action} · ${listName(b.list) ?? "lijst"}`;
-  return BLOCK_KINDS.thing;
+  return BLOCK_KINDS.item;
 }
 
 /** Wat de bouwer toont: kiezen tussen weergave en actie, of een weergave of actie samenstellen (`index` null: nieuw). */
@@ -358,7 +358,7 @@ function BlocksEditor({ blocks, onChange }: { blocks: Block[]; onChange: (b: Blo
                 </span>
                 <span className="row-title">{blockLabel(b, lists)}</span>
               </span>
-              {b.kind !== "thing" && (
+              {b.kind !== "item" && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-icon btn-sm"

@@ -1,9 +1,9 @@
 // Verbanden: hoe je lijsten met elkaar en met de weergaven samenhangen. Niets hiervan wordt bewaard. Het volgt uit de
 // velden van de lijsten en hun soorten (verwijzingen, datums, productinfo) en uit wat er gelogd is (lijnen van een
-// gebeurtenis naar dingen van een andere lijst, soorten van een andere lijst, geld, gepland, herhalen).
+// gebeurtenis naar items van een andere lijst, soorten van een andere lijst, geld, gepland, herhalen).
 //
 // De Worker geeft enkel mee wat de lezer ziet: zijn lijsten (`seenLists`), en tellingen over gebeurtenissen in die
-// lijsten met lijnen naar dingen in die lijsten. Wie een gebeurtenis in haar lijst ziet, ziet ze helemaal (ook een lijn
+// lijsten met lijnen naar items in die lijsten. Wie een gebeurtenis in haar lijst ziet, ziet ze helemaal (ook een lijn
 // "bij"), dus zo'n telling verraadt niets; een verband met een lijst die je niet ziet, bestaat voor jou niet.
 
 import type { BlockKind } from "./board.ts";
@@ -26,7 +26,7 @@ export const FIELD_LINKS = {
   type: false,
   options: false,
   unit: false,
-  ref_type: true, // verwijst naar de dingen van een andere lijst
+  ref_type: true, // verwijst naar de items van een andere lijst
   ref_also: true, // … en van nog andere lijsten
   free: false,
   format: false,
@@ -56,7 +56,7 @@ export const FIELD_LINKS = {
   portion: false,
   timer_goal: false, // valt weg (cleanListFields): een timer is een activiteit met een doel op de soort
   timer_into: false,
-  calc: false, // rekent enkel binnen het ding (cleanListFields weigert een verwijzende berekening)
+  calc: false, // rekent enkel binnen het item (cleanListFields weigert een verwijzende berekening)
   result: false,
 } as const satisfies Record<keyof FieldDef, boolean>;
 
@@ -119,8 +119,8 @@ export const LINE_LINKS = {
   id: false,
   position: false,
   role: true, // erbij, eraf, voor of bij
-  thing_id: true, // een ding van (soms) een andere lijst
-  text: false, // een lijn zonder ding raakt geen lijst
+  item_id: true, // een item van (soms) een andere lijst
+  text: false, // een lijn zonder item raakt geen lijst
   amount: false,
   unit: false,
   price: false,
@@ -132,7 +132,7 @@ export const LINE_LINKS = {
 export const BLOCK_LINKS = {
   view: true, // een weergave toont de lijsten in haar zin
   action: true, // een actie logt in een lijst
-  thing: true,
+  item: true,
 } as const satisfies Record<BlockKind, boolean>;
 
 // ---------- de weergaven ----------
@@ -177,18 +177,18 @@ export const LINK_KINDS = {
 export type LinkKind = keyof typeof LINK_KINDS;
 export const LINK_ORDER = Object.keys(LINK_KINDS) as LinkKind[];
 
-/** Een ding aan de kant van `to` waar het logboek naartoe gaat, en in hoeveel gebeurtenissen. */
-export type LinkThing = { name: string; count: number };
+/** Een item aan de kant van `to` waar het logboek naartoe gaat, en in hoeveel gebeurtenissen. */
+export type LinkItem = { name: string; count: number };
 
 /**
- * Een verband: `from` doet iets met `to` (wijst ernaar, logt met zijn dingen of soorten, komt erin voor). `texts`: wat,
+ * Een verband: `from` doet iets met `to` (wijst ernaar, logt met zijn items of soorten, komt erin voor). `texts`: wat,
  * één zin per veld, soort of rol. `count`: hoeveel gebeurtenissen (enkel bij wat gelogd is), `last`: de laatste.
- * `things`: bij wat gelogd is, de dingen van `to` die het vaakst voorkomen (de meeste eerst).
+ * `items`: bij wat gelogd is, de items van `to` die het vaakst voorkomen (de meeste eerst).
  */
-export type Link = { kind: LinkKind; from: string; to: string; texts: string[]; count: number | null; last: string | null; things?: LinkThing[] };
+export type Link = { kind: LinkKind; from: string; to: string; texts: string[]; count: number | null; last: string | null; items?: LinkItem[] };
 
-/** Zoveel dingen per verband gaan mee (de rest telt in `count`). */
-export const LINK_THINGS = 12;
+/** Zoveel items per verband gaan mee (de rest telt in `count`). */
+export const LINK_ITEMS = 12;
 
 /** Een lijst zoals de kaart ze nodig heeft (enkel lijsten die de lezer ziet, niet gearchiveerd). */
 export type LinkList = Pick<List, "id" | "name" | "one" | "fields" | "stock" | "notify"> & Partial<Pick<List, "ledger">> & { role: Role };
@@ -212,24 +212,24 @@ export type LogStat = {
   food: number;
   last: string | null;
 };
-/** Lijnen van gebeurtenissen in `list` naar dingen in `to` (beide gezien), per soort en rol: in hoeveel gebeurtenissen. */
+/** Lijnen van gebeurtenissen in `list` naar items in `to` (beide gezien), per soort en rol: in hoeveel gebeurtenissen. */
 export type LineStat = { list: string; kind: string; base: Base; role: LineRole; to: string; events: number; last: string | null };
-/** Hoeveel gebeurtenissen in `list` lijnen hebben naar dingen in `to`, in totaal (een gebeurtenis telt één keer). */
+/** Hoeveel gebeurtenissen in `list` lijnen hebben naar items in `to`, in totaal (een gebeurtenis telt één keer). */
 export type LinePair = { list: string; to: string; events: number; last: string | null };
-/** Hoeveel gebeurtenissen in `list` een lijn hebben naar het ding `thing` (in `to`, beide gezien). */
-export type LineThing = { list: string; to: string; thing: string; name: string; events: number };
+/** Hoeveel gebeurtenissen in `list` een lijn hebben naar het item `item` (in `to`, beide gezien). */
+export type LineItem = { list: string; to: string; item: string; name: string; events: number };
 /** Een blok op een van je overzichten dat een lijst toont. */
 export type BoardUse = { board: string; list: string; block: BlockKind };
 
-/** Een koppeling (zie shared/transfer.ts): `list` haalt blijvend dingen uit `source`, met de velden die meelopen. */
+/** Een koppeling (zie shared/transfer.ts): `list` haalt blijvend items uit `source`, met de velden die meelopen. */
 export type MirrorUse = { list: string; source: string; fields: string[] };
 
-export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; things?: LineThing[]; boards: BoardUse[]; mirrors?: MirrorUse[] };
+export type LinkInput = { lists: LinkList[]; kinds: LinkKindDef[]; log: LogStat[]; lines: LineStat[]; pairs: LinePair[]; items?: LineItem[]; boards: BoardUse[]; mirrors?: MirrorUse[] };
 
-/** Verbanden en wat een lijst met haar eigen dingen doet (dat is geen lijn op de kaart). */
+/** Verbanden en wat een lijst met haar eigen items doet (dat is geen lijn op de kaart). */
 export type LinkResult = { links: Link[]; own: Record<string, string[]> };
 
-const BLOCK_TEXT: Partial<Record<BlockKind, string>> = { view: "een weergave", action: "een actie", thing: "één ding" };
+const BLOCK_TEXT: Partial<Record<BlockKind, string>> = { view: "een weergave", action: "een actie", item: "één item" };
 const PRODUCT_SOURCE = "uit Open Food Facts of NEVO";
 
 const times = (n: number) => `${n}×`;
@@ -240,9 +240,9 @@ function kindName(kinds: Map<string, LinkKindDef>, kind: string, base: Base): st
   return kinds.get(kind)?.name ?? BASES[base]?.label ?? kind;
 }
 
-/** Wat een lijn van een soort met een ding van `to` doet, als gewone zin ("Tankbeurt voor een wagen"). */
+/** Wat een lijn van een soort met een item van `to` doet, als gewone zin ("Tankbeurt voor een wagen"). */
 export function lineText(kind: string, role: LineRole, to: Pick<LinkList, "one" | "stock">): string {
-  const one = to.one?.trim().toLowerCase() || "ding";
+  const one = to.one?.trim().toLowerCase() || "item";
   if (to.stock && role === "in") return `${kind} telt erbij in de voorraad`;
   if (to.stock && role === "uit") return `${kind} haalt eraf uit de voorraad`;
   if (role === "in") return `${kind} zet een ${one} erbij`;
@@ -281,7 +281,7 @@ export function buildLinks(input: LinkInput): LinkResult {
     for (const f of fields) {
       const label = `${prefix}${f.label}`;
       for (const to of f.type === "item" || f.type === "items" ? refLists(f) : []) {
-        if (to === from) ownNote(from, `${label} verwijst naar een ander ding van deze lijst`);
+        if (to === from) ownNote(from, `${label} verwijst naar een ander item van deze lijst`);
         else if (lists.has(to)) add("ref", from, to, f.copy ? `${label} verwijst ernaar en neemt over` : `${label} verwijst ernaar`);
       }
       if (f.agenda && canAgenda(f)) add("view", from, viewNode("agenda"), `${label} staat in de agenda`);
@@ -313,7 +313,7 @@ export function buildLinks(input: LinkInput): LinkResult {
     for (const g of k.parts?.groups ?? []) {
       if (g.list && g.list !== k.list_id && lists.has(g.list)) add("log", k.list_id, g.list, `${k.name}: ${g.label} uit deze lijst`);
     }
-    // Wat het formulier invult: een kolom van de dingen van een lijst (de voorraad van elke lijst staat bij de lijnen).
+    // Wat het formulier invult: een kolom van de items van een lijst (de voorraad van elke lijst staat bij de lijnen).
     for (const h of k.does ?? []) {
       const to = h.list ? lists.get(h.list) : undefined;
       if (!to) continue;
@@ -362,12 +362,12 @@ export function buildLinks(input: LinkInput): LinkResult {
       link.last = later(link.last, p.last);
     }
   }
-  for (const t of input.things ?? []) {
+  for (const t of input.items ?? []) {
     const link = t.list !== t.to ? byKey.get(`log ${t.list} ${t.to}`) : undefined;
-    if (link) (link.things ??= []).push({ name: t.name, count: t.events });
+    if (link) (link.items ??= []).push({ name: t.name, count: t.events });
   }
   for (const link of byKey.values()) {
-    if (link.things) link.things = link.things.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "nl")).slice(0, LINK_THINGS);
+    if (link.items) link.items = link.items.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "nl")).slice(0, LINK_ITEMS);
   }
 
   for (const b of input.boards) {
@@ -379,7 +379,7 @@ export function buildLinks(input: LinkInput): LinkResult {
   return { links, own };
 }
 
-/** De lijsten waar een lijst van afhangt om te werken: waar ze naar verwijst en met wiens dingen ze logt. */
+/** De lijsten waar een lijst van afhangt om te werken: waar ze naar verwijst en met wiens items ze logt. */
 export function dependsOn(links: Link[], list: string): string[] {
   return [...new Set(links.filter((l) => l.from === list && (l.kind === "ref" || l.kind === "log") && !viewOf(l.to)).map((l) => l.to))];
 }
@@ -388,7 +388,7 @@ export function dependsOn(links: Link[], list: string): string[] {
 export type LinkPerson = { id: string; name: string; role: Role };
 
 /**
- * Een verband dat voor iemand niet werkt: hij kan in `list` loggen of dingen maken, maar ziet `to` niet (dus geen ding
+ * Een verband dat voor iemand niet werkt: hij kan in `list` loggen of items maken, maar ziet `to` niet (dus geen item
  * daarvan kiezen, en het verband niet zien).
  */
 export type LinkProblem = { list: string; to: string; person: string; name: string };
@@ -525,10 +525,10 @@ export type LinkKindName = { id: string; list: string; name: string };
 /** Wat GET /insights/links geeft. */
 export type LinksResponse = {
   links: Link[];
-  /** Wat een lijst met haar eigen dingen doet (geen lijn op de kaart). */
+  /** Wat een lijst met haar eigen items doet (geen lijn op de kaart). */
   own: Record<string, string[]>;
-  /** Per lijst: hoeveel dingen en gebeurtenissen, en de dag van de laatste die gebeurd is. */
-  counts: Record<string, { things: number; events: number; last: string | null }>;
+  /** Per lijst: hoeveel items en gebeurtenissen, en de dag van de laatste die gebeurd is. */
+  counts: Record<string, { items: number; events: number; last: string | null }>;
   people: Record<string, LinkPersonView[]>;
   /** De lijsten die een melding sturen bij iets nieuws (`notify`), om ze per persoon stil te kunnen zetten. */
   alerts: string[];
@@ -544,7 +544,7 @@ export const linkKey = (l: Pick<Link, "kind" | "from" | "to">) => `${l.kind} ${l
 export const HIT_GROUPS = {
   lijsten: "Lijsten",
   soorten: "Formulieren",
-  dingen: "Dingen",
+  items: "Items",
   verbanden: "Verbanden",
   weergaven: "Weergaven",
 } as const;
@@ -567,7 +567,7 @@ export type LinkHit = {
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Zoeken in je verbanden: lijsten, soorten (en waar ze gebruikt worden), dingen die in een verband voorkomen, wat een
+ * Zoeken in je verbanden: lijsten, soorten (en waar ze gebruikt worden), items die in een verband voorkomen, wat een
  * verband doet, en de weergaven. Elk woord moet erin staan (zonder hoofdletters of accenten). Enkel wat je ziet: `lists`
  * en `links` komen al uit `seenLists`.
  */
@@ -624,11 +624,11 @@ export function searchLinks(
   }
 
   for (const l of known) {
-    for (const t of l.things ?? []) {
+    for (const t of l.items ?? []) {
       if (matches(t.name))
         out.push({
-          group: "dingen",
-          key: `ding ${linkKey(l)} ${t.name}`,
+          group: "items",
+          key: `item ${linkKey(l)} ${t.name}`,
           select: l.to,
           title: t.name,
           detail: `${arrow(l)} · ${t.count}×`,

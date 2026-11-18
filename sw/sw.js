@@ -6,11 +6,11 @@ const PRECACHE = __PRECACHE__;
 
 const SHELL_CACHE = `shell-${VERSION}`;
 // Een nieuwe naam als de routes hieronder veranderen: bij het activeren gaat de oude cache weg.
-const DATA_CACHE = "data-v2";
+const DATA_CACHE = "data-v3";
 
 // API-routes die offline beschikbaar blijven (wat je eerder bekeek): jij, je borden en hun weergaven, een lijst met
-// haar dingen en logboek, een ding of gebeurtenis, en wat een formulier nodig heeft (palet, mensen, de keuzelijst van
-// dingen). Zo opent ook een formulier offline; wat je bewaart wacht dan in de app (src/outbox.ts). Een nieuw scherm
+// haar items en logboek, een item of gebeurtenis, en wat een formulier nodig heeft (palet, mensen, de keuzelijst van
+// items). Zo opent ook een formulier offline; wat je bewaart wacht dan in de app (src/outbox.ts). Een nieuw scherm
 // dat offline moet werken, zet zijn GET-route hier. Zoeken terwijl je typt (`q`, `in`) bewaren we niet: dat zou de
 // cache met elke letter laten groeien. Al de rest vraagt internet.
 const OFFLINE_API = [
@@ -18,9 +18,9 @@ const OFFLINE_API = [
   /^\/api\/me\/(overview|people|app|targets)$/,
   /^\/api\/insights\/view$/,
   /^\/api\/lists\/[\w-]+$/,
-  /^\/api\/lists\/[\w-]+\/(things|events)$/,
-  /^\/api\/things$/,
-  /^\/api\/things\/[\w-]+$/,
+  /^\/api\/lists\/[\w-]+\/(items|events)$/,
+  /^\/api\/items$/,
+  /^\/api\/items\/[\w-]+$/,
   /^\/api\/events\/[\w-]+$/,
 ];
 const SEARCH_PARAMS = ["q", "in"];

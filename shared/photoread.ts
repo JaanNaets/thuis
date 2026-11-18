@@ -1,14 +1,14 @@
-// Een foto lezen met de AI (✨), per formulier van een lijst: "dingen" (een ding toevoegen: een etiket, een product of
+// Een foto lezen met de AI (✨), per formulier van een lijst: "items" (een item toevoegen: een etiket, een product of
 // een gerecht) of een formulier (een vertrekpunt zoals Aankoop, of een eigen formulier zoals Gegeten). Een beheerder zet het per
-// formulier aan of uit (Instellen); wat niemand koos, volgt de standaard: een ding, een formulier met geld (een kasticket
+// formulier aan of uit (Instellen); wat niemand koos, volgt de standaard: een item, een formulier met geld (een kasticket
 // of factuur) en een formulier met voedingswaarden (een gerecht) lezen de foto. Bij elke foto kan je het lezen nog
 // uitzetten (de fotokiezer), en de AI start enkel na die keuze.
 
 import type { FieldDef } from "./fields.ts";
 import type { Parts } from "./model.ts";
 
-/** Het formulier om een ding toe te voegen; een soort heet naar haar id ("aankoop", of de id van een eigen soort). */
-export const THINGS_FORM = "dingen";
+/** Het formulier om een item toe te voegen; een soort heet naar haar id ("aankoop", of de id van een eigen soort). */
+export const ITEMS_FORM = "items";
 
 /** Wat een beheerder uitdrukkelijk aan of uit zette (de rest volgt `readsByDefault`). */
 export type ReadPhoto = { on: string[]; off: string[] };
@@ -20,7 +20,7 @@ export const isFoodKind = (kind: KindLike): boolean => kind.fields.some((f) => f
 
 /** Leest dit formulier een foto als niemand iets koos? */
 export function readsByDefault(form: string, kind: KindLike | null): boolean {
-  if (form === THINGS_FORM) return true;
+  if (form === ITEMS_FORM) return true;
   if (!kind) return false;
   return kind.parts.money || isFoodKind(kind);
 }
@@ -49,6 +49,8 @@ export function cleanReadPhoto(raw: unknown): ReadPhoto | null {
   const seen = new Set<string>();
   const pick = (v: unknown) =>
     (Array.isArray(v) ? v : [])
+      // Vroeger heette het formulier om een item toe te voegen "dingen".
+      .map((f) => (f === "dingen" ? ITEMS_FORM : f))
       .filter((f): f is string => typeof f === "string" && FORM.test(f) && !seen.has(f) && (seen.add(f), true))
       .slice(0, MAX_FORMS);
   const on = pick(o.on);

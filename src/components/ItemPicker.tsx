@@ -1,4 +1,4 @@
-// Een ding kiezen bij een verwijzing of een lijn: typ om te zoeken, over een of meer lijsten heen (of over al je
+// Een item kiezen bij een verwijzing of een lijn: typ om te zoeken, over een of meer lijsten heen (of over al je
 // lijsten). Met vrije tekst (`free`) mag je ook iets typen dat er niet bij staat. Zie STIJLBOEK.md → Lijsten en velden.
 //
 // Een kleine lijst komt in één keer en zoekt in de browser; een grote (meer dan één bladzijde) zoekt op de server
@@ -8,13 +8,13 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { refLists, type AmountEntry, type FieldDef, type TextValue } from "../../shared/fields";
 import { UNITS } from "../../shared/units";
 import { nameMatches } from "../../shared/parse";
-import type { ThingRef } from "../../shared/model";
+import type { ItemRef } from "../../shared/model";
 import { useApi } from "../api";
 import { Icon } from "./Icon";
 
 const PAGE = 50;
 const MAX_SHOWN = 50;
-type Page = { things: ThingRef[]; more: boolean };
+type Page = { items: ItemRef[]; more: boolean };
 
 /** Een waarde die pas verandert als ze even stil staat (zoeken terwijl je typt). */
 function useSettled(value: string, ms = 200) {
@@ -27,33 +27,33 @@ function useSettled(value: string, ms = 200) {
 }
 
 /**
- * De dingen om uit te kiezen uit deze lijsten (leeg: al je lijsten; bij `text`: wat daarbij past), de naam van wat
- * gekozen is (`chosen`), en per ding de lijst als ze uit meer lijsten komen.
+ * De items om uit te kiezen uit deze lijsten (leeg: al je lijsten; bij `text`: wat daarbij past), de naam van wat
+ * gekozen is (`chosen`), en per item de lijst als ze uit meer lijsten komen.
  */
-export function useThingOptions(lists: string[], text = "", chosen: string[] = []) {
+export function useListItems(lists: string[], text = "", chosen: string[] = []) {
   const scope = lists.length ? `lists=${lists.join(",")}&` : "";
-  const base = useApi<Page>(`/things?${scope}limit=${PAGE}`);
+  const base = useApi<Page>(`/items?${scope}limit=${PAGE}`);
   const q = useSettled(text.trim());
   const large = Boolean(base.data?.more);
-  const search = useApi<Page>(large && q ? `/things?${scope}q=${encodeURIComponent(q)}&limit=${MAX_SHOWN}` : null);
-  const missing = chosen.filter((id) => !(base.data?.things ?? []).some((o) => o.id === id));
-  const named = useApi<Page>(base.data && missing.length ? `/things?ids=${missing.join(",")}` : null);
-  const options = base.data && (large && text.trim() ? (search.data?.things ?? base.data.things) : base.data.things);
-  const known = [...(base.data?.things ?? []), ...(search.data?.things ?? []), ...(named.data?.things ?? [])];
+  const search = useApi<Page>(large && q ? `/items?${scope}q=${encodeURIComponent(q)}&limit=${MAX_SHOWN}` : null);
+  const missing = chosen.filter((id) => !(base.data?.items ?? []).some((o) => o.id === id));
+  const named = useApi<Page>(base.data && missing.length ? `/items?ids=${missing.join(",")}` : null);
+  const options = base.data && (large && text.trim() ? (search.data?.items ?? base.data.items) : base.data.items);
+  const known = [...(base.data?.items ?? []), ...(search.data?.items ?? []), ...(named.data?.items ?? [])];
   const several = new Set(known.map((o) => o.list_id)).size > 1;
-  const placeOf = (o: ThingRef) => (several ? o.list : "");
-  /** De naam van een gekozen ding; "Verborgen" als je het niet (meer) mag zien. */
+  const placeOf = (o: ItemRef) => (several ? o.list : "");
+  /** De naam van een gekozen item; "Verborgen" als je het niet (meer) mag zien. */
   const nameOf = (id: string) => known.find((o) => o.id === id)?.name ?? (base.data && (!missing.length || named.data) ? "Verborgen" : "");
   return { options, error: base.error ?? search.error, placeOf, nameOf, known };
 }
 
-/** De dingen waarnaar een veld mag wijzen (zie `refLists`). */
-export const useItemOptions = (def: FieldDef, text = "", chosen: string[] = []) => useThingOptions(refLists(def), text, chosen);
+/** De items waarnaar een veld mag wijzen (zie `refLists`). */
+export const useItemOptions = (def: FieldDef, text = "", chosen: string[] = []) => useListItems(refLists(def), text, chosen);
 
 /**
  * Het zoekveld met de keuzes eronder. `text`: wat er in het veld staat; `onText`: bij typen; `onPick`: een item
  * gekozen. Pijltjes, Enter en Escape werken zoals in het zoekpalet. `typeFirst`: keuzes pas als je iets typt (een lijn
- * kan elk ding zijn; alles van A tot Z zegt dan niets).
+ * kan elk item zijn; alles van A tot Z zegt dan niets).
  */
 export function Combo({
   label,
@@ -72,10 +72,10 @@ export function Combo({
   label: string;
   text: string;
   onText: (text: string) => void;
-  onPick: (option: ThingRef) => void;
+  onPick: (option: ItemRef) => void;
   onLeave?: () => void;
-  options: ThingRef[] | undefined;
-  placeOf: (o: ThingRef) => string;
+  options: ItemRef[] | undefined;
+  placeOf: (o: ItemRef) => string;
   exclude?: string[];
   disabled: boolean;
   placeholder: string;
@@ -92,7 +92,7 @@ export function Combo({
   );
   const current = Math.min(active, matches.length - 1);
 
-  const pick = (o: ThingRef) => {
+  const pick = (o: ItemRef) => {
     onPick(o);
     setOpen(false);
   };

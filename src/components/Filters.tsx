@@ -256,7 +256,7 @@ function ConditionEditor({
  */
 /**
  * Voorwaarden: aan alles of aan één ervan, elk veld met een vergelijking en een waarde, en + Voorwaarde. In een
- * weergave (`ViewEditor`) en bij Toevoegen uit andere lijst (welke dingen meegaan).
+ * weergave (`ViewEditor`) en bij Toevoegen uit andere lijst (welke items meegaan).
  */
 export function ConditionsEditor({
   label,
@@ -338,9 +338,9 @@ export function ViewEditor({
   active: SavedView | null;
   choices: Choices;
   canShare: boolean;
-  /** De lijst (null: het logboek over al je lijsten) en of het over de dingen of het logboek gaat. */
+  /** De lijst (null: het logboek over al je lijsten) en of het over de items of het logboek gaat. */
   listId: string | null;
-  target: "dingen" | "logboek";
+  target: "items" | "logboek";
   onApply: (def: ViewDef) => void;
   onSaved: (view: SavedView) => void;
   onDeleted: () => void;

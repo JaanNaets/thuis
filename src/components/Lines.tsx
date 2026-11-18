@@ -1,20 +1,20 @@
-// De lijnen van een gebeurtenis, per groep van haar formulier (Wat, Waar, Ruimte): het ding (of een tekst, of een
-// nieuw ding in een lijst), hoeveel, de eenheid en de prijs, elk met een label. Zie STIJLBOEK.md → Lijnen.
+// De lijnen van een gebeurtenis, per groep van haar formulier (Wat, Waar, Ruimte): het item (of een tekst, of een
+// nieuw item in een lijst), hoeveel, de eenheid en de prijs, elk met een label. Zie STIJLBOEK.md → Lijnen.
 
 import { useState } from "react";
 import { stockOp, type Op } from "../../shared/cells";
-import { groupOf, type KindInfo, type LineGroup, type LineRole, type ListNode, type ThingRef } from "../../shared/model";
+import { groupOf, type KindInfo, type LineGroup, type LineRole, type ListNode, type ItemRef } from "../../shared/model";
 import { fold } from "../../shared/parse";
 import { UNITS } from "../../shared/units";
 import { centsToInput, parseEuro } from "../format";
-import { Combo, useThingOptions } from "./ItemPicker";
+import { Combo, useListItems } from "./ItemPicker";
 import { Icon } from "./Icon";
 
-/** Een lijn terwijl je ze invult. `thing`: gekozen ding; anders `text` (en eventueel `newIn`: maak er een ding van). */
+/** Een lijn terwijl je ze invult. `item`: gekozen item; anders `text` (en eventueel `newIn`: maak er een item van). */
 export type LineDraft = {
   key: string;
   role: LineRole;
-  thing: ThingRef | null;
+  item: ItemRef | null;
   text: string;
   newIn: string;
   amount: string;
@@ -22,15 +22,15 @@ export type LineDraft = {
   price: string;
   expires: string;
   owner: string;
-  /** De naam op het kasticket: kies of maak je een ding met een andere naam (Go-tan wok → Noedels), dan onthoudt dat ding hem. */
+  /** De naam op het kasticket: kies of maak je een item met een andere naam (Go-tan wok → Noedels), dan onthoudt dat item hem. */
   ticket: string;
 };
 
 let counter = 0;
-export const emptyLine = (role: LineRole, thing: ThingRef | null = null): LineDraft => ({
+export const emptyLine = (role: LineRole, item: ItemRef | null = null): LineDraft => ({
   key: `l${++counter}`,
   role,
-  thing,
+  item,
   text: "",
   newIn: "",
   amount: "",
@@ -43,17 +43,17 @@ export const emptyLine = (role: LineRole, thing: ThingRef | null = null): LineDr
 
 /** Een lijn zoals de API ze wil, of null als ze leeg is; een fout als iets niet klopt. */
 export function buildLine(l: LineDraft): Record<string, unknown> | null | { error: string } {
-  if (!l.thing && !l.text.trim()) return null;
+  if (!l.item && !l.text.trim()) return null;
   const amount = l.amount.trim() ? Number(l.amount.replace(",", ".")) : null;
-  if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return { error: `Hoeveel bij ${l.thing?.name ?? l.text} klopt niet` };
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0)) return { error: `Hoeveel bij ${l.item?.name ?? l.text} klopt niet` };
   const price = l.price.trim() ? parseEuro(l.price) : null;
-  if (price !== null && Number.isNaN(price)) return { error: `De prijs bij ${l.thing?.name ?? l.text} klopt niet` };
+  if (price !== null && Number.isNaN(price)) return { error: `De prijs bij ${l.item?.name ?? l.text} klopt niet` };
   return {
     role: l.role,
-    ...(l.thing
-      ? { thing_id: l.thing.id }
+    ...(l.item
+      ? { item_id: l.item.id }
       : l.newIn
-        ? { new_thing: { list_id: l.newIn, name: l.text.trim(), ...(renamed(l) ? { alias: l.ticket } : {}) } }
+        ? { new_item: { list_id: l.newIn, name: l.text.trim(), ...(renamed(l) ? { alias: l.ticket } : {}) } }
         : { text: l.text.trim() }),
     amount,
     unit: l.unit || null,
@@ -63,14 +63,14 @@ export function buildLine(l: LineDraft): Record<string, unknown> | null | { erro
   };
 }
 
-/** Heet de lijn anders dan op het kasticket (dan onthoudt het ding de naam op het ticket)? */
-export const renamed = (l: LineDraft): boolean => Boolean(l.ticket && fold(l.ticket) !== fold(l.thing?.name ?? l.text));
+/** Heet de lijn anders dan op het kasticket (dan onthoudt het item de naam op het ticket)? */
+export const renamed = (l: LineDraft): boolean => Boolean(l.ticket && fold(l.ticket) !== fold(l.item?.name ?? l.text));
 
 /** Een bewaarde lijn terug als ontwerp. */
-export function lineDraft(l: { role: LineRole; thing_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null }, thing: ThingRef | undefined): LineDraft {
+export function lineDraft(l: { role: LineRole; item_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null }, item: ItemRef | undefined): LineDraft {
   return {
-    ...emptyLine(l.role, l.thing_id && thing ? thing : null),
-    text: l.thing_id ? "" : (l.text ?? ""),
+    ...emptyLine(l.role, l.item_id && item ? item : null),
+    text: l.item_id ? "" : (l.text ?? ""),
     amount: l.amount !== null ? String(l.amount).replace(".", ",") : "",
     unit: l.unit ?? "",
     price: centsToInput(l.price),
@@ -102,7 +102,7 @@ export function LinesEditor({
   onChange: (lines: LineDraft[]) => void;
   /** Wie een lijn "enkel van" kan zijn (de mensen in de verdeling); leeg = geen keuze. */
   people: { id: string; name: string }[];
-  /** Lijsten waarin een nieuw ding kan komen (waar je mag toevoegen). */
+  /** Lijsten waarin een nieuw item kan komen (waar je mag toevoegen). */
   targets: ListNode[];
   /** Waar iets nieuws dat erbij komt standaard in komt (de lijst waar je vandaan kwam); leeg: enkel tekst. */
   defaultNew?: string;
@@ -165,7 +165,7 @@ function LineRow({
 }: {
   line: LineDraft;
   group: LineGroup;
-  /** Wat de lijn met de voorraad van haar ding doet. */
+  /** Wat de lijn met de voorraad van haar item doet. */
   op: Op | null;
   /** Hoeveel en de eenheid doen ertoe. */
   counted: boolean;
@@ -177,11 +177,11 @@ function LineRow({
   onRemove: () => void;
 }) {
   const [typing, setTyping] = useState<string | null>(null);
-  const { options, placeOf } = useThingOptions(group.list ? [group.list] : [], typing ?? "", line.thing ? [line.thing.id] : []);
-  const shown = typing ?? (line.thing ? line.thing.name : line.text);
-  const units = [...new Set(["", ...(line.thing?.unit ? [line.thing.unit] : []), ...UNITS, ...(line.unit ? [line.unit] : [])])];
-  const free = !line.thing && line.text.trim();
-  const what = line.thing?.name ?? (line.text || "lijn");
+  const { options, placeOf } = useListItems(group.list ? [group.list] : [], typing ?? "", line.item ? [line.item.id] : []);
+  const shown = typing ?? (line.item ? line.item.name : line.text);
+  const units = [...new Set(["", ...(line.item?.unit ? [line.item.unit] : []), ...UNITS, ...(line.unit ? [line.unit] : [])])];
+  const free = !line.item && line.text.trim();
+  const what = line.item?.name ?? (line.text || "lijn");
   return (
     <li className="line-row">
       <div className="line-main is-plain">
@@ -192,17 +192,17 @@ function LineRow({
           placeOf={placeOf}
           disabled={false}
           placeholder="Typ een naam…"
-          className="line-thing"
+          className="line-item"
           typeFirst
           onText={(t) => {
             setTyping(t);
             // Iets nieuws dat erbij komt: standaard in de lijst van de groep, of waar je vandaan kwam (een wijn in Wijnen).
             const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.list) && startIn;
-            onChange({ thing: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
+            onChange({ item: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
           }}
           onPick={(o) => {
             setTyping(null);
-            onChange({ thing: o, text: "", newIn: "", unit: line.unit || o.unit || "" });
+            onChange({ item: o, text: "", newIn: "", unit: line.unit || o.unit || "" });
           }}
           onLeave={() => setTyping(null)}
         />

@@ -106,7 +106,7 @@ lists.post("/", async (c) => {
   statements.push(...(await tagStatements(db, me.id, id, body)));
   // Eigen soorten uit een sjabloon (Gegeten, Bijvulling).
   const rawKinds = Array.isArray(body.kinds) ? body.kinds.slice(0, MAX_KINDS) : [];
-  // Wat ze invullen: kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij dingen mag aanpassen.
+  // Wat ze invullen: kolommen van de nieuwe lijst zelf ("self") of van lijsten waarin jij items mag aanpassen.
   const seen = await seenLists(db, me.id);
   const columns: ListColumns[] = rawKinds.some((k) => Array.isArray(asObject(k).does) && (asObject(k).does as unknown[]).length)
     ? [{ id, name, stock: Boolean(stock), ledger: Boolean(ledger), fields }, ...(await columnsOf(db, seen, true))]
@@ -200,12 +200,12 @@ lists.get("/:id", async (c) => {
     db.prepare("SELECT t.id, t.name, t.color, t.created_by FROM list_tags t JOIN list_tag_links l ON l.tag_id = t.id WHERE l.list_id = ? ORDER BY t.name").bind(list.id),
     db
       .prepare(
-        `SELECT (SELECT count(*) FROM things WHERE list_id = ?1 AND archived = 0) AS things,
+        `SELECT (SELECT count(*) FROM items WHERE list_id = ?1 AND archived = 0) AS items,
                 (SELECT count(*) FROM events WHERE list_id = ?1 AND status != 'gepland') AS events,
                 (SELECT count(*) FROM events WHERE list_id = ?1 AND status = 'gepland') AS planned`,
       )
       .bind(list.id),
-  ])) as [D1Result<Tag>, D1Result<{ things: number; events: number; planned: number }>];
+  ])) as [D1Result<Tag>, D1Result<{ items: number; events: number; planned: number }>];
   // Eigen soorten van deze lijst eerst, dan die van andere lijsten die je ziet.
   const all = await kindsFor(db, seen.keys());
   const kinds = [...all.filter((k) => !k.list_id), ...all.filter((k) => k.list_id === list.id), ...all.filter((k) => k.list_id && k.list_id !== list.id)];
@@ -215,7 +215,7 @@ lists.get("/:id", async (c) => {
     tags: tags.results.map((t) => ({ ...t, color: isTone(t.color) ? t.color : null })),
     people: await listPeople(db, list.id),
     kinds,
-    counts: counts.results[0] ?? { things: 0, events: 0, planned: 0 },
+    counts: counts.results[0] ?? { items: 0, events: 0, planned: 0 },
   };
   return c.json(detail);
 });
@@ -273,14 +273,14 @@ lists.put("/:id/archived", async (c) => {
   return c.json({ ok: true });
 });
 
-/** Een lijst verwijderen: met haar dingen, logboek en soorten. Lijnen elders naar haar dingen worden tekst. */
+/** Een lijst verwijderen: met haar items, logboek en soorten. Lijnen elders naar haar items worden tekst. */
 lists.delete("/:id", async (c) => {
   const db = c.env.DB;
   const { list, role } = await requireList(db, c.get("person").id, c.req.param("id"));
   needManage(role);
   await db.batch([
-    db.prepare("UPDATE lines SET text = (SELECT name FROM things WHERE things.id = lines.thing_id), thing_id = NULL WHERE thing_id IN (SELECT id FROM things WHERE list_id = ?)").bind(list.id),
-    db.prepare("DELETE FROM attachments WHERE (owner_kind = 'thing' AND owner_id IN (SELECT id FROM things WHERE list_id = ?1)) OR (owner_kind = 'event' AND owner_id IN (SELECT id FROM events WHERE list_id = ?1))").bind(list.id),
+    db.prepare("UPDATE lines SET text = (SELECT name FROM items WHERE items.id = lines.item_id), item_id = NULL WHERE item_id IN (SELECT id FROM items WHERE list_id = ?)").bind(list.id),
+    db.prepare("DELETE FROM attachments WHERE (owner_kind = 'item' AND owner_id IN (SELECT id FROM items WHERE list_id = ?1)) OR (owner_kind = 'event' AND owner_id IN (SELECT id FROM events WHERE list_id = ?1))").bind(list.id),
     db.prepare("DELETE FROM lists WHERE id = ?").bind(list.id),
   ]);
   return c.body(null, 204);
@@ -390,7 +390,7 @@ function partsOf(raw: unknown, base: Base, seen: Map<string, Role>, self: string
 const plannedOf = (o: Record<string, unknown>): number => (o.planned === true ? 1 : 0);
 
 /**
- * De lijsten met hun kolommen: welke die je ziet (`edit`: enkel waar je dingen mag aanpassen), om handelingen van een
+ * De lijsten met hun kolommen: welke die je ziet (`edit`: enkel waar je items mag aanpassen), om handelingen van een
  * formulier te kiezen en na te kijken (shared/cells.ts).
  */
 export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: boolean): Promise<ListColumns[]> {
@@ -408,7 +408,7 @@ export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: b
   }));
 }
 
-/** Wat een formulier doet, nagekeken: enkel kolommen in lijsten waar jij dingen mag aanpassen. */
+/** Wat een formulier doet, nagekeken: enkel kolommen in lijsten waar jij items mag aanpassen. */
 async function doesOf(db: D1Database, personId: string, raw: unknown, fields: FieldDef[]): Promise<Handeling[]> {
   if (raw === undefined || raw === null) return [];
   const editable = await columnsOf(db, await seenLists(db, personId), true);

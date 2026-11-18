@@ -1,9 +1,9 @@
-// Toevoegen uit een andere lijst: dingen uit een bron (welke: voorwaarden zoals in een weergave) als dingen in deze
+// Toevoegen uit een andere lijst: items uit een bron (welke: voorwaarden zoals in een weergave) als items in deze
 // lijst, met per veld wat erin komt (een veld van de bron, een vaste waarde of een verwijzing naar het origineel) en
-// keuzes die anders heten vertaald (Rood → Drinken). Drie manieren (`TRANSFER_MODES`): kopiëren (nieuwe dingen),
-// verplaatsen (het ding zelf verhuist, met foto, logboek en voorraad) of koppelen (blijvend: `syncChanges` houdt de
+// keuzes die anders heten vertaald (Rood → Drinken). Drie manieren (`TRANSFER_MODES`): kopiëren (nieuwe items),
+// verplaatsen (het item zelf verhuist, met foto, logboek en voorraad) of koppelen (blijvend: `syncChanges` houdt de
 // doellijst bij, de gekoppelde velden volgen de bron). Dezelfde logica in het voorbeeld (src/pages/FromListPage.tsx) en
-// op de server (POST /lists/:id/things/from, PUT /lists/:id/mirrors/:bron, worker/mirrors.ts), met wat de lezer ziet.
+// op de server (POST /lists/:id/items/from, PUT /lists/:id/mirrors/:bron, worker/mirrors.ts), met wat de lezer ziet.
 
 import { refLists, type Attributes, type FieldDef, type FieldValue } from "./fields.ts";
 import { cleanView, matchesView, NAME, viewFields, type ViewContext, type ViewDef } from "./views.ts";
@@ -12,12 +12,12 @@ import { cleanView, matchesView, NAME, viewFields, type ViewContext, type ViewDe
 export type FieldSource =
   /** Een veld van de bron (`NAME`: de naam). */
   | { from: "field"; key: string }
-  /** Voor elk ding dezelfde waarde (Eenheid = fles). */
+  /** Voor elk item dezelfde waarde (Eenheid = fles). */
   | { from: "value"; value: FieldValue }
-  /** Een verwijzing naar het ding in de bron (enkel bij een verwijzing naar die lijst). */
+  /** Een verwijzing naar het item in de bron (enkel bij een verwijzing naar die lijst). */
   | { from: "self" };
 
-/** Kopiëren laat de bron staan, verplaatsen haalt het ding eruit, koppelen blijft meelopen. */
+/** Kopiëren laat de bron staan, verplaatsen haalt het item eruit, koppelen blijft meelopen. */
 export const TRANSFER_MODES = { copy: "Kopiëren", move: "Verplaatsen", link: "Koppelen" } as const;
 export type TransferMode = keyof typeof TRANSFER_MODES;
 
@@ -33,7 +33,7 @@ export type TransferPlan = {
   mode: TransferMode;
 };
 
-export type SourceThing = { id: string; name: string; data: Attributes; tag_ids: string[]; created_at?: string };
+export type SourceItem = { id: string; name: string; data: Attributes; tag_ids: string[]; created_at?: string };
 export type TransferRow = { source_id: string; name: string; data: Attributes };
 
 export const MAX_TRANSFER = 2000;
@@ -111,16 +111,16 @@ export function carryValue(target: FieldDef, source: FieldDef | null, value: Fie
   return value;
 }
 
-/** Welke dingen meegaan: die aan de voorwaarden voldoen. */
-export function chosenThings<T extends SourceThing>(things: T[], plan: Pick<TransferPlan, "where">, sourceFields: FieldDef[], ctx: ViewContext, nameLabel = "Naam"): T[] {
+/** Welke items meegaan: die aan de voorwaarden voldoen. */
+export function chosenItems<T extends SourceItem>(items: T[], plan: Pick<TransferPlan, "where">, sourceFields: FieldDef[], ctx: ViewContext, nameLabel = "Naam"): T[] {
   const vfields = viewFields(sourceFields, nameLabel);
-  return things.filter((t) => matchesView(t, plan.where, vfields, ctx));
+  return items.filter((t) => matchesView(t, plan.where, vfields, ctx));
 }
 
-/** Wat er in deze lijst komt: per gekozen ding een naam en de waarden van de velden. */
-export function transferRows(things: SourceThing[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], ctx: ViewContext): TransferRow[] {
+/** Wat er in deze lijst komt: per gekozen item een naam en de waarden van de velden. */
+export function transferRows(items: SourceItem[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], ctx: ViewContext): TransferRow[] {
   const bySource = new Map(sourceFields.map((f) => [f.key, f]));
-  return chosenThings(things, plan, sourceFields, ctx).map((t) => {
+  return chosenItems(items, plan, sourceFields, ctx).map((t) => {
     const named = plan.name === NAME ? t.name : asTexts(t.data[plan.name]).join(", ");
     const data: Attributes = {};
     for (const target of fillable(targetFields)) {
@@ -141,9 +141,9 @@ export function transferRows(things: SourceThing[], plan: TransferPlan, sourceFi
 }
 
 /** De waarden van de bron die in een keuzeveld van deze lijst geen keuze zijn (om te vertalen), per veld. */
-export function toTranslate(things: SourceThing[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], ctx: ViewContext): Record<string, string[]> {
+export function toTranslate(items: SourceItem[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], ctx: ViewContext): Record<string, string[]> {
   const out: Record<string, string[]> = {};
-  const chosen = chosenThings(things, plan, sourceFields, ctx);
+  const chosen = chosenItems(items, plan, sourceFields, ctx);
   for (const target of targetFields) {
     const src = plan.fields[target.key];
     if (!CHOICE.has(target.type) || !target.options?.length || src?.from !== "field") continue;
@@ -194,8 +194,8 @@ export function linkedKeys(plan: Pick<TransferPlan, "fields">): string[] {
     .map(([k]) => k);
 }
 
-/** Een ding in de doellijst van een koppeling, met het ding in de bron waar het bij hoort. */
-export type MirrorThing = { id: string; mirror_of: string | null; name: string; data: Attributes; archived: 0 | 1 };
+/** Een item in de doellijst van een koppeling, met het item in de bron waar het bij hoort. */
+export type MirrorItem = { id: string; mirror_of: string | null; name: string; data: Attributes; archived: 0 | 1 };
 export type MirrorChanges = {
   /** Nieuw in de doellijst (met de vaste waarden). */
   create: TransferRow[];
@@ -215,8 +215,8 @@ const sameData = (a: Attributes, b: Attributes) => {
  * gekoppeld: de naam en de gekoppelde velden volgen de bron, de eigen velden blijven); wat niet meer voldoet of uit de
  * bron weg is, wordt gearchiveerd en komt terug als het weer voldoet. Enkel wat echt verandert.
  */
-export function syncChanges(things: SourceThing[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], existing: MirrorThing[], ctx: ViewContext): MirrorChanges {
-  const rows = transferRows(things, plan, sourceFields, targetFields, ctx);
+export function syncChanges(items: SourceItem[], plan: TransferPlan, sourceFields: FieldDef[], targetFields: FieldDef[], existing: MirrorItem[], ctx: ViewContext): MirrorChanges {
+  const rows = transferRows(items, plan, sourceFields, targetFields, ctx);
   const linked = linkedKeys(plan);
   const bySource = new Map(existing.filter((e) => e.mirror_of).map((e) => [e.mirror_of!, e]));
   const kept = new Set<string>();

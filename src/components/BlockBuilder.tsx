@@ -150,7 +150,7 @@ function startValue(op: Op): unknown {
   }
 }
 
-/** De keuzes bij "is een van": de opties van een keuzeveld, personen (jij eerst) of dingen. */
+/** De keuzes bij "is een van": de opties van een keuzeveld, personen (jij eerst) of items. */
 function optionsFor(def: FieldDef, choices: Choices): Option<string>[] {
   if (def.type === "select" || def.type === "multi") return (def.options ?? []).map((o) => ({ value: o, label: o }));
   if (def.type === "person" || def.type === "people" || def.type === "share") return [{ value: "me", label: "Ik" }, ...choices.people.filter((p) => p.id !== choices.me).map((p) => ({ value: p.id, label: p.name }))];
@@ -376,9 +376,9 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
   const listName = (id: string) => lists.find((l) => l.id === id)?.name;
 
   function setSource(source: SourceKind) {
-    const keep = source === "dingen" ? draft.lists.filter((id) => lists.find((l) => l.id === id)?.one) : draft.lists;
+    const keep = source === "items" ? draft.lists.filter((id) => lists.find((l) => l.id === id)?.one) : draft.lists;
     const first = lists.find((l) => l.one)?.id;
-    setDraft((d) => ({ ...d, source, lists: source === "dingen" && !keep.length && first ? [first] : keep, where: { match: d.where.match, conditions: [] }, ...(d.tally ? { tally: { agg: "count", step: d.tally.step, n: d.tally.n } } : {}) }));
+    setDraft((d) => ({ ...d, source, lists: source === "items" && !keep.length && first ? [first] : keep, where: { match: d.where.match, conditions: [] }, ...(d.tally ? { tally: { agg: "count", step: d.tally.step, n: d.tally.n } } : {}) }));
   }
 
   const t = draft.tally;
@@ -407,12 +407,12 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
             van
             {draft.lists.length === 0 && <span className="sentence-soft">al je lijsten</span>}
             {draft.lists.map((id) => (
-              <TokChip key={id} text={listName(id) ?? "Lijst"} label={`${listName(id) ?? "Lijst"} weghalen`} onRemove={() => draft.source !== "dingen" || draft.lists.length > 1 ? set({ lists: draft.lists.filter((x) => x !== id) }) : undefined} />
+              <TokChip key={id} text={listName(id) ?? "Lijst"} label={`${listName(id) ?? "Lijst"} weghalen`} onRemove={() => draft.source !== "items" || draft.lists.length > 1 ? set({ lists: draft.lists.filter((x) => x !== id) }) : undefined} />
             ))}
             <TokAdd
               label="Lijst toevoegen"
               text={draft.lists.length ? "en" : "kies"}
-              options={lists.filter((l) => !draft.lists.includes(l.id) && (draft.source !== "dingen" || l.one)).map((l) => ({ value: l.id, label: l.name }))}
+              options={lists.filter((l) => !draft.lists.includes(l.id) && (draft.source !== "items" || l.one)).map((l) => ({ value: l.id, label: l.name }))}
               onPick={(id) => set({ lists: [...draft.lists, id] })}
             />
           </div>
@@ -456,10 +456,10 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
             />
           </div>
 
-          {draft.source === "dingen" && (counts(draft.show) || draft.show === "agenda") && dates.length > 0 && (
+          {draft.source === "items" && (counts(draft.show) || draft.show === "agenda") && dates.length > 0 && (
             <div className="sentence-line">
               volgens
-              <Tok label="Volgens welke datum" value={sourceDate("dingen", usable, draft.date)} options={dates.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))} onChange={(date) => set({ date })} />
+              <Tok label="Volgens welke datum" value={sourceDate("items", usable, draft.date)} options={dates.map((f) => ({ value: f.key, label: f.label.toLowerCase() }))} onChange={(date) => set({ date })} />
             </div>
           )}
 
@@ -602,7 +602,7 @@ export function ViewBuilder({ initial, saveLabel, onSave, onCancel }: { initial:
         <button type="button" className="btn btn-outline" onClick={onCancel}>
           Annuleren
         </button>
-        <button type="button" className="btn btn-primary" disabled={draft.source === "dingen" && !draft.lists.length} onClick={() => onSave(draft)}>
+        <button type="button" className="btn btn-primary" disabled={draft.source === "items" && !draft.lists.length} onClick={() => onSave(draft)}>
           {saveLabel}
         </button>
       </div>

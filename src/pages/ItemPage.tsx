@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router";
 import { formatFieldValue, type FieldDef } from "../../shared/fields";
-import { BASES, type List, type Role, type StockLevel, type Thing, type ThingRef } from "../../shared/model";
+import { BASES, type List, type Role, type StockLevel, type Item, type ItemRef } from "../../shared/model";
 import { formatAmount } from "../../shared/units";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
@@ -39,67 +39,67 @@ type Entry = {
   created_by: string;
 };
 
-type ThingDetail = {
-  thing: Thing;
+type ItemDetail = {
+  item: Item;
   list: Pick<List, "id" | "name" | "one" | "icon" | "color" | "fields" | "stock">;
   role: Role;
   can_edit: boolean;
   stock: StockLevel | null;
   timeline: Entry[];
   parts: { id: string; name: string; list_id: string }[];
-  part_of: ThingRef | null;
+  part_of: ItemRef | null;
   files: Attachment[];
   people: Person[];
-  refs: ThingRef[];
-  backlinks: (ThingRef & { field_label: string })[];
+  refs: ItemRef[];
+  backlinks: (ItemRef & { field_label: string })[];
   /** Gekoppeld (zie shared/transfer.ts): uit welke lijst (als je die ziet) en het origineel. */
-  mirror: { source: { id: string; name: string } | null; of: ThingRef | null; locked: string[] } | null;
+  mirror: { source: { id: string; name: string } | null; of: ItemRef | null; locked: string[] } | null;
 };
 
 const ROLE_WORD = { in: "erbij", uit: "eraf", voor: "voor", bij: "bij" } as const;
 
 /**
- * Een ding: zijn foto, velden en voorraad opzij; rechts zijn tijdlijn (alles wat ermee gebeurde, met prijs per eenheid
+ * Een item: zijn foto, velden en voorraad opzij; rechts zijn tijdlijn (alles wat ermee gebeurde, met prijs per eenheid
  * en waar), zijn delen en wat ernaar verwijst. Zie STIJLBOEK.md → Fiche.
  */
-export function ThingPage() {
-  const { thingId } = useParams();
-  const { data, error, reload, mutate } = useApi<ThingDetail>(`/things/${thingId}`);
+export function ItemPage() {
+  const { itemId } = useParams();
+  const { data, error, reload, mutate } = useApi<ItemDetail>(`/items/${itemId}`);
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [viewing, setViewing] = useState<Attachment | null>(null);
   if (error && !data) return <p className="error page">{error}</p>;
   if (!data) return <p className="page muted">Laden…</p>;
-  const { thing, list } = data;
+  const { item, list } = data;
   const names = namesFrom(data.people, data.refs);
-  const notes = list.fields.filter((f: FieldDef) => f.type === "longtext" && thing.data[f.key]);
-  const other = list.fields.filter((f: FieldDef) => !(f.type === "longtext" && thing.data[f.key]));
+  const notes = list.fields.filter((f: FieldDef) => f.type === "longtext" && item.data[f.key]);
+  const other = list.fields.filter((f: FieldDef) => !(f.type === "longtext" && item.data[f.key]));
 
   async function archive() {
-    await api.put(`/things/${thing.id}/archived`, { archived: !thing.archived });
-    toast(thing.archived ? `${thing.name} terug uit het archief` : `${thing.name} gearchiveerd`);
+    await api.put(`/items/${item.id}/archived`, { archived: !item.archived });
+    toast(item.archived ? `${item.name} terug uit het archief` : `${item.name} gearchiveerd`);
     reload();
   }
   async function remove() {
-    if (!(await confirm({ title: `${thing.name} verwijderen?`, body: "Wat ermee gebeurde, blijft in het logboek staan, met de naam als tekst.", confirmLabel: "Verwijderen", danger: true }))) return;
-    await api.delete(`/things/${thing.id}`);
-    toast(`${thing.name} verwijderd`);
+    if (!(await confirm({ title: `${item.name} verwijderen?`, body: "Wat ermee gebeurde, blijft in het logboek staan, met de naam als tekst.", confirmLabel: "Verwijderen", danger: true }))) return;
+    await api.delete(`/items/${item.id}`);
+    toast(`${item.name} verwijderd`);
     navigate(`/lijsten/${list.id}`, { replace: true });
   }
 
   return (
     <div className="page">
       <PageHead
-        title={thing.name}
-        badge={thing.archived ? <span className="badge badge-muted">Gearchiveerd</span> : undefined}
+        title={item.name}
+        badge={item.archived ? <span className="badge badge-muted">Gearchiveerd</span> : undefined}
         back={{ to: `/lijsten/${list.id}`, label: list.name }}
         actions={
           <>
-            {/* Een knop per formulier ("Uit eten", "Aankoop"), met dit ding al ingevuld. */}
-            {!thing.archived && <LogButtons listId={list.id} thing={thing.id} />}
+            {/* Een knop per formulier ("Uit eten", "Aankoop"), met dit item al ingevuld. */}
+            {!item.archived && <LogButtons listId={list.id} item={item.id} />}
             {data.can_edit && (
-              <Link to={`/dingen/${thing.id}/bewerken`} className="btn btn-outline btn-sm">
+              <Link to={`/items/${item.id}/bewerken`} className="btn btn-outline btn-sm">
                 Bewerken
               </Link>
             )}
@@ -109,7 +109,7 @@ export function ThingPage() {
       <div className="split">
         <aside className="split-aside">
           <section className="card">
-            <ItemPhoto item={thing} canEdit={data.can_edit} onChange={(v, message) => (mutate({ ...data, thing: { ...thing, photo_version: v } }), toast(message))} />
+            <ItemPhoto item={item} canEdit={data.can_edit} onChange={(v, message) => (mutate({ ...data, item: { ...item, photo_version: v } }), toast(message))} />
             <dl className="dl">
               {data.stock && (
                 <div>
@@ -123,13 +123,13 @@ export function ThingPage() {
                   <dd>{dayLabel(data.stock.expires)}</dd>
                 </div>
               )}
-              <AttributeRows defs={other} data={thing.data} names={names} refs={data.refs} />
+              <AttributeRows defs={other} data={item.data} names={names} refs={data.refs} />
               {data.mirror && (
                 <div>
                   <dt>Uit</dt>
                   <dd>
                     {data.mirror.of ? (
-                      <Link to={`/dingen/${data.mirror.of.id}`} className="link-quiet">
+                      <Link to={`/items/${data.mirror.of.id}`} className="link-quiet">
                         {data.mirror.source ? `${data.mirror.of.name} in ${data.mirror.source.name}` : data.mirror.of.name}
                       </Link>
                     ) : (
@@ -142,7 +142,7 @@ export function ThingPage() {
                 <div>
                   <dt>Deel van</dt>
                   <dd>
-                    <Link to={`/dingen/${data.part_of.id}`} className="link-quiet">
+                    <Link to={`/items/${data.part_of.id}`} className="link-quiet">
                       {data.part_of.name}
                     </Link>
                   </dd>
@@ -153,7 +153,7 @@ export function ThingPage() {
           {notes.map((f) => (
             <section key={f.key} className="card">
               <CardHead title={f.label} />
-              <p className="tips-block">{formatFieldValue(f, thing.data[f.key], names)}</p>
+              <p className="tips-block">{formatFieldValue(f, item.data[f.key], names)}</p>
             </section>
           ))}
         </aside>
@@ -201,7 +201,7 @@ export function ThingPage() {
               <ul className="rows">
                 {data.parts.map((p) => (
                   <li key={p.id}>
-                    <Link to={`/dingen/${p.id}`} className="row">
+                    <Link to={`/items/${p.id}`} className="row">
                       <span className="cell-main">
                         <span className="row-title">{p.name}</span>
                       </span>
@@ -218,7 +218,7 @@ export function ThingPage() {
               <ul className="rows">
                 {data.backlinks.map((b) => (
                   <li key={b.id}>
-                    <Link to={`/dingen/${b.id}`} className="row">
+                    <Link to={`/items/${b.id}`} className="row">
                       <span className="cell-main">
                         <span className="row-main">
                           <span className="row-title">{b.name}</span>
@@ -257,7 +257,7 @@ export function ThingPage() {
           {data.can_edit && !data.mirror && (
             <div className="btn-row" style={{ justifySelf: "start" }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={archive}>
-                <Icon name="archive" size={15} /> {thing.archived ? "Uit het archief" : "Archiveren"}
+                <Icon name="archive" size={15} /> {item.archived ? "Uit het archief" : "Archiveren"}
               </button>
               <button type="button" className="btn btn-danger-ghost btn-sm" onClick={remove}>
                 <Icon name="trash" size={15} /> Verwijderen

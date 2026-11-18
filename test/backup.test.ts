@@ -40,7 +40,7 @@ const backup: Backup = {
     { id: GEGETEN, list_id: VOORRAAD, base: "gebruik", name: "Gegeten", icon: "food", fields: [], goal: null, sort_order: 0 },
     { id: "33333333-3333-4333-8333-333333333333", list_id: VOORRAAD, base: "aankoop", name: "Boodschap", icon: "cart", fields: [], goal: null, planned: true, sort_order: 1 },
   ],
-  things: [
+  items: [
     { id: PASTA, list_id: VOORRAAD, name: "Pasta", data: { eenheid: "g", met: SAUS, van: "vreemde" }, part_of: null, archived: 0, photo: true },
     { id: SAUS, list_id: VOORRAAD, name: "Saus", data: { eenheid: "kg", met: WEG, van: "jaan" }, part_of: PASTA, archived: 0, photo: false },
   ],
@@ -66,13 +66,13 @@ const backup: Backup = {
       done_by: null,
       photo: false,
       lines: [
-        { role: "uit", thing_id: PASTA, text: null, amount: 300, unit: "g", price: null, expires: null, owner: null },
-        { role: "bij", thing_id: COLRUYT, text: null, amount: null, unit: null, price: null, expires: null, owner: null },
-        { role: "bij", thing_id: WEG, text: null, amount: null, unit: null, price: null, expires: null, owner: "vreemde" },
+        { role: "uit", item_id: PASTA, text: null, amount: 300, unit: "g", price: null, expires: null, owner: null },
+        { role: "bij", item_id: COLRUYT, text: null, amount: null, unit: null, price: null, expires: null, owner: null },
+        { role: "bij", item_id: WEG, text: null, amount: null, unit: null, price: null, expires: null, owner: "vreemde" },
       ],
     },
   ],
-  views: [{ id: "99999999-9999-4999-8999-999999999999", list_id: VOORRAAD, target: "dingen", name: "Kelder", def: { conditions: [] }, shared: 1 }],
+  views: [{ id: "99999999-9999-4999-8999-999999999999", list_id: VOORRAAD, target: "items", name: "Kelder", def: { conditions: [] }, shared: 1 }],
   outside: [{ id: WEG, name: "Oude winkel" }],
 };
 
@@ -80,7 +80,7 @@ test("een back-up nakijken", () => {
   assert.equal(parseBackup(JSON.parse(JSON.stringify(backup))).lists.length, 1);
   assert.throws(() => parseBackup({ kind: "iets" }), /geen back-up/);
   assert.throws(() => parseBackup({ ...backup, version: 1 }), /andere versie/);
-  assert.throws(() => parseBackup({ ...backup, things: [{ ...backup.things[0], list_id: "elders" }] }), /beschadigd/);
+  assert.throws(() => parseBackup({ ...backup, items: [{ ...backup.items[0], list_id: "elders" }] }), /beschadigd/);
 });
 
 test("ids diep vervangen", () => {
@@ -89,7 +89,7 @@ test("ids diep vervangen", () => {
 
 test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt weg", () => {
   let n = 0;
-  const plan = planRestore(backup, { newId: () => `n${++n}`, me: "jaan", people: new Set(["jaan"]), seenThings: new Set([COLRUYT]) });
+  const plan = planRestore(backup, { newId: () => `n${++n}`, me: "jaan", people: new Set(["jaan"]), seenItems: new Set([COLRUYT]) });
   const [list] = plan.lists;
   assert.notEqual(list.id, VOORRAAD);
   assert.deepEqual(list.tags, ["Huis"]);
@@ -98,8 +98,8 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
   assert.deepEqual(list.stock, { unit: "eenheid", default_unit: "stuk" });
   // Een formulier dat gepland begint, blijft dat; een back-up van vroeger (zonder) is niet gepland.
   assert.deepEqual(plan.kinds.map((k) => [k.name, k.planned]), [["Gegeten", false], ["Boodschap", true]]);
-  const pasta = plan.things.find((t) => t.old === PASTA)!;
-  const saus = plan.things.find((t) => t.old === SAUS)!;
+  const pasta = plan.items.find((t) => t.old === PASTA)!;
+  const saus = plan.items.find((t) => t.old === SAUS)!;
   // Pasta: met = de nieuwe saus; een persoon die je niet kent valt weg.
   assert.deepEqual(pasta.data, { eenheid: "g", met: saus.id });
   // Saus: wat weg is, valt weg; deel van de nieuwe pasta.
@@ -110,7 +110,7 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
   assert.equal(event.kind, plan.kinds[0].id);
   assert.deepEqual(event.split, [{ person_id: "jaan", share: 50 }]);
   assert.deepEqual(
-    event.lines.map((l) => [l.role, l.thing_id, l.text, l.owner]),
+    event.lines.map((l) => [l.role, l.item_id, l.text, l.owner]),
     [
       ["uit", pasta.id, null, null],
       ["bij", COLRUYT, null, null],
@@ -121,7 +121,7 @@ test("terugzetten: nieuwe ids, verwijzingen binnen de kopie, wat niet klopt valt
 });
 
 test("een lijn naar iets dat je niet ziet wordt tekst; zonder naam valt ze weg", () => {
-  const plan = planRestore({ ...backup, outside: [] }, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenThings: new Set() });
+  const plan = planRestore({ ...backup, outside: [] }, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenItems: new Set() });
   assert.deepEqual(
     plan.events[0].lines.map((l) => [l.role, l.text]),
     [["uit", null]],
@@ -155,20 +155,41 @@ test("terugzetten met een koppeling: enkel tussen lijsten die terugkomen, met de
   const withMirror: Backup = {
     ...backup,
     lists: [...backup.lists, { ...backup.lists[0], id: KEUKEN, name: "Keuken", fields: [], tag_ids: [] }],
-    things: [...backup.things, { id: KOPIE, list_id: KEUKEN, name: "Pasta", data: {}, part_of: null, archived: 0, photo: false, mirror_id: MIRROR, mirror_of: PASTA }],
+    items: [...backup.items, { id: KOPIE, list_id: KEUKEN, name: "Pasta", data: {}, part_of: null, archived: 0, photo: false, mirror_id: MIRROR, mirror_of: PASTA }],
     mirrors: [
       { id: MIRROR, list_id: KEUKEN, source_id: VOORRAAD, plan: { source: VOORRAAD, where: { match: "all", conditions: [] }, name: "_name", fields: {}, translate: {}, mode: "link" } },
       { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", list_id: KEUKEN, source_id: ELDERS, plan: {} },
     ],
   };
-  const plan = planRestore(withMirror, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenThings: new Set() });
+  const plan = planRestore(withMirror, { newId: () => crypto.randomUUID(), me: "jaan", people: new Set(["jaan"]), seenItems: new Set() });
   const keuken = plan.lists.find((l) => l.name === "Keuken")!;
   const voorraad = plan.lists.find((l) => l.name === "Voorraad")!;
   assert.equal(plan.mirrors.length, 1, "een koppeling met een lijst buiten de back-up valt weg");
   const [m] = plan.mirrors;
   assert.deepEqual([m.list_id, m.source_id, (m.plan as { source: string }).source], [keuken.id, voorraad.id, voorraad.id]);
-  const kopie = plan.things.find((t) => t.old === KOPIE)!;
-  const pasta = plan.things.find((t) => t.old === PASTA)!;
+  const kopie = plan.items.find((t) => t.old === KOPIE)!;
+  const pasta = plan.items.find((t) => t.old === PASTA)!;
   assert.deepEqual([kopie.mirror_id, kopie.mirror_of], [m.id, pasta.id]);
   assert.deepEqual([pasta.mirror_id, pasta.mirror_of], [null, null]);
+});
+
+test("een back-up van versie 2 (dingen) leest als versie 3 (items)", () => {
+  const list = { id: "L", name: "Wijnen", one: "Wijn", icon: null, color: null, fields: [], stock: null, notify: null, archived: 0, tag_ids: [] };
+  const old = {
+    kind: BACKUP_KIND,
+    version: 2,
+    people: [],
+    tags: [],
+    lists: [list],
+    kinds: [],
+    things: [{ id: "T", list_id: "L", name: "Chablis", data: {}, part_of: null, archived: 0, photo: false }],
+    events: [{ id: "E", list_id: "L", kind: "aankoop", base: "aankoop", name: "", status: "gebeurd", at: "2026-11-01", end_at: null, amount: null, paid_by: null, split: null, to_person: null, data: {}, repeat: null, done_by: null, photo: false, lines: [{ role: "in", thing_id: "T", text: null, amount: 6, unit: null, price: null, expires: null, owner: null }] }],
+    views: [{ id: "V", list_id: "L", target: "dingen", name: "Alles", def: {}, shared: 0 }],
+    outside: [],
+  };
+  const b = parseBackup(old);
+  assert.equal(b.version, BACKUP_VERSION);
+  assert.equal(b.items[0].name, "Chablis");
+  assert.equal(b.events[0].lines[0].item_id, "T");
+  assert.equal(b.views[0].target, "items");
 });

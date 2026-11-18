@@ -1,8 +1,8 @@
 // Getypte tekst naar een gebeurtenis, met code (geen AI): "gegeten pasta 300 g", "tankbeurt 84,50 52 liter gisteren",
 // "colruyt yoghurt 6 3,56 aardappelen 1 zak 4,99". Een datum en een uur, een bedrag (met €, euro of twee cijfers na de
-// komma), de dingen die in de tekst staan (met hun hoeveelheid en eenheid, en een prijs vlak erna), een getal met de
+// komma), de items die in de tekst staan (met hun hoeveelheid en eenheid, en een prijs vlak erna), een getal met de
 // eenheid of de naam van een veld van de soort ("52 liter", "450 kcal"). Wat overblijft, is de omschrijving. De
-// dingen komen van de server (GET /things?in=, enkel wat je ziet), met de rol die ze meestal hebben (Colruyt: bij).
+// items komen van de server (GET /items?in=, enkel wat je ziet), met de rol die ze meestal hebben (Colruyt: bij).
 
 import type { FieldDef } from "./fields.ts";
 import type { LineRole } from "./model.ts";
@@ -87,8 +87,8 @@ export function readTime(word: string): string | null {
   return h < 24 && min < 60 ? `${pad(h)}:${pad(min)}` : null;
 }
 
-/** Een ding dat in de tekst kan staan, met de rol die het meestal heeft. */
-export type ParseThing = { id: string; name: string; unit?: string | null; role: LineRole };
+/** Een item dat in de tekst kan staan, met de rol die het meestal heeft. */
+export type ParseItem = { id: string; name: string; unit?: string | null; role: LineRole };
 
 export type ParseContext = {
   today: string;
@@ -96,10 +96,10 @@ export type ParseContext = {
   money: boolean;
   /** De eigen velden van de soort (Liter, Km, Kcal, Gewicht). */
   fields: FieldDef[];
-  things: ParseThing[];
+  items: ParseItem[];
 };
 
-export type ParsedLine = { thing: ParseThing; amount: number | null; unit: string | null; price: number | null };
+export type ParsedLine = { item: ParseItem; amount: number | null; unit: string | null; price: number | null };
 
 export type ParsedEvent = {
   name: string;
@@ -178,28 +178,28 @@ export function readEvent(text: string, ctx: ParseContext): ParsedEvent {
     }
   }
 
-  // 2. De dingen in de tekst, de langste naam eerst (zo wint "melk halfvol" van "melk").
+  // 2. De items in de tekst, de langste naam eerst (zo wint "melk halfvol" van "melk").
   const folded = bare.map(fold);
-  const spans: { thing: ParseThing; from: number; to: number }[] = [];
-  const place = (thing: ParseThing, parts: string[]) => {
+  const spans: { item: ParseItem; from: number; to: number }[] = [];
+  const place = (item: ParseItem, parts: string[]) => {
     for (let i = 0; i + parts.length <= words.length; i++) {
       if (parts.every((p, k) => folded[i + k] === p && !used[i + k])) {
         take(i, parts.length);
-        spans.push({ thing, from: i, to: i + parts.length });
+        spans.push({ item, from: i, to: i + parts.length });
         return true;
       }
     }
     return false;
   };
-  const sorted = [...ctx.things].sort((a, b) => b.name.length - a.name.length);
+  const sorted = [...ctx.items].sort((a, b) => b.name.length - a.name.length);
   const placed = new Set(sorted.filter((t) => place(t, fold(t.name).split(/\s+/))).map((t) => t.id));
   // Dan een woord uit de naam (minstens 4 letters, geen getal): "sprinter" is Mercedes Sprinter.
-  for (const thing of sorted) {
-    if (placed.has(thing.id)) continue;
-    for (const w of fold(thing.name).split(/\s+/)) if (w.length >= 4 && !/^\d+$/.test(w) && place(thing, [w])) break;
+  for (const item of sorted) {
+    if (placed.has(item.id)) continue;
+    for (const w of fold(item.name).split(/\s+/)) if (w.length >= 4 && !/^\d+$/.test(w) && place(item, [w])) break;
   }
   spans.sort((a, b) => a.from - b.from);
-  const lines = new Map(spans.map((s) => [s, { thing: s.thing, amount: null, unit: null, price: null } as ParsedLine]));
+  const lines = new Map(spans.map((s) => [s, { item: s.item, amount: null, unit: null, price: null } as ParsedLine]));
 
   // 3. Getallen. Een bedrag: met € of euro, of twee cijfers na de komma (enkel bij een soort met geld).
   const moneyAt = (i: number): { cents: number; n: number } | null => {
@@ -224,12 +224,12 @@ export function readEvent(text: string, ctx: ParseContext): ParsedEvent {
     return { amount: toNumber(bare[i]), unit, n: unit ? 2 : 1 };
   };
 
-  // Per ding: een hoeveelheid vlak ervoor of erna, en een prijs vlak erna (na de hoeveelheid). Enkel bij een product
+  // Per item: een hoeveelheid vlak ervoor of erna, en een prijs vlak erna (na de hoeveelheid). Enkel bij een product
   // (erbij of eraf): de km-stand na de naam van de wagen is geen hoeveelheid.
   for (const s of spans) {
     const line = lines.get(s)!;
     let end = s.to;
-    if (s.thing.role !== "in" && s.thing.role !== "uit") continue;
+    if (s.item.role !== "in" && s.item.role !== "uit") continue;
     const after = quantityAt(s.to);
     // Een getal vlak erna dat bij een veld van de soort hoort ("52 liter"), is geen hoeveelheid.
     if (after && !(after.n === 1 && fieldFor(bare[s.to + 1], ctx.fields, out.data))) {
@@ -250,7 +250,7 @@ export function readEvent(text: string, ctx: ParseContext): ParsedEvent {
       }
     }
     // Een prijs hoort bij wat erbij komt of eraf gaat (een product), niet bij een winkel of de wagen.
-    const price = s.thing.role === "in" || s.thing.role === "uit" ? moneyAt(end) : null;
+    const price = s.item.role === "in" || s.item.role === "uit" ? moneyAt(end) : null;
     if (price) {
       line.price = price.cents;
       take(end, price.n);

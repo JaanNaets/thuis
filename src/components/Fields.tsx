@@ -34,7 +34,7 @@ import { REMIND_DAYS } from "../../shared/remind";
 import { splitCents } from "../../shared/ledger";
 import { formatAmount, measureOf } from "../../shared/units";
 import { parseForeign, toEuroCents, type Rates } from "../../shared/money";
-import type { ThingRef } from "../../shared/model";
+import type { ItemRef } from "../../shared/model";
 import type { Person } from "../../shared/types";
 import { api, ApiError, apiUrl } from "../api";
 import type { ScanResult } from "../barcode-detect";
@@ -60,7 +60,7 @@ const Barcode = lazy(() => import("./Barcode").then((m) => ({ default: m.Barcode
 // ---------- namen bij id's ----------
 
 /** Namen van personen en items om waarden te tonen. Wat je niet mag zien, heet "verborgen". */
-export function namesFrom(people: Person[], refs: ThingRef[]): Names {
+export function namesFrom(people: Person[], refs: ItemRef[]): Names {
   const p = new Map(people.map((x) => [x.id, x.name]));
   const r = new Map(refs.map((x) => [x.id, x.name]));
   return { person: (id) => p.get(id) ?? "Onbekend", item: (id) => r.get(id) ?? "Verborgen" };
@@ -1057,7 +1057,7 @@ const OWN_CARD: FieldType[] = ["longtext", "code", "checklist"];
  * e-mail, telefoon of adres opent de site, een mail, de telefoon of een kaart. `lists`: de andere lijsten (voor de
  * uitleg bij een berekening).
  */
-export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ThingRef[]; lists?: CalcList[] }) {
+export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldDef[]; data: Attributes; names: Names; refs: ItemRef[]; lists?: CalcList[] }) {
   return (
     <>
       {defs
@@ -1082,11 +1082,11 @@ export function AttributeRows({ defs, data, names, refs, lists }: { defs: FieldD
   );
 }
 
-function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; value: FieldValue; names: Names; refs: ThingRef[] }) {
+function FieldValueView({ def: d, value: v, names, refs }: { def: FieldDef; value: FieldValue; names: Names; refs: ItemRef[] }) {
   const refLink = (id: string) => {
     const ref = refs.find((r) => r.id === id);
     return ref ? (
-      <Link key={id} to={`/dingen/${ref.id}`} className="link-quiet">
+      <Link key={id} to={`/items/${ref.id}`} className="link-quiet">
         {ref.name}
       </Link>
     ) : (
@@ -1681,13 +1681,13 @@ export async function findProduct(code: string): Promise<ProductInfo | null> {
 /** De foto van een item bovenaan de fiche: tonen, toevoegen, vervangen of weghalen. */
 export function ItemPhoto({
   item,
-  base = "things",
+  base = "items",
   canEdit,
   onChange,
 }: {
   item: { id: string; name: string; photo_version: number | null };
-  /** Van een ding of van een gebeurtenis (een kasticket). */
-  base?: "things" | "events";
+  /** Van een item of van een gebeurtenis (een kasticket). */
+  base?: "items" | "events";
   canEdit: boolean;
   onChange: (version: number | null, message: string) => void;
 }) {

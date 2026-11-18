@@ -26,23 +26,23 @@ const ev = (id: string, at: string, kind: string, extra: Record<string, unknown>
 });
 
 const items: SourceItem[] = [
-  ev("1", "2026-11-06", "Gegeten", { kcal: 500, things: ["k"] }),
-  ev("2", "2026-11-05", "Gegeten", { kcal: 700, things: ["p"] }),
-  ev("3", "2026-11-04", "Gegeten", { kcal: 300, things: ["k", "p"] }),
+  ev("1", "2026-11-06", "Gegeten", { kcal: 500, items: ["k"] }),
+  ev("2", "2026-11-05", "Gegeten", { kcal: 700, items: ["p"] }),
+  ev("3", "2026-11-04", "Gegeten", { kcal: 300, items: ["k", "p"] }),
   ev("4", "2026-11-06", "Water", { ml: 250 }),
   ev("5", "2026-11-06", "Water", { ml: 250, status: "Gepland" }),
 ];
 
 test("de bronnen: het logboek met de velden van zijn soorten, de rest met hun eigen velden", () => {
   const keys = logFields.map((f) => f.key);
-  for (const k of [NAME, "at", "kind", "amount", "status", "things", "running", "kcal", "ml"]) assert.ok(keys.includes(k), k);
+  for (const k of [NAME, "at", "kind", "amount", "status", "items", "running", "kcal", "ml"]) assert.ok(keys.includes(k), k);
   assert.equal(new Set(keys).size, keys.length, "geen dubbele sleutels");
   assert.deepEqual(
     sourceFields("saldo", { lists: [], kinds: [] }).map((f) => f.key),
     [NAME, "from", "to", "amount"],
   );
   assert.ok(sourceFields("voeding", { lists: [], kinds: [] }).some((f) => f.key === "kcal" && f.unit === "kcal"));
-  const dingen = sourceFields("dingen", {
+  const items = sourceFields("items", {
     lists: [
       { name: "A", fields: [{ key: "prijs", label: "Prijs", type: "money" }] },
       { name: "B", fields: [{ key: "prijs", label: "Prijs", type: "money" }, { key: "kleur", label: "Kleur", type: "text" }] },
@@ -51,13 +51,13 @@ test("de bronnen: het logboek met de velden van zijn soorten, de rest met hun ei
   });
   // Uit meer lijsten: ook in welke lijst het staat.
   assert.deepEqual(
-    dingen.map((f) => f.key),
+    items.map((f) => f.key),
     [NAME, "list", "prijs", "kleur"],
   );
-  assert.deepEqual(sourceFields("dingen", { lists: [{ name: "A", fields: [{ key: "prijs", label: "Prijs", type: "money" }] }], kinds: [] }).map((f) => f.key), [NAME, "prijs"]);
+  assert.deepEqual(sourceFields("items", { lists: [{ name: "A", fields: [{ key: "prijs", label: "Prijs", type: "money" }] }], kinds: [] }).map((f) => f.key), [NAME, "prijs"]);
 });
 
-test("alles van een tag: de dingen van haar lijsten samen, de gedeelde kolommen en rechts de lijst", () => {
+test("alles van een tag: de items van haar lijsten samen, de gedeelde kolommen en rechts de lijst", () => {
   const wijn = (id: string, extra: FieldDef[] = []) => ({
     id,
     one: "Wijn",
@@ -72,25 +72,25 @@ test("alles van een tag: de dingen van haar lijsten samen, de gedeelde kolommen 
   const proef: FieldDef = { key: "geproefd_op", label: "Geproefd op", type: "date", column: true };
   const lists = [wijn("WIJNEN", [waar]), wijn("KELDER", [waar]), wijn("GEPROEFD", [proef]), { id: "UITGAVEN", one: null, fields: [] }];
   const block = tagView(lists, " chab ")!;
-  // Lijsten zonder dingen niet; Geproefd op staat maar in één lijst, kleur is nergens een kolom.
+  // Lijsten zonder items niet; Geproefd op staat maar in één lijst, kleur is nergens een kolom.
   assert.deepEqual(block.lists, ["WIJNEN", "KELDER", "GEPROEFD"]);
   assert.deepEqual(block.where.columns, ["wijnhuis", "jaargang", "waar", "list"]);
   assert.deepEqual(block.where.conditions, [{ field: NAME, op: "contains", value: "chab" }]);
-  assert.equal(block.source, "dingen");
-  // Eén lijst: haar eigen kolommen, zonder Lijst; zonder dingen: niets.
+  assert.equal(block.source, "items");
+  // Eén lijst: haar eigen kolommen, zonder Lijst; zonder items: niets.
   assert.deepEqual(tagView([wijn("GEPROEFD", [proef])])!.where.columns, ["wijnhuis", "jaargang", "geproefd_op"]);
   assert.equal(tagView([{ id: "UITGAVEN", one: null, fields: [] }]), null);
   assert.deepEqual(tagView(lists)!.where.conditions, []);
 });
 
-test("een weergave nakijken: wat niet klopt valt weg, de dingen vragen een lijst", () => {
+test("een weergave nakijken: wat niet klopt valt weg, de items vragen een lijst", () => {
   assert.equal(cleanViewBlock({ source: "gevaar" }), null);
-  assert.equal(cleanViewBlock({ source: "dingen", lists: [] }), null);
+  assert.equal(cleanViewBlock({ source: "items", lists: [] }), null);
   const v = cleanViewBlock({
     name: "  Komkommer per week ".repeat(3),
     source: "logboek",
     lists: ["L1", "L1", "<script>"],
-    where: { match: "any", conditions: [{ field: "things", op: "any_of", value: ["k"] }, { field: "Bad Key!", op: "is" }], sort: [{ field: "at", dir: "desc" }] },
+    where: { match: "any", conditions: [{ field: "items", op: "any_of", value: ["k"] }, { field: "Bad Key!", op: "is" }], sort: [{ field: "at", dir: "desc" }] },
     show: "staafjes",
     tally: { agg: "sum", step: "week", n: 8 },
     limit: 999,
@@ -135,11 +135,11 @@ test("oude blokken worden de gelijkwaardige weergave of actie", () => {
   assert.equal(chart.show, "perkeuze");
   assert.deepEqual(chart.tally, { agg: "sum", field: "amount", by: "paid_by", step: "month", n: 1 });
   assert.equal(upgradeBlock({ kind: "onbekend" }), null);
-  // Een bord met oude blokken, nagekeken: elk blok is nu een weergave, actie of ding; de breedte blijft.
-  const board = cleanBlocks([{ kind: "money", wide: true }, { kind: "quick", list: "L1" }, { kind: "thing", thing: "T1" }, { kind: "money" }])!;
+  // Een bord met oude blokken, nagekeken: elk blok is nu een weergave, actie of item; de breedte blijft.
+  const board = cleanBlocks([{ kind: "money", wide: true }, { kind: "quick", list: "L1" }, { kind: "item", item: "T1" }, { kind: "money" }])!;
   assert.deepEqual(
     board.map((b) => b.kind),
-    ["view", "action", "thing"],
+    ["view", "action", "item"],
   );
   assert.equal(board[0].wide, true);
   assert.equal(cleanBlock({ kind: "view", source: "saldo", show: "lijst" })?.kind, "view");
@@ -162,7 +162,7 @@ test("uitrekenen: de zin filtert, een lijst sorteert en volgt de voorwaarden op 
     limit: 2,
     rules: [
       { when: "rij", cond: { field: "kcal", op: "gt", value: 600 }, then: "rood" },
-      { when: "rij", cond: { field: "things", op: "any_of", value: ["k"] }, then: "bovenaan" },
+      { when: "rij", cond: { field: "items", op: "any_of", value: ["k"] }, then: "bovenaan" },
     ],
   };
   const out = evaluateView(eaten, logFields, items, ctx);
@@ -202,7 +202,7 @@ test("uitrekenen: tellen als getal, per keuze en in de tijd, met een kleur op de
   assert.equal(out.chart?.goal, 2000);
   assert.equal(out.tone, "oranje");
   // Komkommer per week (het voorbeeld uit de mockup): het aantal keer.
-  const cucumber: ViewBlock = { ...water, name: "", where: { match: "all", conditions: [{ field: "things", op: "any_of", value: ["k"] }] }, show: "staafjes", tally: { agg: "count", step: "week", n: 2 }, rules: [] };
+  const cucumber: ViewBlock = { ...water, name: "", where: { match: "all", conditions: [{ field: "items", op: "any_of", value: ["k"] }] }, show: "staafjes", tally: { agg: "count", step: "week", n: 2 }, rules: [] };
   const weeks = evaluateView(cucumber, logFields, items, ctx).chart!;
   assert.equal(weeks.buckets.length, 2);
   assert.deepEqual(weeks.series[0].values, [0, 2]);
@@ -215,7 +215,7 @@ test("uitrekenen: tellen als getal, per keuze en in de tijd, met een kleur op de
 });
 
 test("een naam en kolommen als het blok er geen kiest", () => {
-  const block: ViewBlock = { kind: "view", name: "", source: "dingen", lists: ["L1"], where: { match: "all", conditions: [] }, show: "lijst" };
+  const block: ViewBlock = { kind: "view", name: "", source: "items", lists: ["L1"], where: { match: "all", conditions: [] }, show: "lijst" };
   assert.equal(viewName(block, () => "Voorraad"), "Voorraad");
   assert.equal(viewName({ ...block, source: "saldo", lists: [] }, () => undefined), "Wie moet wie");
   assert.equal(viewName({ ...block, name: "Mijn wijnen" }, () => "Wijnen"), "Mijn wijnen");
@@ -283,30 +283,30 @@ test("bladeren: een periode in woorden, en per maand, per venster of per periode
   assert.equal(evaluateView(kcal, logFields, items, { ...ctx, shift: -2 }).chart?.total, 300);
 });
 
-test("een agenda: alles op zijn dag in het rooster van de maand, ook de dingen met een datum of periode", () => {
+test("een agenda: alles op zijn dag in het rooster van de maand, ook de items met een datum of periode", () => {
   const block: ViewBlock = { kind: "view", name: "", source: "logboek", lists: [], where: { match: "all", conditions: [] }, show: "agenda" };
   const later = [...items, ev("6", "2026-12-24", "Gegeten"), ev("7", "2026-11-30T19:00", "Water")];
   const out = evaluateView(block, logFields, later, ctx);
   assert.deepEqual(out.rows.map((r) => r.id), ["3", "2", "1", "4", "5", "7"]);
   assert.equal(out.span?.month, "2026-11");
   assert.deepEqual(evaluateView(block, logFields, later, { ...ctx, shift: 1 }).rows.map((r) => r.id), ["7", "6"], "het rooster van december begint op maandag 30 november");
-  // De dingen: volgens een datumveld (het gekozen, anders dat met "In de agenda", anders het eerste).
+  // De items: volgens een datumveld (het gekozen, anders dat met "In de agenda", anders het eerste).
   const fields: FieldDef[] = [
     { key: NAME, label: "Naam", type: "text" },
     { key: "bought", label: "Gekocht", type: "date" },
     { key: "keuring", label: "Keuring", type: "date", agenda: true },
     { key: "trip", label: "Reis", type: "date_range" },
   ];
-  assert.equal(sourceDate("dingen", fields), "keuring");
-  assert.equal(sourceDate("dingen", fields, "trip"), "trip");
+  assert.equal(sourceDate("items", fields), "keuring");
+  assert.equal(sourceDate("items", fields, "trip"), "trip");
   assert.deepEqual(agendaDays({ data: { trip: ["2026-11-10", "2026-11-14"] } }, "trip"), { start: "2026-11-10", end: "2026-11-14" });
   assert.deepEqual(agendaDays({ data: { at: "2026-11-10T08:00", end: "2026-11-10" } }, "at"), { start: "2026-11-10" });
   assert.equal(agendaDays({ data: {} }, "at"), null);
   // Het datumveld van vroeger (in tally.date) blijft.
-  const old = cleanViewBlock({ source: "dingen", lists: ["w"], show: "staafjes", tally: { agg: "count", step: "month", n: 6, date: "bought" } });
+  const old = cleanViewBlock({ source: "items", lists: ["w"], show: "staafjes", tally: { agg: "count", step: "month", n: 6, date: "bought" } });
   assert.equal(old?.date, "bought");
-  assert.equal(cleanViewBlock({ source: "dingen", lists: ["w"], show: "lijst", date: "bought" })?.date, undefined, "een lijst heeft geen datumveld nodig");
-  // Alles met een datum: wat gebeurde of gepland staat, en de datums van dingen.
+  assert.equal(cleanViewBlock({ source: "items", lists: ["w"], show: "lijst", date: "bought" })?.date, undefined, "een lijst heeft geen datumveld nodig");
+  // Alles met een datum: wat gebeurde of gepland staat, en de datums van items.
   assert.deepEqual(sourceFields("datums", { lists: [], kinds: [] }).map((f) => f.key), [NAME, "at", "end", "list", "what", "status"]);
 });
 

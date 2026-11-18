@@ -12,17 +12,17 @@ import { LogButtons } from "../components/LogButtons";
 import { SkeletonRows } from "../components/Motion";
 import { EmptyState, PageHead } from "../components/Page";
 import { Sheet } from "../components/Sheet";
-import { ThingsView } from "../components/ThingsView";
+import { ItemsView } from "../components/ItemsView";
 import { useToast } from "../components/Toast";
 import { listIcon } from "../lists";
 import { Link, useNavigate } from "../router";
 import { useSession } from "../session";
 import { PhoneAdd } from "../shell";
 
-type Tab = "dingen" | "logboek" | "gepland";
+type Tab = "items" | "logboek" | "gepland";
 
 /**
- * Een lijst: haar dingen, haar logboek (wat er gebeurde, ook elders met haar dingen) en wat gepland staat. Opzij wie
+ * Een lijst: haar items, haar logboek (wat er gebeurde, ook elders met haar items) en wat gepland staat. Opzij wie
  * erbij kan (rechtstreeks of via een tag) en haar tags. Zie STIJLBOEK.md → Patronen per scherm.
  */
 export function ListPage() {
@@ -41,14 +41,14 @@ export function ListPage() {
   const planTab = detail.counts.planned || plans ? [{ value: "gepland" as const, label: "Gepland" }] : [];
   const logTab = [{ value: "logboek" as const, label: "Logboek" }];
   const tabs: { value: Tab; label: string }[] = [
-    ...(list.one ? [{ value: "dingen" as const, label: list.name }] : []),
+    ...(list.one ? [{ value: "items" as const, label: list.name }] : []),
     ...(plans ? [...planTab, ...logTab] : [...logTab, ...planTab]),
   ];
   const asked = params.get("tab") as Tab | null;
   const tab: Tab = asked && tabs.some((t) => t.value === asked) ? asked : tabs[0].value;
   const edit = canEdit(role) && !list.archived;
-  // Toevoegen: hetzelfde palet als de + overal, maar enkel met wat in deze lijst kan (op Dingen eerst een ding).
-  const addHere = () => palette("add", "", { list: list.id, thing: tab === "dingen", planned: tab === "gepland" });
+  // Toevoegen: hetzelfde palet als de + overal, maar enkel met wat in deze lijst kan (op Items eerst een item).
+  const addHere = () => palette("add", "", { list: list.id, item: tab === "items", planned: tab === "gepland" });
   const addLabel = tab === "gepland" ? "Plannen" : "Toevoegen";
   const primary = edit && (
     <button type="button" className="btn btn-primary" onClick={addHere}>
@@ -116,16 +116,16 @@ export function ListPage() {
           )}
         </aside>
         <div className="split-main">
-          {tab === "dingen" && <ThingsView key={list.id} list={list} role={role} onChanged={reload} />}
-          {tab !== "dingen" && edit && <LogButtons listId={list.id} planned={tab === "gepland"} row />}
-          {tab !== "dingen" && <ListLog key={`${list.id}-${tab}`} listId={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />}
+          {tab === "items" && <ItemsView key={list.id} list={list} role={role} onChanged={reload} />}
+          {tab !== "items" && edit && <LogButtons listId={list.id} planned={tab === "gepland"} row />}
+          {tab !== "items" && <ListLog key={`${list.id}-${tab}`} listId={list.id} planned={tab === "gepland"} edit={edit} onChanged={reload} empty={tab === "gepland" ? "Niets gepland" : "Nog niets gelogd"} />}
         </div>
       </div>
       <Sheet open={menu} title={list.name} onClose={() => setMenu(false)}>
         <ul className="rows sheet-menu">
           {canManage(role) && menuLink("sliders", "Instellen", `/lijsten/${list.id}/instellingen`)}
           {edit && list.one && menuLink("upload", "Importeren", `/lijsten/${list.id}/importeren`)}
-          {edit && menuLink("scan", "QR-sticker", `/lijsten/${list.id}/sticker${tab === "dingen" ? "?ding=1" : ""}`)}
+          {edit && menuLink("scan", "QR-sticker", `/lijsten/${list.id}/sticker${tab === "items" ? "?item=1" : ""}`)}
           {menuLink("links", "Verbanden", `/lijsten?lijst=${list.id}`)}
           {edit && (
             <li>
@@ -188,7 +188,7 @@ export function ListLog({ listId, planned, edit, onChanged, empty }: { listId: s
   const pages = data ? [data, ...older] : [];
   const page: EventPage | undefined = data && {
     events: pages.flatMap((p) => p.events),
-    things: pages.flatMap((p) => p.things),
+    items: pages.flatMap((p) => p.items),
     people: pages.flatMap((p) => p.people),
     kinds: pages.flatMap((p) => p.kinds),
     lists: pages.flatMap((p) => p.lists),

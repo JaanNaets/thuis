@@ -1,4 +1,4 @@
-// De dingen van een lijst: zoeken, filters uit de velden, bewaarde weergaven (filters, sortering, kolommen, groeperen,
+// De items van een lijst: zoeken, filters uit de velden, bewaarde weergaven (filters, sortering, kolommen, groeperen,
 // als agenda), en een tabel met de velden die als kolom staan. Telt de lijst voorraad, dan staat rechts hoeveel er
 // is, met − en + om te tellen (een telling in het logboek). Zie STIJLBOEK.md → Een lijst tonen.
 
@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { occurrences } from "../../shared/agenda";
 import { csvFilename, exportValue, toCsv } from "../../shared/csv";
 import { formatFieldValue, rangeStatus, refLists, type ChecklistEntry, type FieldDef, type FieldType, type FieldValue, type Names } from "../../shared/fields";
-import { brusselsNow, canEdit, type List, type Role, type ThingRef, type ThingRow } from "../../shared/model";
+import { brusselsNow, canEdit, type List, type Role, type ItemRef, type ItemRow } from "../../shared/model";
 import { measureFor } from "../../shared/stock";
 import { formatAmount } from "../../shared/units";
 import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
@@ -26,7 +26,7 @@ import { EmptyState } from "./Page";
 import { Sheet } from "./Sheet";
 import { useToast } from "./Toast";
 
-type ThingList = { things: ThingRow[]; people: Person[]; refs: ThingRef[] };
+type ItemList = { items: ItemRow[]; people: Person[]; refs: ItemRef[] };
 
 /** Zoeken zonder op hoofdletters of accenten te letten ("creme" vindt "Crème"). */
 export function fold(s: string): string {
@@ -49,7 +49,7 @@ const NUMERIC: FieldType[] = ["money", "number", "score", "year", "duration"];
 const isNumeric = (def: FieldDef) => NUMERIC.includes(def.type) || (def.type === "calc" && NUMERIC.includes(def.result!));
 const isRange = (def: FieldDef) => def.type === "year_range" || def.type === "date_range";
 
-export function ThingsView({ list, role, onChanged }: { list: List; role: Role; onChanged?: () => void }) {
+export function ItemsView({ list, role, onChanged }: { list: List; role: Role; onChanged?: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const { person } = useSession();
@@ -57,8 +57,8 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
   const [sheet, setSheet] = useState<"more" | "filters">();
   const edit = canEdit(role) && !list.archived;
   const wideScreen = typeof window !== "undefined" && window.matchMedia("(min-width: 1100px)").matches;
-  const { data, error, loading, reload } = useApi<ThingList>(`/lists/${list.id}/things${archived ? "?archived=1" : ""}`);
-  const { data: savedViews, reload: reloadViews } = useApi<SavedView[]>(`/views?list=${list.id}&target=dingen`);
+  const { data, error, loading, reload } = useApi<ItemList>(`/lists/${list.id}/items${archived ? "?archived=1" : ""}`);
+  const { data: savedViews, reload: reloadViews } = useApi<SavedView[]>(`/views?list=${list.id}&target=items`);
   const storeKey = `thuis:weergave:${list.id}`;
   const [{ activeId, def }, setView] = useState<{ activeId: string | null; def: ViewDef }>(() => {
     try {
@@ -99,22 +99,22 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
     : fields.filter((f) => f.column && !stockKeys.has(f.key)).slice(0, (wideScreen ? 3 : 2) - (list.stock ? 1 : 0));
   const filterFields = fields.filter((f) => f.filter && !isRange(f));
   const rangeFields = fields.filter((f) => f.filter && isRange(f));
-  const things = useMemo(() => (data?.things ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [data]);
+  const items = useMemo(() => (data?.items ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [data]);
   const year = new Date().getFullYear();
 
   const options = useMemo(() => {
     const out: Record<string, string[]> = {};
     for (const f of filterFields) {
       const values = new Set<string>();
-      for (const t of things) valueTexts(f, t.data[f.key], names).forEach((v) => v && values.add(v));
+      for (const t of items) valueTexts(f, t.data[f.key], names).forEach((v) => v && values.add(v));
       out[f.key] = [...values].sort((a, b) => (f.type === "year" ? b.localeCompare(a) : a.localeCompare(b, "nl", { numeric: true })));
     }
     return out;
-  }, [things, filterFields, names]);
+  }, [items, filterFields, names]);
 
   const shown = useMemo(() => {
     const q = fold(query.trim());
-    const out = things.filter((t) => {
+    const out = items.filter((t) => {
       for (const f of filterFields) {
         const want = filters[f.key];
         if (want && !valueTexts(f, t.data[f.key], names).includes(want)) return false;
@@ -130,7 +130,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
       vfields,
       names,
     );
-  }, [things, query, filters, now, fields, filterFields, rangeFields, names, year, def, vfields, person.id]);
+  }, [items, query, filters, now, fields, filterFields, rangeFields, names, year, def, vfields, person.id]);
 
   const filtered = Boolean(query.trim() || def.conditions.length || Object.values(filters).some(Boolean) || Object.values(now).some(Boolean));
 
@@ -138,7 +138,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
     if (f.key === TAGS) return [];
     const kind = kindOf(f);
     if (kind === "select" || kind === "multi") {
-      const seen = f.options ?? [...new Set(things.flatMap((t) => (Array.isArray(t.data[f.key]) ? (t.data[f.key] as string[]) : [])))];
+      const seen = f.options ?? [...new Set(items.flatMap((t) => (Array.isArray(t.data[f.key]) ? (t.data[f.key] as string[]) : [])))];
       return seen.map((o) => ({ value: o, label: o }));
     }
     if (kind === "person" || kind === "people") return [{ value: "me", label: "Jij" }, ...(data?.people ?? []).filter((p) => p.id !== person.id).map((p) => ({ value: p.id, label: p.name }))];
@@ -146,7 +146,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
     return [];
   };
 
-  // Als agenda: elk ding op zijn datum (de weergave kiest welk datumveld).
+  // Als agenda: elk item op zijn datum (de weergave kiest welk datumveld).
   const agendaField = def.mode === "agenda" ? fields.find((f) => f.key === def.date) : undefined;
   const agendaEntries: CalendarEntry[] = useMemo(() => {
     if (!agendaField) return [];
@@ -156,7 +156,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
         key: `${t.id}-${i}`,
         title: t.name,
         ...o,
-        href: `/dingen/${t.id}`,
+        href: `/items/${t.id}`,
         tone: listTone(list),
         icon: listIcon(list),
         meta: columns
@@ -171,7 +171,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
   // Voorraad: hoeveel er is, met − en + (een telling na een korte pauze, zodat drie tikken één telling zijn).
   const [counts, setCounts] = useState<Record<string, number>>({});
   const pending = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  function step(t: ThingRow, delta: number) {
+  function step(t: ItemRow, delta: number) {
     if (!list.stock || !t.stock) return;
     const measure = measureFor(list.stock, t.data);
     const next = Math.max(0, Math.round(((counts[t.id] ?? t.stock.amount) + delta * (measure.pack ?? 1)) * 1000) / 1000);
@@ -184,7 +184,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
           name: "Telling",
           status: "gebeurd",
           at: brusselsNow(),
-          lines: [{ role: "voor", thing_id: t.id, amount: next, unit: measure.unit }],
+          lines: [{ role: "voor", item_id: t.id, amount: next, unit: measure.unit }],
         });
         onChanged?.();
       } catch (err) {
@@ -238,8 +238,8 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
   let index = 0;
   const row = (t: (typeof shown)[number]) => (
     <li key={t.id} style={stagger(index++)}>
-      <ThingRowView
-        thing={t}
+      <ItemRowView
+        item={t}
         list={list}
         columns={columns}
         names={names}
@@ -379,7 +379,7 @@ export function ThingsView({ list, role, onChanged }: { list: List; role: Role; 
             choices={choices}
             canShare={edit}
             listId={list.id}
-            target="dingen"
+            target="items"
             onApply={(next) => {
               setDef(next);
               setSheet(undefined);
@@ -477,16 +477,16 @@ function SortButton({ field, label, def, onSort }: { field: string; label: strin
   );
 }
 
-/** Eén ding als rij: foto of icoon, naam, de kolommen (op gsm in de grijze regel), en rechts de voorraad. */
-export function ThingRowView({ thing, list, columns, names, stepper }: { thing: ThingRow; list: Pick<List, "icon" | "one" | "id" | "color">; columns: FieldDef[]; names: Names; stepper?: ReactNode }) {
-  const meta = columns.map((c) => formatFieldValue(c, thing.data[c.key], names)).filter(Boolean);
+/** Eén item als rij: foto of icoon, naam, de kolommen (op gsm in de grijze regel), en rechts de voorraad. */
+export function ItemRowView({ item, list, columns, names, stepper }: { item: ItemRow; list: Pick<List, "icon" | "one" | "id" | "color">; columns: FieldDef[]; names: Names; stepper?: ReactNode }) {
+  const meta = columns.map((c) => formatFieldValue(c, item.data[c.key], names)).filter(Boolean);
   return (
     <div className="row">
-      <Link to={`/dingen/${thing.id}`} className="row-link">
+      <Link to={`/items/${item.id}`} className="row-link">
         <span className="cell-main">
-          {thing.photo_version ? (
+          {item.photo_version ? (
             <span className="row-media">
-              <img src={apiUrl(`/things/${thing.id}/photo?v=${thing.photo_version}`)} alt="" loading="lazy" />
+              <img src={apiUrl(`/items/${item.id}/photo?v=${item.photo_version}`)} alt="" loading="lazy" />
             </span>
           ) : (
             <span className={`row-media tone-${listTone({ ...list, color: list.color ?? null })}`}>
@@ -494,7 +494,7 @@ export function ThingRowView({ thing, list, columns, names, stepper }: { thing: 
             </span>
           )}
           <span className="row-main">
-            <span className="row-title">{thing.name}</span>
+            <span className="row-title">{item.name}</span>
             {meta.length > 0 && (
               <span className="row-meta narrow-only">
                 <span>{meta.join(" · ")}</span>
@@ -503,7 +503,7 @@ export function ThingRowView({ thing, list, columns, names, stepper }: { thing: 
           </span>
         </span>
         {columns.map((c) => {
-          const v = thing.data[c.key];
+          const v = item.data[c.key];
           return (
             <span key={c.key} className={`col${isNumeric(c) ? " col-end" : ""}`}>
               {v === undefined ? <span className="muted">—</span> : c.type === "score" && typeof v === "number" ? <ScoreStars value={v} /> : <span>{formatFieldValue(c, v, names)}</span>}
@@ -516,7 +516,7 @@ export function ThingRowView({ thing, list, columns, names, stepper }: { thing: 
   );
 }
 
-/** − en + rechts in een rij: hoeveel er is (in de eenheid van het ding), rood als het op of bijna op is. */
+/** − en + rechts in een rij: hoeveel er is (in de eenheid van het item), rood als het op of bijna op is. */
 function StockStepper({ amount, unit, low, label, edit, onStep }: { amount: number; unit: string | null; low: boolean; label: string; edit: boolean; onStep: (delta: number) => void }) {
   const shown = unit ? formatAmount(amount, unit) : formatNumber(amount);
   return (

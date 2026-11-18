@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-/** Een bestand bij een ding of gebeurtenis (zie worker/media.ts). */
+/** Een bestand bij een item of gebeurtenis (zie worker/media.ts). */
 export type Attachment = { id: string; filename: string; content_type: string; size_bytes: number; created_at: string };
 import { apiUrl } from "../api";
 import { Icon } from "./Icon";

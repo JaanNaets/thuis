@@ -1,6 +1,6 @@
 // Koppelingen van een lijst (zie shared/transfer.ts en worker/mirrors.ts): GET de koppelingen die in deze lijst schrijven,
 // PUT /:bron bewaart of wijzigt er een (enkel wie beheerder is van beide lijsten, zonder kring) en werkt ze meteen bij,
-// DELETE /:bron haalt ze weg: de gekoppelde dingen blijven als gewone dingen staan.
+// DELETE /:bron haalt ze weg: de gekoppelde items blijven als gewone items staan.
 
 import { Hono } from "hono";
 import { canManage } from "../../shared/model";
@@ -45,7 +45,7 @@ listMirrors.put("/:id/mirrors/:source", async (c) => {
   needManage(role, "Enkel een beheerder van beide lijsten koppelt.");
   const { list: source, role: sourceRole } = await requireList(db, me, c.req.param("source"));
   needManage(sourceRole, "Enkel een beheerder van beide lijsten koppelt.");
-  if (!list.one || !source.one) throw new ValidationError("Koppelen kan enkel tussen lijsten met dingen.");
+  if (!list.one || !source.one) throw new ValidationError("Koppelen kan enkel tussen lijsten met items.");
   const { results: all } = await db.prepare("SELECT list_id, source_id FROM mirrors").all<{ list_id: string; source_id: string }>();
   const others = all.filter((m) => !(m.list_id === list.id && m.source_id === source.id)).map((m) => ({ list: m.list_id, source: m.source_id }));
   if (makesCycle(others, list.id, source.id)) throw new ValidationError(`${source.name} haalt al uit ${list.name}: dat zou een kring worden.`);
@@ -73,7 +73,7 @@ listMirrors.delete("/:id/mirrors/:source", async (c) => {
   const m = await db.prepare("SELECT id FROM mirrors WHERE list_id = ? AND source_id = ?").bind(list.id, c.req.param("source")).first<{ id: string }>();
   if (!m) return c.body(null, 204);
   await db.batch([
-    db.prepare("UPDATE things SET mirror_id = NULL, mirror_of = NULL, updated_at = datetime('now') WHERE mirror_id = ?").bind(m.id),
+    db.prepare("UPDATE items SET mirror_id = NULL, mirror_of = NULL, updated_at = datetime('now') WHERE mirror_id = ?").bind(m.id),
     db.prepare("DELETE FROM mirrors WHERE id = ?").bind(m.id),
   ]);
   return c.body(null, 204);

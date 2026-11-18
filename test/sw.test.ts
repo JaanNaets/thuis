@@ -46,9 +46,9 @@ test("service worker: elk offline patroon is een echte GET-route", () => {
 test("service worker: de schermen die je offline wil openen, staan erin", () => {
   const patterns = offlinePatterns();
   const offline = (path: string) => patterns.some((p) => p.test(path));
-  for (const path of ["/api/me", "/api/me/overview", "/api/lists/a1b2-c3", "/api/lists/a1b2-c3/things", "/api/lists/a1b2-c3/events", "/api/things/a1b2-c3", "/api/events/a1b2-c3"]) {
+  for (const path of ["/api/me", "/api/me/overview", "/api/lists/a1b2-c3", "/api/lists/a1b2-c3/items", "/api/lists/a1b2-c3/events", "/api/items/a1b2-c3", "/api/events/a1b2-c3"]) {
     assert.ok(offline(path), `${path} niet offline`);
   }
   // Foto's en de back-up niet: die zijn groot of gevoelig.
-  for (const path of ["/api/things/a1b2-c3/photo", "/api/me/backup"]) assert.ok(!offline(path), `${path} zou niet offline mogen`);
+  for (const path of ["/api/items/a1b2-c3/photo", "/api/me/backup"]) assert.ok(!offline(path), `${path} zou niet offline mogen`);
 });

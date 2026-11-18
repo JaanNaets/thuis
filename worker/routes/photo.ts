@@ -1,11 +1,11 @@
-// Een foto lezen voor een nieuw ding (✨, POST /lists/:id/things/read-photo): een etiket of typeplaatje (wat er staat,
+// Een foto lezen voor een nieuw item (✨, POST /lists/:id/items/read-photo): een etiket of typeplaatje (wat er staat,
 // in de velden van de lijst), of in een lijst met productinfo het product of gerecht (de AI herkent en schat, daarna
 // de echte gegevens uit Open Food Facts of NEVO, en de app zegt welke van de twee). Bewaart niets.
 
 import { Hono } from "hono";
 import { cleanAttributes, type FieldDef } from "../../shared/fields";
 import { nevoCredit } from "../../shared/nevo";
-import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
+import { readsPhoto, ITEMS_FORM } from "../../shared/photoread";
 import { isProductCode, PRODUCT_KEYS, productData, productLabel, type ProductInfo } from "../../shared/product";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
 import { needEdit, requireList } from "../access";
@@ -49,12 +49,12 @@ export function describeField(f: FieldDef): string {
   return `- ${f.key}: ${f.label}${extra}${f.product ? ` (${PRODUCT_KEYS[f.product].label})` : ""}`;
 }
 
-listPhoto.post("/:id/things/read-photo", async (c) => {
+listPhoto.post("/:id/items/read-photo", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
   const { list, role } = await requireList(db, me, c.req.param("id"));
   needEdit(role);
-  if (!readsPhoto(list.read_photo, THINGS_FORM, null)) throw new ValidationError("Deze lijst leest geen foto's.");
+  if (!readsPhoto(list.read_photo, ITEMS_FORM, null)) throw new ValidationError("Deze lijst leest geen foto's.");
   const form = await c.req.formData();
   const image = form.get("image");
   // Een barcode die de app zelf al op de foto vond.
@@ -90,7 +90,7 @@ listPhoto.post("/:id/things/read-photo", async (c) => {
 ${fields.map(describeField).join("\n")}
 ${estimated.length ? `Vul ${estimated.map((f) => f.key).join(" en ")} altijd in: lees het van de verpakking als dat kan, anders schat je het zoals een voedingstabel.\n` : ""}Vul de andere velden enkel in als het uit de foto volgt, anders null.`
     : `Je leest wat er op een foto staat: een etiket of typeplaatje. Geef enkel wat je echt ziet; gebruik null als je twijfelt. Raad nooit een getal of datum.
-- name: de naam van ${list.one ? `de ${list.one.toLowerCase()}` : "het ding"} zoals op het etiket
+- name: de naam van ${list.one ? `de ${list.one.toLowerCase()}` : "het item"} zoals op het etiket
 ${fields.map(describeField).join("\n")}`;
   try {
     const result = await c.env.AI.run(MODEL, {

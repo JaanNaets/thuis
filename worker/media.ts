@@ -1,4 +1,4 @@
-// Foto's en bestanden van dingen en gebeurtenissen, in R2. Een ding houdt de sleutel van het item van vroeger
+// Foto's en bestanden van items en gebeurtenissen, in R2. Een item houdt de sleutel van het item van vroeger
 // (`items/<id>/photo`), zodat foto's van voor de herbouw blijven werken.
 
 import type { Context } from "hono";
@@ -9,8 +9,8 @@ export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const FILE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
-export type OwnerKind = "thing" | "event";
-const prefix = (kind: OwnerKind, id: string) => (kind === "thing" ? `items/${id}` : `events/${id}`);
+export type OwnerKind = "item" | "event";
+const prefix = (kind: OwnerKind, id: string) => (kind === "item" ? `items/${id}` : `events/${id}`);
 export const photoKey = (kind: OwnerKind, id: string) => `${prefix(kind, id)}/photo`;
 export const fileKey = (kind: OwnerKind, id: string, fileId: string) => `${prefix(kind, id)}/files/${fileId}`;
 
@@ -37,7 +37,7 @@ export async function storePhoto(c: Context<AppEnv>, kind: OwnerKind, id: string
   if (!PHOTO_TYPES.includes(file.type)) return { error: "Kies een foto (JPG, PNG of WebP)" };
   if (file.size > MAX_IMAGE_BYTES) return { error: "Deze foto is groter dan 3 MB" };
   await c.env.FILES.put(photoKey(kind, id), file.stream(), { httpMetadata: { contentType: file.type } });
-  const table = kind === "thing" ? "things" : "events";
+  const table = kind === "item" ? "items" : "events";
   const row = await c.env.DB.prepare(`UPDATE ${table} SET photo_version = COALESCE(photo_version, 0) + 1 WHERE id = ? RETURNING photo_version`)
     .bind(id)
     .first<{ photo_version: number }>();
@@ -45,7 +45,7 @@ export async function storePhoto(c: Context<AppEnv>, kind: OwnerKind, id: string
 }
 
 export async function removePhoto(c: Context<AppEnv>, kind: OwnerKind, id: string) {
-  const table = kind === "thing" ? "things" : "events";
+  const table = kind === "item" ? "items" : "events";
   await c.env.DB.prepare(`UPDATE ${table} SET photo_version = NULL WHERE id = ?`).bind(id).run();
   await c.env.FILES.delete(photoKey(kind, id));
 }
@@ -81,7 +81,7 @@ export async function attachmentsOf(db: D1Database, kind: OwnerKind, id: string)
   return results;
 }
 
-/** Alles in R2 van een ding of gebeurtenis weghalen (na het verwijderen uit de databank). */
+/** Alles in R2 van een item of gebeurtenis weghalen (na het verwijderen uit de databank). */
 export async function purgeMedia(env: AppEnv["Bindings"], kind: OwnerKind, id: string, keys: string[]) {
   await env.FILES.delete([...keys, photoKey(kind, id)]);
 }

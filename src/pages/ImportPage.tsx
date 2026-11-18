@@ -12,7 +12,7 @@ import { useToast } from "../components/Toast";
 import { formatNumber } from "../format";
 import { useNavigate } from "../router";
 
-/** Een tabel (Google Sheet als CSV, Excel, geplakte cellen) als dingen in een lijst. */
+/** Een tabel (Google Sheet als CSV, Excel, geplakte cellen) als items in een lijst. */
 export function ImportPage() {
   const { id } = useParams();
   const { data: detail, error } = useApi<ListDetail>(`/lists/${id}`);
@@ -97,7 +97,7 @@ function ImportForm({ list }: { list: List }) {
       } catch {
         // Niet bewaard (privévenster): volgende keer gewoon opnieuw raden.
       }
-      const res = await api.post<ImportResult>(`/lists/${list.id}/things/import`, { rows: converted.rows });
+      const res = await api.post<ImportResult>(`/lists/${list.id}/items/import`, { rows: converted.rows });
       toast(`${formatNumber(res.created)} toegevoegd aan ${list.name}`);
       if (res.skipped.length === 0) {
         navigate(`/lijsten/${list.id}`, { replace: true });
@@ -202,7 +202,7 @@ function ImportForm({ list }: { list: List }) {
                 <span className="label">Zo komt het erin</span>
                 <span className="hint">
                   {[
-                    `${formatNumber(named.length)} ${named.length === 1 ? (list.one ?? "ding").toLowerCase() : "dingen"}`,
+                    `${formatNumber(named.length)} ${named.length === 1 ? (list.one ?? "item").toLowerCase() : "items"}`,
                     named.length < converted.rows.length && `${converted.rows.length - named.length} rijen zonder naam slaan we over`,
                     converted.problems.length > 0 && `${converted.problems.length} cellen niet te lezen`,
                   ]

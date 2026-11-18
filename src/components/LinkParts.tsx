@@ -131,7 +131,7 @@ export function LinkSearch({
           enterKeyHint="search"
           autoComplete="off"
           value={query}
-          placeholder="Zoek een lijst, ding, formulier of weergave"
+          placeholder="Zoek een lijst, item, formulier of weergave"
           aria-label="Zoeken in verbanden"
           role={popover ? "combobox" : undefined}
           aria-expanded={popover ? show : undefined}
@@ -204,7 +204,7 @@ export function LinkSearch({
 
 const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
 
-/** Wat een lijst (of weergave) binnenkrijgt, doorgeeft, in welke weergaven ze staat en wat ze met haar eigen dingen doet. */
+/** Wat een lijst (of weergave) binnenkrijgt, doorgeeft, in welke weergaven ze staat en wat ze met haar eigen items doet. */
 export function linkParts(id: string, links: LinkDef[], data: LinksResponse) {
   const mine = links.filter((l) => l.from === id || l.to === id);
   const isView = (l: LinkDef) => viewOf(l.from === id ? l.to : l.from) !== null;
@@ -223,25 +223,25 @@ export function linkParts(id: string, links: LinkDef[], data: LinksResponse) {
   };
 }
 
-const thingsOf = (ls: LinkDef[]) => ls.flatMap((l) => l.things ?? []).sort((a, b) => b.count - a.count);
+const itemsOf = (ls: LinkDef[]) => ls.flatMap((l) => l.items ?? []).sort((a, b) => b.count - a.count);
 const lastOf = (ls: LinkDef[]) => ls.reduce<string | null>((a, l) => later(a, l.last), null);
 
 function Chips({ links, max }: { links: LinkDef[]; max: number }) {
-  const things = thingsOf(links);
-  if (!things.length) return null;
+  const items = itemsOf(links);
+  if (!items.length) return null;
   return (
     <span className="lm-chips">
-      {things.slice(0, max).map((t) => (
+      {items.slice(0, max).map((t) => (
         <span key={t.name} className="lm-chip">
           {t.name} <span className="num">{t.count}</span>
         </span>
       ))}
-      {things.length > max && <span className="lm-chip">+{things.length - max}</span>}
+      {items.length > max && <span className="lm-chip">+{items.length - max}</span>}
     </span>
   );
 }
 
-/** Eén rij per ander eind (een lijst of weergave), met wat de verbanden doen, hoe vaak, wanneer laatst en met welke dingen. */
+/** Eén rij per ander eind (een lijst of weergave), met wat de verbanden doen, hoe vaak, wanneer laatst en met welke items. */
 export function LinkEndRow({ other, links, byId, onSelect }: { other: string; links: LinkDef[]; byId: Map<string, ListNode>; onSelect: (id: string) => void }) {
   const end = endOf(other, byId);
   if (!end) return null;
@@ -285,7 +285,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 /**
  * Eén gekozen lijst of weergave: wat erin toekomt en waar ze naartoe gaat (per ander eind één rij), de weergaven, wat
- * ze met haar eigen dingen doet en wie erbij is. Op tablet één kaart in twee kolommen (onder de kaart); op gsm
+ * ze met haar eigen items doet en wie erbij is. Op tablet één kaart in twee kolommen (onder de kaart); op gsm
  * (`phone`) een eigen scherm: het schema bovenaan, dan elk deel in een eigen kaart.
  */
 export function LinkDetail({
@@ -304,7 +304,7 @@ export function LinkDetail({
   byId: Map<string, ListNode>;
   onSelect: (id: string) => void;
   onClose?: () => void;
-  /** De regel onder de naam (tag, dingen, laatst). */
+  /** De regel onder de naam (tag, items, laatst). */
   meta: string;
   phone?: boolean;
 }) {

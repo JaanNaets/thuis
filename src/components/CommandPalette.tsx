@@ -1,10 +1,10 @@
-// Eén veld voor alles (⌘K, Zoeken onderaan, of de + op het overzicht): zoeken naar een lijst, een ding of iets dat
+// Eén veld voor alles (⌘K, Zoeken onderaan, of de + op het overzicht): zoeken naar een lijst, een item of iets dat
 // gebeurde, en iets toevoegen. De + is voor wat er gebeurde, in drie groepen: **Loggen** (de formulieren; typ je een
-// ding, dan "Uit eten · Het Forum" met dat ding al ingevuld, zie `logForms`), **Nieuw** (een ding in een lijst:
+// item, dan "Uit eten · Het Forum" met dat item al ingevuld, zie `logForms`), **Nieuw** (een item in een lijst:
 // Restaurant “Foru”) en **Openen** (wat je typte, om naartoe te gaan). Typ "gegeten pasta 300 g" en bovenaan staat
 // "Gegeten: pasta 300 g" (het formulier opent met die tekst, zie shared/targets.ts). Pijltjes kiezen, Enter opent,
 // Escape sluit. Op een lijst (`scope`) staat er enkel wat bij die lijst hoort (ook Aankoop in Uitgaven bij Wijnen).
-// Kies je een formulier met een ding ("Uit eten · Het Forum") of iets nieuws, dan vul je het hier stap voor stap in (zie
+// Kies je een formulier met een item ("Uit eten · Het Forum") of iets nieuws, dan vul je het hier stap voor stap in (zie
 // shared/steps.ts): het invulveld wordt telkens het volgende veld, met suggesties; leeg is overslaan, na het laatste
 // bewaar je (met Ongedaan maken), en Alles invullen opent het formulier met wat er al staat. Met de camera neem of kies je eerst een foto: ze gaat mee naar
 // het formulier dat je kiest (en wordt daar gelezen als je dat aanzette). Lijsten die je bij de + verborg, staan er
@@ -12,8 +12,8 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { shownIn } from "../../shared/apps";
-import { brusselsNow, type ListDetail, type Role, type ThingRef } from "../../shared/model";
-import { canStep, eventBody, eventSteps, memoryOf, prefillOf, readStep, stepSuggestions, thingBody, thingSteps, type Step, type StepValues } from "../../shared/steps";
+import { brusselsNow, type ListDetail, type Role, type ItemRef } from "../../shared/model";
+import { canStep, eventBody, eventSteps, memoryOf, prefillOf, readStep, stepSuggestions, itemBody, itemSteps, type Step, type StepValues } from "../../shared/steps";
 import { buildTargets, fold, hasPrice, logForms, logPath, matchTargets, pricedFirst, restAfter, targetPath, withoutPrice, type LogForm, type Match, type Target, type Targets } from "../../shared/targets";
 import { parseMoney, type Attributes } from "../../shared/fields";
 import { api, useApi } from "../api";
@@ -33,7 +33,7 @@ import { Icon, type IconName } from "./Icon";
 
 type Entry = { key: string; group: string; label: string; hint?: string; icon?: IconName; to?: string; run?: () => void };
 
-/** Stap voor stap invullen: wat je invult (een gebeurtenis met een ding, of een nieuw ding), de stappen en wat er al staat. */
+/** Stap voor stap invullen: wat je invult (een gebeurtenis met een item, of een nieuw item), de stappen en wat er al staat. */
 type Flow = {
   title: string;
   icon: IconName;
@@ -49,26 +49,26 @@ type Flow = {
   people: { id: string; name: string; role: Role }[];
   memory: Record<string, string[]>;
   target:
-    | { kind: "event"; form: LogForm & { kind: NonNullable<LogForm["kind"]> }; thing: { id: string; name: string; unit: string | null }; rest: string }
-    | { kind: "thing"; list: string; name: string };
+    | { kind: "event"; form: LogForm & { kind: NonNullable<LogForm["kind"]> }; item: { id: string; name: string; unit: string | null }; rest: string }
+    | { kind: "item"; list: string; name: string };
 };
 
 const placeholderOf = (step: Step) => (step.type === "qty" && step.unit ? `${step.label} (${step.unit})` : step.label);
 const numeric = (step: Step) => step.type === "qty" || step.type === "amount" || (step.type === "field" && ["number", "money", "score", "year"].includes(step.def.type));
 export type PaletteMode = "search" | "add";
-/** Enkel deze lijst (de + op een lijst): eerst een ding toevoegen (`thing`) of eerst loggen, en eventueel plannen. */
-export type PaletteScope = { list: string; thing?: boolean; planned?: boolean };
+/** Enkel deze lijst (de + op een lijst): eerst een item toevoegen (`item`) of eerst loggen, en eventueel plannen. */
+export type PaletteScope = { list: string; item?: boolean; planned?: boolean };
 
-type Found = { lists: { id: string; name: string }[]; things: { id: string; name: string; list_id: string; list: string; icon: string | null }[]; events: { id: string; name: string; list: string; at: string }[] };
+type Found = { lists: { id: string; name: string }[]; items: { id: string; name: string; list_id: string; list: string; icon: string | null }[]; events: { id: string; name: string; list: string; at: string }[] };
 
 const NEW_LIST: Entry = { key: "new-list", group: "Nieuw", label: "Nieuwe lijst", icon: "folder", to: "/lijsten/nieuw" };
 
 const PER_GROUP = 6;
 const ADD_SHOWN = 8;
 const ADD_TOP = 3;
-/** Zoveel dingen uit je tekst krijgen hun formulieren erbij ("Uit eten · Het Forum"), elk met zoveel formulieren. */
-const THINGS_LOGGED = 3;
-const FORMS_PER_THING = 3;
+/** Zoveel items uit je tekst krijgen hun formulieren erbij ("Uit eten · Het Forum"), elk met zoveel formulieren. */
+const ITEMS_LOGGED = 3;
+const FORMS_PER_ITEM = 3;
 
 /** Het palet openen vanaf eender waar (de + op het overzicht, een snelkoppeling, gedeelde tekst). */
 export const PaletteContext = createContext<(mode: PaletteMode, text?: string, scope?: PaletteScope) => void>(() => {});
@@ -92,11 +92,11 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
   const all = useMemo(() => (raw ? buildTargets(raw) : []), [raw]);
   // Wat je bij de + verborg, staat er niet; de lijst waarop je staat altijd wel.
   const shown = (id: string) => shownIn(hidden, "add", id) || id === scope?.list;
-  // Op een lijst: een nieuw ding erin en de formulieren die bij haar dingen horen (`logForms`); anders alles.
+  // Op een lijst: een nieuw item erin en de formulieren die bij haar items horen (`logForms`); anders alles.
   const targets = useMemo(() => {
     if (!scope) return all.filter((t) => shownIn(hidden, "add", t.list_id));
     const forms = new Set(raw ? logForms(raw, scope.list, shown).map((f) => f.key) : []);
-    return all.filter((t) => (t.thing ? t.list_id === scope.list : forms.has(t.key)));
+    return all.filter((t) => (t.item ? t.list_id === scope.list : forms.has(t.key)));
   }, [all, scope, hidden, raw]);
   const scopeList = scope ? lists.find((l) => l.id === scope.list) : undefined;
   // De foto bij de +: klaargezet voor het formulier, en of de AI ze daar leest.
@@ -109,7 +109,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
   const [query, setQuery] = useState(text);
   const [active, setActive] = useState(0);
   const [found, setFound] = useState<Found>();
-  const [named, setNamed] = useState<ThingRef[]>([]);
+  const [named, setNamed] = useState<ItemRef[]>([]);
   const [highlight, setHighlight] = useState<{ top: number; height: number }>();
   const [flow, setFlow] = useState<Flow | null>(null);
 
@@ -128,7 +128,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  // Zoeken op de server (enkel wat je ziet), en welke dingen in je tekst staan (om te weten waar het hoort).
+  // Zoeken op de server (enkel wat je ziet), en welke items in je tekst staan (om te weten waar het hoort).
   useEffect(() => {
     const q = query.trim();
     if (flow) return;
@@ -140,7 +140,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     let cancelled = false;
     const timer = window.setTimeout(() => {
       api.get<Found>(`/insights/search?q=${encodeURIComponent(q)}`).then((r) => !cancelled && setFound(r), () => {});
-      api.get<{ things: ThingRef[] }>(`/things?in=${encodeURIComponent(q)}&limit=5`).then((r) => !cancelled && setNamed(r.things), () => {});
+      api.get<{ items: ItemRef[] }>(`/items?in=${encodeURIComponent(q)}&limit=5`).then((r) => !cancelled && setNamed(r.items), () => {});
     }, 180);
     return () => {
       cancelled = true;
@@ -152,19 +152,19 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     const q = fold(query);
     const matches = matchTargets(query, targets);
     const strong = matches[0]?.strong ?? false;
-    const extras = (thing: boolean) => ({ planned: Boolean(scope?.planned && !thing), photo });
+    const extras = (item: boolean) => ({ planned: Boolean(scope?.planned && !item), photo });
     const listOf = (id: string) => lists.find((l) => l.id === id);
-    // De dingen in je tekst ("chablis 54 euro", "foru"): wat de tekst noemt en wat het zoeken vond; op een lijst de hare.
+    // De items in je tekst ("chablis 54 euro", "foru"): wat de tekst noemt en wat het zoeken vond; op een lijst de hare.
     const seen = new Set<string>();
-    const things = [...named.map((t) => ({ id: t.id, name: t.name, list_id: t.list_id, icon: null as string | null })), ...(found?.things ?? [])].filter(
+    const items = [...named.map((t) => ({ id: t.id, name: t.name, list_id: t.list_id, icon: null as string | null })), ...(found?.items ?? [])].filter(
       (t) => !seen.has(t.id) && (seen.add(t.id), !scope || t.list_id === scope.list),
     );
 
-    // Loggen: eerst met een ding uit je tekst (het formulier opent met dat ding als lijn), dan de formulieren zelf.
-    const withThing: Entry[] = raw
-      ? things.slice(0, THINGS_LOGGED).flatMap((t) =>
+    // Loggen: eerst met een item uit je tekst (het formulier opent met dat item als lijn), dan de formulieren zelf.
+    const withItem: Entry[] = raw
+      ? items.slice(0, ITEMS_LOGGED).flatMap((t) =>
           pricedFirst(logForms(raw, t.list_id, shown), query)
-            .slice(0, FORMS_PER_THING)
+            .slice(0, FORMS_PER_ITEM)
             .map((f) => ({
               key: `l${f.key}|${t.id}`,
               group: "Loggen",
@@ -183,27 +183,27 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
       hint: scope && target.list_id === scope.list ? undefined : (target.hint ?? undefined),
       icon: (target.icon ?? "plus") as IconName,
       // Op een lijst met een formulier van elders (Aankoop in Uitgaven, vanuit Wijnen): iets nieuws komt in deze lijst.
-      to: withExtras(targetPath(target, rest), { ...extras(target.thing), newIn: scope && !target.thing && target.list_id !== scope.list ? scope.list : undefined }),
+      to: withExtras(targetPath(target, rest), { ...extras(target.item), newIn: scope && !target.item && target.list_id !== scope.list ? scope.list : undefined }),
     });
-    const forms = matches.filter((m) => !m.target.thing).map((m) => entry(m, "Loggen", m.rest ? `${m.target.label}: ${m.rest}` : m.target.label));
-    // Noemt je tekst een ding, dan staan de formulieren al bij dat ding; enkel een formulier dat je zelf noemde nog los.
-    const logs = [...withThing, ...(withThing.length && !strong ? [] : forms)].slice(0, ADD_SHOWN);
-    // Nieuw: een ding in een lijst, met wat je typte als naam.
+    const forms = matches.filter((m) => !m.target.item).map((m) => entry(m, "Loggen", m.rest ? `${m.target.label}: ${m.rest}` : m.target.label));
+    // Noemt je tekst een item, dan staan de formulieren al bij dat item; enkel een formulier dat je zelf noemde nog los.
+    const logs = [...withItem, ...(withItem.length && !strong ? [] : forms)].slice(0, ADD_SHOWN);
+    // Nieuw: een item in een lijst, met wat je typte als naam.
     const news = matches
-      .filter((m) => m.target.thing)
+      .filter((m) => m.target.item)
       .slice(0, ADD_TOP)
       .map((m) => {
         const name = withoutPrice(m.rest);
         const e = entry(m, "Nieuw", name ? `${m.target.name} “${name}”` : m.target.name);
-        return photo ? e : { ...e, run: () => startThing(m.target, name) };
+        return photo ? e : { ...e, run: () => startItem(m.target, name) };
       });
-    // Openen: de dingen die je typte.
-    const opens: Entry[] = things.slice(0, PER_GROUP).map((t) => {
+    // Openen: de items die je typte.
+    const opens: Entry[] = items.slice(0, PER_GROUP).map((t) => {
       const list = listOf(t.list_id);
-      return { key: `d${t.id}`, group: "Openen", label: t.name, hint: scope ? undefined : list?.name, icon: (t.icon ?? (list ? listIcon(list) : "folder")) as IconName, to: `/dingen/${t.id}` };
+      return { key: `d${t.id}`, group: "Openen", label: t.name, hint: scope ? undefined : list?.name, icon: (t.icon ?? (list ? listIcon(list) : "folder")) as IconName, to: `/items/${t.id}` };
     });
 
-    if (scope) return scope.thing && !withThing.length ? [...news, ...logs, ...opens] : [...logs, ...news, ...opens];
+    if (scope) return scope.item && !withItem.length ? [...news, ...logs, ...opens] : [...logs, ...news, ...opens];
     const add = [...logs, ...news];
     const newList = !q || "nieuwe lijst".startsWith(q) || "lijst".startsWith(q) ? [NEW_LIST] : [];
     if (!q) return mode === "add" ? [...add, ...newList] : [...ACTIONS, ...add.slice(0, ADD_TOP), ...newList];
@@ -218,12 +218,12 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
         .filter((l) => match(l.name))
         .slice(0, PER_GROUP)
         .map((l) => ({ key: `l${l.id}`, group: "Lijsten", label: l.name, hint: l.archived ? "gearchiveerd" : undefined, icon: listIcon(l), to: `/lijsten/${l.id}` })),
-      ...(found?.things ?? []).slice(0, PER_GROUP).map((t) => ({ key: `d${t.id}`, group: "Dingen", label: t.name, hint: t.list, icon: (t.icon ?? "folder") as IconName, to: `/dingen/${t.id}` })),
+      ...(found?.items ?? []).slice(0, PER_GROUP).map((t) => ({ key: `d${t.id}`, group: "Items", label: t.name, hint: t.list, icon: (t.icon ?? "folder") as IconName, to: `/items/${t.id}` })),
       ...(found?.events ?? []).slice(0, PER_GROUP).map((e) => ({ key: `e${e.id}`, group: "Logboek", label: e.name, hint: `${e.list} · ${e.at.slice(0, 10)}`, icon: "note" as IconName, to: `/gebeurtenissen/${e.id}` })),
     ];
-    // De +: wat je typte om naartoe te gaan, onder Openen (de dingen eerst).
+    // De +: wat je typte om naartoe te gaan, onder Openen (de items eerst).
     if (mode === "add") {
-      const rest = search.filter((e) => e.group !== "Dingen" && !opens.some((o) => o.key === e.key)).map((e) => ({ ...e, group: "Openen" }));
+      const rest = search.filter((e) => e.group !== "Items" && !opens.some((o) => o.key === e.key)).map((e) => ({ ...e, group: "Openen" }));
       return [...add, ...newList, ...opens, ...rest];
     }
     // Zoeken: eerst wat je zoekt; begint je tekst met een formulier ("gegeten pasta"), dan dat eerst.
@@ -235,21 +235,21 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
 
   const refresh = () => window.dispatchEvent(new Event(REFRESH_EVENT));
   const peopleOf = (detail: ListDetail) => detail.people.filter((p) => p.direct !== "geen").map((p) => ({ id: p.person.id, name: p.person.name, role: p.role }));
-  const rowsOf = (raw: unknown): Attributes[] => (Array.isArray(raw) ? raw : ((raw as { things?: unknown[] })?.things ?? [])).map((t) => ((t as { data?: Attributes }).data ?? {}) as Attributes);
+  const rowsOf = (raw: unknown): Attributes[] => (Array.isArray(raw) ? raw : ((raw as { items?: unknown[] })?.items ?? [])).map((t) => ((t as { data?: Attributes }).data ?? {}) as Attributes);
 
-  /** Loggen met een formulier over een ding ("Uit eten · Het Forum"): de stappen laden, met wat je eerder invulde. */
-  function startEvent(form: Extract<Flow["target"], { kind: "event" }>["form"], thing: { id: string; name: string }, rest: string) {
-    const target = { kind: "event" as const, form, thing: { ...thing, unit: null as string | null }, rest };
-    setFlow({ title: `${form.label} · ${thing.name}`, icon: form.icon as IconName, query, steps: null, index: 0, values: {}, texts: {}, people: [], memory: {}, target });
+  /** Loggen met een formulier over een item ("Uit eten · Het Forum"): de stappen laden, met wat je eerder invulde. */
+  function startEvent(form: Extract<Flow["target"], { kind: "event" }>["form"], item: { id: string; name: string }, rest: string) {
+    const target = { kind: "event" as const, form, item: { ...item, unit: null as string | null }, rest };
+    setFlow({ title: `${form.label} · ${item.name}`, icon: form.icon as IconName, query, steps: null, index: 0, values: {}, texts: {}, people: [], memory: {}, target });
     setQuery("");
     setActive(-1);
     Promise.all([
       api.get<ListDetail>(`/lists/${form.list_id}`),
-      api.get<{ things: ThingRef[] }>(`/things?ids=${thing.id}`),
+      api.get<{ items: ItemRef[] }>(`/items?ids=${item.id}`),
       api.get<EventPage>(`/lists/${form.list_id}/events?status=klaar&limit=40`).catch(() => null),
     ]).then(
       ([detail, refs, page]) => {
-        const unit = refs.things[0]?.unit ?? null;
+        const unit = refs.items[0]?.unit ?? null;
         const steps = eventSteps(form.kind, { unit });
         const rows = (page?.events ?? []).filter((e) => e.kind === form.kind.id).map((e) => (e.data ?? {}) as Attributes);
         // Een bedrag in je tekst ("chablis 54 euro") staat al bij Bedrag.
@@ -262,27 +262,27 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
                 steps,
                 people: peopleOf(detail),
                 memory: Object.fromEntries(steps.map((x) => [x.key, memoryOf(rows, x.key)])),
-                target: { ...target, thing: { ...target.thing, unit } },
+                target: { ...target, item: { ...target.item, unit } },
                 values: priced ? { $amount: cents } : {},
                 texts: priced ? { $amount: String(cents / 100).replace(".", ",") } : {},
               }
             : f,
         );
       },
-      () => (onClose(), navigate(logPath(form, thing.id, rest))),
+      () => (onClose(), navigate(logPath(form, item.id, rest))),
     );
   }
 
-  /** Een nieuw ding (Restaurant “Foru”): de naam als je die nog niet typte, dan de velden die als kolom in de lijst staan. */
-  function startThing(t: Target, name: string) {
-    const target = { kind: "thing" as const, list: t.list_id, name };
+  /** Een nieuw item (Restaurant “Foru”): de naam als je die nog niet typte, dan de velden die als kolom in de lijst staan. */
+  function startItem(t: Target, name: string) {
+    const target = { kind: "item" as const, list: t.list_id, name };
     setFlow({ title: name ? `${t.name} “${name}”` : t.name, icon: t.icon as IconName, query, steps: null, index: 0, values: {}, texts: {}, people: [], memory: {}, target });
     setQuery("");
     setActive(-1);
-    Promise.all([api.get<ListDetail>(`/lists/${t.list_id}`), api.get<unknown>(`/lists/${t.list_id}/things`).catch(() => [])]).then(
-      ([detail, things]) => {
-        const steps = thingSteps(detail.list.fields, Boolean(name));
-        const rows = rowsOf(things);
+    Promise.all([api.get<ListDetail>(`/lists/${t.list_id}`), api.get<unknown>(`/lists/${t.list_id}/items`).catch(() => [])]).then(
+      ([detail, items]) => {
+        const steps = itemSteps(detail.list.fields, Boolean(name));
+        const rows = rowsOf(items);
         setFlow((f) => (f && f.target === target ? { ...f, steps, people: peopleOf(detail), memory: Object.fromEntries(steps.map((x) => [x.key, memoryOf(rows, x.key)])) } : f));
       },
       () => (onClose(), navigate(targetPath(t, name))),
@@ -297,7 +297,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
           .slice(0, 8)
       : [];
 
-  /** Bewaren: de gebeurtenis zoals het formulier ze zou bewaren, of het nieuwe ding; met Ongedaan maken. */
+  /** Bewaren: de gebeurtenis zoals het formulier ze zou bewaren, of het nieuwe item; met Ongedaan maken. */
   async function saveFlow(values: StepValues) {
     if (!flow?.steps || flow.busy) return;
     const steps = flow.steps;
@@ -305,7 +305,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     setFlow({ ...flow, busy: true, error: undefined });
     try {
       if (t.kind === "event") {
-        const body = eventBody(t.form.kind, steps, values, { thing: t.thing, me: person.id, people: flow.people, today: brusselsNow().slice(0, 10), planned: scope?.planned });
+        const body = eventBody(t.form.kind, steps, values, { item: t.item, me: person.id, people: flow.people, today: brusselsNow().slice(0, 10), planned: scope?.planned });
         const done = body.status === "gepland" ? "gepland" : "bewaard";
         try {
           const { id } = await api.post<{ id: string }>(`/lists/${t.form.list_id}/events`, body);
@@ -320,27 +320,27 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
           });
         } catch (err) {
           if (!isOffline(err)) throw err;
-          await enqueue("event", t.form.list_id, `${t.form.kind.name} · ${t.thing.name}`, body);
+          await enqueue("event", t.form.list_id, `${t.form.kind.name} · ${t.item.name}`, body);
           onClose();
           toast(`${t.form.kind.name} wacht op internet`);
         }
       } else {
-        const body = thingBody(t.name, steps, values);
+        const body = itemBody(t.name, steps, values);
         if (!body.name) throw new Error("Geef het een naam");
         try {
-          const { id } = await api.post<{ id: string }>(`/lists/${t.list}/things`, body);
+          const { id } = await api.post<{ id: string }>(`/lists/${t.list}/items`, body);
           onClose();
           refresh();
           toast(`${body.name} bewaard`, "check", {
             label: "Ongedaan maken",
             run: async () => {
-              await api.delete(`/things/${id}`);
+              await api.delete(`/items/${id}`);
               refresh();
             },
           });
         } catch (err) {
           if (!isOffline(err)) throw err;
-          await enqueue("thing", t.list, body.name, body);
+          await enqueue("item", t.list, body.name, body);
           onClose();
           toast(`${body.name} wacht op internet`);
         }
@@ -403,7 +403,7 @@ export function CommandPalette({ open, mode, text = "", scope, onClose }: { open
     const t = flow.target;
     let path: string;
     if (t.kind === "event") {
-      path = logPath(t.form, t.thing.id, vooraf ? "" : t.rest);
+      path = logPath(t.form, t.item.id, vooraf ? "" : t.rest);
       path = withExtras(vooraf ? `${path}&${vooraf}` : path, { planned: Boolean(scope?.planned), photo: null });
     } else {
       const name = typeof read.values.$name === "string" ? read.values.$name : t.name;

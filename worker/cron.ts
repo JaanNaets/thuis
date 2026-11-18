@@ -10,7 +10,7 @@ import { formatDuration } from "../shared/fields";
 import { canEdit, eventTitle, type Role } from "../shared/model";
 import { remindersDue, repeatsDue, timedRemindersDue, whenText } from "../shared/remind";
 import { lineAllowed } from "../shared/rights";
-import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toThing, type EventRowDb, type ListRow, type ThingRowDb } from "./access";
+import { ids, kindOf, listRoles, parseJson, seenLists, toEvent, toList, toItem, type EventRowDb, type ListRow, type ItemRowDb } from "./access";
 import { ensureEffects, rebuildEffects, withCells } from "./cells";
 import { syncAll } from "./mirrors";
 import { notify } from "./push";
@@ -57,10 +57,10 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
     if (!e.repeat) continue;
     const seen = await seenLists(db, e.created_by);
     const { results: lines } = await db
-      .prepare("SELECT l.*, t.list_id AS thing_list FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id = ? ORDER BY l.position")
+      .prepare("SELECT l.*, t.list_id AS item_list FROM lines l LEFT JOIN items t ON t.id = l.item_id WHERE l.event_id = ? ORDER BY l.position")
       .bind(e.id)
-      .all<{ id: string; role: "in" | "uit" | "voor" | "bij"; thing_id: string | null; thing_list: string | null }>();
-    const allowed = canEdit(seen.get(e.list_id)) && lines.every((l) => !l.thing_id || lineAllowed(l.role, l.thing_list ? (seen.get(l.thing_list) ?? null) : null));
+      .all<{ id: string; role: "in" | "uit" | "voor" | "bij"; item_id: string | null; item_list: string | null }>();
+    const allowed = canEdit(seen.get(e.list_id)) && lines.every((l) => !l.item_id || lineAllowed(l.role, l.item_list ? (seen.get(l.item_list) ?? null) : null));
     if (!allowed) {
       await db.prepare("UPDATE events SET repeat = NULL WHERE id = ?").bind(e.id).run();
       continue;
@@ -80,8 +80,8 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
           .bind(copy, day + e.at.slice(10), e.id),
         db
           .prepare(
-            `INSERT INTO lines (id, event_id, position, role, thing_id, text, amount, unit, price, expires, owner)
-             SELECT lower(hex(randomblob(16))), ?, position, role, thing_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
+            `INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner)
+             SELECT lower(hex(randomblob(16))), ?, position, role, item_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
           )
           .bind(copy, e.id),
       );
@@ -106,8 +106,8 @@ async function listeners(db: D1Database): Promise<Map<string, string[]>> {
   return new Map(results.map((r) => [r.id, cleanAppSettings(parseJson(r.app_settings, null)).muted]));
 }
 
-/** Per persoon wat er valt in de dingen van de lijsten die die ziet (en niet stilzette). */
-async function collectThings(db: D1Database, people: Map<string, string[]>, pick: (fields: ReturnType<typeof toList>["fields"], data: ReturnType<typeof toThing>["data"]) => { key: string; body: string; date: string }[]) {
+/** Per persoon wat er valt in de items van de lijsten die die ziet (en niet stilzette). */
+async function collectItems(db: D1Database, people: Map<string, string[]>, pick: (fields: ReturnType<typeof toList>["fields"], data: ReturnType<typeof toItem>["data"]) => { key: string; body: string; date: string }[]) {
   const due = new Map<string, Due[]>();
   const { results: listRows } = await db.prepare(`SELECT * FROM lists WHERE archived = 0 AND fields LIKE '%"remind"%'`).all<ListRow>();
   for (const list of listRows.map(toList)) {
@@ -119,14 +119,14 @@ async function collectThings(db: D1Database, people: Map<string, string[]>, pick
       .filter((p) => p.role && people.has(p.person_id) && !isMuted(people.get(p.person_id)!, list.id, tags.map((t) => t.tag_id)))
       .map((p) => p.person_id);
     if (!who.length) continue;
-    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
+    const { results } = await db.prepare("SELECT * FROM items WHERE list_id = ? AND archived = 0").bind(list.id).all<ItemRowDb>();
     // Met wat het logboek invult (de datum van het laatste onderhoud, en wat daaruit berekend wordt).
-    const { rows } = await withCells(db, list, results.map(toThing));
-    for (const thing of rows) {
-      const data = computeLocal(list.fields, thing.data, brusselsToday());
+    const { rows } = await withCells(db, list, results.map(toItem));
+    for (const item of rows) {
+      const data = computeLocal(list.fields, item.data, brusselsToday());
       for (const hit of pick(list.fields, data)) {
         for (const person of who)
-          due.set(person, [...(due.get(person) ?? []), { title: thing.name, body: hit.body, url: `/dingen/${thing.id}`, tag: `${thing.id}:${hit.key}:${hit.date}` }]);
+          due.set(person, [...(due.get(person) ?? []), { title: item.name, body: hit.body, url: `/items/${item.id}`, tag: `${item.id}:${hit.key}:${hit.date}` }]);
       }
     }
   }
@@ -139,10 +139,10 @@ async function collectPlanned(db: D1Database, people: Map<string, string[]>, due
   for (const e of results.map(toEvent)) {
     const kind = await kindOf(db, e.kind, e.base);
     const { results: lines } = await db
-      .prepare("SELECT l.*, t.name AS thing FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id = ? ORDER BY l.position")
+      .prepare("SELECT l.*, t.name AS item FROM lines l LEFT JOIN items t ON t.id = l.item_id WHERE l.event_id = ? ORDER BY l.position")
       .bind(e.id)
-      .all<{ role: "in"; thing_id: string | null; text: string | null; thing: string | null }>();
-    const names = new Map(lines.flatMap((l) => (l.thing_id && l.thing ? [[l.thing_id, l.thing] as const] : [])));
+      .all<{ role: "in"; item_id: string | null; text: string | null; item: string | null }>();
+    const names = new Map(lines.flatMap((l) => (l.item_id && l.item ? [[l.item_id, l.item] as const] : [])));
     const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
     const wanted = new Set([e.created_by, e.paid_by, e.to_person, ...(e.split ?? []).map((s) => s.person_id)].filter((x): x is string => Boolean(x)));
     for (const person of wanted) {
@@ -168,11 +168,11 @@ async function send(db: D1Database, due: Map<string, Due[]>, tag: string): Promi
   return sent;
 }
 
-/** 's Morgens: datums van dingen (zoveel dagen vooraf) en wat vandaag gepland staat zonder uur. */
+/** 's Morgens: datums van items (zoveel dagen vooraf) en wat vandaag gepland staat zonder uur. */
 export async function sendMorning(db: D1Database, today: string): Promise<number> {
   const people = await listeners(db);
   if (!people.size) return 0;
-  const due = await collectThings(db, people, (fields, data) =>
+  const due = await collectItems(db, people, (fields, data) =>
     remindersDue(fields, data, today).map((r) => ({ key: r.key, date: r.date, body: `${r.label}: ${whenText(r.days, r.date)}` })),
   );
   await collectPlanned(db, people, due, "at = ?", [today]);
@@ -183,7 +183,7 @@ export async function sendMorning(db: D1Database, today: string): Promise<number
 export async function sendTimed(db: D1Database, from: string, to: string): Promise<number> {
   const people = await listeners(db);
   if (!people.size) return 0;
-  const due = await collectThings(db, people, (fields, data) =>
+  const due = await collectItems(db, people, (fields, data) =>
     timedRemindersDue(fields, data, from, to).map((r) => ({ key: r.key, date: r.date, body: `${r.label}: ${whenText(r.days, r.date)}${r.days === 0 ? ` om ${r.time}` : ""}` })),
   );
   await collectPlanned(db, people, due, "length(at) > 10 AND at >= ? AND at < ?", [from, to]);

@@ -1,7 +1,8 @@
-// Bewaarde weergaven: filters, sortering, kolommen en groeperen op de dingen of het logboek van een lijst, of over al
+// Bewaarde weergaven: filters, sortering, kolommen en groeperen op de items of het logboek van een lijst, of over al
 // je lijsten (`list_id` null, het logboek). Een weergave is geen beveiliging: ze filtert enkel wat je al ziet.
 // `shared`: ook voor iedereen bij de lijst (enkel wie in de lijst mag wijzigen).
 
+import { renamedThings } from "../../shared/blocks";
 import { Hono } from "hono";
 import { logFields } from "../../shared/logview";
 import { canEdit, canManage, type Role } from "../../shared/model";
@@ -13,7 +14,7 @@ import { asObject, ForbiddenError, NotFoundError, requiredString, ValidationErro
 export const views = new Hono<AppEnv>();
 
 
-type Row = { id: string; owner_id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; def: string; shared: number };
+type Row = { id: string; owner_id: string; list_id: string | null; target: "items" | "logboek"; name: string; def: string; shared: number };
 
 views.get("/", async (c) => {
   const db = c.env.DB;
@@ -34,7 +35,8 @@ const toView = (r: Row, me: string, role: Role | null | undefined): SavedView =>
   list_id: r.list_id,
   target: r.target,
   name: r.name,
-  def: parseJson(r.def, { match: "all", conditions: [] }),
+  // Een logboek-weergave van voor de hernoeming (de kolom "things" heet nu "items").
+  def: (r.target === "logboek" ? renamedThings(parseJson(r.def, { match: "all", conditions: [] })) : parseJson(r.def, { match: "all", conditions: [] })) as ViewDef,
   shared: Boolean(r.shared),
   can_edit: r.owner_id === me || (Boolean(r.shared) && canManage(role)),
 });
@@ -46,9 +48,9 @@ async function viewById(db: D1Database, id: string, me: string): Promise<SavedVi
 }
 
 /** De velden waartegen een weergave nagekeken wordt. */
-async function fieldsFor(db: D1Database, personId: string, listId: string | null, target: "dingen" | "logboek") {
+async function fieldsFor(db: D1Database, personId: string, listId: string | null, target: "items" | "logboek") {
   const seen = await seenLists(db, personId);
-  if (target === "dingen") {
+  if (target === "items") {
     if (!listId) throw new ValidationError("Kies een lijst");
     const { list } = await requireList(db, personId, listId);
     return viewFields(list.fields, list.one ?? "Naam");
@@ -70,7 +72,7 @@ views.post("/", async (c) => {
   const me = c.get("person");
   const body = asObject(await c.req.json());
   const listId = typeof body.list_id === "string" ? body.list_id : null;
-  const target = body.target === "dingen" ? "dingen" : "logboek";
+  const target = body.target === "items" ? "items" : "logboek";
   const shared = body.shared === true;
   if (listId) {
     const { role } = await requireList(db, me.id, listId);

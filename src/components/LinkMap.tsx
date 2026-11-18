@@ -64,11 +64,11 @@ const HOVER_WIDTH = 240;
 export const cut = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 export const plural = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
 
-/** Wat er bij een lijst staat: hoeveel dingen (of gebeurtenissen, voor een lijst zonder dingen). */
+/** Wat er bij een lijst staat: hoeveel items (of gebeurtenissen, voor een lijst zonder items). */
 export function listMeta(list: Pick<ListNode, "id" | "one">, counts: LinksResponse["counts"]): string {
   const c = counts[list.id];
   if (!c) return "";
-  return list.one ? plural(c.things, "ding", "dingen") : plural(c.events, "gebeurtenis", "gebeurtenissen");
+  return list.one ? plural(c.items, "item", "items") : plural(c.events, "gebeurtenis", "gebeurtenissen");
 }
 
 /** "laatst gisteren", of niets als er nog niets gebeurd is. */

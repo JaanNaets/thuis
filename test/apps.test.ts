@@ -21,15 +21,15 @@ test("bestemmingen: nagekeken, als pad en met een naam", () => {
   assert.equal(cleanDestination({ kind: "view", view: "geld" }), null);
   assert.equal(cleanDestination({ kind: "agenda" }), null);
   assert.deepEqual(cleanDestination({ kind: "form", list: "pel", type: "bij", text: "  3 zakken  pellets " }), { kind: "form", list: "pel", type: "bij", text: "3 zakken pellets" });
-  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", thing: true, type: "bij" }), { kind: "form", list: "pel", thing: true });
+  assert.deepEqual(cleanDestination({ kind: "form", list: "pel", item: true, type: "bij" }), { kind: "form", list: "pel", item: true });
   assert.equal(destinationPath({ kind: "board", board: "k1" }), "/bord/k1");
   assert.equal(destinationPath({ kind: "list", list: "pel" }), "/lijsten/pel");
   assert.equal(destinationPath({ kind: "form", list: "pel", type: "bij", text: "3 zakken" }), "/lijsten/pel/loggen?soort=bij&tekst=3+zakken");
-  assert.equal(destinationPath({ kind: "form", list: "pel", thing: true }), "/lijsten/pel/nieuw");
+  assert.equal(destinationPath({ kind: "form", list: "pel", item: true }), "/lijsten/pel/nieuw");
   assert.equal(destinationLabel({ kind: "board", board: "k1" }, reach), "Keuken");
   assert.equal(destinationLabel({ kind: "list", list: "pel" }, reach), "Pellets");
   assert.equal(destinationLabel({ kind: "form", list: "pel", type: "bij" }, reach), "Bijvulling loggen");
-  assert.equal(destinationLabel({ kind: "form", list: "pel", thing: true }, reach), "Voorraad toevoegen");
+  assert.equal(destinationLabel({ kind: "form", list: "pel", item: true }, reach), "Voorraad toevoegen");
   assert.equal(appPath("a1"), "/app/a1");
   assert.equal(sameDestination({ kind: "form", list: "pel", type: "bij", text: "x " }, { kind: "form", list: "pel", type: "bij", text: "x" }), true);
   assert.equal(sameDestination({ kind: "list", list: "pel" }, { kind: "list", list: "jaan" }), false);
@@ -44,7 +44,7 @@ test("app-instellingen: nagekeken, met nieuwe ids, en wat je niet meer bereikt v
         { id: "a1", name: "Dubbel", to: { kind: "board", board: "main" } },
         { name: "Geld", to: { kind: "view", view: "geld" } },
         { name: "Geen bestemming" },
-        { name: "Wijn", to: { kind: "form", list: "wijn", thing: true } },
+        { name: "Wijn", to: { kind: "form", list: "wijn", item: true } },
         { name: "Weg", to: { kind: "list", list: "weg" } },
       ],
       shortcuts: [{ name: "Keuken", to: { kind: "board", board: "k1" } }, { name: "x", to: { kind: "raar" } }],

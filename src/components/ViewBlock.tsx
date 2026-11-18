@@ -33,7 +33,7 @@ const monthsFromNow = (month: string) => {
   return (Number(month.slice(0, 4)) - Number(now.slice(0, 4))) * 12 + Number(month.slice(5, 7)) - Number(now.slice(5, 7));
 };
 
-/** Namen om waarden te tonen: personen (jij als "Jij") en dingen. */
+/** Namen om waarden te tonen: personen (jij als "Jij") en items. */
 export function viewNames(data: Pick<ViewResponse, "people" | "items">, me: string): Names {
   const people = new Map(data.people.map((p) => [p.id, p.name]));
   return { person: (id) => (id === me ? "Jij" : (people.get(id) ?? "Iemand")), item: (id) => data.items[id] ?? "Verborgen" };

@@ -1,5 +1,5 @@
 // Back-up (GET /me/backup) en terugzetten (POST /me/restore), zie shared/backup.ts. Enkel de lijsten die je beheert,
-// met wat erin staat; terugzetten maakt een nieuwe kopie waarin jij beheerder bent, en neemt foto's mee van dingen en
+// met wat erin staat; terugzetten maakt een nieuwe kopie waarin jij beheerder bent, en neemt foto's mee van items en
 // gebeurtenissen die nog bestaan en die je ziet.
 
 import { Hono } from "hono";
@@ -25,11 +25,11 @@ backup.get("/backup", async (c) => {
   const mine = [...seen].filter(([, role]) => canManage(role)).map(([id]) => id);
   if (!mine.length) throw new ValidationError("Je beheert nog geen lijst.");
   const L = ids(mine);
-  const [lists, links, kinds, things, events, lines, views, people, mirrors] = (await db.batch([
+  const [lists, links, kinds, items, events, lines, views, people, mirrors] = (await db.batch([
     db.prepare("SELECT * FROM lists WHERE id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT l.list_id, t.id, t.name, t.color FROM list_tag_links l JOIN list_tags t ON t.id = l.tag_id WHERE l.list_id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
-    db.prepare("SELECT id, list_id, name, data, part_of, archived, photo_version, mirror_id, mirror_of FROM things WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
+    db.prepare("SELECT id, list_id, name, data, part_of, archived, photo_version, mirror_id, mirror_of FROM items WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
     db.prepare("SELECT * FROM events WHERE list_id IN (SELECT value FROM json_each(?))").bind(L),
     db
       .prepare(
@@ -48,7 +48,7 @@ backup.get("/backup", async (c) => {
   for (const l of lines.results) {
     const line: BackupLine = {
       role: l.role as BackupLine["role"],
-      thing_id: (l.thing_id as string | null) ?? null,
+      item_id: (l.item_id as string | null) ?? null,
       text: (l.text as string | null) ?? null,
       amount: (l.amount as number | null) ?? null,
       unit: (l.unit as string | null) ?? null,
@@ -58,12 +58,12 @@ backup.get("/backup", async (c) => {
     };
     linesOf.set(l.event_id as string, [...(linesOf.get(l.event_id as string) ?? []), line]);
   }
-  // De namen van dingen buiten de back-up waarnaar een lijn wijst, enkel als je hun lijst ziet.
-  const inside = new Set(things.results.map((t) => t.id as string));
-  const outsideIds = [...new Set(lines.results.map((l) => l.thing_id as string | null).filter((id): id is string => Boolean(id) && !inside.has(id!)))];
+  // De namen van items buiten de back-up waarnaar een lijn wijst, enkel als je hun lijst ziet.
+  const inside = new Set(items.results.map((t) => t.id as string));
+  const outsideIds = [...new Set(lines.results.map((l) => l.item_id as string | null).filter((id): id is string => Boolean(id) && !inside.has(id!)))];
   const outside: Backup["outside"] = [];
   for (const part of chunks(outsideIds, 90)) {
-    const { results } = await db.prepare("SELECT id, name, list_id FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(part)).all<{ id: string; name: string; list_id: string }>();
+    const { results } = await db.prepare("SELECT id, name, list_id FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(ids(part)).all<{ id: string; name: string; list_id: string }>();
     for (const r of results) if (seen.has(r.list_id)) outside.push({ id: r.id, name: r.name });
   }
   const tags = new Map<string, { id: string; name: string; color: string | null }>();
@@ -105,7 +105,7 @@ backup.get("/backup", async (c) => {
       does: parseJson(k.does as string | null, []),
       sort_order: (k.sort_order as number) ?? 0,
     })),
-    things: things.results.map((t) => ({
+    items: items.results.map((t) => ({
       id: t.id as string,
       list_id: t.list_id as string,
       name: t.name as string,
@@ -139,7 +139,7 @@ backup.get("/backup", async (c) => {
     views: views.results.map((v) => ({
       id: v.id as string,
       list_id: v.list_id as string,
-      target: v.target as "dingen" | "logboek",
+      target: v.target as "items" | "logboek",
       name: v.name as string,
       def: parseJson(v.def as string, {}),
       shared: v.shared ? 1 : 0,
@@ -161,14 +161,14 @@ backup.post("/restore", async (c) => {
   }
   const seen = await seenLists(db, me);
   const people = new Set((await knownPeople(db, me)).map((p) => p.id));
-  // Dingen buiten de back-up die er nog zijn en die je ziet.
-  const refs = [...new Set(file.events.flatMap((e) => (e.lines ?? []).flatMap((l) => (l.thing_id ? [l.thing_id] : []))))];
-  const seenThings = new Set<string>();
+  // Items buiten de back-up die er nog zijn en die je ziet.
+  const refs = [...new Set(file.events.flatMap((e) => (e.lines ?? []).flatMap((l) => (l.item_id ? [l.item_id] : []))))];
+  const seenItems = new Set<string>();
   for (const part of chunks(refs, 90)) {
-    const { results } = await db.prepare("SELECT id, list_id FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(part)).all<{ id: string; list_id: string }>();
-    for (const r of results) if (seen.has(r.list_id)) seenThings.add(r.id);
+    const { results } = await db.prepare("SELECT id, list_id FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(ids(part)).all<{ id: string; list_id: string }>();
+    for (const r of results) if (seen.has(r.list_id)) seenItems.add(r.id);
   }
-  const plan = planRestore(file, { newId: () => crypto.randomUUID(), me, people, seenThings });
+  const plan = planRestore(file, { newId: () => crypto.randomUUID(), me, people, seenItems });
 
   // Tags op naam: een tag die je al hebt, of een nieuwe.
   const { tags } = await myLists(db, me);
@@ -210,15 +210,15 @@ backup.post("/restore", async (c) => {
         .prepare("INSERT INTO kinds (id, list_id, base, name, icon, fields, goal, planned, parts, does, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(k.id, k.list_id, k.base, k.name, k.icon, JSON.stringify(k.fields), k.goal, k.planned ? 1 : 0, k.parts ? JSON.stringify(k.parts) : null, k.does.length ? JSON.stringify(k.does) : null, k.sort_order),
     );
-  // Eerst zonder "deel van" (dat wijst misschien naar een ding dat later komt), daarna die verwijzing.
+  // Eerst zonder "deel van" (dat wijst misschien naar een item dat later komt), daarna die verwijzing.
   for (const m of plan.mirrors) st.push(db.prepare("INSERT INTO mirrors (id, list_id, source_id, plan, created_by) VALUES (?, ?, ?, ?, ?)").bind(m.id, m.list_id, m.source_id, JSON.stringify(m.plan), me));
-  for (const t of plan.things)
+  for (const t of plan.items)
     st.push(
       db
-        .prepare("INSERT INTO things (id, list_id, name, data, archived, created_by, mirror_id, mirror_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("INSERT INTO items (id, list_id, name, data, archived, created_by, mirror_id, mirror_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(t.id, t.list_id, t.name, JSON.stringify(t.data), t.archived, me, t.mirror_id, t.mirror_of),
     );
-  for (const t of plan.things) if (t.part_of) st.push(db.prepare("UPDATE things SET part_of = ? WHERE id = ?").bind(t.part_of, t.id));
+  for (const t of plan.items) if (t.part_of) st.push(db.prepare("UPDATE items SET part_of = ? WHERE id = ?").bind(t.part_of, t.id));
   for (const e of plan.events) {
     st.push(
       db
@@ -231,8 +231,8 @@ backup.post("/restore", async (c) => {
     e.lines.forEach((l, i) =>
       st.push(
         db
-          .prepare("INSERT INTO lines (id, event_id, position, role, thing_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(crypto.randomUUID(), e.id, i, l.role, l.thing_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
+          .prepare("INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(crypto.randomUUID(), e.id, i, l.role, l.item_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
       ),
     );
   }
@@ -241,15 +241,15 @@ backup.post("/restore", async (c) => {
     st.push(db.prepare("INSERT INTO saved_views (id, owner_id, list_id, target, name, def, shared) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(v.id, me, v.list_id, v.target, v.name, JSON.stringify(v.def), v.shared));
   // Alles of niets: D1 voert een batch in één transactie uit.
   await db.batch(st);
-  // Wat de gebeurtenissen met de kolommen van de dingen doen (afgeleid).
+  // Wat de gebeurtenissen met de kolommen van de items doen (afgeleid).
   await rebuildEffects(
     db,
     plan.events.map((e) => e.id),
   );
 
-  // Foto's van dingen en gebeurtenissen die nog bestaan en die je ziet.
+  // Foto's van items en gebeurtenissen die nog bestaan en die je ziet.
   let photos = 0;
-  const copy = async (kind: "thing" | "event", oldId: string, newId: string, table: "things" | "events") => {
+  const copy = async (kind: "item" | "event", oldId: string, newId: string, table: "items" | "events") => {
     const row = await db.prepare(`SELECT list_id FROM ${table} WHERE id = ?`).bind(oldId).first<{ list_id: string }>();
     if (!row || !seen.has(row.list_id)) return;
     const object = await c.env.FILES.get(photoKey(kind, oldId));
@@ -258,7 +258,7 @@ backup.post("/restore", async (c) => {
     await db.prepare(`UPDATE ${table} SET photo_version = 1 WHERE id = ?`).bind(newId).run();
     photos++;
   };
-  for (const t of plan.things) if (t.photo) await copy("thing", t.old, t.id, "things");
+  for (const t of plan.items) if (t.photo) await copy("item", t.old, t.id, "items");
   for (const e of plan.events) if (e.photo) await copy("event", e.old, e.id, "events");
-  return c.json({ lists: plan.lists.length, things: plan.things.length, events: plan.events.length, photos });
+  return c.json({ lists: plan.lists.length, items: plan.items.length, events: plan.events.length, photos });
 });

@@ -24,12 +24,12 @@ type TagDetail = {
   rules: TagRule[];
   people: Person[];
   can_edit: boolean;
-  /** De velden per lijst: om al haar dingen samen te tonen. */
+  /** De velden per lijst: om al haar items samen te tonen. */
   fields: Record<string, FieldDef[]>;
 };
 
 /**
- * Een tag: al de dingen van haar lijsten samen (zoeken, en zien in welke lijst iets staat: `tagView`), de lijsten ermee,
+ * Een tag: al de items van haar lijsten samen (zoeken, en zien in welke lijst iets staat: `tagView`), de lijsten ermee,
  * en de regels (wie altijd bij die lijsten kan). Een regel geldt enkel op lijsten waar wie ze bewaarde rechtstreeks
  * beheerder is; wat rechtstreeks bij een lijst staat, wint.
  */
@@ -54,9 +54,9 @@ export function TagPage() {
   const [params, setParams] = useSearchParams();
   if (error && !data) return <p className="error page">{error}</p>;
   if (!data) return <p className="page muted">Laden…</p>;
-  // Met dingen in haar lijsten: eerst die (onder de naam van de tag), dan de lijsten zelf.
-  const things = data.lists.some((l) => l.one);
-  const tab = things && params.get("tab") !== "lijsten" ? "dingen" : "lijsten";
+  // Met items in haar lijsten: eerst die (onder de naam van de tag), dan de lijsten zelf.
+  const items = data.lists.some((l) => l.one);
+  const tab = items && params.get("tab") !== "lijsten" ? "items" : "lijsten";
   const name = (id: string) => data.people.find((p) => p.id === id)?.name ?? "Iemand";
 
   async function remove() {
@@ -92,13 +92,13 @@ export function TagPage() {
           </Link>
         }
       />
-      {things && (
+      {items && (
         <Tabs
           label="Weergaven"
           value={tab}
           onChange={(t) => setParams(t === "lijsten" ? { tab: t } : {}, { replace: true })}
           tabs={[
-            { value: "dingen", label: data.tag.name },
+            { value: "items", label: data.tag.name },
             { value: "lijsten", label: "Lijsten" },
           ]}
         />
@@ -145,8 +145,8 @@ export function TagPage() {
           </section>
         </aside>
         <div className="split-main">
-          {tab === "dingen" ? (
-            <TagThings tag={data.tag} lists={data.lists} fields={data.fields} />
+          {tab === "items" ? (
+            <TagItems tag={data.tag} lists={data.lists} fields={data.fields} />
           ) : data.lists.length === 0 ? (
             <EmptyState icon="tag" title="Nog geen lijsten" />
           ) : (
@@ -304,8 +304,8 @@ function RulesForm({ tag, rules, onDone }: { tag: Tag; rules: TagRule[]; onDone:
   );
 }
 
-/** Al de dingen van de lijsten met deze tag (zie `tagView`): zoeken in de naam, en rechts in welke lijst iets staat. */
-function TagThings({ tag, lists, fields }: { tag: Tag; lists: ListNode[]; fields: Record<string, FieldDef[]> }) {
+/** Al de items van de lijsten met deze tag (zie `tagView`): zoeken in de naam, en rechts in welke lijst iets staat. */
+function TagItems({ tag, lists, fields }: { tag: Tag; lists: ListNode[]; fields: Record<string, FieldDef[]> }) {
   const [query, setQuery] = useState("");
   const [wanted, setWanted] = useState("");
   useEffect(() => {

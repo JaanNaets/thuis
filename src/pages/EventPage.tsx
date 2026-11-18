@@ -22,7 +22,7 @@ import { Link, useNavigate } from "../router";
 type Detail = Page & { event: EventView; can_edit: boolean; files: Attachment[]; ticked: { id: string; name: string }[] };
 
 /**
- * Een gebeurtenis: wat, wanneer, wie betaalde en deelt, en haar lijnen naar de dingen. Zie je ze enkel via een ding
+ * Een gebeurtenis: wat, wanneer, wie betaalde en deelt, en haar lijnen naar de items. Zie je ze enkel via een item
  * (een lijn in een lijst die je ziet), dan enkel die lijnen. Zie STIJLBOEK.md → Fiche.
  */
 export function EventPage() {
@@ -41,7 +41,7 @@ export function EventPage() {
   const minutes = e.end_at ? minutesBetween(e.at, e.end_at) : null;
   const running = kind.parts.duration && !e.end_at && e.at.length > 10 && e.status === "gebeurd";
   const buys = buysWith(kind);
-  const fieldNames = namesFrom(data.people, data.things);
+  const fieldNames = namesFrom(data.people, data.items);
 
   async function tick(undo = false) {
     try {
@@ -134,7 +134,7 @@ export function EventPage() {
                   </dd>
                 </div>
               )}
-              {!e.partial && <AttributeRows defs={kind.fields} data={e.data} names={fieldNames} refs={data.things} />}
+              {!e.partial && <AttributeRows defs={kind.fields} data={e.data} names={fieldNames} refs={data.items} />}
             </dl>
           </section>
         </aside>
@@ -144,7 +144,7 @@ export function EventPage() {
               <CardHead title="Lijnen" />
               <ul className="rows">
                 {e.lines.map((l) => {
-                  const t = l.thing_id ? names.thing(l.thing_id) : undefined;
+                  const t = l.item_id ? names.item(l.item_id) : undefined;
                   const label = t?.name ?? l.text ?? "Verborgen";
                   const meta = [
                     groupOf(kind, l.role).label,
@@ -174,7 +174,7 @@ export function EventPage() {
                   return (
                     <li key={l.id}>
                       {t?.list ? (
-                        <Link to={`/dingen/${t.id}`} className="row">
+                        <Link to={`/items/${t.id}`} className="row">
                           {body}
                         </Link>
                       ) : (

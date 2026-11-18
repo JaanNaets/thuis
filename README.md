@@ -3,11 +3,11 @@
 Onze eigen app voor thuis (het repo en de Worker heten nog `thuis`), volledig op Cloudflare. Ze is **generiek**: je bouwt zelf wat je wil bijhouden, met
 één opbouw voor alles.
 
-- **Lijsten** met **dingen**: Wijnen, Voorraad, Wagens, Bezit, Winkels. De dingen van een lijst hebben dezelfde
+- **Lijsten** met **items**: Wijnen, Voorraad, Wagens, Bezit, Winkels. De items van een lijst hebben dezelfde
   velden (jaargang en druiven, merk en nummerplaat), ook velden die de app zelf uitrekent.
 - Elke lijst heeft een **logboek** met **gebeurtenissen**: een aankoop, iets gebruikt of gegeten, een dienst (de
   garage, de dokter), een activiteit (werk, sport, slaap), een meting (gewicht, een telling) of een overdracht
-  (terugbetaald). Een gebeurtenis heeft lijnen naar dingen: wat erbij kwam, wat eraf ging, waarvoor en waar.
+  (terugbetaald). Een gebeurtenis heeft lijnen naar items: wat erbij kwam, wat eraf ging, waarvoor en waar.
 - **Mensen** per lijst (beheerder, lid of gast), en **tags** om lijsten te groeperen (Huis, Jaan, Wijnkelder). Een
   regel op een tag ("Jana altijd beheerder bij Huis") geeft toegang tot elke lijst met die tag.
 - Wat je gewoonlijk als aparte lijst bijhoudt, rekent de app zelf uit: **Geld** (uitgaven, jouw deel, Wie moet wie),
@@ -174,7 +174,7 @@ code, controleer dan:
 - **Android** (of Chrome en Edge op je computer): tik bij **Jouw gegevens** op **App installeren**, of open het
   menu van de browser (⋮) → **App installeren**.
 
-Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je lijsten, een ding,
+Open de app één keer met internet. Daarna opent ze ook zonder bereik: wat je eerder bekeek (je lijsten, een item,
 het logboek) blijft op het toestel bewaard. Iets **nieuws** loggen of toevoegen lukt ook offline: het wacht op je
 toestel en gaat vanzelf mee zodra je weer internet hebt. Wijzigen en verwijderen vragen internet.
 
@@ -199,14 +199,14 @@ In kioskmodus:
 
 ## Hoe het werkt
 
-### Lijsten, dingen en het logboek
+### Lijsten, items en het logboek
 
-Een lijst heeft dingen (allemaal met dezelfde velden) en een logboek. Een lijst zonder dingen kan ook: dan is ze
+Een lijst heeft items (allemaal met dezelfde velden) en een logboek. Een lijst zonder items kan ook: dan is ze
 enkel een logboek (Jaan: eten en gewicht). Een nieuwe lijst begin je leeg, uit een sjabloon (Uitgaven zoals
 Splitwise, Dieet zoals Yazio) of uit een bestand dat iemand deelde (Instellen → Als sjabloon).
 
 Een gebeurtenis heeft een soort: een van de zes basissoorten, of een eigen soort van de lijst met eigen velden
-(Tankbeurt met liter en km, Gegeten met kcal). Haar lijnen wijzen naar dingen, ook in andere lijsten:
+(Tankbeurt met liter en km, Gegeten met kcal). Haar lijnen wijzen naar items, ook in andere lijsten:
 
 | Lijn  | Betekent                     | Voorbeeld                           |
 | ----- | ---------------------------- | ----------------------------------- |
@@ -215,19 +215,19 @@ Een gebeurtenis heeft een soort: een van de zes basissoorten, of een eigen soort
 | voor  | waarvoor het was             | een tankbeurt voor de Sprinter      |
 | bij   | waar het gebeurde            | bij Colruyt, bij Dr. Peeters        |
 
-Het logboek van een lijst toont wat er in gelogd werd, en ook lijnen van elders die haar dingen raken (een fles wijn
+Het logboek van een lijst toont wat er in gelogd werd, en ook lijnen van elders die haar items raken (een fles wijn
 op een kasticket in Voorraad staat ook in het logboek van Wijnen, zonder de rest van dat ticket).
 
 ### Wie wat ziet
 
 Je ziet een lijst als je er rechtstreeks bij bent, of via een regel op een tag. Een regel werkt enkel op lijsten waar
 wie hem maakte zelf beheerder is, en een rechtstreekse keuze op de lijst wint (ook "geen toegang"). Van een
-gebeurtenis in een lijst die je niet ziet, zie je enkel de lijnen naar jouw dingen (een fles erbij), nooit het bedrag
+gebeurtenis in een lijst die je niet ziet, zie je enkel de lijnen naar jouw items (een fles erbij), nooit het bedrag
 of waar het was.
 
 ### Voorraad
 
-Een lijst kan voorraad tellen (Instellen → Voorraad): in welke eenheid een ding telt, wat er in één stuk of
+Een lijst kan voorraad tellen (Instellen → Voorraad): in welke eenheid een item telt, wat er in één stuk of
 verpakking zit en vanaf wanneer het bijna op is. De voorraad wordt nooit bewaard maar uitgerekend: de laatste telling
 plus wat erbij kwam min wat eraf ging, omgerekend (500 g van iets in kg, een zak van 15 kg). De − en + in de lijst
 loggen een telling.
@@ -242,28 +242,28 @@ met jouw deel, en wie wie nog moet betalen (met een betaal-QR). Terugbetaald log
 
 - **Toevoegen** (de + of ⌘K): typ wat er gebeurde ("gegeten pasta 300 g", "tankbeurt sprinter 84,50 52 liter") en kies
   waar; het formulier opent met alles al ingevuld.
-- **Typ wat je weet** bovenaan het formulier vult live in: datum en uur, bedrag, de dingen met hoeveelheid en prijs,
+- **Typ wat je weet** bovenaan het formulier vult live in: datum en uur, bedrag, de items met hoeveelheid en prijs,
   velden van de soort. Pas je zelf iets aan, dan blijft dat staan.
 - **Kasticket ✨**: een foto van een kasticket wordt één aankoop met een lijn per product, gekoppeld aan wat je al hebt;
   wat nieuw is, komt in de voorraad. De naam op het ticket wordt onthouden voor de volgende keer.
-- Een ding met **Barcode** (Open Food Facts, zonder AI) of **Foto ✨** (etiket of product; de app zegt of het uit een
+- Een item met **Barcode** (Open Food Facts, zonder AI) of **Foto ✨** (etiket of product; de app zegt of het uit een
   databank komt of geschat is).
 - Een gedeelde foto (Android: delen met Heystack) wacht tot je ✨ tikt. De AI staat per persoon aan of uit (Jouw gegevens).
-- Boodschappen en taken zijn geplande gebeurtenissen: afvinken, en een aankoop van hetzelfde ding vinkt een boodschap
+- Boodschappen en taken zijn geplande gebeurtenissen: afvinken, en een aankoop van hetzelfde item vinkt een boodschap
   vanzelf af.
 
 ### Herhalen, herinneren en meldingen
 
 Een gebeurtenis kan herhalen (Netflix elke maand: de app logt ze zelf), een geplande taak maakt bij afvinken de
-volgende. Om 7 u komt een melding voor datums van dingen (keuring, garantie) en wat vandaag gepland staat. Per lijst
+volgende. Om 7 u komt een melding voor datums van items (keuring, garantie) en wat vandaag gepland staat. Per lijst
 kies je of een nieuwe gebeurtenis een melding geeft, en elk lijst of tag kan je voor jezelf stilzetten.
 
 ### Het overzicht
 
 Je overzicht bestaat uit blokken: uitgaven deze maand, Wie moet wie, te doen, bijna op, eten vandaag, wat nu loopt,
-snel loggen, één ding, een lijst of een grafiek. Je kan meer overzichten hebben (Keuken, Garage).
+snel loggen, één item, een lijst of een grafiek. Je kan meer overzichten hebben (Keuken, Garage).
 
 ### Back-up
 
-Jouw gegevens → Back-up: een bestand met de lijsten die je beheert (dingen, logboek, soorten, tags, weergaven).
+Jouw gegevens → Back-up: een bestand met de lijsten die je beheert (items, logboek, soorten, tags, weergaven).
 Terugzetten maakt altijd een nieuwe kopie; er wordt niets overschreven.

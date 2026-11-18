@@ -5,21 +5,21 @@
 import { cleanActionBlock, cleanViewBlock, upgradeBlock, type ActionBlock, type ViewBlock } from "./blocks.ts";
 
 /**
- * Een blok: een weergave (wat je ziet), een actie (een knop die logt) of één ding met zijn voorraad. De vaste blokken
+ * Een blok: een weergave (wat je ziet), een actie (een knop die logt) of één item met zijn voorraad. De vaste blokken
  * van vroeger (Uitgaven, Te doen, Bijna op, Wie moet wie, Eten, Loopt nu, een lijst, een grafiek, Snel loggen) worden
  * bij het nakijken de gelijkwaardige weergave of actie (`upgradeBlock`).
  */
-export type Block = (ViewBlock | ActionBlock | { kind: "thing"; thing: string }) & { wide?: boolean };
+export type Block = (ViewBlock | ActionBlock | { kind: "item"; item: string }) & { wide?: boolean };
 
 export type BlockKind = Block["kind"];
 
 export const BLOCK_KINDS = {
   view: "Weergave",
   action: "Actie",
-  thing: "Eén ding",
+  item: "Eén item",
 } as const satisfies Record<BlockKind, string>;
 
-/** Zoveel items toont een blok met dingen of een logboek. */
+/** Zoveel items toont een blok met items of een logboek. */
 export const BLOCK_ITEMS = 5;
 export const MAX_BLOCKS = 40;
 
@@ -31,7 +31,7 @@ export function cleanBlock(raw: unknown): Block | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const wide = o.wide === true ? { wide: true } : {};
-  const block = o.kind === "view" ? cleanViewBlock(o) : o.kind === "action" ? cleanActionBlock(o) : o.kind === "thing" ? (id(o.thing) ? { kind: "thing" as const, thing: o.thing as string } : null) : upgradeBlock(o);
+  const block = o.kind === "view" ? cleanViewBlock(o) : o.kind === "action" ? cleanActionBlock(o) : o.kind === "item" || o.kind === "thing" ? (id(o.item ?? o.thing) ? { kind: "item" as const, item: (o.item ?? o.thing) as string } : null) : upgradeBlock(o);
   return block ? { ...block, ...wide } : null;
 }
 
@@ -67,7 +67,7 @@ export function segmentBlocks(blocks: Block[]): (Block | QuickBlock[])[] {
 
 /** Een sleutel per blok (om dubbels te weren en in React). */
 export function blockKey(b: Block): string {
-  if (b.kind === "thing") return `thing:${b.thing}`;
+  if (b.kind === "item") return `item:${b.item}`;
   const { wide: _wide, ...rest } = b;
   return `${b.kind}:${JSON.stringify(rest)}`;
 }

@@ -1,7 +1,7 @@
 // Waar je iets kan toevoegen (de +, het palet, de snelkoppelingen): per eigen formulier "Gegeten" (in haar lijst), per
-// lijst zonder eigen formulieren "Loggen in Voorraad" (met de basissoorten) en per lijst met dingen een nieuw ding
+// lijst zonder eigen formulieren "Loggen in Voorraad" (met de basissoorten) en per lijst met items een nieuw item
 // ("Wijn"). Wat je het meest gebruikt, eerst. Noemen de eerste woorden van je tekst er een ("gegeten pasta 300 g"), dan
-// staat die bovenaan en gaat de rest als tekst naar het formulier. Bij een ding (`logForms`): waarmee je ermee logt.
+// staat die bovenaan en gaat de rest als tekst naar het formulier. Bij een item (`logForms`): waarmee je ermee logt.
 
 import { STOCK } from "./cells.ts";
 import type { KindInfo } from "./model.ts";
@@ -13,15 +13,15 @@ export type Target = {
   key: string;
   /** Wat er staat: "Gegeten", "Loggen in Voorraad", "Wijn toevoegen". */
   label: string;
-  /** Kort: het formulier ("Gegeten") of hoe één ding heet ("Wijn"). */
+  /** Kort: het formulier ("Gegeten") of hoe één item heet ("Wijn"). */
   name: string;
   /** Waar (de lijst), als dat niet al in het label staat. */
   hint: string | null;
   icon: string;
   list_id: string;
-  /** Een soort (loggen) of een ding toevoegen. */
+  /** Een soort (loggen) of een item toevoegen. */
   kind: string | null;
-  thing: boolean;
+  item: boolean;
   /** Waarop je kan zoeken (kleine letters, zonder accenten). */
   words: string[];
   used: number;
@@ -44,7 +44,7 @@ export function buildTargets(t: Targets): Target[] {
   const out: Target[] = [];
   const owns = new Set(t.kinds.map((k) => k.list_id));
   for (const l of t.lists) {
-    const logs = t.used.filter((u) => u.list_id === l.id && u.kind !== "+ding");
+    const logs = t.used.filter((u) => u.list_id === l.id && u.kind !== "+item");
     // Met eigen formulieren staan die er zelf; "Loggen in" zou hetzelfde formulier nog eens openen.
     if (!owns.has(l.id)) {
       out.push({
@@ -55,7 +55,7 @@ export function buildTargets(t: Targets): Target[] {
         icon: l.icon ?? "note",
         list_id: l.id,
         kind: null,
-        thing: false,
+        item: false,
         words: [fold(l.name)],
         used: logs.reduce((s, u) => s + u.n, 0),
         last: logs.reduce((s, u) => (u.last > s ? u.last : s), ""),
@@ -63,8 +63,8 @@ export function buildTargets(t: Targets): Target[] {
       });
     }
     if (l.one) {
-      const c = count(l.id, "+ding");
-      out.push({ key: `ding:${l.id}`, label: `${l.one} toevoegen`, name: l.one, hint: l.name, icon: l.icon ?? "folder", list_id: l.id, kind: null, thing: true, words: [fold(l.one), fold(l.name)], used: c.n, last: c.last, buys: false });
+      const c = count(l.id, "+item");
+      out.push({ key: `item:${l.id}`, label: `${l.one} toevoegen`, name: l.one, hint: l.name, icon: l.icon ?? "folder", list_id: l.id, kind: null, item: true, words: [fold(l.one), fold(l.name)], used: c.n, last: c.last, buys: false });
     }
   }
   const editable = new Set(t.lists.map((l) => l.id));
@@ -72,7 +72,7 @@ export function buildTargets(t: Targets): Target[] {
     if (!k.list_id || !editable.has(k.list_id)) continue;
     const list = t.lists.find((l) => l.id === k.list_id)!;
     const c = count(k.list_id, k.id);
-    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint: list.name, icon: k.icon, list_id: k.list_id, kind: k.id, thing: false, words: [fold(k.name)], used: c.n, last: c.last, buys: buysWith(k) });
+    out.push({ key: `soort:${k.id}`, label: k.name, name: k.name, hint: list.name, icon: k.icon, list_id: k.list_id, kind: k.id, item: false, words: [fold(k.name)], used: c.n, last: c.last, buys: buysWith(k) });
   }
   return out.sort((a, b) => b.used - a.used || b.last.localeCompare(a.last) || a.label.localeCompare(b.label, "nl"));
 }
@@ -120,10 +120,10 @@ export function targetPath(t: Target, rest = ""): string {
   if (t.kind) q.set("soort", t.kind);
   if (rest) q.set("tekst", rest);
   const query = q.toString();
-  return `/lijsten/${t.list_id}/${t.thing ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
+  return `/lijsten/${t.list_id}/${t.item ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
 }
 
-/** Een formulier om mee te loggen bij een lijst of een ding ervan; `kind` null = Loggen (kiezen uit de basissoorten). */
+/** Een formulier om mee te loggen bij een lijst of een item ervan; `kind` null = Loggen (kiezen uit de basissoorten). */
 export type LogForm = {
   /** Dezelfde sleutel als de plek in `buildTargets` ("soort:…", "log:…"). */
   key: string;
@@ -145,10 +145,10 @@ export const buysWith = (k: Pick<KindInfo, "parts" | "does">) =>
 export const movesStock = (k: Pick<KindInfo, "does">) => k.does.some((h) => h.rows.from === "lines" && h.field === STOCK && (h.op === "bij" || h.op === "af"));
 
 /**
- * Waarmee je logt bij een lijst of een ding ervan: haar eigen formulieren (zonder: Loggen, met de vertrekpunten) en, telt
+ * Waarmee je logt bij een lijst of een item ervan: haar eigen formulieren (zonder: Loggen, met de vertrekpunten) en, telt
  * ze voorraad, de formulieren die de voorraad veranderen van lijsten die zelf geen voorraad tellen: Aankoop in Uitgaven,
- * Boodschap, Gegeten. Daar komt de gebeurtenis in die andere lijst, met het ding als lijn. Een lijst met een eigen
- * voorraad (een gedeelde wijnkelder) logt enkel over haar eigen dingen. Enkel lijsten waar je mag loggen; `shown` laat weg wat je bij de +
+ * Boodschap, Gegeten. Daar komt de gebeurtenis in die andere lijst, met het item als lijn. Een lijst met een eigen
+ * voorraad (een gedeelde wijnkelder) logt enkel over haar eigen items. Enkel lijsten waar je mag loggen; `shown` laat weg wat je bij de +
  * verborg. Het eigen eerst, daarbinnen wat je het meest gebruikt.
  */
 export function logForms(t: Targets, listId: string, shown: (listId: string) => boolean = () => true): LogForm[] {
@@ -163,7 +163,7 @@ export function logForms(t: Targets, listId: string, shown: (listId: string) => 
         .filter((k) => k.list_id && k.list_id !== listId && movesStock(k))
         .filter((k) => {
           const l = lists.get(k.list_id!);
-          // Een lijst die zelf geen voorraad telt (Uitgaven, Boodschappen, Dieet); een gedeelde wijnkelder logt enkel over haar eigen dingen.
+          // Een lijst die zelf geen voorraad telt (Uitgaven, Boodschappen, Dieet); een gedeelde wijnkelder logt enkel over haar eigen items.
           return l && !l.stock && shown(l.id);
         })
         .sort(byUse)
@@ -184,13 +184,13 @@ export function pricedFirst(forms: LogForm[], text: string): LogForm[] {
 }
 
 /**
- * Het pad om met een formulier te loggen, eventueel met een ding als eerste lijn en je tekst. `newIn`: de lijst waar je
- * vandaan komt; een nieuw ding in een lijn (een wijn die er nog niet staat) komt daar dan vanzelf in (`?nieuw=`).
+ * Het pad om met een formulier te loggen, eventueel met een item als eerste lijn en je tekst. `newIn`: de lijst waar je
+ * vandaan komt; een nieuw item in een lijn (een wijn die er nog niet staat) komt daar dan vanzelf in (`?nieuw=`).
  */
-export function logPath(form: Pick<LogForm, "kind" | "list_id">, thing?: string, text = "", newIn?: string): string {
+export function logPath(form: Pick<LogForm, "kind" | "list_id">, item?: string, text = "", newIn?: string): string {
   const q = new URLSearchParams();
   if (form.kind) q.set("soort", form.kind.id);
-  if (thing) q.set("ding", thing);
+  if (item) q.set("item", item);
   if (text) q.set("tekst", text);
   if (newIn && newIn !== form.list_id) q.set("nieuw", newIn);
   const query = q.toString();
@@ -198,7 +198,7 @@ export function logPath(form: Pick<LogForm, "kind" | "list_id">, thing?: string,
 }
 
 /**
- * Wat er van je tekst overblijft naast de naam van een ding: "chablis 54 euro" bij Chablis is "54 euro". Ook een begin
+ * Wat er van je tekst overblijft naast de naam van een item: "chablis 54 euro" bij Chablis is "54 euro". Ook een begin
  * van een woord telt ("foru" bij Het Forum); getallen blijven altijd.
  */
 export function restAfter(text: string, name: string): string {

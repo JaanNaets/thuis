@@ -17,7 +17,7 @@ test("op naam koppelen: dezelfde, de langste erin, of waar ze in staat", () => {
   assert.equal(matchCandidate(c, "boerenmelk hv 1l")?.id, "m");
 });
 
-test("lijnen in de eenheid van het ding", () => {
+test("lijnen in de eenheid van het item", () => {
   const lines = readLines(
     [
       { name: "AARDAPPELEN 5KG", quantity: 1, size: "5 kg", price: 4.99 },
@@ -31,7 +31,7 @@ test("lijnen in de eenheid van het ding", () => {
     [aardappelen, melk, yoghurt, koffie],
   );
   assert.deepEqual(
-    lines.map((l) => [l.thing, l.amount, l.unit, l.price]),
+    lines.map((l) => [l.item, l.amount, l.unit, l.price]),
     [
       ["a", 5, "kg", 499],
       ["a", 10, "kg", 998],

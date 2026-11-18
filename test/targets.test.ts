@@ -1,5 +1,5 @@
-// Waar je iets toevoegt en waarmee je logt (shared/targets.ts): de + toont wat er gebeurde, bij een ding de formulieren
-// die erbij horen, en wat er van je tekst overblijft naast de naam van een ding.
+// Waar je iets toevoegt en waarmee je logt (shared/targets.ts): de + toont wat er gebeurde, bij een item de formulieren
+// die erbij horen, en wat er van je tekst overblijft naast de naam van een item.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { baseKind, type KindInfo } from "../shared/model.ts";
@@ -38,11 +38,11 @@ test("de +: geen Loggen in een lijst die eigen formulieren heeft, wel in een lij
   assert.ok(!keys.includes("log:WIJNEN"));
   assert.ok(!keys.includes("log:UITGAVEN"));
   assert.ok(keys.includes("log:WINKELS"));
-  assert.ok(keys.includes("ding:RESTAURANTS"));
-  assert.equal(buildTargets(t).find((x) => x.key === "ding:RESTAURANTS")?.name, "Restaurant");
+  assert.ok(keys.includes("item:RESTAURANTS"));
+  assert.equal(buildTargets(t).find((x) => x.key === "item:RESTAURANTS")?.name, "Restaurant");
 });
 
-test("bij een ding: de eigen formulieren, en met voorraad die van lijsten zonder eigen voorraad die de voorraad veranderen", () => {
+test("bij een item: de eigen formulieren, en met voorraad die van lijsten zonder eigen voorraad die de voorraad veranderen", () => {
   const wijn = logForms(t, "WIJNEN");
   // Eerst het eigen formulier, dan wat je het meest gebruikt (Boodschap), niet de Aankoop van de gedeelde wijnkelder.
   assert.deepEqual(
@@ -66,10 +66,10 @@ test("bij een ding: de eigen formulieren, en met voorraad die van lijsten zonder
   assert.ok(logForms(withPeople, "WIJNEN").some((f) => f.list_id === "UITGAVEN"));
 });
 
-test("het pad: de gebeurtenis komt in de lijst van het formulier, met het ding als lijn en je tekst", () => {
+test("het pad: de gebeurtenis komt in de lijst van het formulier, met het item als lijn en je tekst", () => {
   const aankoop = logForms(t, "WIJNEN").find((f) => f.list_id === "UITGAVEN")!;
-  assert.equal(logPath(aankoop, "CHABLIS", "54 euro"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&ding=CHABLIS&tekst=54+euro");
-  assert.equal(logPath(logForms(t, "WINKELS")[0], "COLRUYT"), "/lijsten/WINKELS/loggen?ding=COLRUYT");
+  assert.equal(logPath(aankoop, "CHABLIS", "54 euro"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&item=CHABLIS&tekst=54+euro");
+  assert.equal(logPath(logForms(t, "WINKELS")[0], "COLRUYT"), "/lijsten/WINKELS/loggen?item=COLRUYT");
   // Vanuit Wijnen een aankoop (in Uitgaven): een nieuwe wijn in een lijn komt in Wijnen.
   assert.equal(logPath(aankoop, undefined, "", "WIJNEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u&nieuw=WIJNEN");
   assert.equal(logPath(aankoop, undefined, "", "UITGAVEN"), "/lijsten/UITGAVEN/loggen?soort=aankoop-u");
@@ -84,7 +84,7 @@ test("met een bedrag eerst de formulieren met geld; een nieuwe naam zonder bedra
   assert.equal(withoutPrice("melk 2"), "melk 2");
 });
 
-test("wat er van je tekst overblijft naast een ding", () => {
+test("wat er van je tekst overblijft naast een item", () => {
   assert.equal(restAfter("chablis 54 euro", "Chablis"), "54 euro");
   assert.equal(restAfter("Foru", "Het Forum"), "");
   assert.equal(restAfter("het forum 4 sterren", "Het Forum"), "4 sterren");

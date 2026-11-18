@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { canCarry, carryValue, cleanPlan, guessPlan, linkedKeys, makesCycle, syncChanges, toTranslate, transferRows, type MirrorThing, type SourceThing, type TransferPlan } from "../shared/transfer.ts";
+import { canCarry, carryValue, cleanPlan, guessPlan, linkedKeys, makesCycle, syncChanges, toTranslate, transferRows, type MirrorItem, type SourceItem, type TransferPlan } from "../shared/transfer.ts";
 import { NAME } from "../shared/views.ts";
 
 // Wijnen (de bron) en Voorraad (de keuken): andere velden, een paar dezelfde.
@@ -21,7 +21,7 @@ const voorraad: FieldDef[] = [
   { key: "notitie", label: "Notitie", type: "longtext" },
   { key: "kcal", label: "Kcal", type: "calc", calc: "sum", result: "number" } as FieldDef,
 ];
-const things: SourceThing[] = [
+const items: SourceItem[] = [
   { id: "w1", name: "Chablis", data: { kleur: "Wit", jaargang: 2020, waar: "Keuken", notitie: "fris" }, tag_ids: [] },
   { id: "w2", name: "Barolo", data: { kleur: "Rood", jaargang: 2015, waar: "Kelder" }, tag_ids: [] },
   { id: "w3", name: "Tavel", data: { kleur: "Rosé", waar: "Keuken" }, tag_ids: [] },
@@ -51,7 +51,7 @@ test("een waarde zoals ze past: keuzes vertaald of leeg, tekst uit een keuze of 
   assert.deepEqual(carryValue({ key: "m", label: "M", type: "multi", options: ["Wit", "Rood"] }, wijnen[0], "Wit"), ["Wit"]);
 });
 
-test("de dingen die aan de voorwaarden voldoen, met vaste waarden en de verwijzing naar het origineel", () => {
+test("de items die aan de voorwaarden voldoen, met vaste waarden en de verwijzing naar het origineel", () => {
   const plan = {
     ...guessPlan({ id: WIJNEN, fields: wijnen }, { fields: voorraad }),
     where: { match: "all" as const, conditions: [{ field: "waar", op: "any_of" as const, value: ["Keuken"] }] },
@@ -59,8 +59,8 @@ test("de dingen die aan de voorwaarden voldoen, met vaste waarden en de verwijzi
   plan.fields.eenheid = { from: "value", value: "fles" };
   plan.fields.categorie = { from: "field", key: "kleur" };
   plan.translate = { categorie: { Wit: "Drinken" } };
-  assert.deepEqual(toTranslate(things, plan, wijnen, voorraad, ctx), { categorie: ["Rosé", "Wit"] });
-  const rows = transferRows(things, plan, wijnen, voorraad, ctx);
+  assert.deepEqual(toTranslate(items, plan, wijnen, voorraad, ctx), { categorie: ["Rosé", "Wit"] });
+  const rows = transferRows(items, plan, wijnen, voorraad, ctx);
   assert.deepEqual(
     rows.map((r) => [r.source_id, r.name, r.data]),
     [
@@ -69,7 +69,7 @@ test("de dingen die aan de voorwaarden voldoen, met vaste waarden en de verwijzi
     ],
   );
   // Een ander veld als naam.
-  assert.deepEqual(transferRows(things, { ...plan, name: "kleur" }, wijnen, voorraad, ctx).map((r) => r.name), ["Wit", "Rosé"]);
+  assert.deepEqual(transferRows(items, { ...plan, name: "kleur" }, wijnen, voorraad, ctx).map((r) => r.name), ["Wit", "Rosé"]);
 });
 
 test("een plan nakijken: onbekende velden, een verwijzing die niet naar de bron wijst en vreemde keuzes vallen weg", () => {
@@ -100,17 +100,17 @@ test("koppelen: nieuw wat voldoet, de gekoppelde velden volgen de bron, de eigen
   };
   plan.fields.eenheid = { from: "value", value: "fles" };
   assert.deepEqual(linkedKeys(plan).sort(), ["notitie", "soort", "wijn"], "een vaste waarde is enkel een begin");
-  const existing: MirrorThing[] = [
+  const existing: MirrorItem[] = [
     // Chablis: al gekoppeld, de kleur in de bron is nu Wit, en hier staat een eigen eenheid.
     { id: "v1", mirror_of: "w1", name: "Chablis", data: { soort: "Rood", wijn: "w1", eenheid: "stuk" }, archived: 0 },
     // Barolo: ligt nu in de kelder, voldoet niet meer.
     { id: "v2", mirror_of: "w2", name: "Barolo", data: { soort: "Rood", wijn: "w2" }, archived: 0 },
     // Tavel: was gearchiveerd en voldoet weer.
     { id: "v3", mirror_of: "w3", name: "Tavel", data: { soort: "Rosé", wijn: "w3" }, archived: 1 },
-    // Een ding waarvan het origineel weg is.
+    // Een item waarvan het origineel weg is.
     { id: "v4", mirror_of: "weg", name: "Weg", data: {}, archived: 0 },
   ];
-  const changes = syncChanges(things, plan, wijnen, voorraad, existing, ctx);
+  const changes = syncChanges(items, plan, wijnen, voorraad, existing, ctx);
   assert.deepEqual(changes.create, []);
   assert.deepEqual(changes.update, [
     { id: "v1", name: "Chablis", data: { soort: "Wit", wijn: "w1", eenheid: "stuk", notitie: "fris" }, restore: false },
@@ -119,7 +119,7 @@ test("koppelen: nieuw wat voldoet, de gekoppelde velden volgen de bron, de eigen
   assert.deepEqual(changes.archive, ["v2", "v4"]);
   // Niets veranderd: niets te doen.
   const again = syncChanges(
-    things,
+    items,
     plan,
     wijnen,
     voorraad,
@@ -131,7 +131,7 @@ test("koppelen: nieuw wat voldoet, de gekoppelde velden volgen de bron, de eigen
   );
   assert.deepEqual(again, { create: [], update: [], archive: [] });
   // Een nieuwe wijn in de keuken: erbij, met de vaste waarde.
-  const fresh = syncChanges(things, plan, wijnen, voorraad, [], ctx);
+  const fresh = syncChanges(items, plan, wijnen, voorraad, [], ctx);
   assert.deepEqual(
     fresh.create.map((r) => [r.source_id, r.data.eenheid]),
     [

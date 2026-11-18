@@ -18,8 +18,8 @@ test("een moment is een dag of een dag met uur", () => {
   assert.equal(brusselsNow(new Date("2026-12-01T10:00:00Z")), "2026-12-01T11:00");
 });
 
-test("de titel van een gebeurtenis: haar naam, anders de soort met het eerste ding", () => {
-  const lines = [{ role: "bij" as const, thing_id: "colruyt", text: null }, { role: "in" as const, thing_id: "yoghurt", text: null }];
+test("de titel van een gebeurtenis: haar naam, anders de soort met het eerste item", () => {
+  const lines = [{ role: "bij" as const, item_id: "colruyt", text: null }, { role: "in" as const, item_id: "yoghurt", text: null }];
   const names: Record<string, string> = { yoghurt: "Yoghurt", colruyt: "Colruyt" };
   assert.equal(eventTitle({ name: "", lines: lines as never }, { name: "Aankoop" }, (id) => names[id]), "Aankoop: Yoghurt");
   assert.equal(eventTitle({ name: "Boodschappen", lines: lines as never }, { name: "Aankoop" }, (id) => names[id]), "Boodschappen");
@@ -90,7 +90,7 @@ test("er blijft altijd een rechtstreekse beheerder", () => {
 test("lijnen zien en bewaren", () => {
   // Met de gebeurtenis zie je alles.
   assert.ok(lineVisible("bij", "gast", null));
-  // Via het ding: in, uit en voor, maar nooit bij (de dokter in Winkels en diensten).
+  // Via het item: in, uit en voor, maar nooit bij (de dokter in Winkels en diensten).
   assert.ok(lineVisible("in", null, "gast"));
   assert.ok(lineVisible("voor", null, "lid"));
   assert.ok(!lineVisible("bij", null, "beheerder"));

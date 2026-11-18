@@ -1,5 +1,5 @@
-// Velden van een ding of gebeurtenis nakijken voor ze in de databank komen: `cleanAttributes` (shared/fields.ts),
-// daarna personen die je kent en verwijzingen naar dingen die bestaan, die je ziet en in een lijst staan waarnaar
+// Velden van een item of gebeurtenis nakijken voor ze in de databank komen: `cleanAttributes` (shared/fields.ts),
+// daarna personen die je kent en verwijzingen naar items die bestaan, die je ziet en in een lijst staan waarnaar
 // het veld mag wijzen. Wat niet klopt, valt weg; een verwijzing die er al stond naar iets dat jij niet ziet, blijft.
 
 import { cleanAttributes, missingRequired, referencedItems, referencedPeople, refLists, type AmountEntry, type Attributes, type FieldDef, type Share } from "../shared/fields";
@@ -32,7 +32,7 @@ export async function prepareData(
   const refs = referencedItems(fields, data);
   if (refs.length) {
     const { results } = await db
-      .prepare("SELECT id, list_id FROM things WHERE id IN (SELECT value FROM json_each(?))")
+      .prepare("SELECT id, list_id FROM items WHERE id IN (SELECT value FROM json_each(?))")
       .bind(ids(refs.map((r) => r.id)))
       .all<{ id: string; list_id: string }>();
     const listOf = new Map(results.map((r) => [r.id, r.list_id]));

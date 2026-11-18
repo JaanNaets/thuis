@@ -40,7 +40,7 @@ function rowChoices(parts: Parts): { id: string; label: string; rows: Rows }[] {
 const rowsId = (r: Rows) => (r.from === "lines" ? `lines:${r.role}` : r.from);
 
 /**
- * Wat een formulier doet met de kolommen van de dingen in zijn lijnen, en met het saldo van mensen (shared/cells.ts):
+ * Wat een formulier doet met de kolommen van de items in zijn lijnen, en met het saldo van mensen (shared/cells.ts):
  * per handeling een kaartje zoals een lijn, met de kolom, hoe (Zet op, Tel bij, Tel af), met wat en op wie of welke
  * lijn. Zie STIJLBOEK.md → Wat een formulier doet.
  */

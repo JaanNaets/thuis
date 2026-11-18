@@ -1,29 +1,29 @@
-// Voorraad: hoeveel er van een ding is, uitgerekend uit het logboek (nooit bewaard).
+// Voorraad: hoeveel er van een item is, uitgerekend uit het logboek (nooit bewaard).
 //
-// Een lijst telt voorraad als ze `stock` heeft: welke velden van een ding zeggen in welke eenheid het telt (kg, l,
+// Een lijst telt voorraad als ze `stock` heeft: welke velden van een item zeggen in welke eenheid het telt (kg, l,
 // stuk, zak), wat er in één stuk en in één verpakking zit, en wat het minimum is. De voorraad is een cel zoals elke
 // andere (shared/cells.ts, `STOCK`): de laatste telling (Zet), plus wat er daarna bij kwam (Tel bij), min wat eraf
 // ging (Tel af). Enkel wat gebeurd is, telt (geen geplande of afgevinkte boodschappen). Elke verandering wordt eerst
-// omgerekend naar de eenheid van het ding (500 g van een voorraad in kg is 0,5).
+// omgerekend naar de eenheid van het item (500 g van een voorraad in kg is 0,5).
 
 import type { Op } from "./cells.ts";
 import type { Attributes, FieldDef } from "./fields.ts";
 import type { Status, StockLevel } from "./model.ts";
 import { convert, normalizeUnit, round3, type Measure } from "./units.ts";
 
-/** Welke velden van een ding zeggen hoe het telt (sleutels), en de eenheid als er geen veld is. */
+/** Welke velden van een item zeggen hoe het telt (sleutels), en de eenheid als er geen veld is. */
 export type StockDef = {
-  /** Een veld (tekst of keuzelijst) met de eenheid van het ding: kg, l, stuk, zak. */
+  /** Een veld (tekst of keuzelijst) met de eenheid van het item: kg, l, stuk, zak. */
   unit?: string;
-  /** De eenheid als het ding er geen heeft ("stuk"). */
+  /** De eenheid als het item er geen heeft ("stuk"). */
   default_unit?: string;
   /** Een getal: de inhoud van één stuk in g of ml. */
   piece?: string;
-  /** Een getal: hoeveel er in één verpakking zit, in de eenheid van het ding. */
+  /** Een getal: hoeveel er in één verpakking zit, in de eenheid van het item. */
   pack?: string;
   /** Een tekst: hoe die verpakking heet (zak, pot). */
   pack_name?: string;
-  /** Een getal: bijna op vanaf hier (in de eenheid van het ding). */
+  /** Een getal: bijna op vanaf hier (in de eenheid van het item). */
   min?: string;
 };
 
@@ -48,14 +48,14 @@ export function cleanStock(raw: unknown, fields: FieldDef[]): StockDef | null {
   return out;
 }
 
-/** Hoe een ding telt: zijn eenheid, de inhoud per stuk en per verpakking. */
+/** Hoe een item telt: zijn eenheid, de inhoud per stuk en per verpakking. */
 export function measureFor(def: StockDef, data: Attributes): Measure {
   const text = (k?: string) => (k && typeof data[k] === "string" && (data[k] as string).trim() ? (data[k] as string) : null);
   const num = (k?: string) => (k && typeof data[k] === "number" && (data[k] as number) > 0 ? (data[k] as number) : null);
   return { unit: normalizeUnit(text(def.unit) ?? def.default_unit ?? null), piece: num(def.piece), pack: num(def.pack), pack_name: text(def.pack_name) };
 }
 
-/** Een verandering van de voorraad van een ding (shared/cells.ts), met wat nodig is om te tellen. */
+/** Een verandering van de voorraad van een item (shared/cells.ts), met wat nodig is om te tellen. */
 export type StockEntry = {
   at: string;
   /** Om veranderingen op hetzelfde moment in volgorde te zetten. */
@@ -70,7 +70,7 @@ export type StockEntry = {
 };
 
 /**
- * De voorraad van een ding uit zijn veranderingen (in eender welke volgorde). Wat er nog is, komt van de oudste eerst
+ * De voorraad van een item uit zijn veranderingen (in eender welke volgorde). Wat er nog is, komt van de oudste eerst
  * eraf (zo weet je ongeveer wat het eerst vervalt).
  */
 export function stockLevel(def: StockDef, data: Attributes, lines: StockEntry[]): StockLevel {
@@ -116,7 +116,7 @@ export function stockLevel(def: StockDef, data: Attributes, lines: StockEntry[])
   };
 }
 
-/** De prijs per eenheid van het ding (in cent), uit een lijn met een prijs; null als het niet te zeggen is. */
+/** De prijs per eenheid van het item (in cent), uit een lijn met een prijs; null als het niet te zeggen is. */
 export function unitPrice(price: number | null, amount: number | null, unit: string | null, measure: Measure): number | null {
   if (price === null || !(price > 0)) return null;
   const n = amount === null ? 1 : convert(amount, unit, measure);

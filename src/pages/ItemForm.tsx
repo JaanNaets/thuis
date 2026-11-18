@@ -2,14 +2,14 @@ import { NAME } from "../../shared/views";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { canEdit, type ListDetail, type Thing, type ThingRef } from "../../shared/model";
+import { canEdit, type ListDetail, type Item, type ItemRef } from "../../shared/model";
 import { isProductCode, productData, productLabel } from "../../shared/product";
 import type { Person } from "../../shared/types";
 import { api, useApi } from "../api";
 import { RequiredMark, SubmitButton } from "../components/Controls";
 import { BarcodeScanner } from "../components/BarcodeScanner";
 import { AiMark, attributesDraft, buildAttributes, FieldInputs, findProduct, type Access, type AttributeDraft } from "../components/Fields";
-import { Combo, useThingOptions } from "../components/ItemPicker";
+import { Combo, useListItems } from "../components/ItemPicker";
 import { Icon } from "../components/Icon";
 import { PageHead } from "../components/Page";
 import { useToast } from "../components/Toast";
@@ -17,14 +17,14 @@ import { prepareUpload } from "../image";
 import { enqueue, isOffline } from "../outbox";
 import { useNavigate } from "../router";
 import { clearShared, sharedFile } from "../shared-file";
-import { readsPhoto, THINGS_FORM } from "../../shared/photoread";
+import { readsPhoto, ITEMS_FORM } from "../../shared/photoread";
 import { PhotoButton } from "../components/PhotoPicker";
 import { useSession } from "../session";
 
 /** `mirror`: gekoppeld (zie shared/transfer.ts); de naam en de velden in `locked` volgen de bron. */
-type ThingDetail = { thing: Thing; list: { id: string }; mirror: { locked: string[] } | null };
+type ItemDetail = { item: Item; list: { id: string }; mirror: { locked: string[] } | null };
 
-/** Wat een foto opleverde (POST /lists/:id/things/read-photo). */
+/** Wat een foto opleverde (POST /lists/:id/items/read-photo). */
 type PhotoRead = {
   name: string | null;
   data: Record<string, unknown>;
@@ -36,43 +36,43 @@ type PhotoRead = {
 export const allEdit = (fields: FieldDef[]): Record<string, Access> => Object.fromEntries(fields.map((f) => [f.key, "edit" as const]));
 
 /**
- * Een ding toevoegen aan een lijst (`/lijsten/:id/nieuw`, met `?tekst=` als naam of `?veld=&op=` voor een datum) of
- * bewerken (`/dingen/:thingId/bewerken`). Zie STIJLBOEK.md → Formulier.
+ * Een item toevoegen aan een lijst (`/lijsten/:id/nieuw`, met `?tekst=` als naam of `?veld=&op=` voor een datum) of
+ * bewerken (`/items/:itemId/bewerken`). Zie STIJLBOEK.md → Formulier.
  */
-export function ThingFormPage() {
-  const { id, thingId } = useParams();
-  const { data: existing } = useApi<ThingDetail>(thingId ? `/things/${thingId}` : null);
+export function ItemFormPage() {
+  const { id, itemId } = useParams();
+  const { data: existing } = useApi<ItemDetail>(itemId ? `/items/${itemId}` : null);
   const listId = id ?? existing?.list.id ?? null;
   const { data: detail, error } = useApi<ListDetail>(listId ? `/lists/${listId}` : null);
   if (error) return <p className="error page">{error}</p>;
-  if (!detail || (thingId && !existing)) return <p className="page muted">Laden…</p>;
-  return <ThingForm key={thingId ?? listId} detail={detail} thing={existing?.thing ?? null} locked={existing?.mirror?.locked ?? []} />;
+  if (!detail || (itemId && !existing)) return <p className="page muted">Laden…</p>;
+  return <ItemForm key={itemId ?? listId} detail={detail} item={existing?.item ?? null} locked={existing?.mirror?.locked ?? []} />;
 }
 
-function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing | null; locked: string[] }) {
+function ItemForm({ detail, item, locked }: { detail: ListDetail; item: Item | null; locked: string[] }) {
   const { list, role } = detail;
   const toast = useToast();
   const navigate = useNavigate();
   const { person, ai } = useSession();
   const [params] = useSearchParams();
   const { data: people } = useApi<Person[]>("/me/people");
-  const [name, setName] = useState(thing?.name ?? params.get("tekst") ?? "");
+  const [name, setName] = useState(item?.name ?? params.get("tekst") ?? "");
   const [draft, setDraft] = useState<AttributeDraft>(() => {
     // Vooraf ingevuld in het palet (stap voor stap, Alles invullen): enkel de velden van de lijst tellen.
     let pre: Attributes = {};
     try {
       const raw = JSON.parse(params.get("vooraf") ?? "null");
-      if (!thing && raw && typeof raw === "object" && !Array.isArray(raw)) pre = raw as Attributes;
+      if (!item && raw && typeof raw === "object" && !Array.isArray(raw)) pre = raw as Attributes;
     } catch {
       pre = {};
     }
-    const data = { ...pre, ...(thing?.data ?? {}) };
+    const data = { ...pre, ...(item?.data ?? {}) };
     const field = params.get("veld");
     const day = params.get("op");
-    if (!thing && field && day && list.fields.some((f) => f.key === field && f.type === "date")) data[field] = day;
+    if (!item && field && day && list.fields.some((f) => f.key === field && f.type === "date")) data[field] = day;
     return attributesDraft(list.fields, data);
   });
-  const [partOf, setPartOf] = useState<string | null>(thing?.part_of ?? null);
+  const [partOf, setPartOf] = useState<string | null>(item?.part_of ?? null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   // Gekoppeld: wat uit de bron komt, toon je enkel (de server houdt het zo).
@@ -84,9 +84,9 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
   const [source, setSource] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   // Leest deze lijst een foto (Instellen), en staat de AI voor jou aan?
-  const reads = Boolean(ai && readsPhoto(list.read_photo, THINGS_FORM, null));
+  const reads = Boolean(ai && readsPhoto(list.read_photo, ITEMS_FORM, null));
 
-  // Een gedeelde foto (of de foto bij de +): ze komt bij het ding. Met `lezen=1` koos je al om ze te laten lezen;
+  // Een gedeelde foto (of de foto bij de +): ze komt bij het item. Met `lezen=1` koos je al om ze te laten lezen;
   // anders leest de AI ze pas na een tik op Foto lezen.
   const [shared, setShared] = useState(false);
   const sharedTaken = useRef(false);
@@ -94,7 +94,7 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
     // Eén keer (ook als React het effect twee keer draait): anders leest de AI dezelfde foto twee keer.
     if (sharedTaken.current) return;
     sharedTaken.current = true;
-    if (!thing && params.get("foto") === "gedeeld")
+    if (!item && params.get("foto") === "gedeeld")
       sharedFile().then((f) => {
         if (!f) return;
         setPhoto(f);
@@ -133,7 +133,7 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
     try {
       const form = new FormData();
       form.set("image", await prepareUpload(file));
-      const read = await api.post<PhotoRead>(`/lists/${list.id}/things/read-photo`, form);
+      const read = await api.post<PhotoRead>(`/lists/${list.id}/items/read-photo`, form);
       if (read.message) toast(read.message, "alert");
       fill(read.name, read.data);
       setPhoto(file);
@@ -166,16 +166,16 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
     setProblem(undefined);
     const body = { name: name.trim(), data: built.data, part_of: partOf };
     try {
-      if (thing) {
-        await api.put(`/things/${thing.id}`, body);
+      if (item) {
+        await api.put(`/items/${item.id}`, body);
         toast(`${name.trim()} bewaard`);
-        navigate(`/dingen/${thing.id}`, { replace: true });
+        navigate(`/items/${item.id}`, { replace: true });
       } else {
-        const { id } = await api.post<{ id: string }>(`/lists/${list.id}/things`, body);
+        const { id } = await api.post<{ id: string }>(`/lists/${list.id}/items`, body);
         if (photo) {
           const form = new FormData();
           form.set("file", await prepareUpload(photo));
-          await api.put(`/things/${id}/photo`, form).catch((err: Error) => toast(err.message, "alert"));
+          await api.put(`/items/${id}/photo`, form).catch((err: Error) => toast(err.message, "alert"));
         }
         toast(`${name.trim()} toegevoegd`);
         if (again) {
@@ -184,11 +184,11 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
           setName("");
           setDraft(attributesDraft(list.fields, {}));
           setPartOf(null);
-        } else navigate(`/dingen/${id}`, { replace: true });
+        } else navigate(`/items/${id}`, { replace: true });
       }
     } catch (err) {
-      if (!thing && isOffline(err)) {
-        await enqueue("thing", list.id, name.trim(), body);
+      if (!item && isOffline(err)) {
+        await enqueue("item", list.id, name.trim(), body);
         toast(`${name.trim()} wacht op internet`);
         navigate(`/lijsten/${list.id}`, { replace: true });
         return;
@@ -201,16 +201,16 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
 
   return (
     <form className="form page" onSubmit={(e) => save(e)}>
-      <PageHead title={thing ? `${thing.name} bewerken` : `${list.one} toevoegen`} back={{ to: -1, label: list.name }} />
+      <PageHead title={item ? `${item.name} bewerken` : `${list.one} toevoegen`} back={{ to: -1, label: list.name }} />
       <section className="card form-section">
         <label className="field">
           <span className="label">
             Naam
             <RequiredMark />
           </span>
-          <input value={name} required maxLength={200} autoFocus={!thing} disabled={locked.includes(NAME)} onChange={(e) => setName(e.target.value)} />
+          <input value={name} required maxLength={200} autoFocus={!item} disabled={locked.includes(NAME)} onChange={(e) => setName(e.target.value)} />
         </label>
-        {!thing && (
+        {!item && (
           <div className="field">
             <div className="btn-row photo-row">
               {products && (
@@ -257,7 +257,7 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
         <FieldInputs defs={list.fields} value={draft} onChange={(next) => setDraft(next)} access={access} people={people ?? []} meId={person.id} />
       </section>
       <section className="card form-section">
-        <PartOfPicker value={partOf} onChange={setPartOf} self={thing?.id ?? null} />
+        <PartOfPicker value={partOf} onChange={setPartOf} self={item?.id ?? null} />
       </section>
       {scanning && <BarcodeScanner onResult={(r) => byCode(r.rawValue)} onClose={() => setScanning(false)} />}
       {problem && <p className="error">{problem}</p>}
@@ -265,7 +265,7 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
         <SubmitButton busy={busy} className="btn btn-primary btn-lg">
           Opslaan
         </SubmitButton>
-        {!thing && (
+        {!item && (
           <button type="button" className="btn btn-outline btn-lg" disabled={busy} onClick={(e) => save(e as unknown as FormEvent, true)}>
             Opslaan en volgende
           </button>
@@ -275,10 +275,10 @@ function ThingForm({ detail, thing, locked }: { detail: ListDetail; thing: Thing
   );
 }
 
-/** Deel van een ander ding (de pedalen van de fiets): kies uit al je lijsten. */
+/** Deel van een ander item (de pedalen van de fiets): kies uit al je lijsten. */
 function PartOfPicker({ value, onChange, self }: { value: string | null; onChange: (id: string | null) => void; self: string | null }) {
   const [text, setText] = useState<string | null>(null);
-  const { options, placeOf, nameOf } = useThingOptions([], text ?? "", value ? [value] : []);
+  const { options, placeOf, nameOf } = useListItems([], text ?? "", value ? [value] : []);
   const shown = text ?? (value ? nameOf(value) : "");
   return (
     <div className="field">
@@ -287,7 +287,7 @@ function PartOfPicker({ value, onChange, self }: { value: string | null; onChang
         <Combo
           label="Deel van"
           text={shown}
-          options={options?.filter((o: ThingRef) => o.id !== self)}
+          options={options?.filter((o: ItemRef) => o.id !== self)}
           placeOf={placeOf}
           disabled={false}
           placeholder="Zoek of kies…"

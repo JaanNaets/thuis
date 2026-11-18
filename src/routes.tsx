@@ -12,8 +12,8 @@ import { ListSettings } from "./pages/ListSettings";
 import { MePage } from "./pages/MePage";
 import { AppPage, SharedPage, StickerPage } from "./pages/QuickLinks";
 import { TagPage } from "./pages/TagPage";
-import { ThingFormPage } from "./pages/ThingForm";
-import { ThingPage } from "./pages/ThingPage";
+import { ItemFormPage } from "./pages/ItemForm";
+import { ItemPage } from "./pages/ItemPage";
 
 export const routes: RouteObject[] = [
   {
@@ -29,13 +29,15 @@ export const routes: RouteObject[] = [
       { path: "lijsten/verbanden", loader: ({ request }) => redirect(`/lijsten${new URL(request.url).search}`) },
       { path: "lijsten/:id", element: <ListPage /> },
       { path: "lijsten/:id/instellingen", element: <ListSettings /> },
-      { path: "lijsten/:id/nieuw", element: <ThingFormPage /> },
+      { path: "lijsten/:id/nieuw", element: <ItemFormPage /> },
       { path: "lijsten/:id/loggen", element: <EventFormPage /> },
       { path: "lijsten/:id/importeren", element: <ImportPage /> },
       { path: "lijsten/:id/uit-lijst", element: <FromListPage /> },
       { path: "lijsten/:id/sticker", element: <StickerPage /> },
-      { path: "dingen/:thingId", element: <ThingPage /> },
-      { path: "dingen/:thingId/bewerken", element: <ThingFormPage /> },
+      { path: "items/:itemId", element: <ItemPage /> },
+      { path: "items/:itemId/bewerken", element: <ItemFormPage /> },
+      // Vroeger heetten items "dingen" (oude links en meldingen).
+      { path: "dingen/:itemId/*", loader: ({ params, request }) => redirect(`/items/${params.itemId}${params["*"] ? `/${params["*"]}` : ""}${new URL(request.url).search}`) },
       { path: "gebeurtenissen/:eventId", element: <EventPage /> },
       { path: "gebeurtenissen/:eventId/bewerken", element: <EventFormPage /> },
       { path: "tags/:tagId", element: <TagPage /> },

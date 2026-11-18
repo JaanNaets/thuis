@@ -1,15 +1,15 @@
-// Bestanden bij een ding of gebeurtenis (een factuur, een handleiding): zien wie het ding of de gebeurtenis
+// Bestanden bij een item of gebeurtenis (een factuur, een handleiding): zien wie het item of de gebeurtenis
 // helemaal ziet, verwijderen wie het mag wijzigen.
 
 import { Hono, type Context } from "hono";
 import { canEdit } from "../../shared/model";
-import { requireThing, seenLists } from "../access";
+import { requireItem, seenLists } from "../access";
 import type { AppEnv } from "../types";
 import { ForbiddenError, NotFoundError } from "../validate";
 
 export const attachments = new Hono<AppEnv>();
 
-type Meta = { id: string; owner_kind: "thing" | "event"; owner_id: string; filename: string; content_type: string; r2_key: string };
+type Meta = { id: string; owner_kind: "item" | "event"; owner_id: string; filename: string; content_type: string; r2_key: string };
 
 async function requireAttachment(c: Context<AppEnv>, id: string, edit: boolean): Promise<Meta> {
   const db = c.env.DB;
@@ -17,7 +17,7 @@ async function requireAttachment(c: Context<AppEnv>, id: string, edit: boolean):
   if (!meta) throw new NotFoundError("Dat bestand bestaat niet (meer).");
   const personId = c.get("person").id;
   let role;
-  if (meta.owner_kind === "thing") role = (await requireThing(db, personId, meta.owner_id)).role;
+  if (meta.owner_kind === "item") role = (await requireItem(db, personId, meta.owner_id)).role;
   else {
     const row = await db.prepare("SELECT list_id FROM events WHERE id = ?").bind(meta.owner_id).first<{ list_id: string }>();
     role = row ? (await seenLists(db, personId, row.list_id)).get(row.list_id) : undefined;

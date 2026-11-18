@@ -1,8 +1,8 @@
-// Het model van Heystack: lijsten met dingen, en per lijst een logboek met gebeurtenissen.
+// Het model van Heystack: lijsten met items, en per lijst een logboek met gebeurtenissen.
 //
-// - Een **lijst** heeft dingen (allemaal met dezelfde velden; mag leeg zijn), mensen met een rol, tags en een logboek.
+// - Een **lijst** heeft items (allemaal met dezelfde velden; mag leeg zijn), mensen met een rol, tags en een logboek.
 // - Een **gebeurtenis** gebeurt op een moment en heeft een soort: een van de zes basissoorten (`BASES`) of een eigen
-//   soort erop (Gegeten is een Gebruik met kcal). Ze heeft **lijnen** naar de dingen die ze raakt: wat erbij komt
+//   soort erop (Gegeten is een Gebruik met kcal). Ze heeft **lijnen** naar de items die ze raakt: wat erbij komt
 //   (in), wat eraf gaat (uit), waarover ze gaat (voor) en waar of bij wie (bij).
 // - Wat je ziet, hangt af van je rol per lijst (zie shared/rights.ts). Voorraad, uitgaven, wie moet wie en eten
 //   worden nooit bewaard maar uitgerekend uit de lijnen (shared/stock.ts, shared/ledger.ts, shared/food.ts).
@@ -31,7 +31,7 @@ export const isRole = (v: unknown): v is Role => typeof v === "string" && Object
 export const isDirectRole = (v: unknown): v is DirectRole => v === "geen" || isRole(v);
 
 export const ROLE_RANK: Record<Role, number> = { gast: 1, lid: 2, beheerder: 3 };
-/** Dingen en gebeurtenissen toevoegen, wijzigen en verwijderen. */
+/** Items en gebeurtenissen toevoegen, wijzigen en verwijderen. */
 export const canEdit = (r: Role | null | undefined): boolean => r === "lid" || r === "beheerder";
 /** De lijst instellen: naam, velden, soorten, mensen, tags. */
 export const canManage = (r: Role | null | undefined): boolean => r === "beheerder";
@@ -77,7 +77,7 @@ export const BASES = {
     label: "Dienst",
     plural: "Diensten",
     icon: "wrench",
-    hint: "Iemand doet iets voor jou of een ding",
+    hint: "Iemand doet iets voor jou of een item",
     parts: { money: true, to: false, duration: false, groups: [{ role: "voor", label: "Voor", list: null }, { role: "bij", label: "Bij", list: null }] },
   },
   activiteit: { label: "Activiteit", plural: "Activiteiten", icon: "clock", hint: "Wat je doet, met een duur", parts: { ...NO_PARTS, duration: true, groups: [{ role: "voor", label: "Voor", list: null }] } },
@@ -152,7 +152,7 @@ export function baseKind(base: Base): KindInfo {
   return { id: base, base, name: b.label, icon: b.icon, fields, list_id: null, goal: null, planned: false, parts: baseParts(base), does: presetDoes(base) };
 }
 
-/** Een cel rechtstreeks aanpassen (in het ding): een gebeurtenis die de nieuwe waarde zet (shared/cells.ts). */
+/** Een cel rechtstreeks aanpassen (in het item): een gebeurtenis die de nieuwe waarde zet (shared/cells.ts). */
 export const ADJUST_KIND: KindInfo = {
   id: ADJUST,
   base: "meting",
@@ -181,7 +181,7 @@ export function kindInfo(kind: Kind): KindInfo {
   };
 }
 
-/** De eerste groep lijnen van een formulier (waar een ding komt als je logt vanaf dat ding). */
+/** De eerste groep lijnen van een formulier (waar een item komt als je logt vanaf dat item). */
 export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? { role: "voor", label: LINE_ROLES.voor.label, list: null };
 
 /** De groep van een rol in een formulier (of hoe die rol heet als het formulier ze niet heeft). */
@@ -211,7 +211,7 @@ export function formsOf(kinds: KindInfo[], listId: string, chosen?: string | nul
 export type List = {
   id: string;
   name: string;
-  /** Hoe één ding heet ("Wijn"); null = een lijst zonder dingen (enkel een logboek). */
+  /** Hoe één item heet ("Wijn"); null = een lijst zonder items (enkel een logboek). */
   one: string | null;
   icon: IconKey | null;
   color: Tone | null;
@@ -250,12 +250,12 @@ export type ListDetail = {
   people: ListPerson[];
   /** De soorten die je hier kan loggen: de basissoorten, die van deze lijst en die van andere lijsten die je ziet. */
   kinds: KindInfo[];
-  counts: { things: number; events: number; planned: number };
+  counts: { items: number; events: number; planned: number };
 };
 
-// ---------- dingen ----------
+// ---------- items ----------
 
-export type Thing = {
+export type Item = {
   id: string;
   list_id: string;
   name: string;
@@ -266,13 +266,13 @@ export type Thing = {
   created_by: string;
   created_at: string;
   updated_at: string;
-  /** Gekoppeld (zie shared/transfer.ts): de koppeling en het ding in de bron. */
+  /** Gekoppeld (zie shared/transfer.ts): de koppeling en het item in de bron. */
   mirror_id?: string | null;
   mirror_of?: string | null;
 };
 
-/** Een ding in een lijst, met zijn voorraad als de lijst telt. */
-export type ThingRow = Thing & { stock?: StockLevel | null };
+/** Een item in een lijst, met zijn voorraad als de lijst telt. */
+export type ItemRow = Item & { stock?: StockLevel | null };
 
 export type StockLevel = {
   amount: number;
@@ -283,8 +283,8 @@ export type StockLevel = {
   expires: string | null;
 };
 
-/** Een ding om naar te verwijzen of te kiezen (zoeken, een lijn). */
-export type ThingRef = {
+/** Een item om naar te verwijzen of te kiezen (zoeken, een lijn). */
+export type ItemRef = {
   id: string;
   name: string;
   list_id: string;
@@ -311,7 +311,7 @@ export type Line = {
   id: string;
   position: number;
   role: LineRole;
-  thing_id: string | null;
+  item_id: string | null;
   text: string | null;
   amount: number | null;
   unit: string | null;
@@ -343,18 +343,18 @@ export type Event = {
 };
 
 /**
- * Een gebeurtenis zoals jij ze ziet. `partial`: je ziet de lijst van de gebeurtenis niet, enkel de lijnen over dingen
+ * Een gebeurtenis zoals jij ze ziet. `partial`: je ziet de lijst van de gebeurtenis niet, enkel de lijnen over items
  * die je wel ziet (zonder naam, bedrag, foto of andere lijnen).
  */
 export type EventView = Omit<Event, "data"> & { data: Attributes; lines: Line[]; partial: boolean };
 
-/** Een lijn zoals je ze invoert: een ding, een nieuw ding of tekst. */
+/** Een lijn zoals je ze invoert: een item, een nieuw item of tekst. */
 export type LineInput = {
   role: LineRole;
-  thing_id?: string | null;
+  item_id?: string | null;
   text?: string | null;
-  /** Een nieuw ding in een lijst (een product dat nog niet bestaat). */
-  new_thing?: { list_id: string; name: string; data?: Attributes; alias?: string } | null;
+  /** Een nieuw item in een lijst (een product dat nog niet bestaat). */
+  new_item?: { list_id: string; name: string; data?: Attributes; alias?: string } | null;
   amount?: number | null;
   unit?: string | null;
   price?: number | null;
@@ -419,10 +419,10 @@ export function brusselsNow(now: Date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
 
-/** De naam van een gebeurtenis om te tonen: haar naam, anders de soort (met het eerste ding). */
-export function eventTitle(e: Pick<EventView, "name" | "lines">, kind: Pick<KindInfo, "name">, thingName: (id: string) => string | undefined): string {
+/** De naam van een gebeurtenis om te tonen: haar naam, anders de soort (met het eerste item). */
+export function eventTitle(e: Pick<EventView, "name" | "lines">, kind: Pick<KindInfo, "name">, itemName: (id: string) => string | undefined): string {
   if (e.name.trim()) return e.name;
   const first = e.lines.find((l) => l.role !== "bij");
-  const what = first ? (first.thing_id ? thingName(first.thing_id) : first.text) : null;
+  const what = first ? (first.item_id ? itemName(first.item_id) : first.text) : null;
   return what ? `${kind.name}: ${what}` : kind.name;
 }

@@ -1,5 +1,5 @@
 // Een lijst als sjabloon delen (Instellen → Algemeen → Als sjabloon): een bestand met de opbouw van de lijst (naam, hoe
-// één ding heet, icoon, velden, voorraad, eigen soorten en wie een melding krijgt), zonder dingen, logboek, mensen, tags of weergaven. Een
+// één item heet, icoon, velden, voorraad, eigen soorten en wie een melding krijgt), zonder items, logboek, mensen, tags of weergaven. Een
 // verwijzing naar de lijst zelf wordt "self" (bij het maken weer de nieuwe lijst); een verwijzing naar een andere lijst
 // betekent elders niets en valt weg. Wat binnenkomt, gaat door `parseTemplateFile` en daarna door de gewone
 // controle van POST /lists.

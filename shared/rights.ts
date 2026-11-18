@@ -5,7 +5,7 @@
 // - Een regel geldt enkel op lijsten waar wie ze maakte rechtstreeks beheerder is: anders kon je via een tag toegang
 //   geven tot de lijst van iemand anders.
 // - Er blijft altijd minstens één rechtstreekse beheerder (`keepsAdmin`).
-// - Een lijn `in`, `uit` of `voor` zie je ook als je de lijst van het ding ziet; `bij` enkel met de hele gebeurtenis
+// - Een lijn `in`, `uit` of `voor` zie je ook als je de lijst van het item ziet; `bij` enkel met de hele gebeurtenis
 //   (anders zag je via de lijst met winkels en diensten elk doktersbezoek).
 
 import { ROLE_RANK, canEdit, type DirectRole, type LineRole, type Role } from "./model.ts";
@@ -93,22 +93,22 @@ export function keepsAdmin(rows: { role: DirectRole }[]): boolean {
 }
 
 /**
- * Mag je deze lijn zien? `eventList`: je rol op de lijst van de gebeurtenis; `thingList`: op de lijst van het ding.
- * Met de gebeurtenis zie je alles; anders enkel een lijn in, uit of voor een ding dat je ziet.
+ * Mag je deze lijn zien? `eventList`: je rol op de lijst van de gebeurtenis; `itemList`: op de lijst van het item.
+ * Met de gebeurtenis zie je alles; anders enkel een lijn in, uit of voor een item dat je ziet.
  */
-export function lineVisible(role: LineRole, eventList: Role | null, thingList: Role | null): boolean {
+export function lineVisible(role: LineRole, eventList: Role | null, itemList: Role | null): boolean {
   if (eventList) return true;
-  return role !== "bij" && thingList !== null;
+  return role !== "bij" && itemList !== null;
 }
 
 /**
- * Mag je deze lijn bewaren? Erbij of eraf verandert de voorraad van het ding: daarvoor moet je de lijst van het ding
- * mogen wijzigen. Voor en bij: zien is genoeg. Een lijn zonder ding (tekst) mag altijd.
+ * Mag je deze lijn bewaren? Erbij of eraf verandert de voorraad van het item: daarvoor moet je de lijst van het item
+ * mogen wijzigen. Voor en bij: zien is genoeg. Een lijn zonder item (tekst) mag altijd.
  */
-export function lineAllowed(role: LineRole, thingList: Role | null | "none"): boolean {
-  if (thingList === "none") return true;
-  if (role === "in" || role === "uit") return canEdit(thingList);
-  return thingList !== null;
+export function lineAllowed(role: LineRole, itemList: Role | null | "none"): boolean {
+  if (itemList === "none") return true;
+  if (role === "in" || role === "uit") return canEdit(itemList);
+  return itemList !== null;
 }
 
 /** De hoogste van twee rollen (of de enige). */

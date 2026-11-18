@@ -33,7 +33,7 @@ tags.get("/:id", async (c) => {
     .prepare("SELECT id, name, NULL AS email, color, NULL AS iban FROM people WHERE id IN (SELECT value FROM json_each(?))")
     .bind(ids(results.flatMap((r) => [r.person_id, r.created_by])))
     .all<Person>();
-  // De velden van haar lijsten: om al haar dingen samen te tonen (tagView in shared/blocks.ts).
+  // De velden van haar lijsten: om al haar items samen te tonen (tagView in shared/blocks.ts).
   const { results: rows } = await db
     .prepare("SELECT id, fields FROM lists WHERE id IN (SELECT value FROM json_each(?))")
     .bind(ids(lists.map((l) => l.id)))

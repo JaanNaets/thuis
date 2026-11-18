@@ -8,8 +8,8 @@
 export type Destination =
   | { kind: "board"; board: string }
   | { kind: "list"; list: string }
-  /** Loggen in een lijst (eventueel met een soort en tekst), of met `thing` een ding toevoegen. */
-  | { kind: "form"; list: string; type?: string; thing?: boolean; text?: string };
+  /** Loggen in een lijst (eventueel met een soort en tekst), of met `item` een item toevoegen. */
+  | { kind: "form"; list: string; type?: string; item?: boolean; text?: string };
 
 export type DestinationKind = Destination["kind"];
 
@@ -94,7 +94,7 @@ export function cleanDestination(raw: unknown): Destination | null {
       return {
         kind: "form",
         list: o.list as string,
-        ...(o.thing === true ? { thing: true } : id(o.type) ? { type: o.type as string } : {}),
+        ...(o.item === true || o.thing === true ? { item: true } : id(o.type) ? { type: o.type as string } : {}),
         ...(t ? { text: t } : {}),
       };
     }
@@ -153,7 +153,7 @@ export function destinationPath(d: Destination): string {
       if (d.type) q.set("soort", d.type);
       if (d.text) q.set("tekst", d.text);
       const query = q.toString();
-      return `/lijsten/${d.list}/${d.thing ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
+      return `/lijsten/${d.list}/${d.item ? "nieuw" : "loggen"}${query ? `?${query}` : ""}`;
     }
   }
 }
@@ -175,7 +175,7 @@ export function reachable(d: Destination, reach: Reach): boolean {
     case "form": {
       const l = reach.lists.get(d.list);
       if (!l?.edit) return false;
-      if (d.thing) return Boolean(l.one);
+      if (d.item) return Boolean(l.one);
       return !d.type || l.kinds.has(d.type);
     }
   }
@@ -190,7 +190,7 @@ export function destinationLabel(d: Destination, reach: Reach): string {
       return reach.lists.get(d.list)?.name ?? "Lijst";
     case "form": {
       const l = reach.lists.get(d.list);
-      if (d.thing) return `${l?.one ?? "Ding"} toevoegen`;
+      if (d.item) return `${l?.one ?? "Item"} toevoegen`;
       return `${(d.type && l?.kinds.get(d.type)) || "Iets"} loggen`;
     }
   }

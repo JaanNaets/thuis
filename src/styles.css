@@ -8566,7 +8566,7 @@ dialog.sheet.builder-sheet {
   border-top: 1px solid var(--divider);
 }
 
-/* De fotoknop (en Barcode) in een formulier: op hun eigen breedte, zoals bij de foto van een ding. */
+/* De fotoknop (en Barcode) in een formulier: op hun eigen breedte, zoals bij de foto van een item. */
 .photo-row {
   align-items: center;
   flex-wrap: wrap;

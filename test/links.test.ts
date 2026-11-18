@@ -95,10 +95,10 @@ test("altijd mee: lijsten, soorten, gebeurtenissen, lijnen en blokken", () => {
   }
   assert.ok(has(logged, "view", "A", viewNode("agenda")) && has(logged, "view", "A", viewNode("herinneringen")), "gepland staat ook in de agenda en herinnert");
 
-  // Lijnen: rol en ding naar een andere lijst; een lijn van één persoon telt als gedeeld (in `shared`).
+  // Lijnen: rol en item naar een andere lijst; een lijn van één persoon telt als gedeeld (in `shared`).
   const lined = buildLinks(input({ lines: [{ list: "A", kind: "aankoop", base: "aankoop", role: "in", to: "B", events: 4, last: "2026-11-05" }], pairs: [{ list: "A", to: "B", events: 4, last: "2026-11-05" }] })).links;
   const log = lined.find((l) => l.kind === "log" && l.from === "A" && l.to === "B");
-  assert.ok(LINE_LINKS.role && LINE_LINKS.thing_id && log);
+  assert.ok(LINE_LINKS.role && LINE_LINKS.item_id && log);
   assert.equal(log!.count, 4);
   assert.equal(log!.last, "2026-11-05");
   assert.ok(LINE_LINKS.owner);
@@ -126,15 +126,15 @@ test("wat je niet ziet, bestaat niet; wat in de lijst zelf blijft, is geen lijn"
   assert.deepEqual(links.find((l) => l.kind === "log" && l.to === "B")?.texts, ["Gebruik haalt eraf uit de voorraad"]);
 });
 
-test("een lijn als gewone zin, met hoe één ding heet", () => {
+test("een lijn als gewone zin, met hoe één item heet", () => {
   assert.equal(lineText("Tankbeurt", "voor", { one: "Wagen", stock: null }), "Tankbeurt voor een wagen");
   assert.equal(lineText("Aankoop", "bij", { one: "Winkel", stock: null }), "Aankoop bij een winkel");
   assert.equal(lineText("Aankoop", "in", { one: "Product", stock: { unit: "u" } }), "Aankoop telt erbij in de voorraad");
   assert.equal(lineText("Gegeten", "uit", { one: null, stock: { unit: "u" } }), "Gegeten haalt eraf uit de voorraad");
-  assert.equal(lineText("Gebruik", "uit", { one: null, stock: null }), "Gebruik haalt een ding eraf");
+  assert.equal(lineText("Gebruik", "uit", { one: null, stock: null }), "Gebruik haalt een item eraf");
 });
 
-test("de dingen van een verband: de meeste eerst, enkel bij een verband dat bestaat", () => {
+test("de items van een verband: de meeste eerst, enkel bij een verband dat bestaat", () => {
   const { links } = buildLinks(
     input({
       lines: [
@@ -149,15 +149,15 @@ test("de dingen van een verband: de meeste eerst, enkel bij een verband dat best
         },
       ],
       pairs: [{ list: "A", to: "B", events: 8, last: "2026-11-05" }],
-      things: [
-        { list: "A", to: "B", thing: "m", name: "Melk", events: 2 },
-        { list: "A", to: "B", thing: "p", name: "Pasta", events: 3 },
-        { list: "A", to: "B", thing: "y", name: "Yoghurt", events: 3 },
-        { list: "A", to: "VERBORGEN", thing: "x", name: "Geheim", events: 9 },
+      items: [
+        { list: "A", to: "B", item: "m", name: "Melk", events: 2 },
+        { list: "A", to: "B", item: "p", name: "Pasta", events: 3 },
+        { list: "A", to: "B", item: "y", name: "Yoghurt", events: 3 },
+        { list: "A", to: "VERBORGEN", item: "x", name: "Geheim", events: 9 },
       ],
     }),
   );
-  assert.deepEqual(links.find((l) => l.kind === "log")?.things, [
+  assert.deepEqual(links.find((l) => l.kind === "log")?.items, [
     { name: "Pasta", count: 3 },
     { name: "Yoghurt", count: 3 },
     { name: "Melk", count: 2 },
@@ -173,7 +173,7 @@ const sample: Link[] = [
     texts: ["Gegeten haalt eraf uit de voorraad"],
     count: 8,
     last: "2026-11-05",
-    things: [{ name: "Pasta", count: 3 }],
+    items: [{ name: "Pasta", count: 3 }],
   },
   {
     kind: "log",
@@ -182,7 +182,7 @@ const sample: Link[] = [
     texts: ["Aankoop bij een winkel"],
     count: 12,
     last: "2026-11-04",
-    things: [{ name: "Colruyt", count: 8 }],
+    items: [{ name: "Colruyt", count: 8 }],
   },
   {
     kind: "ref",
@@ -229,7 +229,7 @@ const sampleKinds = [
   { id: "k2", list: "ONZICHTBAAR", name: "Gegeten" },
 ];
 
-test("zoeken: lijsten, formulieren, dingen, verbanden en weergaven; elk woord, zonder accenten", () => {
+test("zoeken: lijsten, formulieren, items, verbanden en weergaven; elk woord, zonder accenten", () => {
   const find = (q: string) => searchLinks(q, { lists: sampleLists, kinds: sampleKinds, links: sample });
   assert.deepEqual(find("  "), []);
   assert.deepEqual(
@@ -254,11 +254,11 @@ test("zoeken: lijsten, formulieren, dingen, verbanden en weergaven; elk woord, z
   assert.deepEqual(soort.nodes, ["J", "V"]);
   assert.ok(soort.links.includes(linkKey(sample[0])));
   assert.equal(soort.detail, "Formulier van Jaan");
-  // Een ding in een verband: kiest de lijst van het ding.
+  // Een item in een verband: kiest de lijst van het item.
   const pasta = find("pasta");
   assert.deepEqual(
     pasta.map((h) => [h.group, h.select, h.detail]),
-    [["dingen", "V", "Jaan → Voorraad · 3×"]],
+    [["items", "V", "Jaan → Voorraad · 3×"]],
   );
   // Een weergave op naam: met al haar lijsten.
   const geld = find("geld");

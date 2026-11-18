@@ -137,7 +137,7 @@ function Shell({ me, reloadMe }: { me: Me; reloadMe: () => void }) {
               {!online && (
                 <p className="offline-note" role="status">
                   {outbox
-                    ? `Offline · ${outbox === 1 ? "1 ding wacht" : `${outbox} dingen wachten`} op internet`
+                    ? `Offline · ${outbox === 1 ? "1 item wacht" : `${outbox} items wachten`} op internet`
                     : "Offline · wat je logt, wacht op dit toestel tot je internet hebt"}
                 </p>
               )}

@@ -1,5 +1,5 @@
 // Twee soorten iconen (zie STIJLBOEK.md → Iconen):
-// - gevuld voor dingen (bon, kaart, doos, ...): Phosphor "fill" (phosphoricons.com, MIT-licentie);
+// - gevuld voor items (bon, kaart, doos, ...): Phosphor "fill" (phosphoricons.com, MIT-licentie);
 // - lijnen voor richtingen en handelingen (plus, kruis, pijl, zoeken): in de stijl van Lucide (lucide.dev, ISC).
 // Inline, zodat er niets extra geladen wordt. Een nieuw icoon: pad van een van beide sites kopiëren.
 

@@ -1,7 +1,7 @@
-// Koppelen (zie shared/transfer.ts): een doellijst haalt blijvend dingen uit een bron. Na elke wijziging aan de dingen
+// Koppelen (zie shared/transfer.ts): een doellijst haalt blijvend items uit een bron. Na elke wijziging aan de items
 // of de velden van een lijst (`syncFrom`) en elk kwartier (`syncAll`, worker/cron.ts) rekent de server de koppelingen
 // opnieuw uit, met de rechten die wie koppelde nu heeft: is die geen beheerder meer van beide lijsten, dan staat de
-// koppeling stil (er verandert niets). Een gekoppeld ding is een gewoon ding in de doellijst met eigen voorraad en
+// koppeling stil (er verandert niets). Een gekoppeld item is een gewoon item in de doellijst met eigen voorraad en
 // logboek; de naam en de gekoppelde velden volgen de bron (`syncChanges`). Wat het in de doellijst verandert, kan weer
 // een bron zijn voor een volgende koppeling (kringen kunnen niet, zie `makesCycle`).
 
@@ -10,9 +10,9 @@ import { referencedItems, referencedPeople, type Attributes } from "../shared/fi
 import { canManage, type List } from "../shared/model";
 import { cleanPlan, linkedKeys, MAX_TRANSFER, syncChanges, type MirrorChanges, type TransferPlan } from "../shared/transfer";
 import { NAME } from "../shared/views";
-import { parseJson, seenLists, toList, toThing, type ListRow, type ThingRowDb } from "./access";
+import { parseJson, seenLists, toList, toItem, type ListRow, type ItemRowDb } from "./access";
 import { prepareData } from "./prepare";
-import { peopleByIds, shown, thingRefs } from "./routes/things";
+import { peopleByIds, shown, itemRefs } from "./routes/items";
 import { brusselsToday } from "./today";
 
 export type MirrorRow = { id: string; list_id: string; source_id: string; plan: string; created_by: string };
@@ -54,14 +54,14 @@ export async function syncMirror(db: D1Database, m: MirrorRow): Promise<MirrorCh
   const plan = mirrorPlan(m, source, target);
   if (!plan) return null;
   const [{ results: sourceRows }, { results: mine }] = await Promise.all([
-    db.prepare(`SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`).bind(source.id).all<ThingRowDb>(),
-    db.prepare("SELECT id, mirror_of, name, data, archived FROM things WHERE mirror_id = ? AND list_id = ?").bind(m.id, target.id).all<{ id: string; mirror_of: string | null; name: string; data: string; archived: number }>(),
+    db.prepare(`SELECT * FROM items WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`).bind(source.id).all<ItemRowDb>(),
+    db.prepare("SELECT id, mirror_of, name, data, archived FROM items WHERE mirror_id = ? AND list_id = ?").bind(m.id, target.id).all<{ id: string; mirror_of: string | null; name: string; data: string; archived: number }>(),
   ]);
   const today = brusselsToday();
   // Met wat het logboek in de bron invult (shared/cells.ts).
-  const rows = (await withCells(db, source, sourceRows.map(toThing))).rows;
+  const rows = (await withCells(db, source, sourceRows.map(toItem))).rows;
   const people = new Map((await peopleByIds(db, rows.flatMap((t) => referencedPeople(source.fields, t.data)))).map((p) => [p.id, p.name]));
-  const refs = new Map((await thingRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
+  const refs = new Map((await itemRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
   const names = { person: (id: string) => people.get(id) ?? "?", item: (id: string) => refs.get(id) ?? "?" };
   const items = rows.map((t) => ({ id: t.id, name: t.name, data: shown(source.fields, t.data, today), tag_ids: [], created_at: t.created_at }));
   const existing = mine.map((t) => ({ id: t.id, mirror_of: t.mirror_of, name: t.name, data: parseJson<Attributes>(t.data, {}), archived: t.archived ? (1 as const) : (0 as const) }));
@@ -74,7 +74,7 @@ export async function syncMirror(db: D1Database, m: MirrorRow): Promise<MirrorCh
     if (!data) continue;
     statements.push(
       db
-        .prepare("INSERT INTO things (id, list_id, name, data, created_by, mirror_id, mirror_of) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .prepare("INSERT INTO items (id, list_id, name, data, created_by, mirror_id, mirror_of) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .bind(crypto.randomUUID(), target.id, r.name, JSON.stringify(data), m.created_by, m.id, r.source_id),
     );
   }
@@ -82,10 +82,10 @@ export async function syncMirror(db: D1Database, m: MirrorRow): Promise<MirrorCh
     const data = await prepareData(db, m.created_by, seen, target.fields, u.data, before.get(u.id)).catch(() => null);
     if (!data) continue;
     statements.push(
-      db.prepare("UPDATE things SET name = ?, data = ?, archived = 0, updated_at = datetime('now') WHERE id = ? AND mirror_id = ?").bind(u.name, JSON.stringify(data), u.id, m.id),
+      db.prepare("UPDATE items SET name = ?, data = ?, archived = 0, updated_at = datetime('now') WHERE id = ? AND mirror_id = ?").bind(u.name, JSON.stringify(data), u.id, m.id),
     );
   }
-  for (const id of changes.archive) statements.push(db.prepare("UPDATE things SET archived = 1, updated_at = datetime('now') WHERE id = ? AND mirror_id = ?").bind(id, m.id));
+  for (const id of changes.archive) statements.push(db.prepare("UPDATE items SET archived = 1, updated_at = datetime('now') WHERE id = ? AND mirror_id = ?").bind(id, m.id));
   for (let k = 0; k < statements.length; k += 100) await db.batch(statements.slice(k, k + 100));
   return changes;
 }
@@ -93,7 +93,7 @@ export async function syncMirror(db: D1Database, m: MirrorRow): Promise<MirrorCh
 const changed = (c: MirrorChanges | null) => Boolean(c && (c.create.length || c.update.length || c.archive.length));
 
 /**
- * Na een wijziging aan de dingen of de velden van een lijst: de koppelingen die eruit halen (en, met `asTarget`, die
+ * Na een wijziging aan de items of de velden van een lijst: de koppelingen die eruit halen (en, met `asTarget`, die
  * erin schrijven: hun plan hangt ook van de velden van de doellijst af). Een fout houdt het bewaren niet tegen; het
  * kwartier daarna probeert opnieuw.
  */

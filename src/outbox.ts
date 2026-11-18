@@ -1,4 +1,4 @@
-// Offline loggen: een nieuwe gebeurtenis of een nieuw ding dat je zonder internet bewaart, wacht op dit toestel
+// Offline loggen: een nieuwe gebeurtenis of een nieuw item dat je zonder internet bewaart, wacht op dit toestel
 // (IndexedDB) en gaat mee zodra er weer internet is. Enkel iets nieuws (met de foto); wijzigen en verwijderen vragen
 // internet. De server kijkt alles na zoals altijd: mag het niet (meer), dan valt het weg en zegt de app dat.
 
@@ -7,8 +7,8 @@ import { api, ApiError } from "./api";
 import { useToast } from "./components/Toast";
 import { REFRESH_EVENT } from "./device";
 
-/** Wat wacht: een gebeurtenis (`event`) of een ding (`thing`) in een lijst, met wat het formulier zou sturen. */
-export type Waiting = { id: string; what: "event" | "thing"; list_id: string; label: string; input: unknown; photo?: Blob; created_at: string };
+/** Wat wacht: een gebeurtenis (`event`) of een item (`item`) in een lijst, met wat het formulier zou sturen. */
+export type Waiting = { id: string; what: "event" | "item"; list_id: string; label: string; input: unknown; photo?: Blob; created_at: string };
 
 const DB_NAME = "thuis";
 const STORE = "outbox";
@@ -63,7 +63,7 @@ export function flush(): Promise<{ sent: number; refused: string[] }> {
     const refused: string[] = [];
     for (const entry of await waiting()) {
       try {
-        const path = entry.what === "event" ? "events" : "things";
+        const path = entry.what === "event" ? "events" : "items";
         const saved = await api.post<{ id: string }>(`/lists/${entry.list_id}/${path}`, entry.input);
         if (entry.photo) {
           const body = new FormData();
@@ -98,7 +98,7 @@ export function useOutbox(online: boolean): number {
     if (!online || !count) return;
     flush().then(({ sent, refused }) => {
       if (sent) {
-        toast(sent === 1 ? "1 ding van offline verstuurd" : `${sent} dingen van offline verstuurd`);
+        toast(sent === 1 ? "1 item van offline verstuurd" : `${sent} items van offline verstuurd`);
         window.dispatchEvent(new Event(REFRESH_EVENT));
       }
       for (const message of refused) toast(message, "alert");

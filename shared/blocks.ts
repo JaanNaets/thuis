@@ -16,10 +16,10 @@ import { matchesView, NAME, PERIODS, periodRange, periodText, sortItems, type Co
 
 // ---------- bronnen ----------
 
-/** Waar een weergave uit toont: het logboek, de dingen van een lijst, of iets wat de app uitrekent. */
+/** Waar een weergave uit toont: het logboek, de items van een lijst, of iets wat de app uitrekent. */
 export const SOURCES = {
   logboek: "het logboek",
-  dingen: "de dingen",
+  items: "de items",
   voorraad: "de voorraad",
   saldo: "wie moet wie",
   voeding: "wat er gegeten is",
@@ -27,12 +27,12 @@ export const SOURCES = {
 } as const;
 export type SourceKind = keyof typeof SOURCES;
 
-/** Volgens welke datum een bron in de tijd staat (tellen per periode, een agenda); bij de dingen kies je een datumveld. */
+/** Volgens welke datum een bron in de tijd staat (tellen per periode, een agenda); bij de items kies je een datumveld. */
 export function sourceDate(source: SourceKind, fields: FieldDef[], chosen?: string): string {
   if (source === "logboek" || source === "datums") return "at";
   if (source === "voeding") return "day";
   if (source === "voorraad") return "expires";
-  if (source === "dingen") {
+  if (source === "items") {
     const dates = fields.filter((f) => f.type === "date" || f.type === "date_range");
     return (dates.find((f) => f.key === chosen) ?? dates.find((f) => f.agenda) ?? dates[0])?.key ?? "created";
   }
@@ -54,7 +54,7 @@ const NUTRIENT_LABELS: Record<(typeof NUTRIENTS)[number], [string, string]> = {
 
 /**
  * De velden van een bron, zoals de zin en de tabel ze kennen. `lists`: de gekozen lijsten (logboek: hun namen als
- * keuze; dingen: hun velden), `kinds`: de soorten die er gelogd kunnen worden (hun velden komen bij het logboek).
+ * keuze; items: hun velden), `kinds`: de soorten die er gelogd kunnen worden (hun velden komen bij het logboek).
  */
 export function sourceFields(source: SourceKind, ctx: { lists: { name: string; fields: FieldDef[] }[]; kinds: { name: string; fields: FieldDef[] }[] }): FieldDef[] {
   switch (source) {
@@ -71,7 +71,7 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
       }
       return [{ key: NAME, label: "Omschrijving", type: "text" }, ...base, RUNNING, ...extra];
     }
-    case "dingen": {
+    case "items": {
       const seen = new Set<string>();
       const fields = ctx.lists.flatMap((l) => l.fields).filter((f) => !seen.has(f.key) && (seen.add(f.key), true));
       // Uit meer lijsten: ook in welke lijst het staat (om te tonen, te filteren of te groeperen).
@@ -103,7 +103,7 @@ export function sourceFields(source: SourceKind, ctx: { lists: { name: string; f
         ...NUTRIENTS.map((n): FieldDef => ({ key: n, label: NUTRIENT_LABELS[n][0], type: "number", unit: NUTRIENT_LABELS[n][1] })),
       ];
     case "datums":
-      // Wat gebeurde of gepland staat, en de datums van dingen met "In de agenda" (de keuring, een verjaardag).
+      // Wat gebeurde of gepland staat, en de datums van items met "In de agenda" (de keuring, een verjaardag).
       return [
         { key: NAME, label: "Wat", type: "text" },
         { key: "at", label: "Wanneer", type: "date" },
@@ -179,12 +179,12 @@ export type ViewBlock = {
   /** De naam boven het blok; leeg: afgeleid uit de zin (`viewName`). */
   name: string;
   source: SourceKind;
-  /** De lijsten; leeg = al je lijsten (bij de dingen: minstens één). */
+  /** De lijsten; leeg = al je lijsten (bij de items: minstens één). */
   lists: string[];
   where: ViewDef;
   show: Show;
   tally?: Tally;
-  /** De dingen: volgens welk datumveld ze in de tijd staan (tellen per periode, agenda); anders het eerste. */
+  /** De items: volgens welk datumveld ze in de tijd staan (tellen per periode, agenda); anders het eerste. */
   date?: string;
   /** Lijst en tabel: hoogstens zoveel rijen. */
   limit?: number;
@@ -283,17 +283,28 @@ function cleanWhere(raw: unknown): ViewDef {
   return { match: o.match === "any" ? "any" : "all", conditions, ...(sort.length ? { sort } : {}), ...(columns.length ? { columns } : {}) };
 }
 
+/** Overal de oude sleutel "things" (de items van een gebeurtenis) als "items". */
+export function renamedThings(value: unknown): unknown {
+  if (value === "things") return "items";
+  if (Array.isArray(value)) return value.map(renamedThings);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, renamedThings(v)]));
+  return value;
+}
+
 export function cleanViewBlock(raw: unknown): ViewBlock | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const source = Object.hasOwn(SOURCES, String(o.source)) ? (o.source as SourceKind) : null;
+  // Vroeger heetten de items "dingen" (de bron) en de kolom met de items van een gebeurtenis "things".
+  const named = o.source === "dingen" ? "items" : o.source;
+  if ((named === "logboek" || named === "datums") && o.renamed !== true) return cleanViewBlock({ ...(renamedThings(o) as object), source: named, renamed: true });
+  const source = Object.hasOwn(SOURCES, String(named)) ? (named as SourceKind) : null;
   if (!source) return null;
   const lists = [...new Set((Array.isArray(o.lists) ? o.lists : []).map(id).filter((x): x is string => x !== null))].slice(0, 20);
-  if (source === "dingen" && !lists.length) return null;
+  if (source === "items" && !lists.length) return null;
   const show = Object.hasOwn(SHOWS, String(o.show)) ? (o.show as Show) : "lijst";
   const limit = typeof o.limit === "number" && Number.isInteger(o.limit) ? Math.max(1, Math.min(o.limit, MAX_LIMIT)) : undefined;
   const goal = typeof o.goal === "number" && Number.isFinite(o.goal) && Math.abs(o.goal) < 1e12 ? o.goal : undefined;
-  // Het datumveld van de dingen (vroeger in `tally.date`).
+  // Het datumveld van de items (vroeger in `tally.date`).
   const t = o.tally && typeof o.tally === "object" ? (o.tally as Record<string, unknown>) : {};
   const date = [o.date, t.date].find((d): d is string => typeof d === "string" && KEY.test(d));
   const rules = (Array.isArray(o.rules) ? o.rules : []).slice(0, MAX_RULES).flatMap((r) => {
@@ -308,7 +319,7 @@ export function cleanViewBlock(raw: unknown): ViewBlock | null {
     where: cleanWhere(o.where),
     show,
     ...(counts(show) ? { tally: cleanTally(o.tally) } : {}),
-    ...(source === "dingen" && date && (counts(show) || show === "agenda") ? { date } : {}),
+    ...(source === "items" && date && (counts(show) || show === "agenda") ? { date } : {}),
     ...((show === "lijst" || show === "tabel") && limit ? { limit } : {}),
     ...(goal !== undefined ? { goal } : {}),
     ...(rules.length ? { rules } : {}),
@@ -387,14 +398,14 @@ export function upgradeBlock(raw: Record<string, unknown>): ViewBlock | ActionBl
       const list = id(raw.list);
       if (!list) return null;
       if (raw.show === "log") return view({ name: "", source: "logboek", lists: [list], where: { match: "all", conditions: [], sort: [{ field: "at", dir: "desc" }] }, show: "lijst", limit: 5 });
-      if (raw.show === "things") return view({ name: "", source: "dingen", lists: [list], where: { match: "all", conditions: [] }, show: "lijst", limit: 5 });
-      return view({ name: "", source: "dingen", lists: [list], where: { match: "all", conditions: [] }, show: "getal", tally: { agg: "count", step: "month", n: 0 } });
+      if (raw.show === "items" || raw.show === "things") return view({ name: "", source: "items", lists: [list], where: { match: "all", conditions: [] }, show: "lijst", limit: 5 });
+      return view({ name: "", source: "items", lists: [list], where: { match: "all", conditions: [] }, show: "getal", tally: { agg: "count", step: "month", n: 0 } });
     }
     case "chart": {
       const chart = cleanChart(raw.chart);
       if (!chart) return null;
       const list = id(raw.list);
-      const source: SourceKind = raw.source === "dingen" && list ? "dingen" : "logboek";
+      const source: SourceKind = (raw.source === "items" || raw.source === "dingen") && list ? "items" : "logboek";
       const show: Show = chart.form === "bars" ? "staafjes" : chart.form === "line" ? "lijn" : chart.form === "number" ? "getal" : chart.form === "ranked" ? "perkeuze" : "verdeling";
       return view({
         name: "",
@@ -403,7 +414,7 @@ export function upgradeBlock(raw: Record<string, unknown>): ViewBlock | ActionBl
         where: { match: "all", conditions: [] },
         show,
         tally: { agg: chart.agg, ...(chart.field ? { field: chart.field } : {}), ...(chart.by ? { by: chart.by } : {}), step: chart.step, n: chart.count },
-        ...(source === "dingen" && chart.date !== "created" ? { date: chart.date } : {}),
+        ...(source === "items" && chart.date !== "created" ? { date: chart.date } : {}),
         ...(chart.goal !== undefined ? { goal: chart.goal } : {}),
       });
     }
@@ -659,7 +670,7 @@ export function columnsOf(block: ViewBlock, fields: FieldDef[]): FieldDef[] {
   if (chosen.length) return chosen;
   const fallback: Record<SourceKind, string[]> = {
     logboek: ["at", "amount"],
-    dingen: [],
+    items: [],
     voorraad: ["level"],
     saldo: ["amount"],
     voeding: ["kcal"],
@@ -671,28 +682,28 @@ export function columnsOf(block: ViewBlock, fields: FieldDef[]): FieldDef[] {
 }
 
 /**
- * Alles van een tag (de tagpagina): de dingen van haar lijsten samen, met wat je zoekt in de naam. Als kolommen de
+ * Alles van een tag (de tagpagina): de items van haar lijsten samen, met wat je zoekt in de naam. Als kolommen de
  * velden die een van die lijsten als kolom toont en die in minstens twee ervan staan (bij één lijst: haar kolommen),
- * hoogstens drie, en rechts de lijst (Wijnhuis · Jaargang · Waar, Wijnen). Null als geen van de lijsten dingen heeft.
+ * hoogstens drie, en rechts de lijst (Wijnhuis · Jaargang · Waar, Wijnen). Null als geen van de lijsten items heeft.
  */
 export function tagView(lists: { id: string; one: string | null; fields: FieldDef[] }[], query = ""): ViewBlock | null {
-  const withThings = lists.filter((l) => l.one);
-  if (!withThings.length) return null;
+  const withItems = lists.filter((l) => l.one);
+  if (!withItems.length) return null;
   const count = new Map<string, number>();
-  for (const l of withThings) for (const f of l.fields) count.set(f.key, (count.get(f.key) ?? 0) + 1);
-  const need = withThings.length > 1 ? 2 : 1;
+  for (const l of withItems) for (const f of l.fields) count.set(f.key, (count.get(f.key) ?? 0) + 1);
+  const need = withItems.length > 1 ? 2 : 1;
   const keys: string[] = [];
-  for (const l of withThings) for (const f of l.fields) if (f.column && f.key !== LIST_KEY && (count.get(f.key) ?? 0) >= need && !keys.includes(f.key)) keys.push(f.key);
+  for (const l of withItems) for (const f of l.fields) if (f.column && f.key !== LIST_KEY && (count.get(f.key) ?? 0) >= need && !keys.includes(f.key)) keys.push(f.key);
   const q = query.trim();
   return {
     kind: "view",
     name: "",
-    source: "dingen",
-    lists: withThings.map((l) => l.id),
+    source: "items",
+    lists: withItems.map((l) => l.id),
     where: {
       match: "all",
       conditions: q ? [{ field: NAME, op: "contains", value: q }] : [],
-      columns: [...keys.slice(0, 3), ...(withThings.length > 1 ? [LIST_KEY] : [])],
+      columns: [...keys.slice(0, 3), ...(withItems.length > 1 ? [LIST_KEY] : [])],
       sort: [{ field: NAME, dir: "asc" }],
     },
     show: "lijst",

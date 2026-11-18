@@ -1,6 +1,6 @@
 // Wie wat mag in het nieuwe model: per lijst een rol (rechtstreeks of via een regel van een tag, zie
 // shared/rights.ts). Elke route die iets van een lijst raakt, haalt eerst de toegang op met `requireList`,
-// `requireThing` of `requireEvent`. Geen toegang = 404 "niet gevonden"; ontbreekt een recht, dan `needEdit` of
+// `requireItem` of `requireEvent`. Geen toegang = 404 "niet gevonden"; ontbreekt een recht, dan `needEdit` of
 // `needManage`. Bij twijfel: weigeren.
 
 import type { FieldDef } from "../shared/fields";
@@ -25,7 +25,7 @@ import {
   type Line,
   type List,
   type Role,
-  type Thing,
+  type Item,
 } from "../shared/model";
 import { Roles, type DirectRow, type RuleRow, type TagLink } from "../shared/rights";
 import { cleanLedger } from "../shared/ledger";
@@ -76,8 +76,8 @@ export function toList(row: ListRow): List {
   };
 }
 
-export type ThingRowDb = Omit<Thing, "data"> & { data: string };
-export const toThing = (row: ThingRowDb): Thing => ({ ...row, data: parseJson(row.data, {}), archived: row.archived ? 1 : 0 });
+export type ItemRowDb = Omit<Item, "data"> & { data: string };
+export const toItem = (row: ItemRowDb): Item => ({ ...row, data: parseJson(row.data, {}), archived: row.archived ? 1 : 0 });
 
 export type EventRowDb = Omit<Event, "data" | "split" | "repeat"> & { data: string; split: string | null; repeat: string | null };
 export const toEvent = (row: EventRowDb): Event => ({
@@ -175,15 +175,15 @@ export function needManage(role: Role | null | undefined, message = "Enkel een b
   if (!canManage(role)) throw new ForbiddenError(message);
 }
 
-export type ThingAccess = { thing: Thing; list: List; role: Role };
+export type ItemAccess = { item: Item; list: List; role: Role };
 
-export async function requireThing(db: D1Database, personId: string, thingId: string): Promise<ThingAccess> {
-  const row = await db.prepare("SELECT * FROM things WHERE id = ?").bind(thingId).first<ThingRowDb>();
+export async function requireItem(db: D1Database, personId: string, itemId: string): Promise<ItemAccess> {
+  const row = await db.prepare("SELECT * FROM items WHERE id = ?").bind(itemId).first<ItemRowDb>();
   if (!row) throw new NotFoundError("Dat bestaat niet (meer), of je kan er niet bij.");
   const { list, role } = await requireList(db, personId, row.list_id).catch(() => {
     throw new NotFoundError("Dat bestaat niet (meer), of je kan er niet bij.");
   });
-  return { thing: toThing(row), list, role };
+  return { item: toItem(row), list, role };
 }
 
 /** De soorten die je kan gebruiken: de basissoorten en de eigen soorten van de lijsten die je ziet. */

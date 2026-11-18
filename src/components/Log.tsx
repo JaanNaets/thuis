@@ -1,10 +1,10 @@
 // Het logboek: gebeurtenissen als rijen, per dag, met de soort als tegel, de titel (de naam, of de soort met het
-// eerste ding), wat erbij hoort (lijst, waar, wie) en rechts het bedrag. Geplande gebeurtenissen krijgen een vinkje.
-// Een gebeurtenis die je enkel via een ding ziet (`partial`), toont geen naam of bedrag. Zie STIJLBOEK.md → Logboek.
+// eerste item), wat erbij hoort (lijst, waar, wie) en rechts het bedrag. Geplande gebeurtenissen krijgen een vinkje.
+// Een gebeurtenis die je enkel via een item ziet (`partial`), toont geen naam of bedrag. Zie STIJLBOEK.md → Logboek.
 
 import { useMemo } from "react";
 import { stockOp } from "../../shared/cells";
-import { baseKind, BASES, dayOf, eventTitle, minutesBetween, timeOf, type EventView, type KindInfo, type ThingRef } from "../../shared/model";
+import { baseKind, BASES, dayOf, eventTitle, minutesBetween, timeOf, type EventView, type KindInfo, type ItemRef } from "../../shared/model";
 import { formatDuration, formatFieldValue } from "../../shared/fields";
 import { formatAmount } from "../../shared/units";
 import type { Person, Tone } from "../../shared/types";
@@ -14,7 +14,7 @@ import { Icon, type IconName } from "./Icon";
 import { stagger } from "./Motion";
 
 /** Wat het logboek terugkrijgt van de API (een bladzijde gebeurtenissen met de namen erbij). */
-export type EventPage = { events: EventView[]; things: ThingRef[]; people: Person[]; kinds: KindInfo[]; lists: { id: string; name: string }[]; more?: boolean };
+export type EventPage = { events: EventView[]; items: ItemRef[]; people: Person[]; kinds: KindInfo[]; lists: { id: string; name: string }[]; more?: boolean };
 
 /** De tint van een basissoort (enkel voor de tegel, zoals een lijst haar toon heeft). */
 export const BASE_TONES: Record<keyof typeof BASES, Tone> = {
@@ -29,16 +29,16 @@ export const BASE_TONES: Record<keyof typeof BASES, Tone> = {
 /** Namen bij ids uit een bladzijde. */
 export function usePageNames(page: EventPage | undefined) {
   return useMemo(() => {
-    const things = new Map((page?.things ?? []).map((t) => [t.id, t]));
+    const items = new Map((page?.items ?? []).map((t) => [t.id, t]));
     const kinds = new Map((page?.kinds ?? []).map((k) => [k.id, k]));
     const people = new Map((page?.people ?? []).map((p) => [p.id, p]));
     const lists = new Map((page?.lists ?? []).map((l) => [l.id, l.name]));
     return {
-      thing: (id: string) => things.get(id),
+      item: (id: string) => items.get(id),
       kind: (e: Pick<EventView, "kind" | "base">): KindInfo => kinds.get(e.kind) ?? baseKind(e.base),
       person: (id: string | null) => (id ? (people.get(id)?.name ?? "Onbekend") : ""),
       list: (id: string) => lists.get(id) ?? "",
-      title: (e: EventView) => eventTitle(e, kinds.get(e.kind) ?? { name: BASES[e.base].label }, (id) => things.get(id)?.name),
+      title: (e: EventView) => eventTitle(e, kinds.get(e.kind) ?? { name: BASES[e.base].label }, (id) => items.get(id)?.name),
     };
   }, [page]);
 }
@@ -65,7 +65,7 @@ function metaOf(e: EventView, names: ReturnType<typeof usePageNames>, home: stri
   }
   if (e.list_id !== home) parts.push(e.partial ? `${names.kind(e).name} in een andere lijst` : names.list(e.list_id));
   const store = e.lines.find((l) => l.role === "bij");
-  if (store) parts.push(store.thing_id ? (names.thing(store.thing_id)?.name ?? "") : (store.text ?? ""));
+  if (store) parts.push(store.item_id ? (names.item(store.item_id)?.name ?? "") : (store.text ?? ""));
   if (e.paid_by) parts.push(names.person(e.paid_by));
   return parts.filter(Boolean).join(" · ");
 }
@@ -81,7 +81,7 @@ function endOf(e: EventView, names: ReturnType<typeof usePageNames>): string {
   }
   const main = e.lines.filter((l) => l.role !== "bij");
   if (main.length === 1 && main[0].amount !== null) {
-    const unit = main[0].unit ?? (main[0].thing_id ? names.thing(main[0].thing_id)?.unit : null) ?? null;
+    const unit = main[0].unit ?? (main[0].item_id ? names.item(main[0].item_id)?.unit : null) ?? null;
     const op = stockOp(names.kind(e).does, main[0].role);
     return `${op === "af" ? "−" : op === "bij" ? "+" : ""}${formatAmount(main[0].amount, unit)}`;
   }
@@ -90,7 +90,7 @@ function endOf(e: EventView, names: ReturnType<typeof usePageNames>): string {
 
 /**
  * Gebeurtenissen per dag. `home`: de lijst die je bekijkt (dan staat de lijstnaam enkel bij wat elders gelogd werd).
- * `onTick`: een vinkje bij wat gepland staat. `only`: enkel de lijnen over dit ding tonen (de tijdlijn van een ding).
+ * `onTick`: een vinkje bij wat gepland staat. `only`: enkel de lijnen over dit item tonen (de tijdlijn van een item).
  */
 export function LogList({
   page,

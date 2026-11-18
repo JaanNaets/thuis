@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { computeLocal, isLinkCalc } from "../../shared/calc";
 import { referencedItems, referencedPeople, type Attributes } from "../../shared/fields";
-import { canEdit, type LineRole, type List, type Role, type StockLevel, type ThingRef, type ThingRow } from "../../shared/model";
+import { canEdit, type LineRole, type List, type Role, type StockLevel, type ItemRef, type ItemRow } from "../../shared/model";
 import { measureFor, unitPrice } from "../../shared/stock";
 import type { Person } from "../../shared/types";
 import { brusselsToday } from "../today";
-import { ids, kindOf, needEdit, requireList, requireThing, seenLists, toThing, type ThingRowDb } from "../access";
+import { ids, kindOf, needEdit, requireList, requireItem, seenLists, toItem, type ItemRowDb } from "../access";
 import { adjust, cellsOf, rebuildEffects, withCells, withValues } from "../cells";
 import { attachmentsOf, purgeMedia, removePhoto, servePhoto, storeFiles, storePhoto } from "../media";
 import { lockedOf, syncFrom } from "../mirrors";
@@ -14,24 +14,24 @@ import { cleanPlan, MAX_TRANSFER, transferRows, type TransferPlan } from "../../
 import type { AppEnv } from "../types";
 import { asObject, NotFoundError, optionalString, requiredString, ValidationError } from "../validate";
 
-export const things = new Hono<AppEnv>();
-export const listThings = new Hono<AppEnv>();
+export const items = new Hono<AppEnv>();
+export const listItems = new Hono<AppEnv>();
 
-const MAX_THINGS = 2000;
+const MAX_ITEMS = 2000;
 
-/** De voorraad van dingen in een lijst die telt (uit alle lijnen, ook van gebeurtenissen die jij niet ziet). */
+/** De voorraad van items in een lijst die telt (uit alle lijnen, ook van gebeurtenissen die jij niet ziet). */
 export async function stockOf(db: D1Database, list: Pick<List, "stock">, rows: { id: string; data: Attributes }[]): Promise<Map<string, StockLevel>> {
   if (!list.stock || !rows.length) return new Map();
   return (await cellsOf(db, { fields: [], stock: list.stock }, rows)).stock;
 }
 
-/** Namen van dingen (voor verwijzingen en lijnen), enkel uit lijsten die je ziet. */
-export async function thingRefs(db: D1Database, seen: Map<string, Role>, thingIds: Iterable<string>): Promise<ThingRef[]> {
-  const list = [...new Set(thingIds)];
+/** Namen van items (voor verwijzingen en lijnen), enkel uit lijsten die je ziet. */
+export async function itemRefs(db: D1Database, seen: Map<string, Role>, itemIds: Iterable<string>): Promise<ItemRef[]> {
+  const list = [...new Set(itemIds)];
   if (!list.length) return [];
   const { results } = await db
     .prepare(
-      `SELECT t.id, t.name, t.list_id, t.data, l.name AS list, l.stock, l.fields FROM things t JOIN lists l ON l.id = t.list_id
+      `SELECT t.id, t.name, t.list_id, t.data, l.name AS list, l.stock, l.fields FROM items t JOIN lists l ON l.id = t.list_id
        WHERE t.id IN (SELECT value FROM json_each(?))`,
     )
     .bind(ids(list))
@@ -41,7 +41,7 @@ export async function thingRefs(db: D1Database, seen: Map<string, Role>, thingId
     .map((r) => ({ id: r.id, name: r.name, list_id: r.list_id, list: r.list, unit: unitOf(r) }));
 }
 
-/** De eenheid van een ding in een lijst die telt. */
+/** De eenheid van een item in een lijst die telt. */
 function unitOf(r: { data: string; stock: string | null }): string | null {
   if (!r.stock) return null;
   try {
@@ -65,41 +65,41 @@ export const shown = (fields: List["fields"], data: Attributes, today: string): 
 
 // ---------- een lijst ----------
 
-listThings.get("/:id/things", async (c) => {
+listItems.get("/:id/items", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { list } = await requireList(db, me.id, c.req.param("id"));
   const archived = c.req.query("archived") === "1" ? 1 : 0;
   const q = c.req.query("q")?.trim();
   const { results } = await db
-    .prepare(`SELECT * FROM things WHERE list_id = ? AND archived = ? ${q ? "AND name LIKE ?" : ""} ORDER BY name COLLATE NOCASE LIMIT ${MAX_THINGS}`)
+    .prepare(`SELECT * FROM items WHERE list_id = ? AND archived = ? ${q ? "AND name LIKE ?" : ""} ORDER BY name COLLATE NOCASE LIMIT ${MAX_ITEMS}`)
     .bind(...[list.id, archived, ...(q ? [`%${q}%`] : [])])
-    .all<ThingRowDb>();
+    .all<ItemRowDb>();
   const today = brusselsToday();
-  const { rows, cells } = await withCells(db, list, results.map(toThing));
+  const { rows, cells } = await withCells(db, list, results.map(toItem));
   const stock = cells.stock;
   const seen = await seenLists(db, me.id);
-  const out: ThingRow[] = rows.map((t) => ({ ...t, data: shown(list.fields, t.data, today), ...(list.stock ? { stock: stock.get(t.id) ?? null } : {}) }));
+  const out: ItemRow[] = rows.map((t) => ({ ...t, data: shown(list.fields, t.data, today), ...(list.stock ? { stock: stock.get(t.id) ?? null } : {}) }));
   return c.json({
-    things: out,
+    items: out,
     people: await peopleByIds(db, rows.flatMap((t) => referencedPeople(list.fields, t.data))),
-    refs: await thingRefs(db, seen, [...rows.flatMap((t) => referencedItems(list.fields, t.data).map((r) => r.id)), ...rows.flatMap((t) => (t.part_of ? [t.part_of] : []))]),
+    refs: await itemRefs(db, seen, [...rows.flatMap((t) => referencedItems(list.fields, t.data).map((r) => r.id)), ...rows.flatMap((t) => (t.part_of ? [t.part_of] : []))]),
   });
 });
 
-listThings.post("/:id/things", async (c) => {
+listItems.post("/:id/items", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needEdit(role);
-  if (!list.one) throw new ValidationError("Deze lijst heeft geen dingen, enkel een logboek.");
+  if (!list.one) throw new ValidationError("Deze lijst heeft geen items, enkel een logboek.");
   const body = asObject(await c.req.json());
   const seen = await seenLists(db, me.id);
   const id = crypto.randomUUID();
   const data = await prepareData(db, me.id, seen, list.fields, body.data);
   const partOf = await checkPartOf(db, seen, optionalString(body, "part_of", 64), id);
   await db
-    .prepare("INSERT INTO things (id, list_id, name, data, part_of, created_by) VALUES (?, ?, ?, ?, ?, ?)")
+    .prepare("INSERT INTO items (id, list_id, name, data, part_of, created_by) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(id, list.id, requiredString(body, "name", 200), JSON.stringify(data), partOf, me.id)
     .run();
   await syncFrom(db, list.id);
@@ -108,17 +108,17 @@ listThings.post("/:id/things", async (c) => {
 
 async function checkPartOf(db: D1Database, seen: Map<string, Role>, partOf: string | null, self: string): Promise<string | null> {
   if (!partOf || partOf === self) return null;
-  const row = await db.prepare("SELECT id, list_id FROM things WHERE id = ?").bind(partOf).first<{ id: string; list_id: string }>();
+  const row = await db.prepare("SELECT id, list_id FROM items WHERE id = ?").bind(partOf).first<{ id: string; list_id: string }>();
   return row && seen.has(row.list_id) ? row.id : null;
 }
 
-/** Dingen uit een tabel (zie src/pages/ImportPage.tsx): elke rij zoals een gewoon nieuw ding; wat niet lukt, slaat over. */
-listThings.post("/:id/things/import", async (c) => {
+/** Items uit een tabel (zie src/pages/ImportPage.tsx): elke rij zoals een gewoon nieuw item; wat niet lukt, slaat over. */
+listItems.post("/:id/items/import", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needEdit(role);
-  if (!list.one) throw new ValidationError("Deze lijst heeft geen dingen, enkel een logboek.");
+  if (!list.one) throw new ValidationError("Deze lijst heeft geen items, enkel een logboek.");
   const rows = asObject(await c.req.json()).rows;
   if (!Array.isArray(rows) || rows.length > 2000) throw new ValidationError("Hoogstens 2000 rijen tegelijk");
   const seen = await seenLists(db, me.id);
@@ -129,7 +129,7 @@ listThings.post("/:id/things/import", async (c) => {
       const r = asObject(raw);
       const name = requiredString(r, "name", 200);
       const data = await prepareData(db, me.id, seen, list.fields, r.data);
-      statements.push(db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, name, JSON.stringify(data), me.id));
+      statements.push(db.prepare("INSERT INTO items (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, name, JSON.stringify(data), me.id));
     } catch (err) {
       skipped.push({ row: i + 2, error: err instanceof Error ? err.message : "Ongeldig" });
     }
@@ -141,20 +141,20 @@ listThings.post("/:id/things/import", async (c) => {
 
 /**
  * Toevoegen uit een andere lijst (zie shared/transfer.ts): de server rekent het plan opnieuw uit met wat de lezer van de
- * bron ziet. Zonder Weghalen komen er nieuwe dingen bij (zoals Importeren); met Weghalen verhuist het ding zelf (dezelfde
+ * bron ziet. Zonder Weghalen komen er nieuwe items bij (zoals Importeren); met Weghalen verhuist het item zelf (dezelfde
  * id: foto, logboek en voorraad gaan mee), enkel als je de bron mag wijzigen. Elke waarde gaat door `prepareData`.
  */
-listThings.post("/:id/things/from", async (c) => {
+listItems.post("/:id/items/from", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const { list, role } = await requireList(db, me.id, c.req.param("id"));
   needEdit(role);
-  if (!list.one) throw new ValidationError("Deze lijst heeft geen dingen, enkel een logboek.");
+  if (!list.one) throw new ValidationError("Deze lijst heeft geen items, enkel een logboek.");
   const body = asObject(await c.req.json());
   const sourceId = typeof body.source === "string" ? body.source : "";
   if (!sourceId || sourceId === list.id) throw new ValidationError("Kies een andere lijst.");
   const { list: source, role: sourceRole } = await requireList(db, me.id, sourceId);
-  if (!source.one) throw new ValidationError("Die lijst heeft geen dingen.");
+  if (!source.one) throw new ValidationError("Die lijst heeft geen items.");
   let plan: TransferPlan;
   try {
     plan = cleanPlan(body, source, list.fields);
@@ -165,17 +165,17 @@ listThings.post("/:id/things/from", async (c) => {
   const move = plan.mode === "move";
   if (move) needEdit(sourceRole, "Enkel wie die lijst mag wijzigen, haalt er iets uit weg.");
   const { results } = await db
-    .prepare(`SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`)
+    .prepare(`SELECT * FROM items WHERE list_id = ? AND archived = 0 ORDER BY name COLLATE NOCASE LIMIT ${MAX_TRANSFER}`)
     .bind(source.id)
-    .all<ThingRowDb>();
+    .all<ItemRowDb>();
   const today = brusselsToday();
-  const rows = (await withCells(db, source, results.map(toThing))).rows;
+  const rows = (await withCells(db, source, results.map(toItem))).rows;
   const seen = await seenLists(db, me.id);
   const people = new Map((await peopleByIds(db, rows.flatMap((t) => referencedPeople(source.fields, t.data)))).map((p) => [p.id, p.name]));
-  const refs = new Map((await thingRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
+  const refs = new Map((await itemRefs(db, seen, rows.flatMap((t) => referencedItems(source.fields, t.data).map((r) => r.id)))).map((r) => [r.id, r.name]));
   const names = { person: (id: string) => people.get(id) ?? "?", item: (id: string) => refs.get(id) ?? "?" };
-  const items = rows.map((t) => ({ id: t.id, name: t.name, data: shown(source.fields, t.data, today), tag_ids: [], created_at: t.created_at }));
-  const out = transferRows(items, plan, source.fields, list.fields, { today, me: me.id, names });
+  const sourceItems = rows.map((t) => ({ id: t.id, name: t.name, data: shown(source.fields, t.data, today), tag_ids: [], created_at: t.created_at }));
+  const out = transferRows(sourceItems, plan, source.fields, list.fields, { today, me: me.id, names });
   const statements: D1PreparedStatement[] = [];
   const skipped: { name: string; error: string }[] = [];
   for (const r of out) {
@@ -184,9 +184,9 @@ listThings.post("/:id/things/from", async (c) => {
       statements.push(
         move
           ? db
-              .prepare("UPDATE things SET list_id = ?, name = ?, data = ?, updated_at = datetime('now') WHERE id = ? AND list_id = ?")
+              .prepare("UPDATE items SET list_id = ?, name = ?, data = ?, updated_at = datetime('now') WHERE id = ? AND list_id = ?")
               .bind(list.id, r.name, JSON.stringify(data), r.source_id, source.id)
-          : db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, r.name, JSON.stringify(data), me.id),
+          : db.prepare("INSERT INTO items (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), list.id, r.name, JSON.stringify(data), me.id),
       );
     } catch (err) {
       skipped.push({ name: r.name, error: err instanceof Error ? err.message : "Ongeldig" });
@@ -201,10 +201,10 @@ listThings.post("/:id/things/from", async (c) => {
 // ---------- zoeken en kiezen ----------
 
 /**
- * Dingen om te kiezen of te herkennen, uit de lijsten die je ziet (`lists`: enkel die): op naam (`q`), de namen die
+ * Items om te kiezen of te herkennen, uit de lijsten die je ziet (`lists`: enkel die): op naam (`q`), de namen die
  * in een tekst staan (`in`: "yoghurt colruyt 6 euro" → Yoghurt en Colruyt), of bij ids (`ids`). Nooit een hele lijst.
  */
-things.get("/", async (c) => {
+items.get("/", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const seen = await seenLists(db, me.id);
@@ -214,7 +214,7 @@ things.get("/", async (c) => {
   const q = c.req.query("q")?.trim() ?? "";
   const text = c.req.query("in")?.trim().toLowerCase() ?? "";
   const chosen = (c.req.query("ids") ?? "").split(",").filter(Boolean).slice(0, 100);
-  if (chosen.length) return c.json({ things: await thingRefs(db, seen, chosen), more: false });
+  if (chosen.length) return c.json({ items: await itemRefs(db, seen, chosen), more: false });
   // In een tekst: de hele naam, of een woord van minstens 4 letters uit de naam ("sprinter" → Mercedes Sprinter).
   const words = text ? [...new Set(text.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4 && !/^\d+$/.test(w)))].slice(0, 8) : [];
   const where = text
@@ -222,7 +222,7 @@ things.get("/", async (c) => {
     : "t.name LIKE ?2";
   const { results: rows } = await db
     .prepare(
-      `SELECT t.id, t.name, t.list_id, t.data, l.name AS list, l.stock FROM things t JOIN lists l ON l.id = t.list_id
+      `SELECT t.id, t.name, t.list_id, t.data, l.name AS list, l.stock FROM items t JOIN lists l ON l.id = t.list_id
        WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND t.archived = 0 AND (${where})
        ORDER BY ${text ? "length(t.name) DESC" : "t.name COLLATE NOCASE"} LIMIT ${text ? 200 : limit + 1}`,
     )
@@ -238,7 +238,7 @@ things.get("/", async (c) => {
   const found = results.slice(0, limit);
   const usual = text ? await usualRoles(db, seen, found) : new Map<string, LineRole>();
   return c.json({
-    things: found.map(
+    items: found.map(
       (r) =>
         ({
           id: r.id,
@@ -247,25 +247,25 @@ things.get("/", async (c) => {
           list: r.list,
           unit: unitOf(r),
           ...(text ? { usual: usual.get(r.id) ?? null, stock: Boolean(r.stock) } : {}),
-        }) satisfies ThingRef,
+        }) satisfies ItemRef,
     ),
     more: results.length > limit,
   });
 });
 
 /**
- * Welke rol een ding meestal heeft (Colruyt: bij, de wagen: voor), uit de lijnen in wat de lezer ziet; zonder
- * geschiedenis die van de andere dingen in zijn lijst (een nieuwe winkel in Winkels: bij).
+ * Welke rol een item meestal heeft (Colruyt: bij, de wagen: voor), uit de lijnen in wat de lezer ziet; zonder
+ * geschiedenis die van de andere items in zijn lijst (een nieuwe winkel in Winkels: bij).
  */
 async function usualRoles(db: D1Database, seen: Map<string, Role>, found: { id: string; list_id: string }[]): Promise<Map<string, LineRole>> {
   if (!found.length) return new Map();
   const { results } = await db
     .prepare(
-      `SELECT t.id AS thing_id, t.list_id, l.role, COUNT(*) AS n FROM lines l JOIN things t ON t.id = l.thing_id JOIN events e ON e.id = l.event_id
+      `SELECT t.id AS item_id, t.list_id, l.role, COUNT(*) AS n FROM lines l JOIN items t ON t.id = l.item_id JOIN events e ON e.id = l.event_id
        WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND e.list_id IN (SELECT value FROM json_each(?2)) GROUP BY t.id, l.role`,
     )
     .bind(ids(new Set(found.map((f) => f.list_id))), ids(seen.keys()))
-    .all<{ thing_id: string; list_id: string; role: LineRole; n: number }>();
+    .all<{ item_id: string; list_id: string; role: LineRole; n: number }>();
   const top = (rows: typeof results) => {
     const sums = new Map<LineRole, number>();
     for (const r of rows) sums.set(r.role, (sums.get(r.role) ?? 0) + r.n);
@@ -273,15 +273,15 @@ async function usualRoles(db: D1Database, seen: Map<string, Role>, found: { id: 
   };
   const out = new Map<string, LineRole>();
   for (const f of found) {
-    const role = top(results.filter((r) => r.thing_id === f.id)) ?? top(results.filter((r) => r.list_id === f.list_id));
+    const role = top(results.filter((r) => r.item_id === f.id)) ?? top(results.filter((r) => r.list_id === f.list_id));
     if (role) out.set(f.id, role);
   }
   return out;
 }
 
-// ---------- één ding ----------
+// ---------- één item ----------
 
-/** Een lijn op de tijdlijn van een ding, met de kop van haar gebeurtenis. */
+/** Een lijn op de tijdlijn van een item, met de kop van haar gebeurtenis. */
 type TimelineEntry = {
   event_id: string;
   kind: string;
@@ -304,10 +304,10 @@ type TimelineEntry = {
   created_by: string;
 };
 
-things.get("/:id", async (c) => {
+items.get("/:id", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
-  const { thing, list, role } = await requireThing(db, me.id, c.req.param("id"));
+  const { item, list, role } = await requireItem(db, me.id, c.req.param("id"));
   const seen = await seenLists(db, me.id);
   const today = brusselsToday();
   const [lines, parts] = (await db.batch([
@@ -316,29 +316,29 @@ things.get("/:id", async (c) => {
         `SELECT l.role, l.amount, l.unit, l.price, l.expires, e.id AS event_id, e.kind, e.base, e.status, e.at, e.list_id, e.name, e.created_by, ls.name AS list,
                 e.amount AS event_amount, (SELECT COUNT(*) FROM lines x WHERE x.event_id = e.id AND x.role != 'bij') AS main_lines
          FROM lines l JOIN events e ON e.id = l.event_id JOIN lists ls ON ls.id = e.list_id
-         WHERE l.thing_id = ? ORDER BY e.at DESC, e.created_at DESC LIMIT 300`,
+         WHERE l.item_id = ? ORDER BY e.at DESC, e.created_at DESC LIMIT 300`,
       )
-      .bind(thing.id),
-    db.prepare("SELECT id, name, list_id FROM things WHERE part_of = ?").bind(thing.id),
+      .bind(item.id),
+    db.prepare("SELECT id, name, list_id FROM items WHERE part_of = ?").bind(item.id),
   ])) as [D1Result<Omit<TimelineEntry, "partial" | "store" | "unit_price" | "kind_name"> & { event_amount: number | null; main_lines: number }>, D1Result<{ id: string; name: string; list_id: string }>];
   const visible = lines.results.filter((l) => seen.has(l.list_id) || l.role !== "bij");
   const full = visible.filter((l) => seen.has(l.list_id)).map((l) => l.event_id);
   const { results: stores } = await db
     .prepare(
-      `SELECT l.event_id, COALESCE(t.name, l.text) AS name FROM lines l LEFT JOIN things t ON t.id = l.thing_id
+      `SELECT l.event_id, COALESCE(t.name, l.text) AS name FROM lines l LEFT JOIN items t ON t.id = l.item_id
        WHERE l.role = 'bij' AND l.event_id IN (SELECT value FROM json_each(?))`,
     )
     .bind(ids(full))
     .all<{ event_id: string; name: string | null }>();
   const storeOf = new Map(stores.map((s) => [s.event_id, s.name]));
-  const measure = list.stock ? measureFor(list.stock, thing.data) : { unit: null };
+  const measure = list.stock ? measureFor(list.stock, item.data) : { unit: null };
   const kindNames = new Map<string, string>();
   for (const l of visible) if (!kindNames.has(l.kind)) kindNames.set(l.kind, (await kindOf(db, l.kind, l.base as never)).name);
   const timeline: TimelineEntry[] = visible.map(({ event_amount, main_lines, ...l }) => {
     const partial = !seen.has(l.list_id);
     return {
       ...l,
-      // Gaat de gebeurtenis enkel over dit ding (een tankbeurt voor de wagen), dan is haar bedrag het zijne.
+      // Gaat de gebeurtenis enkel over dit item (een tankbeurt voor de wagen), dan is haar bedrag het zijne.
       price: l.price ?? (!partial && main_lines === 1 ? event_amount : null),
       kind_name: kindNames.get(l.kind) ?? l.kind,
       partial,
@@ -348,50 +348,50 @@ things.get("/:id", async (c) => {
       unit_price: unitPrice(l.price, l.amount, l.unit, measure),
     };
   });
-  const cells = await cellsOf(db, list, [thing]);
-  const stock = list.stock ? cells.stock.get(thing.id) : null;
-  const filled = withValues(thing.data, cells.values.get(thing.id));
-  const locked = thing.mirror_id ? await lockedOf(db, thing.mirror_id) : null;
+  const cells = await cellsOf(db, list, [item]);
+  const stock = list.stock ? cells.stock.get(item.id) : null;
+  const filled = withValues(item.data, cells.values.get(item.id));
+  const locked = item.mirror_id ? await lockedOf(db, item.mirror_id) : null;
   const mirror = locked
     ? {
         source: seen.has(locked.source.id) ? locked.source : null,
-        of: thing.mirror_of ? ((await thingRefs(db, seen, [thing.mirror_of]))[0] ?? null) : null,
+        of: item.mirror_of ? ((await itemRefs(db, seen, [item.mirror_of]))[0] ?? null) : null,
         locked: locked.keys,
       }
     : null;
   return c.json({
     mirror,
-    thing: { ...thing, data: shown(list.fields, filled, today) },
+    item: { ...item, data: shown(list.fields, filled, today) },
     // Welke kolommen het logboek invult, en de gebeurtenis die elk het laatst veranderde.
-    cells: cells.from.get(thing.id) ?? {},
+    cells: cells.from.get(item.id) ?? {},
     list: { id: list.id, name: list.name, one: list.one, icon: list.icon, color: list.color, fields: list.fields, stock: list.stock },
     role,
     can_edit: canEdit(role),
     stock: stock ?? null,
     timeline,
     parts: parts.results.filter((p) => seen.has(p.list_id)),
-    part_of: thing.part_of ? ((await thingRefs(db, seen, [thing.part_of]))[0] ?? null) : null,
-    files: await attachmentsOf(db, "thing", thing.id),
+    part_of: item.part_of ? ((await itemRefs(db, seen, [item.part_of]))[0] ?? null) : null,
+    files: await attachmentsOf(db, "item", item.id),
     people: await peopleByIds(db, [...referencedPeople(list.fields, filled), ...timeline.map((t) => t.created_by)]),
-    refs: await thingRefs(db, seen, referencedItems(list.fields, filled).map((r) => r.id)),
-    backlinks: await backlinks(db, seen, thing.id),
+    refs: await itemRefs(db, seen, referencedItems(list.fields, filled).map((r) => r.id)),
+    backlinks: await backlinks(db, seen, item.id),
   });
 });
 
-/** Dingen die naar dit ding verwijzen (de wijnen van een wijnhuis), uit lijsten die je ziet. */
-async function backlinks(db: D1Database, seen: Map<string, Role>, thingId: string) {
+/** Items die naar dit item verwijzen (de wijnen van een wijnhuis), uit lijsten die je ziet. */
+async function backlinks(db: D1Database, seen: Map<string, Role>, itemId: string) {
   const { results } = await db
     .prepare(
-      `SELECT t.id, t.name, t.list_id, t.data, l.fields, l.name AS list FROM things t JOIN lists l ON l.id = t.list_id
+      `SELECT t.id, t.name, t.list_id, t.data, l.fields, l.name AS list FROM items t JOIN lists l ON l.id = t.list_id
        WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND instr(t.data, ?2) > 0 LIMIT 100`,
     )
-    .bind(ids(seen.keys()), thingId)
+    .bind(ids(seen.keys()), itemId)
     .all<{ id: string; name: string; list_id: string; data: string; fields: string; list: string }>();
   return results
     .flatMap((r) => {
       try {
         const fields = JSON.parse(r.fields);
-        const hit = referencedItems(fields, JSON.parse(r.data)).find((x) => x.id === thingId);
+        const hit = referencedItems(fields, JSON.parse(r.data)).find((x) => x.id === itemId);
         const label = hit ? fields.find((f: { key: string }) => f.key === hit.key)?.label : null;
         return hit ? [{ id: r.id, name: r.name, list_id: r.list_id, list: r.list, field_label: label ?? "" }] : [];
       } catch {
@@ -401,29 +401,29 @@ async function backlinks(db: D1Database, seen: Map<string, Role>, thingId: strin
     .slice(0, 50);
 }
 
-things.put("/:id", async (c) => {
+items.put("/:id", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
-  const { thing, list, role } = await requireThing(db, me.id, c.req.param("id"));
+  const { item, list, role } = await requireItem(db, me.id, c.req.param("id"));
   needEdit(role);
   const body = asObject(await c.req.json());
   const seen = await seenLists(db, me.id);
-  const data = await prepareData(db, me.id, seen, list.fields, body.data, thing.data);
+  const data = await prepareData(db, me.id, seen, list.fields, body.data, item.data);
   let name = requiredString(body, "name", 200);
   // Gekoppeld: de naam en de gekoppelde velden volgen de bron, wat hier binnenkomt telt daarvoor niet.
-  const locked = thing.mirror_id ? await lockedOf(db, thing.mirror_id) : null;
+  const locked = item.mirror_id ? await lockedOf(db, item.mirror_id) : null;
   if (locked) {
-    name = thing.name;
+    name = item.name;
     for (const k of locked.keys) {
-      if (thing.data[k] === undefined) delete data[k];
-      else data[k] = thing.data[k];
+      if (item.data[k] === undefined) delete data[k];
+      else data[k] = item.data[k];
     }
   }
-  const partOf = body.part_of === undefined ? thing.part_of : await checkPartOf(db, seen, optionalString(body, "part_of", 64), thing.id);
+  const partOf = body.part_of === undefined ? item.part_of : await checkPartOf(db, seen, optionalString(body, "part_of", 64), item.id);
   // Wat het logboek invult en je hier verandert, wordt een Aanpassing in het logboek (shared/cells.ts).
-  const adjusted = await adjust(db, me.id, list, thing, data);
+  const adjusted = await adjust(db, me.id, list, item, data);
   await db.batch([
-    db.prepare("UPDATE things SET name = ?, data = ?, part_of = ?, updated_at = datetime('now') WHERE id = ?").bind(name, JSON.stringify(adjusted.data), partOf, thing.id),
+    db.prepare("UPDATE items SET name = ?, data = ?, part_of = ?, updated_at = datetime('now') WHERE id = ?").bind(name, JSON.stringify(adjusted.data), partOf, item.id),
     ...adjusted.statements,
   ]);
   if (adjusted.eventId) await rebuildEffects(db, [adjusted.eventId]);
@@ -431,35 +431,35 @@ things.put("/:id", async (c) => {
   return c.json({ ok: true, adjusted: adjusted.eventId });
 });
 
-things.put("/:id/archived", async (c) => {
+items.put("/:id/archived", async (c) => {
   const db = c.env.DB;
-  const { thing, role } = await requireThing(db, c.get("person").id, c.req.param("id"));
+  const { item, role } = await requireItem(db, c.get("person").id, c.req.param("id"));
   needEdit(role);
-  await notMirrored(db, thing.mirror_id);
+  await notMirrored(db, item.mirror_id);
   const archived = asObject(await c.req.json()).archived === true ? 1 : 0;
-  await db.prepare("UPDATE things SET archived = ?, updated_at = datetime('now') WHERE id = ?").bind(archived, thing.id).run();
-  await syncFrom(db, thing.list_id);
+  await db.prepare("UPDATE items SET archived = ?, updated_at = datetime('now') WHERE id = ?").bind(archived, item.id).run();
+  await syncFrom(db, item.list_id);
   return c.json({ ok: true });
 });
 
-/** Een ding verwijderen. Lijnen ernaar blijven als tekst (de geschiedenis van een kasticket klopt dan nog). */
-things.delete("/:id", async (c) => {
+/** Een item verwijderen. Lijnen ernaar blijven als tekst (de geschiedenis van een kasticket klopt dan nog). */
+items.delete("/:id", async (c) => {
   const db = c.env.DB;
-  const { thing, role } = await requireThing(db, c.get("person").id, c.req.param("id"));
+  const { item, role } = await requireItem(db, c.get("person").id, c.req.param("id"));
   needEdit(role);
-  await notMirrored(db, thing.mirror_id);
-  const { results } = await db.prepare("SELECT r2_key FROM attachments WHERE owner_kind = 'thing' AND owner_id = ?").bind(thing.id).all<{ r2_key: string }>();
+  await notMirrored(db, item.mirror_id);
+  const { results } = await db.prepare("SELECT r2_key FROM attachments WHERE owner_kind = 'item' AND owner_id = ?").bind(item.id).all<{ r2_key: string }>();
   await db.batch([
-    db.prepare("UPDATE lines SET text = ?, thing_id = NULL WHERE thing_id = ?").bind(thing.name, thing.id),
-    db.prepare("DELETE FROM attachments WHERE owner_kind = 'thing' AND owner_id = ?").bind(thing.id),
-    db.prepare("DELETE FROM things WHERE id = ?").bind(thing.id),
+    db.prepare("UPDATE lines SET text = ?, item_id = NULL WHERE item_id = ?").bind(item.name, item.id),
+    db.prepare("DELETE FROM attachments WHERE owner_kind = 'item' AND owner_id = ?").bind(item.id),
+    db.prepare("DELETE FROM items WHERE id = ?").bind(item.id),
   ]);
-  await purgeMedia(c.env, "thing", thing.id, results.map((r) => r.r2_key));
-  await syncFrom(db, thing.list_id);
+  await purgeMedia(c.env, "item", item.id, results.map((r) => r.r2_key));
+  await syncFrom(db, item.list_id);
   return c.body(null, 204);
 });
 
-/** Een gekoppeld ding komt en gaat met de bron: weghalen of archiveren doe je daar (of je past de koppeling aan). */
+/** Een gekoppeld item komt en gaat met de bron: weghalen of archiveren doe je daar (of je past de koppeling aan). */
 async function notMirrored(db: D1Database, mirrorId: string | null | undefined) {
   if (!mirrorId) return;
   const locked = await lockedOf(db, mirrorId);
@@ -468,29 +468,29 @@ async function notMirrored(db: D1Database, mirrorId: string | null | undefined) 
 
 // ---------- foto en bestanden ----------
 
-things.get("/:id/photo", async (c) => {
-  const { thing } = await requireThing(c.env.DB, c.get("person").id, c.req.param("id"));
-  return servePhoto(c, "thing", thing.id);
+items.get("/:id/photo", async (c) => {
+  const { item } = await requireItem(c.env.DB, c.get("person").id, c.req.param("id"));
+  return servePhoto(c, "item", item.id);
 });
 
-things.put("/:id/photo", async (c) => {
-  const { thing, role } = await requireThing(c.env.DB, c.get("person").id, c.req.param("id"));
+items.put("/:id/photo", async (c) => {
+  const { item, role } = await requireItem(c.env.DB, c.get("person").id, c.req.param("id"));
   needEdit(role);
-  const result = await storePhoto(c, "thing", thing.id);
+  const result = await storePhoto(c, "item", item.id);
   return "error" in result ? c.json(result, 400) : c.json(result);
 });
 
-things.delete("/:id/photo", async (c) => {
-  const { thing, role } = await requireThing(c.env.DB, c.get("person").id, c.req.param("id"));
+items.delete("/:id/photo", async (c) => {
+  const { item, role } = await requireItem(c.env.DB, c.get("person").id, c.req.param("id"));
   needEdit(role);
-  await removePhoto(c, "thing", thing.id);
+  await removePhoto(c, "item", item.id);
   return c.body(null, 204);
 });
 
-things.post("/:id/files", async (c) => {
-  const { thing, role } = await requireThing(c.env.DB, c.get("person").id, c.req.param("id"));
+items.post("/:id/files", async (c) => {
+  const { item, role } = await requireItem(c.env.DB, c.get("person").id, c.req.param("id"));
   needEdit(role);
-  const result = await storeFiles(c, "thing", thing.id);
+  const result = await storeFiles(c, "item", item.id);
   return "error" in result ? c.json(result, 400) : c.json(result, 201);
 });
 

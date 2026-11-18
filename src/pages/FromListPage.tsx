@@ -1,4 +1,4 @@
-// Toevoegen uit andere lijst (zie shared/transfer.ts en STIJLBOEK.md): kies een lijst, welke dingen meegaan
+// Toevoegen uit andere lijst (zie shared/transfer.ts en STIJLBOEK.md): kies een lijst, welke items meegaan
 // (voorwaarden zoals in een weergave), wat er per veld in komt (een veld van de bron, een vaste waarde of het origineel),
 // hoe keuzes vertalen, en of je kopieert, verplaatst of koppelt (blijvend: PUT /lists/:id/mirrors/:bron). Een voorbeeld
 // toont wat erbij komt; de server rekent het opnieuw uit. Een bestaande koppeling opent hier om aan te passen
@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { formatFieldValue, refLists, type FieldDef } from "../../shared/fields";
-import { canEdit, canManage, type List, type ListDetail, type Role, type ThingRef, type ThingRow } from "../../shared/model";
+import { canEdit, canManage, type List, type ListDetail, type Role, type ItemRef, type ItemRow } from "../../shared/model";
 import { canCarry, canPointBack, cleanPlan, fillable, guessPlan, toTranslate, transferRows, TRANSFER_MODES, type FieldSource, type TransferMode, type TransferPlan } from "../../shared/transfer";
 import type { Person } from "../../shared/types";
 import { kindOf, NAME, viewFields, type ViewContext } from "../../shared/views";
@@ -21,9 +21,9 @@ import { useToast } from "../components/Toast";
 import { formatNumber, today } from "../format";
 import { useNavigate } from "../router";
 import { useSession } from "../session";
-import { allEdit } from "./ThingForm";
+import { allEdit } from "./ItemForm";
 
-type ThingList = { things: ThingRow[]; people: Person[]; refs: ThingRef[] };
+type ItemList = { items: ItemRow[]; people: Person[]; refs: ItemRef[] };
 type Result = { created: number; skipped: { name: string; error: string }[] };
 /** Een koppeling die in deze lijst schrijft (GET /lists/:id/mirrors); het plan enkel als je beide lijsten beheert. */
 type MirrorInfo = { id: string; source_id: string; source: string | null; plan: unknown; can_manage: boolean };
@@ -69,7 +69,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
   const [sourceId, setSourceId] = useState(() => params.get("bron") ?? "");
   const { data: mirrors, reload: reloadMirrors } = useApi<MirrorInfo[]>(`/lists/${list.id}/mirrors`);
   const { data: source } = useApi<ListDetail>(sourceId ? `/lists/${sourceId}` : null);
-  const { data: sourceData } = useApi<ThingList>(sourceId ? `/lists/${sourceId}/things` : null);
+  const { data: sourceData } = useApi<ItemList>(sourceId ? `/lists/${sourceId}/items` : null);
   const [plan, setPlan] = useState<TransferPlan | null>(null);
   const [values, setValues] = useState<AttributeDraft>({});
   const [busy, setBusy] = useState(false);
@@ -101,7 +101,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
   const vfields = useMemo(() => viewFields(sourceFields, ready?.source.list.one ?? "Naam"), [sourceFields, ready?.source.list.one]);
   const names = useMemo(() => namesFrom(ready?.sourceData.people ?? [], ready?.sourceData.refs ?? []), [ready?.sourceData]);
   const ctx: ViewContext = useMemo(() => ({ today: today(), me: person.id, names }), [person.id, names]);
-  const items = useMemo(() => (ready?.sourceData.things ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [ready?.sourceData]);
+  const items = useMemo(() => (ready?.sourceData.items ?? []).map((t) => ({ ...t, tag_ids: [] as string[] })), [ready?.sourceData]);
   const choices: Choices = (f) => {
     const kind = kindOf(f);
     if (kind === "select" || kind === "multi") return (f.options ?? []).map((o) => ({ value: o, label: o }));
@@ -146,7 +146,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
         navigate(`/lijsten/${list.id}`, { replace: true });
         return;
       }
-      const res = await api.post<Result>(`/lists/${list.id}/things/from`, ready.plan);
+      const res = await api.post<Result>(`/lists/${list.id}/items/from`, ready.plan);
       toast(`${formatNumber(res.created)} ${ready.plan.mode === "move" ? "verplaatst naar" : "toegevoegd aan"} ${list.name}`);
       if (res.skipped.length === 0) {
         navigate(`/lijsten/${list.id}`, { replace: true });
@@ -160,7 +160,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
     }
   }
 
-  /** De koppeling weghalen: wat ze bracht, blijft als gewone dingen staan. */
+  /** De koppeling weghalen: wat ze bracht, blijft als gewone items staan. */
   async function unlink() {
     if (!ready || !mirror) return;
     if (!(await confirm({ title: `Koppeling met ${ready.source.list.name} weghalen?`, body: "Wat ze bracht, blijft staan en volgt niet meer mee.", confirmLabel: "Weghalen", danger: true }))) return;
@@ -175,7 +175,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
   }
 
   const textual = sourceFields.filter((f) => canCarry({ key: "_", label: "", type: "text" }, f));
-  const one = (list.one ?? "ding").toLowerCase();
+  const one = (list.one ?? "item").toLowerCase();
 
   return (
     <form className="form page" onSubmit={onSubmit}>
@@ -253,7 +253,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
                         {f.label}
                       </option>
                     ))}
-                    {back && <option value="self">{`${ready.source.list.one ?? "Het ding"} in ${ready.source.list.name}`}</option>}
+                    {back && <option value="self">{`${ready.source.list.one ?? "Het item"} in ${ready.source.list.name}`}</option>}
                     <option value="value">Vaste waarde</option>
                   </select>
                   {current?.from === "value" && (
@@ -293,7 +293,7 @@ function FromListForm({ list, role }: { list: List; role: Role }) {
         <section className="card form-section">
           <div className="field">
             <span className="label">Zo komt het erin</span>
-            <span className="hint">{`${formatNumber(rows.length)} ${rows.length === 1 ? one : "dingen"}`}</span>
+            <span className="hint">{`${formatNumber(rows.length)} ${rows.length === 1 ? one : "items"}`}</span>
           </div>
           {rows.length > 0 && (
             <ul className="import-preview">

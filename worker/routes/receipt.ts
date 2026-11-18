@@ -1,37 +1,37 @@
 // Een foto lezen voor een gebeurtenis (✨): POST /lists/:id/events/read-photo met de foto en de soort van het
-// formulier. Een aankoop leest een kasticket: elke lijn gekoppeld aan een ding uit een voorraad die de lezer ziet (zie
-// shared/receipt.ts), de winkel aan een ding dat hij ziet. Een andere soort vult haar eigen velden in (en de
+// formulier. Een aankoop leest een kasticket: elke lijn gekoppeld aan een item uit een voorraad die de lezer ziet (zie
+// shared/receipt.ts), de winkel aan een item dat hij ziet. Een andere soort vult haar eigen velden in (en de
 // omschrijving, de datum, het bedrag); met voedingswaarden is de foto een gerecht en schat de AI de portie (dat zegt de
 // app ook). Enkel als het formulier foto's leest (shared/photoread.ts). Bewaart niets: het formulier toont het om na
-// te kijken. POST /things/:id/alias onthoudt de naam op het ticket bij het ding (een tekstveld met `aliases`, enkel als
+// te kijken. POST /items/:id/alias onthoudt de naam op het ticket bij het item (een tekstveld met `aliases`, enkel als
 // je in die lijst mag wijzigen).
 
 import { buysWith } from "../../shared/targets";
 import { syncFrom } from "../mirrors";
 import { Hono } from "hono";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { baseKind, canEdit, isBase, type KindInfo, type ThingRef } from "../../shared/model";
+import { baseKind, canEdit, isBase, type KindInfo, type ItemRef } from "../../shared/model";
 import { cleanAttributes } from "../../shared/fields";
 import { isFoodKind, readsPhoto } from "../../shared/photoread";
 import { aliasesOf, matchName, readLines, validDate, cents, withAlias, type Candidate } from "../../shared/receipt";
 import { measureFor, type StockDef } from "../../shared/stock";
 import { AI_IMAGE_TYPES, MAX_IMAGE_BYTES, MODEL, safeJson, toBase64, useAiBudget } from "../ai";
-import { ids, kindsFor, needEdit, parseJson, requireList, requireThing, seenLists } from "../access";
+import { ids, kindsFor, needEdit, parseJson, requireList, requireItem, seenLists } from "../access";
 import { describeField, labelSchema, READABLE } from "./photo";
 import { brusselsToday } from "../today";
 import type { AppEnv } from "../types";
 import { asObject, requiredString, ValidationError } from "../validate";
 
 export const listReceipt = new Hono<AppEnv>();
-export const thingAlias = new Hono<AppEnv>();
+export const itemAlias = new Hono<AppEnv>();
 
 type Read = {
   kind: "receipt";
-  store: ThingRef | null;
+  store: ItemRef | null;
   store_text: string | null;
   date: string | null;
   total: number | null;
-  lines: { name: string; thing: ThingRef | null; amount: number; unit: string | null; price: number | null }[];
+  lines: { name: string; item: ItemRef | null; amount: number; unit: string | null; price: number | null }[];
   message?: string;
 };
 
@@ -207,12 +207,12 @@ export async function matchReceipt(db: D1Database, me: string, parsed: { store?:
   const seen = await seenLists(db, me);
   const { results } = await db
     .prepare(
-      `SELECT t.id, t.name, t.data, t.list_id, l.name AS list, l.fields, l.stock FROM things t JOIN lists l ON l.id = t.list_id
+      `SELECT t.id, t.name, t.data, t.list_id, l.name AS list, l.fields, l.stock FROM items t JOIN lists l ON l.id = t.list_id
        WHERE t.list_id IN (SELECT value FROM json_each(?)) AND t.archived = 0 AND l.archived = 0 LIMIT 5000`,
     )
     .bind(ids(seen.keys()))
     .all<{ id: string; name: string; data: string; list_id: string; list: string; fields: string; stock: string | null }>();
-  const refOf = (r: (typeof results)[number], unit: string | null = null): ThingRef => ({ id: r.id, name: r.name, list_id: r.list_id, list: r.list, unit });
+  const refOf = (r: (typeof results)[number], unit: string | null = null): ItemRef => ({ id: r.id, name: r.name, list_id: r.list_id, list: r.list, unit });
   const stocked = results.filter((r) => r.stock);
   const candidates: Candidate[] = stocked.map((r) => {
     const data = parseJson<Attributes>(r.data, {});
@@ -221,8 +221,8 @@ export async function matchReceipt(db: D1Database, me: string, parsed: { store?:
     return { id: r.id, name: r.name, aliases: aliasKeys.flatMap((k) => aliasesOf(data[k])), measure: measureFor(parseJson<StockDef>(r.stock, {}), data) };
   });
   const lines = readLines(parsed.lines, candidates).map((l) => {
-    const row = l.thing ? stocked.find((r) => r.id === l.thing) : undefined;
-    return { ...l, thing: row ? refOf(row, candidates.find((c) => c.id === row.id)?.measure?.unit ?? null) : null };
+    const row = l.item ? stocked.find((r) => r.id === l.item) : undefined;
+    return { ...l, item: row ? refOf(row, candidates.find((c) => c.id === row.id)?.measure?.unit ?? null) : null };
   });
   const storeText = typeof parsed.store === "string" && parsed.store.trim() ? parsed.store.trim().slice(0, 80) : null;
   const storeId = storeText ? matchName(results.filter((r) => !r.stock), storeText) : null;
@@ -237,21 +237,21 @@ export async function matchReceipt(db: D1Database, me: string, parsed: { store?:
   };
 }
 
-/** De naam op het ticket onthouden bij een ding (in zijn eerste tekstveld met `aliases`). */
-thingAlias.post("/:id/alias", async (c) => {
+/** De naam op het ticket onthouden bij een item (in zijn eerste tekstveld met `aliases`). */
+itemAlias.post("/:id/alias", async (c) => {
   const db = c.env.DB;
   const me = c.get("person").id;
-  const { thing, list, role } = await requireThing(db, me, c.req.param("id"));
+  const { item, list, role } = await requireItem(db, me, c.req.param("id"));
   const body = asObject(await c.req.json());
   const name = requiredString(body, "name", 80);
   const field = list.fields.find((f) => f.type === "text" && f.aliases);
   if (!field || !canEdit(role)) return c.json({ ok: false });
-  const next = withAlias(thing.data[field.key], name);
+  const next = withAlias(item.data[field.key], name);
   if (next === null) return c.json({ ok: true });
   await db
-    .prepare("UPDATE things SET data = json_set(data, ?, ?), updated_at = datetime('now') WHERE id = ?")
-    .bind(`$.${field.key}`, next, thing.id)
+    .prepare("UPDATE items SET data = json_set(data, ?, ?), updated_at = datetime('now') WHERE id = ?")
+    .bind(`$.${field.key}`, next, item.id)
     .run();
-  await syncFrom(db, thing.list_id);
+  await syncFrom(db, item.list_id);
   return c.json({ ok: true });
 });

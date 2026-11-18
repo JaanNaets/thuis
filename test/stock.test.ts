@@ -34,7 +34,7 @@ test("stock nakijken: enkel velden van de lijst met de juiste soort", () => {
   assert.equal(cleanStock(null, FIELDS), null);
 });
 
-test("voorraad: telling, erbij en eraf, omgerekend naar de eenheid van het ding", () => {
+test("voorraad: telling, erbij en eraf, omgerekend naar de eenheid van het item", () => {
   const aardappelen = { eenheid: "kg", verpakking: 5, verpakking_naam: "zak", minimum: 2 };
   const level = stockLevel(DEF, aardappelen, [
     line("2026-11-01", "meting", "voor", 1),
@@ -61,7 +61,7 @@ test("in eender welke volgorde, en een stuk met inhoud per stuk", () => {
   const yoghurt = { eenheid: "stuk", per_stuk: 125 };
   const lines = [line("2026-11-03", "gebruik", "uit", 250, "g"), line("2026-11-01", "aankoop", "in", 6)];
   assert.equal(stockLevel(DEF, yoghurt, lines).amount, 4);
-  // Zonder eenheid op het ding: de standaard van de lijst (stuk).
+  // Zonder eenheid op het item: de standaard van de lijst (stuk).
   assert.equal(stockLevel(DEF, {}, [line("2026-11-01", "aankoop", "in", 3)]).unit, "stuk");
 });
 
@@ -80,7 +80,7 @@ test("meer eraf dan er was: onder nul, en dus op", () => {
   assert.equal(level.low, true);
 });
 
-test("prijs per eenheid van het ding", () => {
+test("prijs per eenheid van het item", () => {
   assert.equal(unitPrice(600, 6, "stuk", { unit: "stuk" }), 100);
   assert.equal(unitPrice(499, 5, "kg", { unit: "kg" }), 100);
   assert.equal(unitPrice(299, 750, "g", { unit: "kg" }), 399);

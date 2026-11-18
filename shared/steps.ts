@@ -1,7 +1,7 @@
 // Stap voor stap invullen in het palet: na "Uit eten · Het Forum" wordt het invulveld telkens het volgende veld (Score,
 // Wat ik at, …) met suggesties; leeg is overslaan, na het laatste bewaar je. Hier: welke velden (`eventSteps`,
-// `thingSteps`), wat je typte als waarde (`readStep`, met dezelfde lezer als het formulier: `parseFieldText`), de
-// suggesties (`stepSuggestions`) en wat er bewaard wordt (`eventBody`, `thingBody`). Wat niet in één regel past (meer
+// `itemSteps`), wat je typte als waarde (`readStep`, met dezelfde lezer als het formulier: `parseFieldText`), de
+// suggesties (`stepSuggestions`) en wat er bewaard wordt (`eventBody`, `itemBody`). Wat niet in één regel past (meer
 // lijnen, een eigen verdeling, een foto, een timer) blijft in het volledige formulier: Alles invullen (`prefillOf`).
 
 import { normalizeShares, parseFieldText, parseMoney, type Attributes, type FieldDef, type FieldType } from "./fields.ts";
@@ -47,20 +47,20 @@ const fieldStep = (def: FieldDef): Step => ({ key: def.key, label: def.label, ty
 export const canStep = (kind: Pick<KindInfo, "parts"> | null | undefined): kind is KindInfo => Boolean(kind && !kind.parts.duration && !kind.parts.to);
 
 /**
- * Loggen met een formulier, eventueel over een ding: hoeveel (als het ding erbij komt of eraf gaat), de velden van het
+ * Loggen met een formulier, eventueel over een item: hoeveel (als het item erbij komt of eraf gaat), de velden van het
  * formulier, en een bedrag (met geld, tenzij het formulier zelf een bedrag heeft of gepland begint).
  */
-export function eventSteps(kind: KindInfo, thing?: { unit: string | null } | null): Step[] {
+export function eventSteps(kind: KindInfo, item?: { unit: string | null } | null): Step[] {
   const steps: Step[] = [];
   const op = stockOp(kind.does, mainGroup(kind).role);
-  if (thing && (op === "bij" || op === "af")) steps.push({ key: "$qty", label: "Hoeveel", type: "qty", unit: thing.unit });
+  if (item && (op === "bij" || op === "af")) steps.push({ key: "$qty", label: "Hoeveel", type: "qty", unit: item.unit });
   steps.push(...kind.fields.filter(quick).map(fieldStep));
   if (kind.parts.money && !kind.planned && !kind.fields.some((f) => f.type === "money")) steps.push({ key: "$amount", label: "Bedrag", type: "amount" });
   return steps;
 }
 
-/** Een nieuw ding: de naam (als je die nog niet typte), dan de verplichte velden en die als kolom in de lijst staan. */
-export function thingSteps(fields: FieldDef[], named: boolean): Step[] {
+/** Een nieuw item: de naam (als je die nog niet typte), dan de verplichte velden en die als kolom in de lijst staan. */
+export function itemSteps(fields: FieldDef[], named: boolean): Step[] {
   return [...(named ? [] : [{ key: "$name", label: "Naam", type: "name" } as const]), ...fields.filter((f) => quick(f) && (f.required || f.column)).map(fieldStep)];
 }
 
@@ -106,7 +106,7 @@ export function readStep(step: Step, text: string, ctx: { today: string; people:
   return value === undefined || value === null ? wrong : { value };
 }
 
-/** Wat je eerder invulde in een veld, het vaakst eerst (van gebeurtenissen met dit formulier of dingen in de lijst). */
+/** Wat je eerder invulde in een veld, het vaakst eerst (van gebeurtenissen met dit formulier of items in de lijst). */
 export function memoryOf(rows: Attributes[], key: string, max = 6): string[] {
   const count = new Map<string, number>();
   for (const row of rows) {
@@ -144,7 +144,7 @@ const dataOf = (steps: Step[], values: StepValues): Attributes =>
   Object.fromEntries(steps.flatMap((s) => (s.type === "field" && values[s.key] !== undefined ? [[s.key, values[s.key] as Attributes[string]]] : []))) as Attributes;
 
 /**
- * De gebeurtenis zoals het formulier ze zou bewaren: vandaag, gepland als het formulier (of jij) dat vraagt, het ding
+ * De gebeurtenis zoals het formulier ze zou bewaren: vandaag, gepland als het formulier (of jij) dat vraagt, het item
  * als lijn (hoeveel, en bij één aankoop het bedrag als prijs), jij als betaler en in een lijst waar meer mensen loggen
  * gelijk verdeeld (`defaultSharers`).
  */
@@ -152,7 +152,7 @@ export function eventBody(
   kind: KindInfo,
   steps: Step[],
   values: StepValues,
-  ctx: { thing?: { id: string; unit: string | null } | null; me: string; people: { id: string; role: Role }[]; today: string; planned?: boolean },
+  ctx: { item?: { id: string; unit: string | null } | null; me: string; people: { id: string; role: Role }[]; today: string; planned?: boolean },
 ) {
   const money = kind.parts.money;
   const role = mainGroup(kind).role;
@@ -172,15 +172,15 @@ export function eventBody(
     to_person: null,
     split: sharers.length ? normalizeShares(sharers.map((id) => ({ person_id: id }))) : null,
     data,
-    lines: ctx.thing
-      ? [{ role, thing_id: ctx.thing.id, amount: qty, unit: ctx.thing.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }]
+    lines: ctx.item
+      ? [{ role, item_id: ctx.item.id, amount: qty, unit: ctx.item.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }]
       : [],
     repeat: null,
   };
 }
 
-/** Een nieuw ding: de naam en de velden die je invulde. */
-export function thingBody(name: string, steps: Step[], values: StepValues) {
+/** Een nieuw item: de naam en de velden die je invulde. */
+export function itemBody(name: string, steps: Step[], values: StepValues) {
   return { name: (typeof values.$name === "string" ? values.$name : name).trim(), data: dataOf(steps, values) };
 }
 

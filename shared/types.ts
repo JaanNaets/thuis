@@ -1,5 +1,5 @@
 // Gedeelde types tussen de Worker (API) en de React-app die niet bij één onderdeel horen: kleuren en personen. De
-// rest staat bij zijn onderdeel (shared/model.ts: lijsten, dingen en gebeurtenissen).
+// rest staat bij zijn onderdeel (shared/model.ts: lijsten, items en gebeurtenissen).
 
 /** Een zachte kleur voor een lijst, tag of persoon. */
 export const TONES = ["peach", "butter", "sage", "mint", "sky", "lilac", "rose"] as const;

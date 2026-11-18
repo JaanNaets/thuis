@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { foodPerPerson, gramsOf, isFood, nutritionOf, type FoodEvent, type FoodThing } from "../shared/food.ts";
+import { foodPerPerson, gramsOf, isFood, nutritionOf, type FoodEvent, type FoodItem } from "../shared/food.ts";
 import type { FieldDef } from "../shared/fields.ts";
 
 const PRODUCT: FieldDef[] = [
@@ -11,13 +11,13 @@ const PRODUCT: FieldDef[] = [
   { key: "portie", label: "Portie", type: "number", product: "serving" },
 ];
 const STOCK = { unit: "eenheid", piece: "per_stuk" };
-const pasta: FoodThing = { fields: PRODUCT, data: { eenheid: "kg", kcal: 350, eiwit: 12 }, stock: STOCK };
-const yoghurt: FoodThing = { fields: PRODUCT, data: { eenheid: "stuk", per_stuk: 125, kcal: 80 }, stock: STOCK };
+const pasta: FoodItem = { fields: PRODUCT, data: { eenheid: "kg", kcal: 350, eiwit: 12 }, stock: STOCK };
+const yoghurt: FoodItem = { fields: PRODUCT, data: { eenheid: "stuk", per_stuk: 125, kcal: 80 }, stock: STOCK };
 const KCAL: FieldDef[] = [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }];
 
 const eaten = (o: Partial<FoodEvent>): FoodEvent => ({ eats: true, status: "gebeurd", split: null, created_by: "jana", fields: KCAL, data: {}, lines: [], ...o });
 
-test("gram van een lijn, met de eenheid van het ding", () => {
+test("gram van een lijn, met de eenheid van het item", () => {
   assert.equal(gramsOf(300, "g", pasta), 300);
   assert.equal(gramsOf(0.3, null, pasta), 300);
   assert.equal(gramsOf(2, null, yoghurt), 250);
@@ -25,8 +25,8 @@ test("gram van een lijn, met de eenheid van het ding", () => {
   assert.equal(gramsOf(2, "stuk", { fields: PRODUCT, data: { kcal: 100 }, stock: STOCK }), null);
 });
 
-test("kcal uit de dingen die eraf gingen, of zelf ingevuld", () => {
-  const meal = eaten({ lines: [{ amount: 300, unit: "g", thing: pasta }, { amount: 1, unit: null, thing: yoghurt }] });
+test("kcal uit de items die eraf gingen, of zelf ingevuld", () => {
+  const meal = eaten({ lines: [{ amount: 300, unit: "g", item: pasta }, { amount: 1, unit: null, item: yoghurt }] });
   assert.deepEqual(nutritionOf(meal), { kcal: 1150, protein: 36 });
   // Wat je zelf invult, wint.
   assert.deepEqual(nutritionOf(eaten({ data: { kcal: 450 } })), { kcal: 450 });
@@ -41,19 +41,19 @@ test("per persoon: wie at, volgens de verdeling", () => {
       { person_id: "jana", share: 50 },
       { person_id: "jaan", share: 50 },
     ],
-    lines: [{ amount: 300, unit: "g", thing: pasta }],
+    lines: [{ amount: 300, unit: "g", item: pasta }],
   });
   const per = foodPerPerson([meal, eaten({ data: { kcal: 200 } })]);
   assert.deepEqual(per.get("jaan"), { kcal: 525, protein: 18 });
   assert.deepEqual(per.get("jana"), { kcal: 725, protein: 18 });
 });
 
-test("eten is een gebruik met kcal (in de soort of in het ding), geen pellets", () => {
+test("eten is een gebruik met kcal (in de soort of in het item), geen pellets", () => {
   const kcal: FieldDef = { key: "kcal", label: "Kcal", type: "number", product: "kcal" };
   const pellets = { fields: [], data: {}, stock: null };
   const pasta = { fields: [kcal], data: { kcal: 350 }, stock: null };
-  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 1, unit: "zak", thing: pellets }] }), false);
-  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 300, unit: "g", thing: pasta }] }), true);
+  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 1, unit: "zak", item: pellets }] }), false);
+  assert.equal(isFood({ eats: true, fields: [], lines: [{ amount: 300, unit: "g", item: pasta }] }), true);
   assert.equal(isFood({ eats: true, fields: [kcal], lines: [] }), true);
   assert.equal(isFood({ eats: false, fields: [kcal], lines: [] }), false);
 });

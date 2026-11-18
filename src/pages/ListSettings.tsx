@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import { NOTIFY_CHOICES } from "../../shared/alerts";
 import { BALANCE, presetDoes } from "../../shared/cells";
 import { baseParts, BASES, canManage, formsOf, isBase, LINE_ROLES, ROLES, type Base, type DirectRole, type KindInfo, type List, type ListDetail, type ListPerson, type Parts } from "../../shared/model";
-import { readsPhoto, THINGS_FORM, withReads } from "../../shared/photoread";
+import { readsPhoto, ITEMS_FORM, withReads } from "../../shared/photoread";
 import type { LedgerDef } from "../../shared/ledger";
 import type { StockDef } from "../../shared/stock";
 import { templateFile } from "../../shared/template-file";
@@ -132,7 +132,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
     try {
       await api.put(`/lists/${list.id}`, {
         name,
-        one: one.trim() || (detail.counts.things ? list.one : null),
+        one: one.trim() || (detail.counts.items ? list.one : null),
         icon,
         color,
         notify: notify === "none" ? null : { to: notify },
@@ -160,7 +160,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
   async function remove() {
     const ok = await confirm({
       title: `${list.name} verwijderen?`,
-      body: "Met alle dingen en het hele logboek. Dat kan niet terug.",
+      body: "Met alle items en het hele logboek. Dat kan niet terug.",
       confirmLabel: "Verwijderen",
       danger: true,
     });
@@ -171,7 +171,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
     navigate("/", { replace: true });
   }
 
-  /** De opbouw van de lijst als bestand (zonder dingen, logboek of mensen), om te delen. */
+  /** De opbouw van de lijst als bestand (zonder items, logboek of mensen), om te delen. */
   function downloadTemplate() {
     const own = detail.kinds.filter((k) => k.list_id === list.id);
     const file = templateFile(list, own);
@@ -191,7 +191,7 @@ function General({ detail, onSaved }: { detail: ListDetail; onSaved: () => void 
           <input value={name} maxLength={60} required onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="label">Eén ding heet</span>
+          <span className="label">Eén item heet</span>
           <input value={one} maxLength={40} placeholder="bv. Wijn" onChange={(e) => setOne(e.target.value)} />
         </label>
         <div className="field">
@@ -241,14 +241,14 @@ function Fields({ detail, onSaved }: { detail: ListDetail; onSaved: () => void }
   const { data: people } = useApi<Person[]>("/me/people");
   const toast = useToast();
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(list.fields));
-  const [reads, setReads] = useState(() => readsPhoto(list.read_photo, THINGS_FORM, null));
+  const [reads, setReads] = useState(() => readsPhoto(list.read_photo, ITEMS_FORM, null));
   const [busy, setBusy] = useState(false);
   async function save() {
     const built = buildFields(drafts, list.id);
     if ("error" in built) return toast(built.error, "alert");
     setBusy(true);
     try {
-      await api.put(`/lists/${list.id}`, { fields: built.fields, ...(list.one ? { read_photo: withReads(list.read_photo, THINGS_FORM, null, reads) } : {}) });
+      await api.put(`/lists/${list.id}`, { fields: built.fields, ...(list.one ? { read_photo: withReads(list.read_photo, ITEMS_FORM, null, reads) } : {}) });
       toast("Velden bewaard");
       onSaved();
     } catch (err) {
@@ -479,7 +479,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
   const [drafts, setDrafts] = useState<FieldDraft[]>(() => fieldsDraft(kind?.fields ?? []));
   const [does, setDoes] = useState<DoesDraft[]>(() => doesDraft(kind?.does ?? presetDoes("gebruik")));
   const { data: columns } = useApi<ListColumns[]>("/me/columns");
-  const things = lists.filter((l) => l.one && !l.archived);
+  const items = lists.filter((l) => l.one && !l.archived);
   // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
   const [readChoice, setReadChoice] = useState<boolean | null>(null);
   const reads = readChoice ?? readsPhoto(list.read_photo, kind?.id ?? "", { parts, fields: kind?.fields ?? [] });
@@ -573,7 +573,7 @@ function KindForm({ list, kind, onDone }: { list: List; kind: KindInfo | null; o
           <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
         </label>
       )}
-      <GroupsEditor value={parts.groups} onChange={(groups) => setParts({ ...parts, groups })} lists={things} />
+      <GroupsEditor value={parts.groups} onChange={(groups) => setParts({ ...parts, groups })} lists={items} />
       <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
       {columns && <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} parts={parts} />}
       <Switch checked={planned} onChange={setPlanned} label="Gepland" />

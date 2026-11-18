@@ -43,19 +43,19 @@ test("handelingen nakijken: enkel kolommen van lijsten waar je mag aanpassen, te
   assert.throws(() => cleanDoes([{ ...zetKleur, field: "lagen", op: "bij", value: { from: "fixed", value: "twee" } }], [HUIS], FORM));
 });
 
-const event = (data: Record<string, unknown>, lines: { role: "in" | "uit" | "voor" | "bij"; thing: string; list: string; amount?: number | null; unit?: string; price?: number }[], at = "2026-11-12", amount: number | null = null) => ({
+const event = (data: Record<string, unknown>, lines: { role: "in" | "uit" | "voor" | "bij"; item: string; list: string; amount?: number | null; unit?: string; price?: number }[], at = "2026-11-12", amount: number | null = null) => ({
   list_id: "uitgaven",
   at,
   amount,
   data: data as never,
-  lines: lines.map((l) => ({ role: l.role, thing_id: l.thing, thing_list: l.list, amount: l.amount ?? null, unit: l.unit ?? null, price: l.price ?? null, expires: null })),
+  lines: lines.map((l) => ({ role: l.role, item_id: l.item, item_list: l.list, amount: l.amount ?? null, unit: l.unit ?? null, price: l.price ?? null, expires: null })),
 });
 
 test("wat een gebeurtenis doet: Schilderwerk zet de kleur en de datum van elke ruimte in de lijn Voor", () => {
   const does: Handeling[] = [zetKleur, { rows: voor, list: "huis", field: "geschilderd", op: "zet", value: { from: "at" } }];
-  const effects = effectsOf(does, event({ kleur: "Country Linen" }, [{ role: "voor", thing: "keuken", list: "huis" }, { role: "voor", thing: "living", list: "huis" }, { role: "bij", thing: "schilder", list: "winkels" }]));
+  const effects = effectsOf(does, event({ kleur: "Country Linen" }, [{ role: "voor", item: "keuken", list: "huis" }, { role: "voor", item: "living", list: "huis" }, { role: "bij", item: "schilder", list: "winkels" }]));
   assert.deepEqual(
-    effects.map((e) => [e.thing_id, e.field, e.op, e.val ?? e.num]),
+    effects.map((e) => [e.item_id, e.field, e.op, e.val ?? e.num]),
     [
       ["keuken", "kleur", "zet", "Country Linen"],
       ["living", "kleur", "zet", "Country Linen"],
@@ -63,9 +63,9 @@ test("wat een gebeurtenis doet: Schilderwerk zet de kleur en de datum van elke r
       ["living", "geschilderd", "zet", "2026-11-12"],
     ],
   );
-  // Een leeg veld wist niets; een ding in een andere lijst raakt de handeling niet.
-  assert.deepEqual(effectsOf([zetKleur], event({}, [{ role: "voor", thing: "keuken", list: "huis" }])), []);
-  assert.deepEqual(effectsOf([zetKleur], event({ kleur: "Wit" }, [{ role: "voor", thing: "fiat", list: "wagens" }])), []);
+  // Een leeg veld wist niets; een item in een andere lijst raakt de handeling niet.
+  assert.deepEqual(effectsOf([zetKleur], event({}, [{ role: "voor", item: "keuken", list: "huis" }])), []);
+  assert.deepEqual(effectsOf([zetKleur], event({ kleur: "Wit" }, [{ role: "voor", item: "fiat", list: "wagens" }])), []);
 });
 
 test("de voorraad: Toevoegen telt bij, Weghalen telt af, een telling zet; met hoeveel en eenheid", () => {
@@ -74,15 +74,15 @@ test("de voorraad: Toevoegen telt bij, Weghalen telt af, een telling zet; met ho
   assert.deepEqual(own.does, [...presetDoes("dienst"), zetKleur]);
   // Met eigen onderdelen enkel wat erin staat.
   assert.deepEqual(kindInfo({ ...own, list_id: "huis", icon: null, sort_order: 0, parts: own.parts, does: [zetKleur] }).does, [zetKleur]);
-  const buy = effectsOf(baseKind("aankoop").does, event({}, [{ role: "in", thing: "chablis", list: "wijnen", amount: 6, unit: "fles" }, { role: "bij", thing: "colruyt", list: "winkels" }]));
-  assert.deepEqual(buy.map((e) => [e.thing_id, e.field, e.op, e.num, e.unit]), [["chablis", STOCK, "bij", 6, "fles"]]);
-  const count = effectsOf(baseKind("meting").does, event({}, [{ role: "voor", thing: "chablis", list: "wijnen", amount: 4 }, { role: "voor", thing: "jaan", list: "mensen" }]));
+  const buy = effectsOf(baseKind("aankoop").does, event({}, [{ role: "in", item: "chablis", list: "wijnen", amount: 6, unit: "fles" }, { role: "bij", item: "colruyt", list: "winkels" }]));
+  assert.deepEqual(buy.map((e) => [e.item_id, e.field, e.op, e.num, e.unit]), [["chablis", STOCK, "bij", 6, "fles"]]);
+  const count = effectsOf(baseKind("meting").does, event({}, [{ role: "voor", item: "chablis", list: "wijnen", amount: 4 }, { role: "voor", item: "jaan", list: "mensen" }]));
   // Een telling zonder hoeveelheid zegt niets.
-  assert.deepEqual(count.map((e) => [e.thing_id, e.op, e.num]), [["chablis", "zet", 4]]);
+  assert.deepEqual(count.map((e) => [e.item_id, e.op, e.num]), [["chablis", "zet", 4]]);
 });
 
-test("een Aanpassing zet elk ingevuld veld op het ding (leeg wist)", () => {
-  const effects = effectsOf(ADJUST_DOES, event({ kleur: "Wit", lagen: 2, oud: "" }, [{ role: "voor", thing: "keuken", list: "huis" }]));
+test("een Aanpassing zet elk ingevuld veld op het item (leeg wist)", () => {
+  const effects = effectsOf(ADJUST_DOES, event({ kleur: "Wit", lagen: 2, oud: "" }, [{ role: "voor", item: "keuken", list: "huis" }]));
   assert.deepEqual(
     effects.map((e) => [e.field, e.val, e.num]),
     [
@@ -106,7 +106,7 @@ const entry = (at: string, op: CellEntry["op"], v: number | string | null, i = 0
 });
 
 test("de waarde van een cel: de laatste Zet plus wat er daarna bij en af ging, in volgorde van de datum", () => {
-  // In eender welke volgorde bewaard; wat er in het ding stond, is het begin.
+  // In eender welke volgorde bewaard; wat er in het item stond, is het begin.
   const km = foldCell([entry("2026-11-03", "bij", 120), entry("2026-11-01", "zet", 52000), entry("2026-11-02", "bij", 80.5)], 50000);
   assert.deepEqual(km, { value: 52200.5, from: "e2026-11-030" });
   assert.deepEqual(foldCell([entry("2026-11-02", "af", 1)], 6), { value: 5, from: "e2026-11-020" });
@@ -127,7 +127,7 @@ test("wie bewaart, moet de lijst mogen wijzigen als het formulier daar een kolom
   // Toevoegen telt enkel in een lijst die voorraad telt.
   assert.equal(touchesCell(does, "in", "wijnen", true), true);
   assert.equal(touchesCell(does, "in", "huis", false), false);
-  // Een Aanpassing raakt elke kolom van het ding.
+  // Een Aanpassing raakt elke kolom van het item.
   assert.equal(touchesCell(ADJUST_DOES, "voor", "huis", false), true);
 });
 
@@ -140,14 +140,14 @@ test("geld als cellen: wie betaalde telt het bedrag bij, wie deelt zijn deel af,
   const money = (o: object) => ({ ...event({}, []), ...o });
   const saldo = (events: object[], does = presetDoes("aankoop")) => {
     const all = events.flatMap((e, i) => effectsOf(does, money(e), ledgers).map((f) => ({ ...f, at: `2026-11-0${i + 1}`, created_at: "", position: 0, event_id: `e${i}` })));
-    return new Map(["rij-jaan", "rij-jana"].map((r) => [r, foldCell(all.filter((f) => f.thing_id === r), undefined).value ?? 0]));
+    return new Map(["rij-jaan", "rij-jana"].map((r) => [r, foldCell(all.filter((f) => f.item_id === r), undefined).value ?? 0]));
   };
   // Jaan betaalt 46 euro, Jana 20, samen gedeeld; iets van Jaan alleen telt niet mee; een lijn van Jaan alleen is van hem.
   const net = saldo([
     { amount: 4600, paid_by: "jaan", split: half },
     { amount: 2000, paid_by: "jana", split: half },
     { amount: 9900, paid_by: "jaan" },
-    { amount: 1000, paid_by: "jana", split: half, lines: [{ role: "in", thing_id: null, thing_list: null, amount: null, unit: null, price: 400, expires: null, owner: "jaan" }] },
+    { amount: 1000, paid_by: "jana", split: half, lines: [{ role: "in", item_id: null, item_list: null, amount: null, unit: null, price: 400, expires: null, owner: "jaan" }] },
   ]);
   // Jaan: +4600 −2300 −1000 (deel) +9900 −9900 −400 −300 = 600; Jana: −2300 +2000 −1000 +1000 −300 = −600.
   assert.deepEqual([...net], [
@@ -157,7 +157,7 @@ test("geld als cellen: wie betaalde telt het bedrag bij, wie deelt zijn deel af,
   assert.deepEqual(settleUp(new Map([["jaan", net.get("rij-jaan") as number], ["jana", net.get("rij-jana") as number]])), [{ from: "jana", to: "jaan", amount: 600 }]);
   // Jana betaalt terug: alles in orde.
   const back = effectsOf(presetDoes("overdracht"), money({ amount: 600, paid_by: "jana", to_person: "jaan" }), ledgers);
-  assert.deepEqual(back.map((f) => [f.thing_id, f.field, f.op, f.num]), [
+  assert.deepEqual(back.map((f) => [f.item_id, f.field, f.op, f.num]), [
     ["rij-jana", "saldo", "bij", 600],
     ["rij-jaan", "saldo", "af", 600],
   ]);

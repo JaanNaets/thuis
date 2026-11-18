@@ -210,10 +210,10 @@ export type ViewDef = {
   group?: string;
 };
 /**
- * Een bewaarde weergave van de dingen of het logboek van een lijst (`list_id` null: het logboek over al je lijsten);
+ * Een bewaarde weergave van de items of het logboek van een lijst (`list_id` null: het logboek over al je lijsten);
  * `shared`: voor iedereen bij de lijst; `can_edit`: jij mag ze aanpassen.
  */
-export type SavedView = { id: string; list_id: string | null; target: "dingen" | "logboek"; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
+export type SavedView = { id: string; list_id: string | null; target: "items" | "logboek"; name: string; shared: boolean; def: ViewDef; can_edit: boolean };
 
 export const EMPTY_VIEW: ViewDef = { match: "all", conditions: [] };
 export const MAX_CONDITIONS = 20;

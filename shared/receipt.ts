@@ -1,7 +1,7 @@
 // Een kasticket lezen (✨, POST /lists/:id/events/read-photo bij een aankoop): de AI geeft de winkel, de datum, het totaal en de
-// lijnen zoals op het ticket; de code koppelt elke lijn aan een ding dat de lezer ziet (op naam, of op een naam die
+// lijnen zoals op het ticket; de code koppelt elke lijn aan een item dat de lezer ziet (op naam, of op een naam die
 // eerder op een ticket stond: een tekstveld met `aliases`), en rekent de maat op de lijn om naar de eenheid van dat
-// ding (5 kg aardappelen in een voorraad in kg). Het formulier maakt er één aankoop van, met een lijn per product.
+// item (5 kg aardappelen in een voorraad in kg). Het formulier maakt er één aankoop van, met een lijn per product.
 
 import { normalizeUnit, parseSize, receiptAmount, round3, type Measure } from "./units.ts";
 
@@ -10,11 +10,11 @@ export const MAX_LINES = 80;
 /** Een lijn zoals de AI ze geeft. */
 export type RawLine = { name: string; quantity: number; size: string | null; price: number | null };
 
-/** Een ding om aan te koppelen, met de namen die eerder op een ticket stonden. */
+/** Een item om aan te koppelen, met de namen die eerder op een ticket stonden. */
 export type Candidate = { id: string; name: string; aliases: string[]; measure: Measure | null };
 
-/** Een gelezen lijn: wat op het ticket stond, het ding (of niets), hoeveel en de prijs in cent. */
-export type ReceiptLine = { name: string; thing: string | null; amount: number; unit: string | null; price: number | null };
+/** Een gelezen lijn: wat op het ticket stond, het item (of niets), hoeveel en de prijs in cent. */
+export type ReceiptLine = { name: string; item: string | null; amount: number; unit: string | null; price: number | null };
 
 const plain = (s: string) =>
   s
@@ -24,7 +24,7 @@ const plain = (s: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** Het ding met deze naam: dezelfde, de langste die erin staat, of de kortste waar ze in staat. */
+/** Het item met deze naam: dezelfde, de langste die erin staat, of de kortste waar ze in staat. */
 export function matchName(candidates: { id: string; name: string }[], text: string): string | null {
   const t = plain(text);
   if (t.length < 2) return null;
@@ -92,8 +92,8 @@ export function niceName(text: string): string {
 }
 
 /**
- * De lijnen van de AI, nagekeken en gekoppeld. Een lijn met een ding staat in de eenheid van dat ding (5 kg, of één
- * verpakking als er geen maat op staat); zonder ding de maat op het ticket (2 × 1 l = 2 l), anders stuks.
+ * De lijnen van de AI, nagekeken en gekoppeld. Een lijn met een item staat in de eenheid van dat item (5 kg, of één
+ * verpakking als er geen maat op staat); zonder item de maat op het ticket (2 × 1 l = 2 l), anders stuks.
  */
 export function readLines(raw: unknown, candidates: Candidate[]): ReceiptLine[] {
   const out: ReceiptLine[] = [];
@@ -103,10 +103,10 @@ export function readLines(raw: unknown, candidates: Candidate[]): ReceiptLine[] 
     if (!name) continue;
     const quantity = typeof l.quantity === "number" && l.quantity > 0 ? Math.min(99, Math.round(l.quantity)) || 1 : 1;
     const size = typeof l.size === "string" && l.size.trim() ? l.size.trim().slice(0, 40) : null;
-    const thing = matchCandidate(candidates, name);
-    const measured = thing?.measure?.unit ? receiptAmount(quantity, size, name, thing.measure) : null;
+    const item = matchCandidate(candidates, name);
+    const measured = item?.measure?.unit ? receiptAmount(quantity, size, name, item.measure) : null;
     if (measured) {
-      out.push({ name, thing: thing!.id, amount: measured.amount, unit: measured.unit, price: cents(l.price) });
+      out.push({ name, item: item!.id, amount: measured.amount, unit: measured.unit, price: cents(l.price) });
       continue;
     }
     const found = (size ? parseSize(size) : null) ?? parseSize(name);
@@ -115,7 +115,7 @@ export function readLines(raw: unknown, candidates: Candidate[]): ReceiptLine[] 
     const toLiter = unit === "cl" ? 0.01 : unit === "dl" ? 0.1 : 1;
     out.push({
       name,
-      thing: thing?.id ?? null,
+      item: item?.id ?? null,
       amount: found ? round3(quantity * found.count * found.amount * toLiter) : quantity,
       unit: toLiter !== 1 ? "l" : unit,
       price: cents(l.price),

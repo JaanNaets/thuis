@@ -114,20 +114,20 @@ export function AppPage() {
   );
 }
 
-/** Een QR-sticker voor een lijst: scannen opent het formulier (loggen, met een soort en tekst, of een ding toevoegen). */
+/** Een QR-sticker voor een lijst: scannen opent het formulier (loggen, met een soort en tekst, of een item toevoegen). */
 export function StickerPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const thing = params.get("ding") === "1";
+  const item = params.get("item") === "1";
   const kind = params.get("soort");
   const text = params.get("tekst") ?? "";
   const { data: detail } = useApi<ListDetail>(`/lists/${id}`);
   const q = new URLSearchParams();
   if (kind) q.set("soort", kind);
   if (text) q.set("tekst", text);
-  const url = `${window.location.origin}/lijsten/${id}/${thing ? "nieuw" : "loggen"}${q.toString() ? `?${q}` : ""}`;
+  const url = `${window.location.origin}/lijsten/${id}/${item ? "nieuw" : "loggen"}${q.toString() ? `?${q}` : ""}`;
   const kindName = detail?.kinds.find((k) => k.id === kind)?.name;
-  const title = thing ? `${detail?.list.one ?? "Ding"} toevoegen` : kindName ? `${kindName}` : "Loggen";
+  const title = item ? `${detail?.list.one ?? "Item"} toevoegen` : kindName ? `${kindName}` : "Loggen";
   return (
     <div className="page">
       <PageHead

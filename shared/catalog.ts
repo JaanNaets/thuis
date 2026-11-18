@@ -22,7 +22,7 @@ export type ListTemplate = {
   name: string;
   /** Hoe het sjabloon heet in de kiezer; anders de naam. */
   label?: string;
-  /** Hoe één ding heet; null = enkel een logboek. */
+  /** Hoe één item heet; null = enkel een logboek. */
   one: string | null;
   icon: IconKey;
   fields: FieldDef[];
@@ -40,7 +40,7 @@ export const TEMPLATES: ListTemplate[] = [
     key: "leeg",
     name: "Lijst",
     label: "Lege lijst",
-    one: "Ding",
+    one: "Item",
     icon: "folder",
     fields: [note],
   },

@@ -1,18 +1,18 @@
-// Cellen: de kolommen van een ding die het logboek invult (Zet, Tel bij, Tel af).
+// Cellen: de kolommen van een item die het logboek invult (Zet, Tel bij, Tel af).
 //
-// Een formulier zegt wat het doet met **handelingen** (`does` op een soort): per handeling welke rijen (de dingen van
+// Een formulier zegt wat het doet met **handelingen** (`does` op een soort): per handeling welke rijen (de items van
 // een groep lijnen: Voor, Bij, Toevoegen of Weghalen), welke kolom (een veld van hun lijst, of hun voorraad), hoe (Zet
 // op, Tel bij, Tel af) en met wat (een veld van het formulier, de datum, het bedrag, de hoeveelheid of de prijs van de
 // lijn, of een vaste waarde). Schilderwerk zet de Kleur van de Ruimte; een Tankbeurt zet de Km-stand van de Wagen.
 //
 // Bij het bewaren rekent de Worker uit wat een gebeurtenis zo doet (`effectsOf`, de tabel `effects`: afgeleid, altijd
-// opnieuw op te bouwen uit de gebeurtenissen en hun formulieren). De waarde van een cel is wat in het ding stond, of
+// opnieuw op te bouwen uit de gebeurtenissen en hun formulieren). De waarde van een cel is wat in het item stond, of
 // de laatste Zet, plus wat er daarna bij en af ging, in volgorde van de datum en enkel wat gebeurd is (`foldCell`).
 // Zo verbetert een gebeurtenis die je aanpast of verwijdert de lijst vanzelf. Een cel die het logboek invult, pas je
-// in het ding aan met een Aanpassing: een gebeurtenis die de nieuwe waarde zet (`ADJUST`).
+// in het item aan met een Aanpassing: een gebeurtenis die de nieuwe waarde zet (`ADJUST`).
 //
 // De voorraad is zo'n cel (`STOCK`): een aankoop telt bij, gebruik telt af en een telling zet, omgerekend naar de
-// eenheid van het ding (shared/stock.ts). Geld ook (`BALANCE`): in een lijst met een saldo per persoon (`ledger`) telt
+// eenheid van het item (shared/stock.ts). Geld ook (`BALANCE`): in een lijst met een saldo per persoon (`ledger`) telt
 // wie betaalde het bedrag bij, wie deelt zijn deel af, en wie een overdracht krijgt het bedrag af (Wie moet wie).
 // Wat een vertrekpunt (Aankoop, Gebruik, …) doet, staat in `presetDoes`.
 
@@ -30,7 +30,7 @@ export const OPS: Record<Op, { label: string }> = {
 };
 export const isOp = (v: unknown): v is Op => typeof v === "string" && Object.hasOwn(OPS, v);
 
-/** De voorraad van het ding: de kolom die zijn lijst telt (zie `stock` op een lijst), in eender welke lijst. */
+/** De voorraad van het item: de kolom die zijn lijst telt (zie `stock` op een lijst), in eender welke lijst. */
 export const STOCK = "$voorraad";
 /** Het saldo van een persoon: de kolom van de lijst met een saldo per persoon (`ledger`; geen lijst: die van de gebeurtenis). */
 export const BALANCE = "$saldo";
@@ -38,7 +38,7 @@ export const BALANCE = "$saldo";
 export const EACH = "*";
 
 /**
- * Welke rijen een handeling raakt: de dingen van de lijnen met deze rol, of de rij van een persoon in een lijst met een
+ * Welke rijen een handeling raakt: de items van de lijnen met deze rol, of de rij van een persoon in een lijst met een
  * saldo per persoon: wie betaalde, wie deelt (elk met zijn deel) of naar wie het gaat.
  */
 export type Rows = { from: "lines"; role: LineRole } | { from: "payer" } | { from: "sharers" } | { from: "to" };
@@ -70,11 +70,11 @@ export const VALUE_FROM: Record<ValueFrom, { label: string }> = {
 /** Waarmee een handeling op de rij van een persoon kan: het bedrag (bij wie deelt: zijn deel), een veld of een vaste waarde. */
 export const PERSON_VALUES: ValueFrom[] = ["amount", "field", "fixed"];
 
-/** Eén handeling: wat een formulier met een kolom van de dingen van een groep lijnen (of van personen) doet. */
+/** Eén handeling: wat een formulier met een kolom van de items van een groep lijnen (of van personen) doet. */
 export type Handeling = {
   rows: Rows;
   /**
-   * Enkel dingen in deze lijst (en dan is `field` een veld van die lijst). Null enkel met `STOCK` (elke lijst) of
+   * Enkel items in deze lijst (en dan is `field` een veld van die lijst). Null enkel met `STOCK` (elke lijst) of
    * `BALANCE` (de lijst van de gebeurtenis).
    */
   list: string | null;
@@ -94,7 +94,7 @@ export const COUNTABLE: FieldDef["type"][] = ["number", "money", "duration", "sc
 export type ListColumns = { id: string; name: string; stock: boolean; ledger?: boolean; fields: Pick<FieldDef, "key" | "label" | "type" | "unit">[] };
 
 /**
- * Handelingen van buiten nakijken. `lists`: de lijsten waarin jij dingen mag aanpassen (lid of beheerder), met hun
+ * Handelingen van buiten nakijken. `lists`: de lijsten waarin jij items mag aanpassen (lid of beheerder), met hun
  * velden; `fields`: de velden van het formulier. Gooit een fout met uitleg.
  */
 export function cleanDoes(raw: unknown, lists: ListColumns[], fields: FieldDef[]): Handeling[] {
@@ -106,7 +106,7 @@ export function cleanDoes(raw: unknown, lists: ListColumns[], fields: FieldDef[]
     const from = ((o.rows ?? {}) as Record<string, unknown>).from;
     const role = ((o.rows ?? {}) as Record<string, unknown>).role;
     const person = isPersonRows(from);
-    if (!person && !(from === "lines" && ROLES.includes(role as LineRole))) throw new Error("Kies welke dingen het formulier aanpast");
+    if (!person && !(from === "lines" && ROLES.includes(role as LineRole))) throw new Error("Kies welke items het formulier aanpast");
     const rows: Rows = person ? { from } : { from: "lines", role: role as LineRole };
     if (!isOp(o.op)) throw new Error("Kies wat het formulier doet");
     const field = typeof o.field === "string" ? o.field : "";
@@ -192,19 +192,19 @@ export function presetDoes(base: string): Handeling[] {
   }
 }
 
-/** Het formulier waarmee je een cel rechtstreeks aanpast (in het ding): het zet elk ingevuld veld op dat ding. */
+/** Het formulier waarmee je een cel rechtstreeks aanpast (in het item): het zet elk ingevuld veld op dat item. */
 export const ADJUST = "aanpassing";
 export const ADJUST_DOES: Handeling[] = [{ rows: { from: "lines", role: "voor" }, list: null, field: EACH, op: "zet", value: { from: "field", key: EACH } }];
 
 /**
- * Raakt een lijn met deze rol een cel van een ding in deze lijst? Dan moet wie bewaart die lijst mogen wijzigen.
+ * Raakt een lijn met deze rol een cel van een item in deze lijst? Dan moet wie bewaart die lijst mogen wijzigen.
  * `counts`: de lijst telt voorraad.
  */
 export function touchesCell(does: Handeling[], role: LineRole, list: string, counts: boolean): boolean {
   return does.some((h) => h.rows.from === "lines" && h.rows.role === role && (h.field === STOCK ? counts && (!h.list || h.list === list) : h.list === list || h.field === EACH));
 }
 
-/** Wat lijnen met deze rol met de voorraad van hun ding doen (Tel bij, Tel af, Zet), of niets. */
+/** Wat lijnen met deze rol met de voorraad van hun item doen (Tel bij, Tel af, Zet), of niets. */
 export const stockOp = (does: Handeling[], role: LineRole): Op | null =>
   does.find((h) => h.rows.from === "lines" && h.rows.role === role && h.field === STOCK)?.op ?? null;
 
@@ -215,8 +215,8 @@ export const ledgerLists = (does: Handeling[], list: string): string[] => [...ne
 
 /** Eén verandering van een cel door een gebeurtenis. */
 export type Effect = {
-  thing_id: string;
-  /** Een veld van de lijst van het ding, of `STOCK`. */
+  item_id: string;
+  /** Een veld van de lijst van het item, of `STOCK`. */
   field: string;
   op: Op;
   /** Een getal (tellen, of een getal zetten); bij de voorraad: hoeveel (leeg = één, of één verpakking). */
@@ -229,9 +229,9 @@ export type Effect = {
 
 export type EffectLine = {
   role: LineRole;
-  thing_id: string | null;
-  /** De lijst van het ding. */
-  thing_list: string | null;
+  item_id: string | null;
+  /** De lijst van het item. */
+  item_list: string | null;
   amount: number | null;
   unit: string | null;
   price: number | null;
@@ -272,7 +272,7 @@ export function personAmounts(from: PersonRows, e: EffectEvent): Map<string, num
 }
 
 /**
- * Wat een gebeurtenis doet met de cellen van de dingen in haar lijnen, en met het saldo van personen. `ledgers`: de
+ * Wat een gebeurtenis doet met de cellen van de items in haar lijnen, en met het saldo van personen. `ledgers`: de
  * lijsten met een saldo per persoon (haar saldokolom en de rij van elke persoon).
  */
 export function effectsOf(does: Handeling[], e: EffectEvent, ledgers: Map<string, Ledger> = new Map()): Effect[] {
@@ -283,29 +283,29 @@ export function effectsOf(does: Handeling[], e: EffectEvent, ledgers: Map<string
       if (!ledger) continue;
       const field = h.field === BALANCE ? ledger.field : h.field;
       for (const [person, cents] of personAmounts(h.rows.from, e)) {
-        const thing = ledger.rows.get(person);
-        if (!thing) continue;
+        const item = ledger.rows.get(person);
+        if (!item) continue;
         const v = h.value;
         const value: FieldValue | undefined = v.from === "amount" ? cents : v.from === "fixed" ? v.value : v.from === "field" ? e.data[v.key] : undefined;
         if (isEmpty(value)) continue;
         const num = typeof value === "number" ? value : null;
         if (h.op !== "zet" && num === null) continue;
-        out.push({ thing_id: thing, field, op: h.op, num, val: num === null ? (value as FieldValue) : null, unit: null, expires: null });
+        out.push({ item_id: item, field, op: h.op, num, val: num === null ? (value as FieldValue) : null, unit: null, expires: null });
       }
       continue;
     }
     const role = h.rows.role;
     for (const l of e.lines) {
-      if (l.role !== role || !l.thing_id) continue;
-      if (h.list && l.thing_list !== h.list) continue;
+      if (l.role !== role || !l.item_id) continue;
+      if (h.list && l.item_list !== h.list) continue;
       if (h.field === EACH) {
         for (const [key, v] of Object.entries(e.data)) {
           if (!KEY_RE.test(key)) continue;
-          out.push({ thing_id: l.thing_id, field: key, op: "zet", num: typeof v === "number" ? v : null, val: isEmpty(v) ? null : v, unit: null, expires: null });
+          out.push({ item_id: l.item_id, field: key, op: "zet", num: typeof v === "number" ? v : null, val: isEmpty(v) ? null : v, unit: null, expires: null });
         }
         continue;
       }
-      const base = { thing_id: l.thing_id, field: h.field, op: h.op, unit: null, expires: null };
+      const base = { item_id: l.item_id, field: h.field, op: h.op, unit: null, expires: null };
       const v = h.value;
       if (v.from === "qty") {
         // Een telling zonder hoeveelheid zegt niets; erbij of eraf zonder hoeveelheid is één (of één verpakking).
@@ -336,7 +336,7 @@ export const byTime = (a: Pick<CellEntry, "at" | "created_at" | "position">, b: 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /**
- * De waarde van een cel: wat er in het ding stond (`start`), of de laatste Zet, plus wat er daarna bij en af ging.
+ * De waarde van een cel: wat er in het item stond (`start`), of de laatste Zet, plus wat er daarna bij en af ging.
  * `from`: de gebeurtenis die de cel het laatst veranderde. Zonder veranderingen: `start`.
  */
 export function foldCell(entries: CellEntry[], start: FieldValue | undefined): { value: FieldValue | undefined; from: string | null } {

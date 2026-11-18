@@ -37,7 +37,7 @@ me.put("/", async (c) => {
 /** Wie je kent (om toe te voegen aan een lijst, of in een veld met mensen). */
 me.get("/people", async (c) => c.json(await knownPeople(c.env.DB, c.get("person").id)));
 
-/** De lijsten waarin je dingen mag aanpassen, met hun kolommen: wat een formulier kan invullen (shared/cells.ts). */
+/** De lijsten waarin je items mag aanpassen, met hun kolommen: wat een formulier kan invullen (shared/cells.ts). */
 me.get("/columns", async (c) => c.json(await columnsOf(c.env.DB, await seenLists(c.env.DB, c.get("person").id), true)));
 
 /** Je volgorde van de lijsten: { ids } in de gewenste volgorde. */
@@ -58,7 +58,7 @@ me.put("/order", async (c) => {
 
 /**
  * Waar je kan loggen (voor Toevoegen, de snelkoppelingen en de app): per lijst waar je lid of beheerder bent, de
- * soorten die je er kan gebruiken, en hoe vaak jij er de laatste 90 dagen iets logde (per soort) of een ding toevoegde.
+ * soorten die je er kan gebruiken, en hoe vaak jij er de laatste 90 dagen iets logde (per soort) of een item toevoegde.
  */
 export type Targets = {
   lists: { id: string; name: string; one: string | null; icon: string | null; color: string | null; stock: boolean }[];
@@ -76,7 +76,7 @@ export async function targetsFor(db: D1Database, personId: string): Promise<Targ
         `SELECT list_id, kind, count(*) AS n, max(created_at) AS last FROM events
          WHERE created_by = ?1 AND created_at >= datetime('now', '-90 days') GROUP BY list_id, kind
          UNION ALL
-         SELECT list_id, '+ding' AS kind, count(*) AS n, max(created_at) AS last FROM things
+         SELECT list_id, '+item' AS kind, count(*) AS n, max(created_at) AS last FROM items
          WHERE created_by = ?1 AND created_at >= datetime('now', '-90 days') GROUP BY list_id`,
       )
       .bind(personId),
@@ -99,7 +99,7 @@ function often(t: Targets): { name: string; url: string }[] {
     .flatMap((u) => {
       const list = lists.get(u.list_id);
       if (!list) return [];
-      if (u.kind === "+ding") return list.one ? [{ name: list.one, url: `/lijsten/${list.id}/nieuw` }] : [];
+      if (u.kind === "+item") return list.one ? [{ name: list.one, url: `/lijsten/${list.id}/nieuw` }] : [];
       const kind = kinds.get(u.kind);
       return kind ? [{ name: kind.name, url: `/lijsten/${list.id}/loggen?soort=${encodeURIComponent(kind.id)}` }] : [];
     });

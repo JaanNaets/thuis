@@ -1,6 +1,6 @@
-// Cellen in de Worker (shared/cells.ts): wat gebeurtenissen met de kolommen van dingen doen (de tabel `effects`,
+// Cellen in de Worker (shared/cells.ts): wat gebeurtenissen met de kolommen van items doen (de tabel `effects`,
 // afgeleid uit de gebeurtenissen en hun formulieren) en de waarde van die kolommen voor wie leest. Een cel aanpassen
-// in het ding is een Aanpassing in het logboek van zijn lijst (`adjust`).
+// in het item is een Aanpassing in het logboek van zijn lijst (`adjust`).
 
 import { effectsOf, foldCell, personAmounts, STOCK, type CellEntry, type Effect, type EffectEvent, type EffectLine, type Ledger } from "../shared/cells";
 import { formatFieldValue, type Attributes, type FieldDef, type FieldValue, type Share } from "../shared/fields";
@@ -42,23 +42,23 @@ async function ledgersFor(db: D1Database, needs: Map<string, Set<string>>): Prom
   for (const l of results) {
     const def = cleanLedger(parseJson(l.ledger, null), parseJson<FieldDef[]>(l.fields, []));
     if (!def) continue;
-    const { results: things } = await db.prepare("SELECT id, data FROM things WHERE list_id = ? AND archived = 0").bind(l.id).all<{ id: string; data: string }>();
+    const { results: items } = await db.prepare("SELECT id, data FROM items WHERE list_id = ? AND archived = 0").bind(l.id).all<{ id: string; data: string }>();
     const rows = new Map<string, string>();
-    for (const t of things) {
+    for (const t of items) {
       const who = parseJson<Attributes>(t.data, {})[def.person];
       if (typeof who === "string" && !rows.has(who)) rows.set(who, t.id);
     }
     const missing = [...(needs.get(l.id) ?? [])].filter((p) => !rows.has(p));
     if (missing.length) {
       const { results: people } = await db.prepare("SELECT id, name FROM people WHERE id IN (SELECT value FROM json_each(?))").bind(ids(missing)).all<{ id: string; name: string }>();
-      const made = people.map((p) => ({ ...p, thing: crypto.randomUUID() }));
+      const made = people.map((p) => ({ ...p, item: crypto.randomUUID() }));
       if (made.length)
         await db.batch(
           made.map((p) =>
-            db.prepare("INSERT INTO things (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(p.thing, l.id, p.name, JSON.stringify({ [def.person]: p.id }), p.id),
+            db.prepare("INSERT INTO items (id, list_id, name, data, created_by) VALUES (?, ?, ?, ?, ?)").bind(p.item, l.id, p.name, JSON.stringify({ [def.person]: p.id }), p.id),
           ),
         );
-      for (const p of made) rows.set(p.id, p.thing);
+      for (const p of made) rows.set(p.id, p.item);
     }
     out.set(l.id, { field: def.field, rows });
   }
@@ -75,8 +75,8 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
         .bind(ids(chunk)),
       db
         .prepare(
-          `SELECT l.event_id, l.role, l.thing_id, t.list_id AS thing_list, l.amount, l.unit, l.price, l.expires, l.owner
-           FROM lines l LEFT JOIN things t ON t.id = l.thing_id WHERE l.event_id IN (SELECT value FROM json_each(?)) ORDER BY l.position`,
+          `SELECT l.event_id, l.role, l.item_id, t.list_id AS item_list, l.amount, l.unit, l.price, l.expires, l.owner
+           FROM lines l LEFT JOIN items t ON t.id = l.item_id WHERE l.event_id IN (SELECT value FROM json_each(?)) ORDER BY l.position`,
         )
         .bind(ids(chunk)),
     ])) as [D1Result<EventRow>, D1Result<EffectLine & { event_id: string }>];
@@ -116,8 +116,8 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
 function effectStatements(db: D1Database, eventId: string, effects: Effect[]): D1PreparedStatement[] {
   return effects.map((f, i) =>
     db
-      .prepare("INSERT INTO effects (event_id, position, thing_id, field, op, num, val, unit, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(eventId, i, f.thing_id, f.field, f.op, f.num, f.val === null ? null : JSON.stringify(f.val), f.unit, f.expires),
+      .prepare("INSERT INTO effects (event_id, position, item_id, field, op, num, val, unit, expires) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(eventId, i, f.item_id, f.field, f.op, f.num, f.val === null ? null : JSON.stringify(f.val), f.unit, f.expires),
   );
 }
 
@@ -142,39 +142,39 @@ export async function ensureEffects(db: D1Database): Promise<void> {
 
 // ---------- lezen ----------
 
-type EntryRow = { thing_id: string; field: string; op: CellEntry["op"]; num: number | null; val: string | null; unit: string | null; expires: string | null; position: number; event_id: string; at: string; created_at: string };
+type EntryRow = { item_id: string; field: string; op: CellEntry["op"]; num: number | null; val: string | null; unit: string | null; expires: string | null; position: number; event_id: string; at: string; created_at: string };
 
 export type Cells = {
-  /** Per ding de kolommen die het logboek invulde, met hun waarde (leeg = gewist). */
+  /** Per item de kolommen die het logboek invulde, met hun waarde (leeg = gewist). */
   values: Map<string, Record<string, FieldValue | undefined>>;
-  /** Per ding en kolom: de gebeurtenis die ze het laatst veranderde. */
+  /** Per item en kolom: de gebeurtenis die ze het laatst veranderde. */
   from: Map<string, Record<string, string>>;
   /** De voorraad, als de lijst telt. */
   stock: Map<string, StockLevel>;
 };
 
-/** De kolommen van deze dingen die het logboek invult (uit alle gebeurtenissen, ook die jij niet ziet). */
+/** De kolommen van deze items die het logboek invult (uit alle gebeurtenissen, ook die jij niet ziet). */
 export async function cellsOf(db: D1Database, list: Pick<List, "fields" | "stock">, rows: { id: string; data: Attributes }[]): Promise<Cells> {
   const out: Cells = { values: new Map(), from: new Map(), stock: new Map() };
   const keys = [...list.fields.filter((f) => f.type !== "calc").map((f) => f.key), ...(list.stock ? [STOCK] : [])];
   if (!rows.length || !keys.length) return out;
   const { results } = await db
     .prepare(
-      `SELECT f.thing_id, f.field, f.op, f.num, f.val, f.unit, f.expires, f.position, f.event_id, e.at, e.created_at
+      `SELECT f.item_id, f.field, f.op, f.num, f.val, f.unit, f.expires, f.position, f.event_id, e.at, e.created_at
        FROM effects f JOIN events e ON e.id = f.event_id
-       WHERE e.status = 'gebeurd' AND f.thing_id IN (SELECT value FROM json_each(?1)) AND f.field IN (SELECT value FROM json_each(?2))`,
+       WHERE e.status = 'gebeurd' AND f.item_id IN (SELECT value FROM json_each(?1)) AND f.field IN (SELECT value FROM json_each(?2))`,
     )
     .bind(ids(rows.map((r) => r.id)), ids(keys))
     .all<EntryRow>();
-  const byThing = new Map<string, Map<string, CellEntry[]>>();
+  const byItem = new Map<string, Map<string, CellEntry[]>>();
   for (const r of results) {
-    const fields = byThing.get(r.thing_id) ?? new Map<string, CellEntry[]>();
+    const fields = byItem.get(r.item_id) ?? new Map<string, CellEntry[]>();
     const entry: CellEntry = { op: r.op, num: r.num, val: r.val === null ? null : parseJson<FieldValue | null>(r.val, null), unit: r.unit, expires: r.expires, at: r.at, created_at: r.created_at, position: r.position, event_id: r.event_id };
     fields.set(r.field, [...(fields.get(r.field) ?? []), entry]);
-    byThing.set(r.thing_id, fields);
+    byItem.set(r.item_id, fields);
   }
   for (const row of rows) {
-    const fields = byThing.get(row.id);
+    const fields = byItem.get(row.id);
     if (list.stock) {
       const entries = fields?.get(STOCK) ?? [];
       out.stock.set(row.id, stockLevel(list.stock, row.data, entries.map((e) => ({ at: e.at, created_at: e.created_at, position: e.position, op: e.op, amount: e.num, unit: e.unit, expires: e.expires }))));
@@ -194,7 +194,7 @@ export async function cellsOf(db: D1Database, list: Pick<List, "fields" | "stock
   return out;
 }
 
-/** De waarden van een ding met wat het logboek invulde. */
+/** De waarden van een item met wat het logboek invulde. */
 export function withValues(data: Attributes, values: Record<string, FieldValue | undefined> | undefined): Attributes {
   if (!values) return data;
   const out = { ...data };
@@ -205,7 +205,7 @@ export function withValues(data: Attributes, values: Record<string, FieldValue |
   return out;
 }
 
-/** Dingen met de kolommen die het logboek invult (en hun voorraad). */
+/** Items met de kolommen die het logboek invult (en hun voorraad). */
 export async function withCells<T extends { id: string; data: Attributes }>(db: D1Database, list: Pick<List, "fields" | "stock">, rows: T[]): Promise<{ rows: T[]; cells: Cells }> {
   const cells = await cellsOf(db, list, rows);
   return { rows: rows.map((r) => ({ ...r, data: withValues(r.data, cells.values.get(r.id)) })), cells };
@@ -216,38 +216,38 @@ export async function withCells<T extends { id: string; data: Attributes }>(db: 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 /**
- * Een ding bewaren waarvan het logboek kolommen invult: wat je daar verandert, wordt een Aanpassing (een gebeurtenis
- * in het logboek van de lijst die de nieuwe waarde zet); in het ding zelf blijft staan wat er stond. `data`: wat je
- * bewaart (nagekeken); geeft terug wat er in het ding komt en de statements voor de Aanpassing.
+ * Een item bewaren waarvan het logboek kolommen invult: wat je daar verandert, wordt een Aanpassing (een gebeurtenis
+ * in het logboek van de lijst die de nieuwe waarde zet); in het item zelf blijft staan wat er stond. `data`: wat je
+ * bewaart (nagekeken); geeft terug wat er in het item komt en de statements voor de Aanpassing.
  */
 export async function adjust(
   db: D1Database,
   meId: string,
   list: Pick<List, "id" | "fields" | "stock">,
-  thing: { id: string; data: Attributes },
+  item: { id: string; data: Attributes },
   data: Attributes,
 ): Promise<{ data: Attributes; statements: D1PreparedStatement[]; eventId: string | null }> {
-  const cells = await cellsOf(db, list, [thing]);
-  const managed = cells.from.get(thing.id) ?? {};
-  const now = cells.values.get(thing.id) ?? {};
+  const cells = await cellsOf(db, list, [item]);
+  const managed = cells.from.get(item.id) ?? {};
+  const now = cells.values.get(item.id) ?? {};
   const changes: Record<string, FieldValue | null> = {};
   const changed: FieldDef[] = [];
   const kept = { ...data };
   for (const f of list.fields) {
     if (!(f.key in managed)) continue;
-    // Wat in het ding stond, blijft het begin van de cel.
-    if (thing.data[f.key] === undefined) delete kept[f.key];
-    else kept[f.key] = thing.data[f.key];
+    // Wat in het item stond, blijft het begin van de cel.
+    if (item.data[f.key] === undefined) delete kept[f.key];
+    else kept[f.key] = item.data[f.key];
     if (same(data[f.key], now[f.key])) continue;
     changes[f.key] = data[f.key] ?? null;
     changed.push(f);
   }
   if (!changed.length) return { data: kept, statements: [], eventId: null };
-  return { data: kept, ...adjustStatements(db, meId, list.id, thing.id, changed, changes) };
+  return { data: kept, ...adjustStatements(db, meId, list.id, item.id, changed, changes) };
 }
 
-/** Een Aanpassing: een gebeurtenis in de lijst van het ding die deze kolommen zet. */
-export function adjustStatements(db: D1Database, meId: string, listId: string, thingId: string, fields: FieldDef[], changes: Record<string, FieldValue | null>) {
+/** Een Aanpassing: een gebeurtenis in de lijst van het item die deze kolommen zet. */
+export function adjustStatements(db: D1Database, meId: string, listId: string, itemId: string, fields: FieldDef[], changes: Record<string, FieldValue | null>) {
   const eventId = crypto.randomUUID();
   const name = fields.map((f) => `${f.label}: ${changes[f.key] === null ? "leeg" : formatFieldValue(f, changes[f.key] ?? undefined)}`).join(" · ").slice(0, 200);
   const data = Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v === null ? "" : v]));
@@ -255,7 +255,7 @@ export function adjustStatements(db: D1Database, meId: string, listId: string, t
     db
       .prepare("INSERT INTO events (id, list_id, kind, base, name, status, at, data, created_by) VALUES (?, ?, ?, ?, ?, 'gebeurd', ?, ?, ?)")
       .bind(eventId, listId, ADJUST_KIND.id, ADJUST_KIND.base, name, brusselsNow(), JSON.stringify(data), meId),
-    db.prepare("INSERT INTO lines (id, event_id, position, role, thing_id) VALUES (?, ?, 0, 'voor', ?)").bind(crypto.randomUUID(), eventId, thingId),
+    db.prepare("INSERT INTO lines (id, event_id, position, role, item_id) VALUES (?, ?, 0, 'voor', ?)").bind(crypto.randomUUID(), eventId, itemId),
   ];
   return { statements, eventId };
 }

@@ -1,7 +1,7 @@
 // De app instellen (Jouw gegevens → App, zie shared/apps.ts): waar ze opent op dit toestel, je eigen apps (elk een
 // icoon op je beginscherm met een eigen naam en bestemming), de snelkoppelingen op het icoon en wat er met een gedeelde
 // foto gebeurt (Android). Een bestemming is een overzicht (een bord: Geld, Agenda, …), een lijst, of een formulier:
-// loggen (eventueel met een soort en tekst) of een ding toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
+// loggen (eventueel met een soort en tekst) of een item toevoegen. Zie STIJLBOEK.md → Jouw gegevens.
 
 import { useMemo, useState } from "react";
 import { appPath, DESTINATION_KINDS, destinationLabel, MAX_SHORTCUTS, type AppDef, type AppSettings, type Destination, type DestinationKind, type Reach, type Shortcut } from "../../shared/apps";
@@ -43,7 +43,7 @@ function useChoices(): Choices | null {
 function shortName(d: Destination, reach: Reach): string {
   if (d.kind === "form") {
     const l = reach.lists.get(d.list);
-    return (d.thing ? l?.one : d.type ? l?.kinds.get(d.type) : l?.name) ?? "Toevoegen";
+    return (d.item ? l?.one : d.type ? l?.kinds.get(d.type) : l?.name) ?? "Toevoegen";
   }
   return destinationLabel(d, reach);
 }
@@ -75,8 +75,8 @@ export function DestinationPicker({
     onChange(next ?? null);
   };
   const list = value && "list" in value ? choices.lists.find((l) => l.id === value.list) : undefined;
-  // Wat het formulier doet: loggen (met een soort) of een ding toevoegen.
-  const action = value?.kind === "form" ? (value.thing ? "ding" : (value.type ?? "")) : "";
+  // Wat het formulier doet: loggen (met een soort) of een item toevoegen.
+  const action = value?.kind === "form" ? (value.item ? "item" : (value.type ?? "")) : "";
   return (
     <div className="field-row">
       <label className="field">
@@ -121,8 +121,8 @@ export function DestinationPicker({
             value={action}
             onChange={(e) => {
               const v = e.target.value;
-              const { thing: _t, type: _k, ...rest } = value;
-              onChange(v === "ding" ? { ...rest, thing: true } : v ? { ...rest, type: v } : rest);
+              const { item: _t, type: _k, ...rest } = value;
+              onChange(v === "item" ? { ...rest, item: true } : v ? { ...rest, type: v } : rest);
             }}
           >
             <option value="">Loggen</option>
@@ -131,7 +131,7 @@ export function DestinationPicker({
                 {k.name}
               </option>
             ))}
-            {list.one && <option value="ding">{list.one} toevoegen</option>}
+            {list.one && <option value="item">{list.one} toevoegen</option>}
           </select>
         </label>
       )}

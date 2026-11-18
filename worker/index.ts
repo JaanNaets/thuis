@@ -9,13 +9,13 @@ import { insights } from "./routes/insights";
 import { kinds, lists } from "./routes/lists";
 import { me } from "./routes/me";
 import { products, rates } from "./routes/products";
-import { listReceipt, thingAlias } from "./routes/receipt";
+import { listReceipt, itemAlias } from "./routes/receipt";
 import { listPhoto } from "./routes/photo";
 import { backup } from "./routes/backup";
 import { push } from "./routes/push";
 import { tags } from "./routes/tags";
 import { listMirrors } from "./routes/mirrors";
-import { listThings, things } from "./routes/things";
+import { listItems, items } from "./routes/items";
 import { views } from "./routes/views";
 import type { AppEnv } from "./types";
 import { SHARE_PATH } from "../shared/manifest";
@@ -27,7 +27,7 @@ const app = new Hono<AppEnv>().basePath("/api");
 app.use("*", requireAccess);
 // 2. Welke persoon is dat? Elke route kijkt daarna zelf na wat die persoon in de lijst mag (zie access.ts).
 app.use("*", withPerson);
-// 3. Wat gebeurtenissen met de kolommen van dingen doen, is uitgerekend met deze versie (zie cells.ts).
+// 3. Wat gebeurtenissen met de kolommen van items doen, is uitgerekend met deze versie (zie cells.ts).
 app.use("*", async (c, next) => {
   await ensureEffects(c.env.DB);
   await next();
@@ -36,15 +36,15 @@ app.use("*", async (c, next) => {
 app.route("/me", me);
 app.route("/me", backup);
 app.route("/lists", lists);
-app.route("/lists", listThings);
+app.route("/lists", listItems);
 app.route("/lists", listEvents);
 app.route("/lists", listReceipt);
 app.route("/lists", listPhoto);
 app.route("/lists", listMirrors);
 app.route("/kinds", kinds);
 app.route("/tags", tags);
-app.route("/things", things);
-app.route("/things", thingAlias);
+app.route("/items", items);
+app.route("/items", itemAlias);
 app.route("/events", events);
 app.route("/attachments", attachments);
 app.route("/views", views);

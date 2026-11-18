@@ -1,6 +1,6 @@
-// Wat de app uitrekent voor een weergave op je overzicht (GET /insights/view: het logboek, de dingen, de voorraad, wie
+// Wat de app uitrekent voor een weergave op je overzicht (GET /insights/view: het logboek, de items, de voorraad, wie
 // moet wie, wat er gegeten is, alles met een datum), zoeken en Verbanden: op de server uit wat de lezer ziet, nooit
-// bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een ding geeft geen
+// bewaard. Over alle lijsten heen tellen enkel gebeurtenissen die je helemaal ziet (een lijn via een item geeft geen
 // bedrag of verdeling).
 
 import { linkedKeys, type TransferPlan } from "../../shared/transfer";
@@ -10,14 +10,14 @@ import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
 import { eatenRoles, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
-import { buildLinks, linkProblems, type BoardUse, type LineThing, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
+import { buildLinks, linkProblems, type BoardUse, type LineItem, type LinkKindDef, type LinkPersonView, type LinePair, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
 import { baseKind, BASES, canEdit, dayOf, kindInfo, STATUSES, type Base, type KindInfo, type List, type Role, type Status } from "../../shared/model";
 
 const BASE_IDS = Object.keys(BASES) as Base[];
 import { formatAmount } from "../../shared/units";
-import { ids, kindsFor, parseJson, seenLists, toKind, toList, toThing, type EventRowDb, type KindRowDb, type ListRow, type ThingRowDb } from "../access";
+import { ids, kindsFor, parseJson, seenLists, toKind, toList, toItem, type EventRowDb, type KindRowDb, type ListRow, type ItemRowDb } from "../access";
 import { withCells } from "../cells";
 import { viewEvents } from "../events-view";
 import { brusselsToday } from "../today";
@@ -25,7 +25,7 @@ import type { AppEnv } from "../types";
 import { ValidationError } from "../validate";
 import { listPeople } from "./lists";
 import { boardsOf } from "./me";
-import { peopleByIds, stockOf, thingRefs } from "./things";
+import { peopleByIds, stockOf, itemRefs } from "./items";
 
 export const insights = new Hono<AppEnv>();
 
@@ -52,8 +52,8 @@ async function balanceOf(db: D1Database, seen: Map<string, Role>) {
   const members = new Map<string, Set<string>>();
   for (const list of listRows.map(toList)) {
     if (!list.ledger) continue;
-    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
-    const { rows } = await withCells(db, list, results.map(toThing));
+    const { results } = await db.prepare("SELECT * FROM items WHERE list_id = ? AND archived = 0").bind(list.id).all<ItemRowDb>();
+    const { rows } = await withCells(db, list, results.map(toItem));
     const here = new Set<string>();
     for (const t of rows) {
       const who = t.data[list.ledger.person];
@@ -81,18 +81,18 @@ async function ibansFor(db: D1Database, personIds: string[]): Promise<Record<str
 
 // ---------- voorraad ----------
 
-type StockThing = { id: string; name: string; list_id: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null; created_at: string };
+type StockItem = { id: string; name: string; list_id: string; list: string; amount: number; unit: string | null; low: boolean; expires: string | null; created_at: string };
 
 /** Alles in een voorraad van deze lijsten (die je ziet), wat op of bijna op is eerst. */
-async function stockThings(db: D1Database, listIds: Iterable<string>): Promise<StockThing[]> {
+async function stockItems(db: D1Database, listIds: Iterable<string>): Promise<StockItem[]> {
   const { results: listRows } = await db
     .prepare("SELECT * FROM lists WHERE stock IS NOT NULL AND archived = 0 AND id IN (SELECT value FROM json_each(?))")
     .bind(ids(listIds))
     .all<ListRow>();
-  const out: StockThing[] = [];
+  const out: StockItem[] = [];
   for (const list of listRows.map(toList)) {
-    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0 ORDER BY name LIMIT 2000").bind(list.id).all<ThingRowDb>();
-    const rows = results.map(toThing);
+    const { results } = await db.prepare("SELECT * FROM items WHERE list_id = ? AND archived = 0 ORDER BY name LIMIT 2000").bind(list.id).all<ItemRowDb>();
+    const rows = results.map(toItem);
     const levels = await stockOf(db, list, rows);
     for (const t of rows) {
       const s = levels.get(t.id);
@@ -110,13 +110,13 @@ async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string,
   // Zonder bedrag: een formulier met geld eet niet (shared/food.ts, `formEats`).
   const rows = await fullRows(db, seen, "e.status = 'gebeurd' AND e.amount IS NULL AND e.at >= ?2 AND e.at < ?3", [from, `${to}~`]);
   const page = await viewEvents(db, seen, rows);
-  // De dingen met hun velden (productinfo) en voorraad-eenheden, ook uit lijsten die je niet ziet (enkel de getallen).
-  const thingIds = [...new Set(page.events.flatMap((e) => e.lines.flatMap((l) => (l.thing_id ? [l.thing_id] : []))))];
+  // De items met hun velden (productinfo) en voorraad-eenheden, ook uit lijsten die je niet ziet (enkel de getallen).
+  const itemIds = [...new Set(page.events.flatMap((e) => e.lines.flatMap((l) => (l.item_id ? [l.item_id] : []))))];
   const { results: tRows } = await db
-    .prepare("SELECT t.id, t.data, l.fields, l.stock FROM things t JOIN lists l ON l.id = t.list_id WHERE t.id IN (SELECT value FROM json_each(?))")
-    .bind(ids(thingIds))
+    .prepare("SELECT t.id, t.data, l.fields, l.stock FROM items t JOIN lists l ON l.id = t.list_id WHERE t.id IN (SELECT value FROM json_each(?))")
+    .bind(ids(itemIds))
     .all<{ id: string; data: string; fields: string; stock: string | null }>();
-  const things = new Map(tRows.map((t) => [t.id, { fields: parseJson<FieldDef[]>(t.fields, []), data: parseJson(t.data, {}), stock: parseJson(t.stock, null) }]));
+  const items = new Map(tRows.map((t) => [t.id, { fields: parseJson<FieldDef[]>(t.fields, []), data: parseJson(t.data, {}), stock: parseJson(t.stock, null) }]));
   const kinds = new Map(page.kinds.map((k) => [k.id, k]));
   const byDay = new Map<string, FoodEvent[]>();
   const food = new Set<string>();
@@ -131,7 +131,7 @@ async function foodPeriod(db: D1Database, seen: Map<string, Role>, from: string,
       created_by: e.created_by,
       fields: kind.fields,
       data: e.data,
-      lines: e.lines.filter((l) => eaten.includes(l.role)).map((l) => ({ amount: l.amount, unit: l.unit, thing: l.thing_id ? (things.get(l.thing_id) ?? null) : null })),
+      lines: e.lines.filter((l) => eaten.includes(l.role)).map((l) => ({ amount: l.amount, unit: l.unit, item: l.item_id ? (items.get(l.item_id) ?? null) : null })),
     };
     if (!isFood(fe)) continue;
     food.add(e.id);
@@ -154,19 +154,19 @@ const addDays = (day: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-// ---------- datums van dingen ----------
+// ---------- datums van items ----------
 
-/** De datums van dingen (de keuring, een verjaardag, het einde van de garantie) in velden met "In de agenda", van–tot. */
-async function datedThings(db: D1Database, lists: List[], from: string, to: string, today: string) {
-  const dated: { thing_id: string; name: string; list_id: string; label: string; start: string; end?: string }[] = [];
+/** De datums van items (de keuring, een verjaardag, het einde van de garantie) in velden met "In de agenda", van–tot. */
+async function datedItems(db: D1Database, lists: List[], from: string, to: string, today: string) {
+  const dated: { item_id: string; name: string; list_id: string; label: string; start: string; end?: string }[] = [];
   for (const list of lists) {
     const fields = list.fields.filter((f) => f.agenda && canAgenda(f));
     if (!fields.length) continue;
-    const { results } = await db.prepare("SELECT * FROM things WHERE list_id = ? AND archived = 0").bind(list.id).all<ThingRowDb>();
-    const { rows } = await withCells(db, list, results.map(toThing));
+    const { results } = await db.prepare("SELECT * FROM items WHERE list_id = ? AND archived = 0").bind(list.id).all<ItemRowDb>();
+    const { rows } = await withCells(db, list, results.map(toItem));
     for (const t of rows) {
       const data = computeLocal(list.fields, t.data, today);
-      for (const f of fields) for (const o of occurrences(f, data[f.key], from, to)) dated.push({ thing_id: t.id, name: t.name, list_id: list.id, label: f.label, ...o });
+      for (const f of fields) for (const o of occurrences(f, data[f.key], from, to)) dated.push({ item_id: t.id, name: t.name, list_id: list.id, label: f.label, ...o });
     }
   }
   return dated;
@@ -195,9 +195,9 @@ insights.get("/view", async (c) => {
   const lists = listRows.map(toList);
   const only = new Map([...seen].filter(([id]) => lists.some((l) => l.id === id)));
 
-  type Item = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string }; settle?: { list: string; iban: string | null } };
+  type ViewRow = SourceItem & { link: string | null; event?: { status: Status; running: boolean; at: string }; settle?: { list: string; iban: string | null } };
   let fields: FieldDef[] = [];
-  let items: Item[] = [];
+  let items: ViewRow[] = [];
   let people: { id: string; name: string }[] = [];
   let refs: Record<string, string> = {};
 
@@ -220,28 +220,28 @@ insights.get("/view", async (c) => {
       return { ...row, id: e.id, data: { ...own, ...row.data, ...(running ? { running: true } : {}) }, link: `/gebeurtenissen/${e.id}`, event: { status: e.status, running, at: e.at } };
     });
     people = page.people.map((p) => ({ id: p.id, name: p.name }));
-    refs = Object.fromEntries(page.things.map((t) => [t.id, t.name]));
-  } else if (block.source === "dingen") {
+    refs = Object.fromEntries(page.items.map((t) => [t.id, t.name]));
+  } else if (block.source === "items") {
     const { results } = lists.length
-      ? await db.prepare("SELECT * FROM things WHERE archived = 0 AND list_id IN (SELECT value FROM json_each(?)) ORDER BY name LIMIT 2000").bind(ids(lists.map((l) => l.id))).all<ThingRowDb>()
-      : { results: [] as ThingRowDb[] };
+      ? await db.prepare("SELECT * FROM items WHERE archived = 0 AND list_id IN (SELECT value FROM json_each(?)) ORDER BY name LIMIT 2000").bind(ids(lists.map((l) => l.id))).all<ItemRowDb>()
+      : { results: [] as ItemRowDb[] };
     const byList = new Map(lists.map((l) => [l.id, l]));
-    fields = sourceFields("dingen", { lists, kinds: [] });
+    fields = sourceFields("items", { lists, kinds: [] });
     // Uit meer lijsten: ook in welke lijst (LIST_KEY, zie sourceFields).
     const listOf = (id: string): Attributes => (lists.length > 1 ? { [LIST_KEY]: byList.get(id)?.name ?? "" } : {});
     // Met wat het logboek invult (shared/cells.ts), per lijst.
-    const filled: ReturnType<typeof toThing>[] = [];
-    for (const list of lists) filled.push(...(await withCells(db, list, results.filter((r) => r.list_id === list.id).map(toThing))).rows);
+    const filled: ReturnType<typeof toItem>[] = [];
+    for (const list of lists) filled.push(...(await withCells(db, list, results.filter((r) => r.list_id === list.id).map(toItem))).rows);
     const order = new Map(results.map((r, i) => [r.id, i]));
     filled.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
-    items = filled.map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/dingen/${t.id}` }));
+    items = filled.map((t) => ({ id: t.id, name: t.name, data: { ...computeLocal(byList.get(t.list_id)?.fields ?? [], t.data, today), ...listOf(t.list_id) }, tag_ids: [], created_at: t.created_at, link: `/items/${t.id}` }));
     // Namen van personen en verwijzingen in de velden.
     const values = items.flatMap((i) => Object.values(i.data));
     const strings = values.flatMap((v) => (typeof v === "string" ? [v] : Array.isArray(v) ? (v as unknown[]).flatMap((x) => (typeof x === "string" ? [x] : x && typeof x === "object" ? Object.values(x as object).filter((y): y is string => typeof y === "string") : [])) : []));
     people = (await peopleByIds(db, strings.filter((x) => /^[0-9a-f-]{36}$/.test(x)))).map((p) => ({ id: p.id, name: p.name }));
-    refs = Object.fromEntries((await thingRefs(db, seen, strings.filter((x) => /^[0-9a-f-]{36}$/.test(x)))).map((t) => [t.id, t.name]));
+    refs = Object.fromEntries((await itemRefs(db, seen, strings.filter((x) => /^[0-9a-f-]{36}$/.test(x)))).map((t) => [t.id, t.name]));
   } else if (block.source === "voorraad") {
-    const stock = await stockThings(db, lists.map((l) => l.id));
+    const stock = await stockItems(db, lists.map((l) => l.id));
     fields = sourceFields("voorraad", { lists: lists.filter((l) => l.stock), kinds: [] });
     items = stock.map((t) => ({
       id: t.id,
@@ -249,7 +249,7 @@ insights.get("/view", async (c) => {
       data: { list: t.list, level: formatAmount(t.amount, t.unit), amount: t.amount, low: t.low, out: t.amount <= 0, ...(t.expires ? { expires: t.expires } : {}) },
       tag_ids: [],
       created_at: t.created_at,
-      link: `/dingen/${t.id}`,
+      link: `/items/${t.id}`,
     }));
   } else if (block.source === "saldo") {
     // Wie moet wie; Terugbetaald logt een overdracht in een lijst waar beiden in staan (met de IBAN van wie krijgt).
@@ -269,7 +269,7 @@ insights.get("/view", async (c) => {
       ...(t.list_id ? { settle: { list: t.list_id, iban: ibans[t.to] ?? null } } : {}),
     }));
   } else if (block.source === "datums") {
-    // Alles met een datum: wat gebeurde of gepland staat (niet afgevinkt) en de datums van dingen, in de periode (anders
+    // Alles met een datum: wat gebeurde of gepland staat (niet afgevinkt) en de datums van items, in de periode (anders
     // de komende maanden).
     const start = from ?? addDays(today, -31);
     const end = to ?? addDays(today, 366);
@@ -292,13 +292,13 @@ insights.get("/view", async (c) => {
           event: { status: e.status, running, at: e.at },
         };
       }),
-      ...(await datedThings(db, lists, start, end, today)).map((d) => ({
-        id: `${d.thing_id}-${d.label}-${d.start}`,
+      ...(await datedItems(db, lists, start, end, today)).map((d) => ({
+        id: `${d.item_id}-${d.label}-${d.start}`,
         name: d.name,
         data: { at: d.start, ...(d.end ? { end: d.end } : {}), list: listName.get(d.list_id) ?? "", what: d.label },
         tag_ids: [],
         created_at: `${d.start} 12:00:00`,
-        link: `/dingen/${d.thing_id}`,
+        link: `/items/${d.item_id}`,
       })),
     ];
     people = page.people.map((p) => ({ id: p.id, name: p.name }));
@@ -331,14 +331,14 @@ insights.get("/search", async (c) => {
   const db = c.env.DB;
   const me = c.get("person");
   const q = c.req.query("q")?.trim() ?? "";
-  if (q.length < 2) return c.json({ lists: [], things: [], events: [] });
+  if (q.length < 2) return c.json({ lists: [], items: [], events: [] });
   const seen = await seenLists(db, me.id);
   const like = `%${q}%`;
-  const [lists, things, events] = (await db.batch([
+  const [lists, items, events] = (await db.batch([
     db.prepare("SELECT id, name, icon, color FROM lists WHERE id IN (SELECT value FROM json_each(?1)) AND name LIKE ?2 LIMIT 8").bind(ids(seen.keys()), like),
     db
       .prepare(
-        `SELECT t.id, t.name, t.list_id, l.name AS list, l.icon FROM things t JOIN lists l ON l.id = t.list_id
+        `SELECT t.id, t.name, t.list_id, l.name AS list, l.icon FROM items t JOIN lists l ON l.id = t.list_id
          WHERE t.list_id IN (SELECT value FROM json_each(?1)) AND t.name LIKE ?2 ORDER BY t.archived, t.name LIMIT 20`,
       )
       .bind(ids(seen.keys()), like),
@@ -349,7 +349,7 @@ insights.get("/search", async (c) => {
       )
       .bind(ids(seen.keys()), like),
   ])) as [D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string }>, D1Result<{ id: string; name: string; kind: string }>];
-  return c.json({ lists: lists.results, things: things.results, events: events.results, kinds: await kindsFor(db, seen.keys()) });
+  return c.json({ lists: lists.results, items: items.results, events: events.results, kinds: await kindsFor(db, seen.keys()) });
 });
 
 // ---------- verbanden ----------
@@ -359,7 +359,7 @@ const LINK_PEOPLE_LISTS = 80;
 
 /**
  * Hoe je lijsten samenhangen (zie shared/links.ts): enkel je lijsten (niet gearchiveerd) en tellingen over
- * gebeurtenissen in die lijsten met lijnen naar dingen in die lijsten; wie een gebeurtenis in haar lijst ziet, ziet ze
+ * gebeurtenissen in die lijsten met lijnen naar items in die lijsten; wie een gebeurtenis in haar lijst ziet, ziet ze
  * helemaal. De problemen enkel waar je een van beide lijsten beheert.
  */
 insights.get("/links", async (c) => {
@@ -370,7 +370,7 @@ insights.get("/links", async (c) => {
   const lists = listRows.map(toList).map((l) => ({ ...l, role: seen.get(l.id)! }));
   const listIds = ids(lists.map((l) => l.id));
 
-  // De soorten van je lijsten en die je gebeurtenissen gebruiken; wat als eten telt (kcal in de soort of het ding).
+  // De soorten van je lijsten en die je gebeurtenissen gebruiken; wat als eten telt (kcal in de soort of het item).
   const [kindRows, kcalRows] = (await db.batch([
     db.prepare("SELECT * FROM kinds WHERE list_id IN (SELECT value FROM json_each(?1)) OR id IN (SELECT DISTINCT kind FROM events WHERE list_id IN (SELECT value FROM json_each(?1)))").bind(listIds),
     db.prepare(`SELECT id, fields FROM lists WHERE fields LIKE '%"product":"kcal"%'`),
@@ -384,7 +384,7 @@ insights.get("/links", async (c) => {
 
   const done = "MAX(CASE WHEN e.status != 'gepland' THEN substr(e.at, 1, 10) END)";
   const inLists = "(SELECT value FROM json_each(?1))";
-  const [logRows, lineRows, pairRows, thingLineRows, thingRows] = (await db.batch([
+  const [logRows, lineRows, pairRows, itemLineRows, itemRows] = (await db.batch([
     db
       .prepare(
         `SELECT e.list_id AS list, e.kind, e.base, COUNT(*) AS events,
@@ -395,7 +395,7 @@ insights.get("/links", async (c) => {
            SUM(e.repeat IS NOT NULL) AS repeats,
            SUM(e.kind IN (SELECT value FROM json_each(?5)) AND e.end_at IS NULL AND length(e.at) > 10 AND e.status = 'gebeurd') AS running,
            SUM(e.kind IN (SELECT value FROM json_each(?6)) AND e.status = 'gebeurd' AND (e.kind IN (SELECT value FROM json_each(?2))
-               OR EXISTS (SELECT 1 FROM lines f JOIN things ft ON ft.id = f.thing_id
+               OR EXISTS (SELECT 1 FROM lines f JOIN items ft ON ft.id = f.item_id
                           WHERE f.event_id = e.id AND f.role != 'bij' AND ft.list_id IN (SELECT value FROM json_each(?3))))) AS food,
            ${done} AS last
          FROM events e WHERE e.list_id IN ${inLists} GROUP BY e.list_id, e.kind, e.base`,
@@ -411,7 +411,7 @@ insights.get("/links", async (c) => {
     db
       .prepare(
         `SELECT e.list_id AS list, e.kind, e.base, l.role, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
-         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
          WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists}
          GROUP BY e.list_id, e.kind, e.base, l.role, t.list_id`,
       )
@@ -419,37 +419,37 @@ insights.get("/links", async (c) => {
     db
       .prepare(
         `SELECT e.list_id AS list, t.list_id AS "to", COUNT(DISTINCT e.id) AS events, ${done} AS last
-         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
          WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
          GROUP BY e.list_id, t.list_id`,
       )
       .bind(listIds),
-    // Welke dingen er in een verband zitten (enkel dingen van lijsten die je ziet).
+    // Welke items er in een verband zitten (enkel items van lijsten die je ziet).
     db
       .prepare(
-        `SELECT e.list_id AS list, t.list_id AS "to", t.id AS thing, t.name, COUNT(DISTINCT e.id) AS events
-         FROM lines l JOIN events e ON e.id = l.event_id JOIN things t ON t.id = l.thing_id
+        `SELECT e.list_id AS list, t.list_id AS "to", t.id AS item, t.name, COUNT(DISTINCT e.id) AS events
+         FROM lines l JOIN events e ON e.id = l.event_id JOIN items t ON t.id = l.item_id
          WHERE e.list_id IN ${inLists} AND t.list_id IN ${inLists} AND e.list_id != t.list_id
          GROUP BY e.list_id, t.id`,
       )
       .bind(listIds),
-    db.prepare(`SELECT list_id, COUNT(*) AS n FROM things WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
-  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<LineThing>, D1Result<{ list_id: string; n: number }>];
+    db.prepare(`SELECT list_id, COUNT(*) AS n FROM items WHERE archived = 0 AND list_id IN ${inLists} GROUP BY list_id`).bind(listIds),
+  ])) as [D1Result<LogStat>, D1Result<LineStat>, D1Result<LinePair>, D1Result<LineItem>, D1Result<{ list_id: string; n: number }>];
 
-  // Je overzichten: welke blokken een lijst tonen (een ding: zijn lijst).
+  // Je overzichten: welke blokken een lijst tonen (een item: zijn lijst).
   const boards = await boardsOf(db, me);
-  const thingIds = boards.flatMap((b) => (b.blocks ?? []).flatMap((x) => (x.kind === "thing" ? [x.thing] : [])));
-  const thingList = new Map<string, string>();
-  if (thingIds.length) {
-    const { results } = await db.prepare("SELECT id, list_id FROM things WHERE id IN (SELECT value FROM json_each(?))").bind(ids(thingIds)).all<{ id: string; list_id: string }>();
-    for (const r of results) thingList.set(r.id, r.list_id);
+  const itemIds = boards.flatMap((b) => (b.blocks ?? []).flatMap((x) => (x.kind === "item" ? [x.item] : [])));
+  const itemList = new Map<string, string>();
+  if (itemIds.length) {
+    const { results } = await db.prepare("SELECT id, list_id FROM items WHERE id IN (SELECT value FROM json_each(?))").bind(ids(itemIds)).all<{ id: string; list_id: string }>();
+    for (const r of results) itemList.set(r.id, r.list_id);
   }
   const uses: BoardUse[] = boards.flatMap((b) =>
     (b.blocks ?? []).flatMap((x): BoardUse[] => {
       if (x.kind === "view") return x.lists.map((list) => ({ board: b.name, list, block: "view" as const }));
       if (x.kind === "action") return [{ board: b.name, list: x.list, block: "action" }];
-      const list = x.kind === "thing" ? thingList.get(x.thing) : undefined;
-      return list ? [{ board: b.name, list, block: "thing" }] : [];
+      const list = x.kind === "item" ? itemList.get(x.item) : undefined;
+      return list ? [{ board: b.name, list, block: "item" }] : [];
     }),
   );
 
@@ -465,7 +465,7 @@ insights.get("/links", async (c) => {
     return { list: m.list_id, source: m.source_id, fields: labels };
   });
 
-  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, things: thingLineRows.results, boards: uses, mirrors });
+  const { links, own } = buildLinks({ lists, kinds, log: logRows.results, lines: lineRows.results, pairs: pairRows.results, items: itemLineRows.results, boards: uses, mirrors });
 
   // Wie bij elke lijst is (zonder wie er rechtstreeks niet bij mag), en wat voor wie niet werkt.
   const peopleLists = lists.slice(0, LINK_PEOPLE_LISTS);
@@ -480,8 +480,8 @@ insights.get("/links", async (c) => {
   const problems = linkProblems(links, new Map(Object.entries(people)), managed);
 
   const counts: LinksResponse["counts"] = {};
-  for (const l of lists) counts[l.id] = { things: 0, events: 0, last: null };
-  for (const r of thingRows.results) counts[r.list_id].things = r.n;
+  for (const l of lists) counts[l.id] = { items: 0, events: 0, last: null };
+  for (const r of itemRows.results) counts[r.list_id].items = r.n;
   for (const r of logRows.results) {
     const count = counts[r.list];
     count.events += r.events;
