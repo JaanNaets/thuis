@@ -10,7 +10,7 @@
 //   nooit bewaard maar uitgerekend (shared/cells.ts, shared/stock.ts, shared/ledger.ts, shared/food.ts).
 
 import { ADJUST, ADJUST_DOES, presetDoes, type Handeling } from "./cells.ts";
-import type { Attributes, FieldDef, Interval, Share } from "./fields.ts";
+import { FIELD_TYPES, type Attributes, type FieldDef, type Interval, type Share } from "./fields.ts";
 import type { LedgerDef } from "./ledger.ts";
 import type { IconKey } from "./icons.ts";
 import type { NotifyDef } from "./alerts.ts";
@@ -52,8 +52,12 @@ export const LINE_ROLES: Record<LineRole, { label: string; done: string }> = {
 export const isLineRole = (v: unknown): v is LineRole => typeof v === "string" && Object.hasOwn(LINE_ROLES, v);
 
 /** Een groep lijnen van een formulier (Wat, Waar, Ruimte): de rol van haar lijnen, hoe ze heet, en enkel uit deze lijst. */
-/** Een groep lijnen van een formulier: haar rol, haar naam en uit welke lijsten ze kiest (leeg: uit elke lijst). */
-export type LineGroup = { role: LineRole; label: string; lists: string[] };
+/**
+ * Een groep lijnen van een formulier: haar rol, haar naam en uit welke lijsten ze kiest (leeg: uit elke lijst).
+ * `fresh`: elke keer een nieuwe rij in haar (enige) lijst in plaats van een bestaand item kiezen, met als naam het veld
+ * `name` (anders de omschrijving). `one`: hoogstens één item (een Ruimte, een wagen) in plaats van meerdere lijnen.
+ */
+export type LineGroup = { role: LineRole; label: string; lists: string[]; fresh?: true; name?: string; one?: true };
 
 /**
  * Wat een formulier vraagt naast zijn velden: geld (bedrag, wie betaalde, de verdeling en een prijs per lijn), naar
@@ -90,6 +94,21 @@ export const BASES = {
 export type Base = keyof typeof BASES;
 export const isBase = (v: unknown): v is Base => typeof v === "string" && Object.hasOwn(BASES, v);
 
+/**
+ * Groepen recht zetten na het filteren van hun lijsten: een nieuwe rij kan enkel in één lijst, en haar naam komt enkel
+ * uit een tekstveld van het formulier.
+ */
+export function fitGroups(parts: Parts, fields: Pick<FieldDef, "key" | "type">[]): Parts {
+  const text = (key: string | undefined) => fields.some((f) => f.key === key && FIELD_TYPES[f.type].group === "text");
+  return {
+    ...parts,
+    groups: parts.groups.map(({ fresh, name, one, ...g }) => {
+      const isFresh = fresh === true && g.lists.length === 1;
+      return { ...g, ...(isFresh ? { fresh: true as const } : {}), ...(isFresh && text(name) ? { name } : {}), ...(isFresh || one ? { one: true as const } : {}) };
+    }),
+  };
+}
+
 /** Onderdelen van buiten nakijken: hoogstens één groep per rol, een naam van 30 tekens; null als het niet klopt. */
 export function cleanParts(raw: unknown): Parts | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -102,7 +121,10 @@ export function cleanParts(raw: unknown): Parts | null {
     // Uit welke lijsten; van vroeger één lijst (`list`).
     const raw = Array.isArray(x.lists) ? x.lists : typeof x.list === "string" ? [x.list] : [];
     const lists = [...new Set(raw.filter((l): l is string => typeof l === "string" && /^[A-Za-z0-9-]{1,64}$/.test(l)))].slice(0, 20);
-    groups.push({ role: x.role, label, lists });
+    // Een nieuwe rij kan enkel in één lijst.
+    const fresh = x.fresh === true && lists.length === 1;
+    const name = fresh && typeof x.name === "string" && /^[a-z][a-z0-9_]{0,39}$/.test(x.name) ? x.name : undefined;
+    groups.push({ role: x.role, label, lists, ...(fresh ? { fresh: true as const } : {}), ...(name ? { name } : {}), ...(fresh || x.one === true ? { one: true as const } : {}) });
   }
   const money = o.money === true;
   return { money, to: money && o.to === true, duration: o.duration === true, groups };
@@ -227,6 +249,18 @@ export function fillsLists(kind: Pick<KindInfo, "parts" | "does">): string[] {
 
 /** De eerste groep lijnen van een formulier (waar een item komt als je logt vanaf dat item). */
 export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? { role: "voor", label: LINE_ROLES.voor.label, lists: [] };
+
+/**
+ * De lijnen van de nieuwe rijen die hun naam uit een veld halen (een Proeverij in Geproefd met de Wijn als naam): enkel
+ * als het veld ingevuld is en de gebeurtenis nog geen lijn in die groep heeft (`taken`).
+ */
+export function namedLines(kind: Pick<KindInfo, "parts">, taken: LineRole[], data: Record<string, unknown>) {
+  return kind.parts.groups.flatMap((g) => {
+    const name = g.fresh && g.name ? data[g.name] : null;
+    if (typeof name !== "string" || !name.trim() || taken.includes(g.role)) return [];
+    return [{ role: g.role, new_item: { list_id: g.lists[0], name: name.trim().slice(0, 120) }, amount: null, unit: null, price: null, expires: null, owner: null }];
+  });
+}
 
 /** De groep van een rol in een formulier (of hoe die rol heet als het formulier ze niet heeft). */
 export const groupOf = (kind: Pick<KindInfo, "parts">, role: LineRole): LineGroup => kind.parts.groups.find((g) => g.role === role) ?? { role, label: LINE_ROLES[role].label, lists: [] };

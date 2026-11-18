@@ -85,7 +85,7 @@ export const KIND_LINKS = {
   fields: true, // zie FIELD_LINKS (kcal: Eten; een verwijzing: naar die lijst)
   goal: true, // een activiteit die loopt, geeft na zoveel minuten een melding
   planned: false, // enkel hoe een nieuwe gebeurtenis begint; de status zelf staat op de gebeurtenis (EVENT_LINKS.status)
-  parts: true, // geld (Geld, Wie moet wie), een einde (Loopt nu), groepen lijnen uit een lijst
+  parts: true, // geld (Geld, Wie moet wie), een einde (Loopt nu), groepen lijnen uit een lijst (of een nieuwe rij erin)
   does: true, // het formulier vult kolommen van een (andere) lijst in (shared/cells.ts)
   notify: true, // een melding bij iets nieuws
   reads: false, // een foto lezen: verbindt niets
@@ -316,9 +316,9 @@ export function buildLinks(input: LinkInput): LinkResult {
     fieldLinks(node, k.fields, "");
     if (k.goal) toView(k.id, "meldingen", `Een melding na ${k.goal % 60 ? `${k.goal} min` : `${k.goal / 60} u`}`);
     if (k.notify) toView(k.id, "meldingen", k.notify.to === "all" ? "Iets nieuws: een melding aan iedereen bij het formulier" : "Iets nieuws: een melding aan wie erin staat");
-    // Een groep lijnen uit bepaalde lijsten (Ruimte uit Huis).
+    // Een groep lijnen uit bepaalde lijsten (Ruimte uit Huis), of die er een nieuwe rij in maakt (een Proeverij in Geproefd).
     for (const g of k.parts?.groups ?? []) {
-      for (const l of g.lists) if (lists.has(l)) add("log", node, l, `${g.label} uit deze lijst`);
+      for (const l of g.lists) if (lists.has(l)) add("log", node, l, g.fresh ? `${g.label}: een nieuwe rij in deze lijst` : `${g.label} uit deze lijst`);
     }
     // Wat het formulier invult: een kolom van de items van een lijst (de voorraad van elke lijst staat bij de lijnen).
     for (const h of k.does ?? []) {

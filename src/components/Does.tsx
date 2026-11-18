@@ -1,6 +1,6 @@
 import { BALANCE, COUNTABLE, OPS, PERSON_ROWS, PERSON_VALUES, STOCK, VALUE_FROM, type Handeling, type ListColumns, type Op, type PersonRows, type Rows, type Value, type ValueFrom } from "../../shared/cells";
 import type { FieldDef } from "../../shared/fields";
-import type { LineGroup, LineRole, Parts } from "../../shared/model";
+import type { LineGroup, Parts } from "../../shared/model";
 import { Icon } from "./Icon";
 
 /** Een handeling terwijl je ze invult (`key`: om te tekenen). */
@@ -8,6 +8,7 @@ export type DoesDraft = Handeling & { key: string };
 
 let counter = 0;
 export const doesDraft = (does: Handeling[]): DoesDraft[] => does.map((h) => ({ ...h, key: `h${counter++}` }));
+export const newDoes = (h: Handeling): DoesDraft => ({ ...h, key: `h${counter++}` });
 /** Naar de API: een vaste waarde die een getal is ("2,5"), als getal. */
 export const buildDoes = (drafts: DoesDraft[]): Handeling[] =>
   drafts.map(({ key: _k, ...h }) => {
@@ -44,7 +45,7 @@ const rowsId = (r: Rows) => (r.from === "lines" ? `lines:${r.role}` : r.from);
  * per handeling een kaartje zoals een lijn, met de kolom, hoe (Zet op, Tel bij, Tel af), met wat en op wie of welke
  * lijn. Zie STIJLBOEK.md → Wat een formulier doet.
  */
-export function DoesEditor({ value, onChange, columns, fields, parts }: { value: DoesDraft[]; onChange: (v: DoesDraft[]) => void; columns: ListColumns[]; fields: Field[]; parts: Parts }) {
+export function DoesEditor({ label, value, onChange, columns, fields, parts }: { label: string; value: DoesDraft[]; onChange: (v: DoesDraft[]) => void; columns: ListColumns[]; fields: Field[]; parts: Parts }) {
   const set = (i: number, patch: Partial<Handeling>) => onChange(value.map((h, k) => (k === i ? fit({ ...h, ...patch }, columns, fields) : h)));
   const choices = rowChoices(parts);
   function add() {
@@ -63,7 +64,7 @@ export function DoesEditor({ value, onChange, columns, fields, parts }: { value:
   }
   return (
     <div className="field">
-      <span className="label">Wat het doet</span>
+      <span className="label">{label}</span>
       {value.length > 0 && (
         <ul className="line-rows">
           {value.map((h, i) => (
@@ -249,81 +250,5 @@ function DoesRow({
         </label>
       </div>
     </li>
-  );
-}
-
-/** Hoe je de rol van een groep lijnen kiest (ze bepaalt ook wie ze ziet: Waar of bij wie enkel met de hele gebeurtenis). */
-const ROLE_CHOICES: Record<LineRole, string> = {
-  in: "Wat erbij komt",
-  uit: "Wat eraf gaat",
-  voor: "Waarover",
-  bij: "Waar of bij wie",
-};
-
-/**
- * De groepen lijnen van een formulier (Wat, Waar, Ruimte): per groep een kaartje met de naam, de rol en uit welke
- * lijsten (aangevinkt; niets is uit elke lijst). Elke rol hoogstens één keer. Zie STIJLBOEK.md → Wat een formulier doet.
- */
-export function GroupsEditor({ value, onChange, lists }: { value: LineGroup[]; onChange: (v: LineGroup[]) => void; lists: { id: string; name: string }[] }) {
-  const free = (Object.keys(ROLE_CHOICES) as LineRole[]).filter((r) => !value.some((g) => g.role === r));
-  const set = (i: number, patch: Partial<LineGroup>) => onChange(value.map((g, k) => (k === i ? { ...g, ...patch } : g)));
-  return (
-    <div className="field">
-      <span className="label">Lijnen</span>
-      {value.length > 0 && (
-        <ul className="line-rows">
-          {value.map((g, i) => (
-            <li key={g.role} className="line-row">
-              <div className="line-main is-plain">
-                <input aria-label="Naam van de groep" value={g.label} maxLength={30} placeholder="bv. Ruimte, Winkel" onChange={(e) => set(i, { label: e.target.value })} />
-                <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${g.label || "Groep"} weghalen`} onClick={() => onChange(value.filter((_, k) => k !== i))}>
-                  <Icon name="close" size={15} />
-                </button>
-              </div>
-              <div className="line-details">
-                <label className="line-field">
-                  <span>Rol</span>
-                  <select aria-label={`${g.label}: rol`} value={g.role} onChange={(e) => set(i, { role: e.target.value as LineRole })}>
-                    {[g.role, ...free].map((r) => (
-                      <option key={r} value={r}>
-                        {ROLE_CHOICES[r]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {/* Uit welke lijsten: aanvinken; niets aangevinkt is uit elke lijst. */}
-                <div className="line-field is-wide" role="group" aria-label={`${g.label}: uit welke lijsten`}>
-                  <span>{g.lists.length ? "Uit" : "Uit elke lijst"}</span>
-                  <div className="tag-picker">
-                    {lists.map((l) => {
-                      const on = g.lists.includes(l.id);
-                      return (
-                        <button key={l.id} type="button" className="tag" aria-pressed={on} onClick={() => set(i, { lists: on ? g.lists.filter((x) => x !== l.id) : [...g.lists, l.id] })}>
-                          <Icon name="check" size={14} className="check" />
-                          {!on && <span className="dot" />}
-                          {l.name}
-                        </button>
-                      );
-                    })}
-                    {g.lists
-                      .filter((x) => !lists.some((l) => l.id === x))
-                      .map((x) => (
-                        <span key={x} className="tag static">
-                          Een lijst die je niet ziet
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {free.length > 0 && (
-        <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...value, { role: free[0], label: "", lists: [] }])}>
-          <Icon name="plus" size={15} /> Groep
-        </button>
-      )}
-    </div>
   );
 }

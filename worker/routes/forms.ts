@@ -9,7 +9,7 @@ import { cleanDoes, type Handeling, type ListColumns } from "../../shared/cells"
 import type { FieldDef } from "../../shared/fields";
 import { isIconKey } from "../../shared/icons";
 import { cleanKindFields } from "../../shared/listdef";
-import { baseParts, canEdit, cleanParts, isBase, mergeKinds, type Base, type FormDetail, type Parts, type Role } from "../../shared/model";
+import { baseParts, canEdit, cleanParts, fitGroups, isBase, mergeKinds, type Base, type FormDetail, type Parts, type Role } from "../../shared/model";
 import { ids, needManage, parseJson, requireForm, seenLists } from "../access";
 import { rebuildEffects } from "../cells";
 import { addPerson, peopleOf, setPerson, tagsOn, tagStatements } from "../members";
@@ -47,15 +47,23 @@ const readsOf = (o: Record<string, unknown>): number | null => (o.reads === true
 export async function columnsOf(db: D1Database, seen: Map<string, Role>, edit: boolean): Promise<ListColumns[]> {
   const wanted = [...seen].filter(([, r]) => !edit || canEdit(r)).map(([id]) => id);
   const { results } = await db
-    .prepare("SELECT id, name, fields, stock, ledger FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
+    .prepare("SELECT id, name, one, fields, stock, ledger FROM lists WHERE archived = 0 AND one IS NOT NULL AND id IN (SELECT value FROM json_each(?)) ORDER BY name COLLATE NOCASE")
     .bind(ids(wanted))
-    .all<{ id: string; name: string; fields: string; stock: string | null; ledger: string | null }>();
+    .all<{ id: string; name: string; one: string | null; fields: string; stock: string | null; ledger: string | null }>();
   return results.map((r) => ({
     id: r.id,
     name: r.name,
+    one: r.one,
     stock: Boolean(r.stock),
     ledger: Boolean(r.ledger),
-    fields: parseJson<FieldDef[]>(r.fields, []).map((f) => ({ key: f.key, label: f.label, type: f.type, ...(f.unit ? { unit: f.unit } : {}) })),
+    fields: parseJson<FieldDef[]>(r.fields, []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type,
+      ...(f.unit ? { unit: f.unit } : {}),
+      ...(f.options?.length ? { options: f.options } : {}),
+      ...(f.ref_type ? { ref_type: f.ref_type } : {}),
+    })),
   }));
 }
 
@@ -80,7 +88,8 @@ forms.post("/", async (c) => {
   const wantsDoes = Array.isArray(body.does) && body.does.length > 0;
   const editable = wantsDoes ? await columnsOf(db, seen, true) : [];
   const checked = wantsDoes ? cleaned(() => cleanDoes(body.does, editable, fields)) : [];
-  const parts = body.parts === undefined ? null : partsOf(body.parts, body.base, seen);
+  const raw = body.parts === undefined ? null : partsOf(body.parts, body.base, seen);
+  const parts = raw && fitGroups(raw, fields);
   await db.batch([
     db
       .prepare("INSERT INTO kinds (id, base, name, icon, fields, goal, planned, parts, does, notify, reads, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
@@ -136,7 +145,8 @@ forms.put("/:id", async (c) => {
   const fields = body.fields === undefined ? kind.fields : cleaned(() => cleanKindFields(body.fields));
   const seen = await seenLists(db, me.id);
   // Groepen uit een lijst die je niet (meer) ziet, blijven staan als je ze niet aanraakt.
-  const parts = body.parts === undefined ? kind.parts : keepUnseen(kind.parts, partsOf(body.parts, kind.base, seen), seen);
+  const asked = body.parts === undefined ? kind.parts : keepUnseen(kind.parts, partsOf(body.parts, kind.base, seen), seen);
+  const parts = asked && fitGroups(asked, fields);
   // Handelingen die al bestonden in een lijst waar jij niets mag aanpassen, blijven; nieuwe moeten jouw lijsten zijn.
   let does: Handeling[] = kind.does;
   if (body.does !== undefined) {

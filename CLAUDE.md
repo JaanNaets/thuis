@@ -41,7 +41,12 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   **onderdelen** (`parts`: `money` = bedrag, wie betaalde, verdeling en een prijs per lijn; `to` = naar iemand, een
   overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en de
   lijsten waaruit ze kiezen, `lists` (leeg: uit elke lijst; van vroeger één `list`): Wat, Waar, "Ruimte uit Huis", "Fles
-  uit Wijnen of de Gedeelde wijnkelder") plus **handelingen** (`does`, zie Cellen). Er is geen "Werkt als"
+  uit Wijnen of de Gedeelde wijnkelder"; `one` = één item; `fresh` = elke keer een nieuwe rij in haar enige lijst, met
+  als naam het tekstveld `name` of wat je bij de groep typt, `namedLines`, `fitGroups`) plus **handelingen** (`does`,
+  zie Cellen). De bouwer (`FormLists`) vormt het formulier vanuit de lijsten: per lijst al haar kolommen, elk
+  gekoppeld aan een veld (ook een nieuw dat de kolom overneemt; één veld kan kolommen in meer lijsten invullen), de
+  datum, hoeveel, de prijs, het bedrag of een vaste waarde, met Zet op en bij een getal Tel bij of Tel af; het worden
+  gewone groepen en handelingen. Kies je bij het loggen een item, dan beginnen die velden met wat het nu heeft. Er is geen "Werkt als"
   meer: de zes **vertrekpunten** (`BASES`: aankoop, gebruik, dienst, activiteit, meting, overdracht, met `baseParts` en
   `presetDoes`) zijn enkel waar een nieuw formulier mee begint. Een formulier zonder eigen onderdelen (`parts` NULL) volgt
   zijn vertrekpunt (`kindInfo`). **De code vraagt nooit "is dit

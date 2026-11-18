@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useSearchParams } from "react-router";
-import type { Attributes, Interval } from "../../shared/fields";
+import { FIELD_TYPES, type Attributes, type FieldDef, type Interval } from "../../shared/fields";
 import { defaultSharers } from "../../shared/ledger";
 import { stockOp } from "../../shared/cells";
 import { formEats } from "../../shared/food";
-import { brusselsNow, fillsLists, mainGroup, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineRole, type Status, type ItemRef } from "../../shared/model";
+import { brusselsNow, fillsLists, mainGroup, namedLines, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineRole, type Status, type ItemRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { formReads } from "../../shared/photoread";
 import { buysWith, hasPrice, receiptForms, type Targets } from "../../shared/targets";
@@ -16,7 +16,7 @@ import { attributesDraft, buildAttributes, buildShares, FieldInputs, sharesDraft
 import { AiMark } from "../components/Fields";
 import { FormPicker } from "../components/FormPicker";
 import { Icon } from "../components/Icon";
-import { buildLine, emptyLine, lineDraft, LinesEditor, renamed, type LineDraft } from "../components/Lines";
+import { buildLine, emptyLine, lineDraft, LinesEditor, renamed, startLines, type LineDraft } from "../components/Lines";
 import { EmptyState, PageHead } from "../components/Page";
 import { PhotoButton } from "../components/PhotoPicker";
 import { useToast } from "../components/Toast";
@@ -170,9 +170,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
             existing?.items.find((t) => t.id === l.item_id),
           ),
         )
-      : kind.parts.groups.length
-        ? [emptyLine(main)]
-        : [],
+      : startLines(kind, main),
   );
   const [repeat, setRepeat] = useState(() => {
     const r = event?.repeat?.every;
@@ -194,7 +192,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
   useEffect(() => {
     const t = preset?.items[0];
     const qty = typeof prefill.$qty === "number" ? String(prefill.$qty).replace(".", ",") : "";
-    if (t) setLines((ls) => (ls.length <= 1 && !ls[0]?.item && !ls[0]?.text ? [{ ...emptyLine(main, t), unit: t.unit ?? "", amount: qty }] : ls));
+    if (t) setLines((ls) => (ls.every((l) => !l.item && !l.text) ? [{ ...emptyLine(main, t), unit: t.unit ?? "", amount: qty }, ...ls.filter((l) => l.role !== main)] : ls));
   }, [preset]);
   // Een gedeelde foto (Android: delen met Heystack, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
   // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.
@@ -226,7 +224,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
     setDraft(attributesDraft(kind.fields, {}));
     setLines((ls) => {
       const kept = ls.filter((l) => l.item || l.text);
-      return kept.length || !kind.parts.groups.length ? kept : [emptyLine(main)];
+      return kept.length ? kept : startLines(kind, main);
     });
     if (!statusChosen.current) setStatus(startsPlanned(kind, askedPlanned) ? "gepland" : "gebeurd");
   }, [kindId]);
@@ -275,7 +273,8 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
         // De groep van het formulier uit de lijst van het item; uit een voorraad: de groep die de voorraad verandert;
         // anders wat het item meestal is (Colruyt: bij), als het formulier die groep heeft.
         const roleOf = (t: ItemRef): LineRole => {
-          const groups = kind.parts.groups;
+          // Een groep die een nieuwe rij maakt, kiest geen bestaand item.
+          const groups = kind.parts.groups.filter((g) => !g.fresh);
           const listed = groups.find((g) => g.lists.includes(t.list_id));
           if (listed) return listed.role;
           const stocked = t.stock ? groups.find((g) => !g.lists.length && stockOp(kind.does, g.role)) : undefined;
@@ -344,7 +343,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
       const kept = cur.filter((l) => (before.lines.has(l.key) ? before.lines.get(l.key) !== sig(l) : Boolean(l.item || l.text.trim() || l.amount || l.price)));
       const fresh = made.filter((m) => !kept.some((k) => k.item?.id === m.item?.id));
       const all = [...kept, ...fresh];
-      return all.length || !kind.parts.groups.length ? all : [emptyLine(main)];
+      return all.length ? all : startLines(kind, main);
     });
     auto.current = {
       ...next,
@@ -402,6 +401,32 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
     }
   }
 
+  /**
+   * Een gekozen item: de velden waarmee het formulier zijn kolommen zet, beginnen met wat het item nu heeft (enkel als
+   * ze nog leeg zijn en van dezelfde soort).
+   */
+  async function pickItem(item: ItemRef, role: LineRole) {
+    const wanted = kind.does.filter((h) => h.op === "zet" && h.value.from === "field" && h.rows.from === "lines" && h.rows.role === role && h.list === item.list_id);
+    if (!wanted.length) return;
+    const got = await api.get<{ item: { data: Attributes }; list: { fields: FieldDef[] } }>(`/items/${item.id}`).catch(() => null);
+    if (!got) return;
+    const text = (t: FieldDef["type"]) => FIELD_TYPES[t].group === "text";
+    const empty = attributesDraft(kind.fields, {});
+    setDraft((cur) => {
+      const out = { ...cur };
+      for (const h of wanted) {
+        const key = h.value.from === "field" ? h.value.key : "";
+        const def = kind.fields.find((f) => f.key === key);
+        const col = got.list.fields.find((f) => f.key === h.field);
+        const v = got.item.data[h.field];
+        if (!def || !col || v === undefined || v === null || JSON.stringify(cur[key]) !== JSON.stringify(empty[key])) continue;
+        if (col.type !== def.type && !(text(col.type) && text(def.type))) continue;
+        out[key] = attributesDraft([def], { [key]: v })[key];
+      }
+      return out;
+    });
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     const built = buildAttributes(kind.fields, draft);
@@ -412,6 +437,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
       if (b && "error" in b) return setProblem(b.error as string);
       if (b) builtLines.push(b);
     }
+    builtLines.push(...namedLines(kind, lines.filter((l) => l.item || l.text.trim()).map((l) => l.role), built.data));
     const cents = amount.trim() ? parseEuro(amount) : null;
     if (cents !== null && Number.isNaN(cents)) return setProblem("Het bedrag klopt niet");
     const split = buildShares(shares);
@@ -614,7 +640,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
 
       {(kind.parts.groups.length > 0 || lines.length > 0) && (
         <section className="card form-section">
-          <LinesEditor kind={kind} lines={lines} onChange={setLines} people={shareWith} targets={targets} defaultNew={newIn} />
+          <LinesEditor kind={kind} lines={lines} onChange={setLines} people={shareWith} targets={targets} defaultNew={newIn} onPick={pickItem} />
         </section>
       )}
 

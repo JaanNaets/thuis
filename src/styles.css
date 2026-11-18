@@ -8546,9 +8546,85 @@ dialog.sheet.builder-sheet {
   min-width: 0;
 }
 
-/* Een veld van een lijn over de hele breedte (Uit welke lijsten, bij een groep). */
-.line-field.is-wide {
-  grid-column: 1 / -1;
+/* Een keuze van een groep die meer plaats vraagt (Item: Bestaand of Nieuwe rij, Aantal: Eén of Meerdere). */
+.line-field.is-double {
+  grid-column: span 2;
+}
+
+/* De kolommen van een lijst in de formulierbouwer (FormLists): de naam van de lijst, en per kolom waarmee het formulier
+   ze invult en hoe. Een kolom zonder koppeling staat grijs. */
+.map-list {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+
+.map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.map-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.map-label {
+  overflow: hidden;
+  padding: 0 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-row.is-on > .map-label {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.map-how {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.map-how > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* + Lijst: een keuzelijst die eruitziet als een knop, op haar eigen breedte. */
+.map-add {
+  justify-self: start;
+  width: auto;
+}
+
+@media (max-width: 520px) {
+  .map-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px 8px;
+  }
+
+  .map-label {
+    grid-column: 1 / -1;
+  }
 }
 
 .line-field > span,

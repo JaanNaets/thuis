@@ -70,6 +70,10 @@ test("altijd mee: lijsten, formulieren, gebeurtenissen, lijnen en blokken", () =
   assert.ok(KIND_LINKS.parts && has(kinded, "log", K, "A"), "een groep lijnen uit A");
   assert.ok(EVENT_LINKS.kind && has(kinded, "log", K, "B"), "lijnen naar B");
   assert.ok(!has(kinded, "log", "A", "B"), "geen spoor meer van lijst naar lijst");
+  // Een groep die een nieuwe rij maakt in A (een Proeverij in Geproefd), verbindt ook.
+  const freshA = { ...fromA, groups: [{ role: "in" as const, label: "Proeverij", lists: ["A"], fresh: true as const, one: true as const }] };
+  const tasted = buildLinks(input({ kinds: [{ ...kinds[0], parts: freshA }] })).links;
+  assert.ok(tasted.some((l) => l.from === K && l.to === "A" && l.texts.includes("Proeverij: een nieuwe rij in deze lijst")), "een nieuwe rij in A");
   assert.ok(KIND_LINKS.fields && has(kinded, "view", K, viewNode("eten")), "kcal in het formulier");
   assert.ok(KIND_LINKS.goal && has(kinded, "view", K, viewNode("meldingen")), "een doel op het formulier");
   assert.ok(KIND_LINKS.notify && kinded.some((l) => l.from === K && l.to === viewNode("meldingen") && l.texts.some((t) => t.includes("aan iedereen"))), "een melding bij iets nieuws");

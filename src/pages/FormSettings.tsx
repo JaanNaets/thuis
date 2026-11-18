@@ -12,7 +12,8 @@ import { formReads } from "../../shared/photoread";
 import { api, useApi } from "../api";
 import { Switch, Tabs } from "../components/Controls";
 import { useConfirm } from "../components/ConfirmDialog";
-import { buildDoes, DoesEditor, doesDraft, GroupsEditor, type DoesDraft } from "../components/Does";
+import { buildDoes, DoesEditor, doesDraft, type DoesDraft } from "../components/Does";
+import { FormLists } from "../components/FormLists";
 import { AiMark, buildFields, FieldsEditor, fieldsDraft, type FieldDraft } from "../components/Fields";
 import { Icon } from "../components/Icon";
 import { IconPicker } from "../components/IconPicker";
@@ -97,7 +98,6 @@ function FormEditor({ detail, list, onSaved, onMerged }: { detail: FormDetail | 
   const [fresh, setFresh] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const { data: columns } = useApi<ListColumns[]>("/me/columns");
-  const items = lists.filter((l) => l.one && !l.archived);
   // Foto lezen: null = de standaard (met geld of voedingswaarden), anders wat je koos.
   const [reads, setReads] = useState<boolean | null>(kind?.reads ?? null);
   const readsNow = formReads({ id: kind?.id ?? "", reads, parts, fields: kind?.fields ?? [] });
@@ -125,7 +125,7 @@ function FormEditor({ detail, list, onSaved, onMerged }: { detail: FormDetail | 
     if ("error" in built) return toast(built.error, "alert");
     // Een nieuw veld krijgt zijn sleutel pas nu: wat het formulier ermee invult, volgt mee.
     const keyOf = new Map(drafts.map((d, i) => [d.key, built.fields[i]?.key ?? d.key]));
-    const groups = parts.groups.map((g) => ({ ...g, label: g.label.trim() || LINE_ROLES[g.role].label }));
+    const groups = parts.groups.map((g) => ({ ...g, label: g.label.trim() || LINE_ROLES[g.role].label, ...(g.name ? { name: keyOf.get(g.name) ?? g.name } : {}) }));
     const body = {
       base,
       name,
@@ -239,16 +239,25 @@ function FormEditor({ detail, list, onSaved, onMerged }: { detail: FormDetail | 
             <input inputMode="decimal" value={goal} placeholder="bv. 16" onChange={(e) => setGoal(e.target.value)} />
           </label>
         )}
-        <GroupsEditor value={parts.groups} onChange={(groups) => setParts({ ...parts, groups })} lists={items} />
-      </section>
-      <section className="card form-section">
-        <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
+        {parts.money && columns?.some((l) => l.ledger) && (
+          <DoesEditor
+            label="Saldo"
+            value={does.filter((h) => h.rows.from !== "lines")}
+            onChange={(v) => setDoes([...does.filter((h) => h.rows.from === "lines"), ...v])}
+            columns={columns}
+            fields={drafts}
+            parts={{ ...parts, groups: [] }}
+          />
+        )}
       </section>
       {columns && (
         <section className="card form-section">
-          <DoesEditor value={does} onChange={setDoes} columns={columns} fields={drafts} parts={parts} />
+          <FormLists parts={parts} onParts={setParts} does={does} onDoes={setDoes} fields={drafts} onFields={setDrafts} columns={columns} />
         </section>
       )}
+      <section className="card form-section">
+        <FieldsEditor value={drafts} onChange={setDrafts} lists={lists} selfLabel={name || "Dit formulier"} people={[]} meId={person.id} />
+      </section>
       <section className="card form-section">
         <div className="switch-list">
           <Switch checked={planned} onChange={setPlanned} label="Gepland" />

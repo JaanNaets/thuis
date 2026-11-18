@@ -67,7 +67,19 @@ export function buildLine(l: LineDraft): Record<string, unknown> | null | { erro
 export const renamed = (l: LineDraft): boolean => Boolean(l.ticket && fold(l.ticket) !== fold(l.item?.name ?? l.text));
 
 /** Een bewaarde lijn terug als ontwerp. */
-export function lineDraft(l: { role: LineRole; item_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null }, item: ItemRef | undefined): LineDraft {
+export function lineDraft(
+  l: {
+    role: LineRole;
+    item_id: string | null;
+    text: string | null;
+    amount: number | null;
+    unit: string | null;
+    price: number | null;
+    expires: string | null;
+    owner: string | null;
+  },
+  item: ItemRef | undefined,
+): LineDraft {
   return {
     ...emptyLine(l.role, l.item_id && item ? item : null),
     text: l.item_id ? "" : (l.text ?? ""),
@@ -79,10 +91,20 @@ export function lineDraft(l: { role: LineRole; item_id: string | null; text: str
   };
 }
 
-/** De groepen om te tonen: die van het formulier, en een rol die een bewaarde lijn heeft maar het formulier niet. */
+/**
+ * De groepen om te tonen: die van het formulier, en een rol die een bewaarde lijn heeft maar het formulier niet. Een
+ * nieuwe rij met haar naam uit een veld niet: die lijn maakt het bewaren (`namedLines`).
+ */
 export function shownGroups(kind: Pick<KindInfo, "parts">, lines: Pick<LineDraft, "role">[]): LineGroup[] {
   const extra = [...new Set(lines.map((l) => l.role))].filter((r) => !kind.parts.groups.some((g) => g.role === r));
-  return [...kind.parts.groups, ...extra.map((r) => groupOf(kind, r))];
+  return [...kind.parts.groups.filter((g) => !(g.fresh && g.name)), ...extra.map((r) => groupOf(kind, r))];
+}
+
+/** De lijnen waarmee een nieuwe gebeurtenis begint: één lege in de eerste groep en in elke groep van één item. */
+export function startLines(kind: Pick<KindInfo, "parts">, main: LineRole): LineDraft[] {
+  return shownGroups(kind, [])
+    .filter((g) => g.role === main || g.one)
+    .map((g) => ({ ...emptyLine(g.role), newIn: g.fresh ? g.lists[0] : "" }));
 }
 
 /**
@@ -96,6 +118,7 @@ export function LinesEditor({
   people,
   targets,
   defaultNew,
+  onPick,
 }: {
   kind: Pick<KindInfo, "parts" | "does">;
   lines: LineDraft[];
@@ -106,6 +129,8 @@ export function LinesEditor({
   targets: ListNode[];
   /** Waar iets nieuws dat erbij komt standaard in komt (de lijst waar je vandaan kwam); leeg: enkel tekst. */
   defaultNew?: string;
+  /** Een gekozen item (om velden in te vullen met wat het nu heeft). */
+  onPick?: (item: ItemRef, role: LineRole) => void;
 }) {
   const set = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const groups = shownGroups(kind, lines);
@@ -136,15 +161,24 @@ export function LinesEditor({
                     people={people}
                     targets={into}
                     startIn={startIn}
+                    onPick={(t) => onPick?.(t, g.role)}
                     onChange={(p) => set(l.key, p)}
                     onRemove={() => onChange(lines.filter((x) => x.key !== l.key))}
                   />
                 ))}
               </ul>
             )}
-            <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...lines, emptyLine(g.role)])}>
-              <Icon name="plus" size={15} /> {oneOf(into, g.lists) ?? "Lijn"}
-            </button>
+            {/* Eén item of een nieuwe rij: geen tweede lijn. */}
+            {!(g.one && own.length) && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ justifySelf: "start" }}
+                onClick={() => onChange([...lines, { ...emptyLine(g.role), newIn: g.fresh ? g.lists[0] : "" }])}
+              >
+                <Icon name="plus" size={15} /> {oneOf(into, g.lists) ?? "Lijn"}
+              </button>
+            )}
           </div>
         );
       })}
@@ -167,6 +201,7 @@ function LineRow({
   people,
   targets,
   startIn,
+  onPick,
   onChange,
   onRemove,
 }: {
@@ -180,6 +215,7 @@ function LineRow({
   people: { id: string; name: string }[];
   targets: ListNode[];
   startIn: string;
+  onPick: (item: ItemRef) => void;
   onChange: (patch: Partial<LineDraft>) => void;
   onRemove: () => void;
 }) {
@@ -192,27 +228,40 @@ function LineRow({
   return (
     <li className="line-row">
       <div className="line-main is-plain">
-        <Combo
-          label={group.label}
-          text={shown}
-          options={options}
-          placeOf={placeOf}
-          disabled={false}
-          placeholder="Typ een naam…"
-          className="line-item"
-          typeFirst
-          onText={(t) => {
-            setTyping(t);
-            // Iets nieuws dat erbij komt: standaard in de lijst van de groep, of waar je vandaan kwam (een wijn in Wijnen).
-            const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.lists.length) && startIn;
-            onChange({ item: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
-          }}
-          onPick={(o) => {
-            setTyping(null);
-            onChange({ item: o, text: "", newIn: "", unit: line.unit || o.unit || "" });
-          }}
-          onLeave={() => setTyping(null)}
-        />
+        {group.fresh ? (
+          // Een nieuwe rij: enkel haar naam (een bewaarde lijn wijst al naar haar item).
+          <input
+            aria-label={group.label}
+            value={line.item ? line.item.name : line.text}
+            disabled={Boolean(line.item)}
+            maxLength={120}
+            placeholder="Typ een naam…"
+            onChange={(e) => onChange({ text: e.target.value, newIn: group.lists[0] })}
+          />
+        ) : (
+          <Combo
+            label={group.label}
+            text={shown}
+            options={options}
+            placeOf={placeOf}
+            disabled={false}
+            placeholder="Typ een naam…"
+            className="line-item"
+            typeFirst
+            onText={(t) => {
+              setTyping(t);
+              // Iets nieuws dat erbij komt: standaard in de lijst van de groep, of waar je vandaan kwam (een wijn in Wijnen).
+              const fresh = !line.text && !line.newIn && t.trim() && (op === "bij" || group.lists.length) && startIn;
+              onChange({ item: null, text: t, ...(fresh ? { newIn: startIn } : {}) });
+            }}
+            onPick={(o) => {
+              setTyping(null);
+              onChange({ item: o, text: "", newIn: "", unit: line.unit || o.unit || "" });
+              onPick(o);
+            }}
+            onLeave={() => setTyping(null)}
+          />
+        )}
         <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`${what} weghalen`} onClick={onRemove}>
           <Icon name="close" size={15} />
         </button>
@@ -241,7 +290,13 @@ function LineRow({
           {money && (
             <label className="line-field">
               <span>Prijs</span>
-              <input inputMode="decimal" aria-label={`Prijs van ${what}`} placeholder="€" value={line.price} onChange={(e) => onChange({ price: e.target.value })} />
+              <input
+                inputMode="decimal"
+                aria-label={`Prijs van ${what}`}
+                placeholder="€"
+                value={line.price}
+                onChange={(e) => onChange({ price: e.target.value })}
+              />
             </label>
           )}
           {op === "bij" && (
@@ -265,7 +320,7 @@ function LineRow({
           )}
         </div>
       )}
-      {free && (op === "bij" || op === "af" || group.lists.length > 0) && targets.length > 0 && (
+      {free && !group.fresh && (op === "bij" || op === "af" || group.lists.length > 0) && targets.length > 0 && (
         <label className="line-field">
           <span>Nieuw in</span>
           <select aria-label={`${line.text}: nieuw in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>

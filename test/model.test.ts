@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, brusselsNow, cleanParts, mergeKinds, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
+import { baseKind, brusselsNow, cleanParts, fitGroups, mergeKinds, namedLines, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
 import { eventRole, keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
@@ -154,6 +154,37 @@ test("een groep lijnen kiest uit bepaalde lijsten (leeg: elke); van vroeger éé
     ],
   );
   assert.deepEqual(fillsLists({ parts, does: [] }), ["wijnen", "kelder", "winkels"]);
+});
+
+test("een groep maakt een nieuwe rij in één lijst (met haar naam uit een tekstveld) of kiest één item", () => {
+  const parts = cleanParts({
+    groups: [
+      { role: "in", label: "Proeverij", lists: ["geproefd"], fresh: true, name: "wijn" },
+      { role: "voor", label: "Ruimte", lists: ["huis"], one: true },
+      { role: "uit", label: "Fles", lists: ["wijnen", "kelder"], fresh: true },
+    ],
+  })!;
+  assert.deepEqual(
+    parts.groups.map((g) => [g.role, g.fresh ?? false, g.name ?? null, g.one ?? false]),
+    [
+      ["in", true, "wijn", true],
+      ["voor", false, null, true],
+      // Een nieuwe rij kan enkel in één lijst.
+      ["uit", false, null, false],
+    ],
+  );
+  // De naam komt enkel uit een tekstveld van het formulier; zonder dat veld typ je ze bij de groep.
+  assert.equal(fitGroups(parts, [{ key: "wijn", type: "text" }]).groups[0].name, "wijn");
+  assert.equal(fitGroups(parts, [{ key: "wijn", type: "number" }]).groups[0].name, undefined);
+  // Valt een lijst weg die je niet ziet, dan is het geen nieuwe rij meer.
+  assert.equal(fitGroups({ ...parts, groups: [{ ...parts.groups[0], lists: [] }] }, [{ key: "wijn", type: "text" }]).groups[0].fresh, undefined);
+  // Bewaren maakt de rij met de naam uit het veld, tenzij de groep al een lijn heeft of het veld leeg is.
+  const kind = { parts };
+  assert.deepEqual(namedLines(kind, [], { wijn: " Chablis 2022 " }), [
+    { role: "in", new_item: { list_id: "geproefd", name: "Chablis 2022" }, amount: null, unit: null, price: null, expires: null, owner: null },
+  ]);
+  assert.deepEqual(namedLines(kind, ["in"], { wijn: "Chablis" }), []);
+  assert.deepEqual(namedLines(kind, [], { wijn: "  " }), []);
 });
 
 test("formulieren samenvoegen: velden, groepen en handelingen van beide", () => {

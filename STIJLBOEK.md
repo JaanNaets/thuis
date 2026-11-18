@@ -833,29 +833,37 @@ wie, en rechts het bedrag, een hoeveelheid (+2, −300 g) of de waarde van een m
 formulier dat je niet ziet ("gedeeltelijk") toont enkel wat jouw items raakt, zonder bedrag. Gepland: met een vinkje
 vooraan.
 
-### Een formulier instellen: `GroupsEditor` en `DoesEditor` (`Does.tsx`)
+### Een formulier instellen: `FormLists` (`FormLists.tsx`) en `DoesEditor` (`Does.tsx`)
 
 In Instellen van het formulier (`FormSettings`, `/formulieren/:id/instellingen`, of `/formulieren/nieuw`; vanop een
 lijst ⋯ → Nieuw formulier, dan vult zijn eerste groep die lijst in), in grijze groepen: bij een nieuw formulier eerst
 **Begin van** (een vertrekpunt: Aankoop, Gebruik, Dienst, Activiteit, Meting, Overdracht; het vult de rest voor), dan
-Naam en Icoon; de schakelaars **Met een bedrag**, **Naar iemand** (enkel met een bedrag) en **Met een einde** (dan
-Melding na) met de groepen lijnen; de velden; **Wat het doet**; Gepland, Foto lezen met AI, Melding bij iets nieuws en
-de tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen "Werkt als".
+Naam en Icoon; de schakelaars **Met een bedrag** (met eronder **Saldo**), **Naar iemand** (enkel met een bedrag) en
+**Met een einde** (dan Melding na); **Lijsten**; de velden; Gepland, Foto lezen met AI, Melding bij iets nieuws en de
+tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen "Werkt als".
 
-- **Lijnen** (`GroupsEditor`): per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan `.line-main.is-plain`:
-  de naam van de groep, "bv. Ruimte, Winkel", met ×), eronder **Rol** (Wat erbij komt, Wat eraf gaat, Waarover, Waar of
-  bij wie; elke rol één keer) en **Uit** over de hele breedte (`.line-field.is-wide`): de lijsten als `tag` om aan te
-  vinken (Wijnen én de Gedeelde wijnkelder); niets aangevinkt heet "Uit elke lijst". Onderaan "+ Groep".
+- **Lijsten** (`FormLists`): je vormt het formulier vanuit de lijsten. "+ Lijst" (een keuzelijst op haar eigen breedte,
+  `.map-add`) zet een lijst erbij als groep lijnen; per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan
+  `.line-main.is-plain`: de naam van de groep, standaard hoe één item heet, met ×), eronder **Rol** (Waarover, Wat
+  erbij komt, Wat eraf gaat, Waar of bij wie; elke rol één keer), **Item** (`Segmented`: Bestaand of Nieuwe rij, enkel
+  met één lijst), **Aantal** (Eén of Meerdere; een nieuwe rij is er altijd één) en **Ook uit** (nog een lijst in
+  dezelfde groep: een fles uit Wijnen of de Gedeelde wijnkelder); die vier zijn `.line-field.is-double`. Daaronder
+  (`.map-list`, met een haarlijn) per lijst haar naam (`.map-head`) en **al haar kolommen** (`.map-row`): de naam en
+  waarmee het formulier ze invult: — (de kolom verschijnt niet), een veld van het formulier (enkel van dezelfde soort,
+  tekst bij tekst), **+ Nieuw veld** (een veld dat de kolom overneemt: naam, soort, eenheid, keuzes), De datum, Hoeveel,
+  De prijs, Het bedrag of Een vaste waarde (dan met een invulvak); bij een getal ernaast **Zet op**, **Tel bij** of
+  **Tel af** (`.map-how`). Een gekoppelde kolom staat zwart, de rest grijs. Eén veld kan zo kolommen in meer lijsten
+  tegelijk invullen (de Score van de Wijn én van de Proeverij). Een nieuwe rij heeft bovenaan **Naam** (— : je typt ze
+  bij de groep; of een tekstveld van het formulier). De **Voorraad** van elke lijst in de groep staat boven de lijsten
+  (niet bij Waar of bij wie). Op de gsm staat de naam van de kolom boven haar keuzes. Enkel lijsten waar je items mag
+  aanpassen (`GET /me/columns`).
+- **Saldo** (`DoesEditor` met enkel de mensen): per handeling een kaartje met het saldo (een lijst met een saldo per
+  persoon) en ×; eronder **Hoe**, **Met** (Het bedrag, een veld, een vaste waarde) en **Op** (Wie betaalde, Wie deelt,
+  Naar wie). Onderaan "+ Handeling". Met een bedrag aan- of uitzetten neemt het saldo mee (wie betaalde telt bij, wie
+  deelt of naar wie telt af).
 - **Samenvoegen met** (een `select` met de andere formulieren die je beheert; met dezelfde naam hun tags erbij): na
   een bevestiging komen het logboek, de mensen, de tags, de velden en wat het doet bij dit formulier, en verdwijnt het
   andere.
-- **Wat het doet** (`DoesEditor`): per handeling zo'n kaartje met de kolom (een keuzelijst per lijst, "Huis · Kleur",
-  Voorraad; bij een persoon Saldo) en ×; eronder **Hoe** (Zet op, Tel bij, Tel af; tellen enkel bij een getal, de
-  voorraad of een saldo), **Met** (een veld van het formulier, De datum, Hoeveel, De prijs, Het bedrag, Een vaste waarde,
-  dan met **Waarde** erbij) en **Op** (een groep lijnen, of met een bedrag Wie betaalde, Wie deelt, Naar wie). Onderaan
-  "+ Handeling". Enkel kolommen van lijsten waar je items mag aanpassen (`GET /me/columns`); een saldo staat altijd in
-  een gekozen lijst. Met een bedrag aan- of uitzetten neemt het saldo mee (wie betaalde telt bij, wie deelt of naar wie
-  telt af).
 
 Een kolom die het logboek invult, toont in de lijst en de fiche gewoon haar waarde; pas je ze in het item aan, dan komt
 er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
@@ -863,8 +871,12 @@ er een **Aanpassing** in het logboek (zonder Bewerken; verwijderen kan).
 ### Lijnen: `LinesEditor` (`Lines.tsx`)
 
 De lijnen staan per **groep van het formulier** (`shownGroups`): de naam van de groep als label (Wat, Waar, Ruimte),
-eronder haar lijnen en "+ Lijn" (bij een groep uit lijsten die één item hetzelfde noemen: "+ Ruimte", "+ Wijn"). Een rol
-die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij. Elke lijn is een wit kaartje in
+eronder haar lijnen en "+ Lijn" (bij een groep uit lijsten die één item hetzelfde noemen: "+ Ruimte", "+ Wijn"; bij een
+groep van één item enkel zolang er geen lijn is). Een nieuwe gebeurtenis begint met een lege lijn in de eerste groep en
+in elke groep van één item (`startLines`). Een **nieuwe rij** is een gewoon invulvak voor haar naam (geen items om te
+kiezen, geen Nieuw in); haalt ze haar naam uit een veld, dan staat de groep er niet (bewaren maakt de lijn,
+`namedLines`). Kies je een item, dan beginnen de velden waarmee het formulier zijn kolommen zet met wat het item nu heeft
+(enkel als ze nog leeg zijn). Een rol die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij. Elke lijn is een wit kaartje in
 de groep (`.line-row`): bovenaan met wat (`Combo` met `typeFirst`: de items pas als je typt, met hun lijst ernaast;
 uit de lijsten van de groep, met de lijst ernaast als het er meer zijn; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven
 (`.line-field`): Hoeveel en Eenheid als de lijn de voorraad verandert of het formulier ermee iets invult, Prijs bij geld,

@@ -83,15 +83,18 @@ export type Handeling = {
   value: Value;
 };
 
-export const MAX_DOES = 20;
+export const MAX_DOES = 60;
 const KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
 const ROLES: LineRole[] = ["in", "uit", "voor", "bij"];
 
 /** Getallen waarmee je kan tellen (Tel bij, Tel af). */
 export const COUNTABLE: FieldDef["type"][] = ["number", "money", "duration", "score", "year"];
 
-/** Wat een lijst kent: haar velden, of ze voorraad telt en een saldo per persoon bijhoudt (om handelingen na te kijken en te tonen). */
-export type ListColumns = { id: string; name: string; stock: boolean; ledger?: boolean; fields: Pick<FieldDef, "key" | "label" | "type" | "unit">[] };
+/**
+ * Wat een lijst kent: haar velden, of ze voorraad telt en een saldo per persoon bijhoudt (om handelingen na te kijken en
+ * te tonen; met keuzes en verwijzing om er een veld van een formulier van te maken).
+ */
+export type ListColumns = { id: string; name: string; one?: string | null; stock: boolean; ledger?: boolean; fields: Pick<FieldDef, "key" | "label" | "type" | "unit" | "options" | "ref_type">[] };
 
 /**
  * Handelingen van buiten nakijken. `lists`: de lijsten waarin jij items mag aanpassen (lid of beheerder), met hun

@@ -7,7 +7,7 @@
 import { normalizeShares, parseFieldText, parseMoney, type Attributes, type FieldDef, type FieldType } from "./fields.ts";
 import { defaultSharers } from "./ledger.ts";
 import { stockOp } from "./cells.ts";
-import { mainGroup, type KindInfo, type Role } from "./model.ts";
+import { mainGroup, namedLines, type KindInfo, type Role } from "./model.ts";
 import { fold } from "./targets.ts";
 
 /** Veldsoorten die je in één regel invult. */
@@ -161,6 +161,7 @@ export function eventBody(
   const amount = typeof values.$amount === "number" ? values.$amount : moneyField && typeof data[moneyField.key] === "number" ? (data[moneyField.key] as number) : null;
   const sharers = defaultSharers(kind.parts, ctx.people);
   const qty = typeof values.$qty === "number" ? values.$qty : null;
+  const lines = ctx.item ? [{ role, item_id: ctx.item.id, amount: qty, unit: ctx.item.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }] : [];
   return {
     kind: kind.id,
     name: "",
@@ -172,9 +173,8 @@ export function eventBody(
     to_person: null,
     split: sharers.length ? normalizeShares(sharers.map((id) => ({ person_id: id }))) : null,
     data,
-    lines: ctx.item
-      ? [{ role, item_id: ctx.item.id, amount: qty, unit: ctx.item.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }]
-      : [],
+    // Een nieuwe rij die haar naam uit een veld haalt, komt er ook bij.
+    lines: [...lines, ...namedLines(kind, lines.map((l) => l.role), data)],
     repeat: null,
   };
 }
