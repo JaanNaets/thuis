@@ -121,6 +121,7 @@ export const LINE_LINKS = {
   id: false,
   position: false,
   role: true, // erbij, eraf, voor of bij
+  group: false, // de groep van het formulier: wat ze verbindt, staat bij KIND_LINKS.parts
   item_id: true, // een item van (soms) een andere lijst
   text: false, // een lijn zonder item raakt geen lijst
   amount: false,

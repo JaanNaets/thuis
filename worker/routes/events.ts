@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { normalizeShares, type Attributes, type Interval, type Share } from "../../shared/fields";
 import { addToDate } from "../../shared/calc";
 import { ledgerLists, touchesCell } from "../../shared/cells";
-import { brusselsNow, canEdit, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
+import { brusselsNow, canEdit, GROUP_KEY, isAt, isLineRole, isStatus, type Base, type Event, type KindInfo, type LineRole, type Role, type Status } from "../../shared/model";
 import { buysWith } from "../../shared/targets";
 import { fold } from "../../shared/parse";
 import { withAlias } from "../../shared/receipt";
@@ -112,6 +112,8 @@ async function tickedBy(db: D1Database, seen: Seen, eventId: string) {
 
 type CleanLine = {
   role: LineRole;
+  /** De groep van het formulier (de `key`); haar rol is die van de lijn. */
+  group: string;
   item_id: string | null;
   text: string | null;
   amount: number | null;
@@ -190,13 +192,19 @@ async function cleanEvent(
   if (rawLines.length > MAX_LINES) throw new ValidationError(`Hoogstens ${MAX_LINES} lijnen`);
   const parsed = rawLines.map((r) => {
     const o = asObject(r);
-    if (!isLineRole(o.role)) throw new ValidationError("Onbekende rol van een lijn");
+    // De groep zegt de rol; zonder groep (van vroeger, of de groep is er niet meer) de eerste groep met die rol.
+    const wanted = typeof o.group === "string" && GROUP_KEY.test(o.group) ? o.group : null;
+    const known = wanted ? kind.parts.groups.find((g) => g.key === wanted) : undefined;
+    const role = known?.role ?? (isLineRole(o.role) ? o.role : null);
+    if (!role) throw new ValidationError("Onbekende rol van een lijn");
+    const group = known?.key ?? wanted ?? kind.parts.groups.find((g) => g.role === role)?.key ?? role;
     const newItem = o.new_item && typeof o.new_item === "object" ? asObject(o.new_item) : null;
     const text = optionalString(o, "text", 200);
     const expires = optionalString(o, "expires", 10);
     if (expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) throw new ValidationError("Houdbaar tot moet een datum zijn");
     return {
-      role: o.role,
+      role,
+      group,
       item_id: typeof o.item_id === "string" && o.item_id ? o.item_id : null,
       text,
       amount: num(o.amount, "Hoeveel", 0, 1_000_000),
@@ -225,7 +233,7 @@ async function cleanEvent(
   const listOf = new Map(results.map((r) => [r.id, r.list_id]));
   const counts = new Set(results.filter((r) => r.counts).map((r) => r.list_id));
   const unchanged = (l: CleanLine) =>
-    before?.lines.some((b) => b.item_id === l.item_id && b.role === l.role && b.amount === l.amount && (b.unit ?? null) === (l.unit ?? null)) ?? false;
+    before?.lines.some((b) => b.item_id === l.item_id && b.role === l.role && b.group === l.group && b.amount === l.amount && (b.unit ?? null) === (l.unit ?? null)) ?? false;
   const lines: CleanLine[] = [];
   for (const l of parsed) {
     if (l.new_item) {
@@ -250,7 +258,7 @@ async function cleanEvent(
         );
       }
       // Vult het formulier een kolom van dit item in, dan moet je zijn lijst mogen wijzigen (shared/cells.ts).
-      if (!unchanged(l) && touchesCell(does, l.role, list, counts.has(list)) && !canEdit(seen.get(list))) {
+      if (!unchanged(l) && touchesCell(does, l.group, list, counts.has(list)) && !canEdit(seen.get(list))) {
         throw new ValidationError(`Je mag ${name()} niet aanpassen`);
       }
       lines.push({ ...l, text: null });
@@ -260,7 +268,7 @@ async function cleanEvent(
   }
   // Een groep lijnen uit bepaalde lijsten (Ruimte uit Huis, een fles uit Wijnen of de kelder): enkel items daaruit.
   for (const l of lines) {
-    const group = kind.parts.groups.find((g) => g.role === l.role && g.lists.length);
+    const group = kind.parts.groups.find((g) => g.key === l.group && g.lists.length);
     const list = l.new_item ? l.new_item.list_id : l.item_id ? listOf.get(l.item_id) : null;
     if (group && list && !group.lists.includes(list)) throw new ValidationError(`Bij ${group.label} hoort een item uit een andere lijst`);
   }
@@ -293,8 +301,8 @@ async function cleanEvent(
 function lineStatements(db: D1Database, eventId: string, lines: CleanLine[], newIds: Map<number, string>): D1PreparedStatement[] {
   return lines.map((l, i) =>
     db
-      .prepare("INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(crypto.randomUUID(), eventId, i, l.role, newIds.get(i) ?? l.item_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
+      .prepare("INSERT INTO lines (id, event_id, position, role, grp, item_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), eventId, i, l.role, l.group, newIds.get(i) ?? l.item_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
   );
 }
 
@@ -484,8 +492,8 @@ events.post("/:id/tick", async (c) => {
         .bind(next, nextAt, JSON.stringify(repeat), event.id),
       db
         .prepare(
-          `INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner)
-           SELECT lower(hex(randomblob(16))), ?, position, role, item_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
+          `INSERT INTO lines (id, event_id, position, role, grp, item_id, text, amount, unit, price, expires, owner)
+           SELECT lower(hex(randomblob(16))), ?, position, role, grp, item_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
         )
         .bind(next, event.id),
     );

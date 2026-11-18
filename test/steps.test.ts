@@ -86,7 +86,7 @@ test("bewaren zoals het formulier: vandaag, het item als lijn, jij betaalt, geli
   assert.equal(body.amount, 5400);
   assert.equal(body.paid_by, "jaan");
   assert.deepEqual(body.split?.map((s) => s.person_id), ["jaan", "jana"]);
-  assert.deepEqual(body.lines, [{ role: "in", item_id: "CHABLIS", amount: 6, unit: "fles", price: 5400, expires: null, owner: null }]);
+  assert.deepEqual(body.lines, [{ role: "in", group: "in", item_id: "CHABLIS", amount: 6, unit: "fles", price: 5400, expires: null, owner: null }]);
   // Een boodschap begint gepland en heeft geen geld; Uit eten zet de velden en het restaurant als lijn.
   assert.equal(eventBody(boodschap, eventSteps(boodschap, { unit: null }), {}, { item: { id: "MELK", unit: null }, me: "jaan", people, today: "2026-11-11" }).status, "gepland");
   const eten = eventBody(uitEten, eventSteps(uitEten, { unit: null }), { score: 4, gegeten: "Steak" }, { item: { id: "FORUM", unit: null }, me: "jaan", people: [people[0]], today: "2026-11-11" });

@@ -88,7 +88,8 @@ export function readTime(word: string): string | null {
 }
 
 /** Een item dat in de tekst kan staan, met de rol die het meestal heeft. */
-export type ParseItem = { id: string; name: string; unit?: string | null; role: LineRole };
+/** Een item dat je tekst kan noemen, met de rol en (optioneel) de groep van het formulier waarin het komt. */
+export type ParseItem = { id: string; name: string; unit?: string | null; role: LineRole; group?: string };
 
 export type ParseContext = {
   today: string;

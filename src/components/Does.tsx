@@ -34,11 +34,11 @@ const countable = (t: FieldDef["type"] | "stock" | null) => t === "stock" || (t 
 
 /** Welke rijen een handeling kan raken: de groepen lijnen van het formulier, en met geld de mensen. */
 function rowChoices(parts: Parts): { id: string; label: string; rows: Rows }[] {
-  const lines = parts.groups.map((g: LineGroup) => ({ id: `lines:${g.role}`, label: g.label, rows: { from: "lines", role: g.role } as Rows }));
+  const lines = parts.groups.map((g: LineGroup) => ({ id: `lines:${g.key}`, label: g.label, rows: { from: "lines", group: g.key } as Rows }));
   const people = parts.money ? (Object.keys(PERSON_ROWS) as PersonRows[]).filter((p) => (p === "to" ? parts.to : p === "sharers" ? !parts.to : true)) : [];
   return [...lines, ...people.map((p) => ({ id: p, label: PERSON_ROWS[p].label, rows: { from: p } as Rows }))];
 }
-const rowsId = (r: Rows) => (r.from === "lines" ? `lines:${r.role}` : r.from);
+const rowsId = (r: Rows) => (r.from === "lines" ? `lines:${r.group}` : r.from);
 
 /**
  * Wat een formulier doet met de kolommen van de items in zijn lijnen, en met het saldo van mensen (shared/cells.ts):
@@ -49,8 +49,8 @@ export function DoesEditor({ label, value, onChange, columns, fields, parts }: {
   const set = (i: number, patch: Partial<Handeling>) => onChange(value.map((h, k) => (k === i ? fit({ ...h, ...patch }, columns, fields) : h)));
   const choices = rowChoices(parts);
   function add() {
-    const rows: Rows = choices[0]?.rows ?? { from: "lines", role: "voor" };
-    const group = rows.from === "lines" ? parts.groups.find((g) => g.role === rows.role) : undefined;
+    const rows: Rows = choices[0]?.rows ?? { from: "lines", group: "voor" };
+    const group = rows.from === "lines" ? parts.groups.find((g) => g.key === rows.group) : undefined;
     const list = columns.find((l) => group?.lists.includes(l.id)) ?? columns[0];
     const first = list?.fields.find((f) => f.type !== "calc");
     const same = first ? fields.find((f) => f.label.trim().toLowerCase() === first.label.toLowerCase()) : undefined;

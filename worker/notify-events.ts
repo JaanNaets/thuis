@@ -50,7 +50,7 @@ export async function notifyNewEvent(env: AppEnv["Bindings"], author: Pick<Perso
   ];
   const kind = kindInfo(form);
   const names = new Map(lines.results.flatMap((l) => (l.item_id && l.name ? [[l.item_id, l.name] as const] : [])));
-  const title = eventTitle({ name: event.name, lines: lines.results.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
+  const title = eventTitle({ name: event.name, lines: lines.results.map((l) => ({ ...l, group: l.role, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
   const n = count.results[0]?.n ?? 1;
   const tagIds = tags.results.map((t) => t.tag_id);
   let sent = 0;

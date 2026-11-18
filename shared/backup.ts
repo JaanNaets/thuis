@@ -10,7 +10,7 @@ import { cleanNotify, type NotifyDef } from "./alerts.ts";
 import { cleanAttributes, type AmountEntry, type Attributes, type FieldDef, type Share } from "./fields.ts";
 import { cleanKindFields, cleanListFields } from "./listdef.ts";
 import { cleanLedger, type LedgerDef } from "./ledger.ts";
-import { BASES, baseParts, cleanParts, isBase, isLineRole, isStatus, type Base, type LineRole, type Parts, type Status } from "./model.ts";
+import { BASES, baseParts, cleanParts, GROUP_KEY, isBase, isLineRole, isStatus, type Base, type LineRole, type Parts, type Status } from "./model.ts";
 import { cleanStock } from "./stock.ts";
 import { cleanReadPhoto, type ReadPhoto } from "./photoread.ts";
 
@@ -48,7 +48,8 @@ export const BACKUP_TABLES = {
   push_subscriptions: false,
 } as const;
 
-export type BackupLine = { role: LineRole; item_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null };
+/** `grp`: de groep van het formulier (van vroeger, of zonder: de rol). */
+export type BackupLine = { role: LineRole; grp?: string; item_id: string | null; text: string | null; amount: number | null; unit: string | null; price: number | null; expires: string | null; owner: string | null };
 
 export type Backup = {
   kind: typeof BACKUP_KIND;
@@ -379,7 +380,8 @@ export function planRestore(backup: Backup, ctx: RestoreContext): RestorePlan {
       const keep = item && itemOk(item);
       const text = keep ? null : (l.text ?? (l.item_id ? (itemName.get(l.item_id) ?? outsideName.get(l.item_id) ?? null) : null));
       if (!keep && !text) continue;
-      lines.push({ ...l, item_id: keep ? item : null, text, owner: l.owner && personOk(l.owner) ? l.owner : null });
+      const grp = typeof l.grp === "string" && GROUP_KEY.test(l.grp) ? l.grp : l.role;
+      lines.push({ ...l, grp, item_id: keep ? item : null, text, owner: l.owner && personOk(l.owner) ? l.owner : null });
     }
     const split = Array.isArray(e.split) ? (e.split as Share[]).filter((s) => s && personOk(s.person_id)) : null;
     events.push({

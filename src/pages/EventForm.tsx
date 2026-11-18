@@ -4,7 +4,7 @@ import { FIELD_TYPES, type Attributes, type FieldDef, type Interval } from "../.
 import { defaultSharers } from "../../shared/ledger";
 import { stockOp } from "../../shared/cells";
 import { formEats } from "../../shared/food";
-import { brusselsNow, fillsLists, mainGroup, namedLines, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineRole, type Status, type ItemRef } from "../../shared/model";
+import { brusselsNow, fillsLists, mainGroup, namedLines, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineGroup, type Status, type ItemRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { formReads } from "../../shared/photoread";
 import { buysWith, hasPrice, receiptForms, type Targets } from "../../shared/targets";
@@ -113,8 +113,13 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
   // Wie bij het formulier is (een uitgave is standaard gelijk verdeeld over hen).
   const { data: form } = useApi<FormDetail>(kind.system ? null : `/forms/${kind.id}`);
   // Waar een item komt als je logt vanaf dat item, en wat erbij komt in een voorraad (een aankoop).
-  const main = mainGroup(kind).role;
-  const adds = kind.parts.groups.find((g) => stockOp(kind.does, g.role) === "bij")?.role ?? null;
+  const mainG = mainGroup(kind);
+  const main = mainG.key;
+  // De groep waar iets bij komt (een aankoop): daar komen de lijnen van een kasticket.
+  const addsG = kind.parts.groups.find((g) => !g.fresh && stockOp(kind.does, g.key) === "bij") ?? null;
+  const adds = addsG?.key ?? null;
+  // Waar of bij wie (de winkel van een kasticket): de eerste groep met die rol.
+  const storeG = kind.parts.groups.find((g) => g.role === "bij" && !g.fresh) ?? null;
   // Een formulier dat koopt (een kasticket, een prijs in je tekst): een dat de lijst invult eerst, dan je meestgebruikte.
   const buyers = receiptForms(logTargets);
   const buyKind = buyers.find(fillsHome) ?? buyers[0] ?? null;
@@ -192,7 +197,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
   useEffect(() => {
     const t = preset?.items[0];
     const qty = typeof prefill.$qty === "number" ? String(prefill.$qty).replace(".", ",") : "";
-    if (t) setLines((ls) => (ls.every((l) => !l.item && !l.text) ? [{ ...emptyLine(main, t), unit: t.unit ?? "", amount: qty }, ...ls.filter((l) => l.role !== main)] : ls));
+    if (t) setLines((ls) => (ls.every((l) => !l.item && !l.text) ? [{ ...emptyLine(mainG, t), unit: t.unit ?? "", amount: qty }, ...ls.filter((l) => l.group !== main)] : ls));
   }, [preset]);
   // Een gedeelde foto (Android: delen met Heystack, of de foto bij de +): ze komt bij wat je logt. Met `lezen=1` koos je
   // al om ze te laten lezen; anders wacht ze op een tik op Foto lezen. Een kasticket is een aankoop.
@@ -272,15 +277,15 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
         if (stale) return;
         // De groep van het formulier uit de lijst van het item; uit een voorraad: de groep die de voorraad verandert;
         // anders wat het item meestal is (Colruyt: bij), als het formulier die groep heeft.
-        const roleOf = (t: ItemRef): LineRole => {
+        const groupFor = (t: ItemRef): LineGroup => {
           // Een groep die een nieuwe rij maakt, kiest geen bestaand item.
           const groups = kind.parts.groups.filter((g) => !g.fresh);
           const listed = groups.find((g) => g.lists.includes(t.list_id));
-          if (listed) return listed.role;
-          const stocked = t.stock ? groups.find((g) => !g.lists.length && stockOp(kind.does, g.role)) : undefined;
-          if (stocked) return stocked.role;
+          if (listed) return listed;
+          const stocked = t.stock ? groups.find((g) => !g.lists.length && stockOp(kind.does, g.key)) : undefined;
+          if (stocked) return stocked;
           const usual = t.usual ? groups.find((g) => !g.lists.length && g.role === t.usual) : undefined;
-          return usual?.role ?? groups.find((g) => !g.lists.length && !stockOp(kind.does, g.role))?.role ?? main;
+          return usual ?? groups.find((g) => !g.lists.length && !stockOp(kind.does, g.key)) ?? mainG;
         };
         const parsed = readEvent(text, {
           today: now.slice(0, 10),
@@ -290,7 +295,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
             id: t.id,
             name: t.name,
             unit: t.unit,
-            role: roleOf(t),
+            ...((g) => ({ role: g.role, group: g.key }))(groupFor(t)),
           })),
         });
         applyTyped(parsed, found);
@@ -312,7 +317,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     // Kom je van een lijst (Aankoop vanuit Wijnen) en noemt je tekst geen item dat erbij komt, dan is de rest van je
     // tekst iets nieuws in die lijst ("Meursault 2019 32 euro"), niet de omschrijving.
-    const loose = newIn && adds && p.name && !p.lines.some((l) => l.item.role === adds) ? niceName(p.name) : "";
+    const loose = newIn && adds && p.name && !p.lines.some((l) => l.item.group === adds) ? niceName(p.name) : "";
     const next = {
       name: loose ? "" : p.name,
       amount: p.amount !== null ? centsToInput(p.amount) : "",
@@ -331,13 +336,13 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
     const made = p.lines.map((l) => {
       const ref = found.find((t) => t.id === l.item.id)!;
       return {
-        ...emptyLine(l.item.role, ref),
+        ...emptyLine({ key: l.item.group ?? main, role: l.item.role }, ref),
         amount: l.amount !== null ? String(l.amount).replace(".", ",") : "",
         unit: l.unit ?? ref.unit ?? "",
         price: l.price !== null ? centsToInput(l.price) : "",
       };
     });
-    if (loose && adds) made.push({ ...emptyLine(adds), text: loose, newIn });
+    if (loose && addsG) made.push({ ...emptyLine(addsG), text: loose, newIn });
     setLines((cur) => {
       // Wat de tekst vroeger maakte en niet aangepast is, gaat weg; een lege lijn ook.
       const kept = cur.filter((l) => (before.lines.has(l.key) ? before.lines.get(l.key) !== sig(l) : Boolean(l.item || l.text.trim() || l.amount || l.price)));
@@ -381,7 +386,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
       if (read.total !== null) setAmount(centsToInput(read.total));
       if (!name.trim() && read.store_text && !read.store) setName(read.store_text);
       const made: LineDraft[] = read.lines.map((l) => ({
-        ...emptyLine(adds ?? main, l.item),
+        ...emptyLine(addsG ?? mainG, l.item),
         text: l.item ? "" : niceName(l.name),
         newIn: l.item ? "" : defaultNew,
         amount: String(l.amount).replace(".", ","),
@@ -389,9 +394,8 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
         price: l.price !== null ? centsToInput(l.price) : "",
         ticket: l.name,
       }));
-      const store = read.store ? [emptyLine("bij", read.store)] : read.store_text ? [{ ...emptyLine("bij"), text: read.store_text }] : [];
       // Het formulier heeft geen groep voor de winkel: de naam als omschrijving.
-      if (!kind.parts.groups.some((g) => g.role === "bij")) store.length = 0;
+      const store = !storeG ? [] : read.store ? [emptyLine(storeG, read.store)] : read.store_text ? [{ ...emptyLine(storeG), text: read.store_text }] : [];
       setLines((cur) => [...cur.filter((l) => l.item || l.text.trim()), ...store, ...made]);
       setSource(`Kasticket gelezen met AI: ${read.lines.length} ${read.lines.length === 1 ? "lijn" : "lijnen"}`);
     } catch (err) {
@@ -405,8 +409,8 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
    * Een gekozen item: de velden waarmee het formulier zijn kolommen zet, beginnen met wat het item nu heeft (enkel als
    * ze nog leeg zijn en van dezelfde soort).
    */
-  async function pickItem(item: ItemRef, role: LineRole) {
-    const wanted = kind.does.filter((h) => h.op === "zet" && h.value.from === "field" && h.rows.from === "lines" && h.rows.role === role && h.list === item.list_id);
+  async function pickItem(item: ItemRef, group: LineGroup) {
+    const wanted = kind.does.filter((h) => h.op === "zet" && h.value.from === "field" && h.rows.from === "lines" && h.rows.group === group.key && h.list === item.list_id);
     if (!wanted.length) return;
     const got = await api.get<{ item: { data: Attributes }; list: { fields: FieldDef[] } }>(`/items/${item.id}`).catch(() => null);
     if (!got) return;
@@ -437,7 +441,7 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
       if (b && "error" in b) return setProblem(b.error as string);
       if (b) builtLines.push(b);
     }
-    builtLines.push(...namedLines(kind, lines.filter((l) => l.item || l.text.trim()).map((l) => l.role), built.data));
+    builtLines.push(...namedLines(kind, lines.filter((l) => l.item || l.text.trim()).map((l) => l.group), built.data));
     const cents = amount.trim() ? parseEuro(amount) : null;
     if (cents !== null && Number.isNaN(cents)) return setProblem("Het bedrag klopt niet");
     const split = buildShares(shares);

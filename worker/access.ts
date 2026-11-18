@@ -7,7 +7,7 @@ import type { FieldDef } from "../shared/fields";
 import { isIconKey } from "../shared/icons";
 import { cleanNotify } from "../shared/alerts";
 import { cleanReadPhoto } from "../shared/photoread";
-import { ADJUST, type Handeling } from "../shared/cells";
+import { ADJUST, readDoes } from "../shared/cells";
 import {
   ADJUST_KIND,
   cleanParts,
@@ -87,8 +87,9 @@ export const toEvent = (row: EventRowDb): Event => ({
   repeat: parseJson(row.repeat, null),
 });
 
-export type LineRowDb = Line & { event_id: string };
-export const toLine = ({ event_id: _e, ...l }: LineRowDb): Line => l;
+/** Een lijn uit de databank: haar groep staat in `grp` (van vroeger leeg: haar rol). */
+export type LineRowDb = Omit<Line, "group"> & { event_id: string; grp: string | null };
+export const toLine = ({ event_id: _e, grp, ...l }: LineRowDb): Line => ({ ...l, group: grp || l.role });
 
 export type KindRowDb = Omit<Kind, "fields" | "icon" | "planned" | "does" | "parts" | "notify" | "reads" | "archived"> & {
   fields: string;
@@ -109,7 +110,7 @@ export const toKind = (row: KindRowDb): Kind => ({
   goal: row.goal,
   planned: row.planned === 1,
   parts: row.parts ? cleanParts(parseJson(row.parts, null)) : null,
-  does: parseJson<Handeling[]>(row.does, []),
+  does: readDoes(parseJson(row.does, [])),
   notify: cleanNotify(parseJson(row.notify, null)),
   reads: row.reads === null || row.reads === undefined ? null : row.reads === 1,
   archived: row.archived ? 1 : 0,

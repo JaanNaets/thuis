@@ -87,7 +87,7 @@ function endOf(e: EventView, names: ReturnType<typeof usePageNames>): string {
   const main = e.lines.filter((l) => l.role !== "bij");
   if (main.length === 1 && main[0].amount !== null) {
     const unit = main[0].unit ?? (main[0].item_id ? names.item(main[0].item_id)?.unit : null) ?? null;
-    const op = stockOp(names.kind(e).does, main[0].role);
+    const op = stockOp(names.kind(e).does, main[0].group);
     return `${op === "af" ? "−" : op === "bij" ? "+" : ""}${formatAmount(main[0].amount, unit)}`;
   }
   return main.length > 1 ? `${main.length} lijnen` : "";

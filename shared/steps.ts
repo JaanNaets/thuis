@@ -52,7 +52,7 @@ export const canStep = (kind: Pick<KindInfo, "parts"> | null | undefined): kind 
  */
 export function eventSteps(kind: KindInfo, item?: { unit: string | null } | null): Step[] {
   const steps: Step[] = [];
-  const op = stockOp(kind.does, mainGroup(kind).role);
+  const op = stockOp(kind.does, mainGroup(kind).key);
   if (item && (op === "bij" || op === "af")) steps.push({ key: "$qty", label: "Hoeveel", type: "qty", unit: item.unit });
   steps.push(...kind.fields.filter(quick).map(fieldStep));
   if (kind.parts.money && !kind.planned && !kind.fields.some((f) => f.type === "money")) steps.push({ key: "$amount", label: "Bedrag", type: "amount" });
@@ -155,13 +155,13 @@ export function eventBody(
   ctx: { item?: { id: string; unit: string | null } | null; me: string; people: { id: string; role: Role }[]; today: string; planned?: boolean },
 ) {
   const money = kind.parts.money;
-  const role = mainGroup(kind).role;
+  const { role, key: group } = mainGroup(kind);
   const data = dataOf(steps, values);
   const moneyField = kind.fields.find((f) => f.type === "money");
   const amount = typeof values.$amount === "number" ? values.$amount : moneyField && typeof data[moneyField.key] === "number" ? (data[moneyField.key] as number) : null;
   const sharers = defaultSharers(kind.parts, ctx.people);
   const qty = typeof values.$qty === "number" ? values.$qty : null;
-  const lines = ctx.item ? [{ role, item_id: ctx.item.id, amount: qty, unit: ctx.item.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }] : [];
+  const lines = ctx.item ? [{ role, group, item_id: ctx.item.id, amount: qty, unit: ctx.item.unit, price: money && role === "in" ? amount : null, expires: null, owner: null }] : [];
   return {
     kind: kind.id,
     name: "",
@@ -174,7 +174,7 @@ export function eventBody(
     split: sharers.length ? normalizeShares(sharers.map((id) => ({ person_id: id }))) : null,
     data,
     // Een nieuwe rij die haar naam uit een veld haalt, komt er ook bij.
-    lines: [...lines, ...namedLines(kind, lines.map((l) => l.role), data)],
+    lines: [...lines, ...namedLines(kind, lines.map((l) => l.group), data)],
     repeat: null,
   };
 }

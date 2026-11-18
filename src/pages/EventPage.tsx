@@ -161,7 +161,7 @@ export function EventPage() {
                   const t = l.item_id ? names.item(l.item_id) : undefined;
                   const label = t?.name ?? l.text ?? "Verborgen";
                   const meta = [
-                    groupOf(kind, l.role).label,
+                    groupOf(kind, l).label,
                     l.amount !== null ? formatAmount(l.amount, l.unit ?? t?.unit ?? null) : null,
                     t?.list || null,
                     l.owner ? `van ${names.person(l.owner)}` : null,
@@ -173,7 +173,7 @@ export function EventPage() {
                     <>
                       <span className="cell-main">
                         <span className={`row-media tone-${BASE_TONES[e.base]}`}>
-                          <Icon name={l.role === "bij" ? "store" : stockOp(kind.does, l.role) === "af" ? "minus" : stockOp(kind.does, l.role) === "bij" ? "plus" : "next"} size={16} />
+                          <Icon name={l.role === "bij" ? "store" : stockOp(kind.does, l.group) === "af" ? "minus" : stockOp(kind.does, l.group) === "bij" ? "plus" : "next"} size={16} />
                         </span>
                         <span className="row-main">
                           <span className="row-title">{label}</span>

@@ -194,21 +194,34 @@ export function ItemPage() {
               </ul>
             )}
           </section>
-          {data.parts.length > 0 && (
+          {/* De delen van dit item (Colruyt Herentals bij Colruyt), met Toevoegen: een nieuw item in deze lijst dat er een deel van is. */}
+          {(data.parts.length > 0 || (data.can_edit && !item.archived)) && (
             <section className="card">
-              <CardHead title="Delen" />
-              <ul className="rows">
-                {data.parts.map((p) => (
-                  <li key={p.id}>
-                    <Link to={`/items/${p.id}`} className="row">
-                      <span className="cell-main">
-                        <span className="row-title">{p.name}</span>
-                      </span>
-                      <Icon name="next" size={16} className="row-chevron" />
+              <CardHead
+                title="Delen"
+                action={
+                  data.can_edit &&
+                  !item.archived && (
+                    <Link to={`/lijsten/${list.id}/nieuw?deel_van=${item.id}`} className="btn btn-outline btn-sm">
+                      <Icon name="plus" size={15} /> Toevoegen
                     </Link>
-                  </li>
-                ))}
-              </ul>
+                  )
+                }
+              />
+              {data.parts.length > 0 && (
+                <ul className="rows">
+                  {data.parts.map((p) => (
+                    <li key={p.id}>
+                      <Link to={`/items/${p.id}`} className="row">
+                        <span className="cell-main">
+                          <span className="row-title">{p.name}</span>
+                        </span>
+                        <Icon name="next" size={16} className="row-chevron" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
           {data.backlinks.length > 0 && (

@@ -183,10 +183,10 @@ forms.put("/:id", async (c) => {
 function keepUnseen(before: Parts | null, after: Parts, seen: Map<string, Role>): Parts {
   const unseen = (g: Parts["groups"][number]) => g.lists.filter((l) => !seen.has(l));
   const groups = after.groups.map((g) => {
-    const had = before?.groups.find((b) => b.role === g.role);
+    const had = before?.groups.find((b) => b.key === g.key);
     return had && unseen(had).length ? { ...g, lists: [...new Set([...g.lists, ...unseen(had)])] } : g;
   });
-  const gone = (before?.groups ?? []).filter((g) => unseen(g).length && !groups.some((a) => a.role === g.role));
+  const gone = (before?.groups ?? []).filter((g) => unseen(g).length && !groups.some((a) => a.key === g.key));
   return { ...after, groups: [...groups, ...gone] };
 }
 

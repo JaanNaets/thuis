@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baseKind, brusselsNow, cleanParts, fitGroups, mergeKinds, namedLines, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
+import { baseKind, brusselsNow, cleanParts, fitGroups, groupOf, mergeKinds, namedLines, eventTitle, fillsLists, formsOf, isAt, minutesBetween, startsPlanned, type KindInfo } from "../shared/model.ts";
 import { eventRole, keepsAdmin, lineAllowed, lineVisible, rolesFor, Roles } from "../shared/rights.ts";
 
 const JAAN = "jaan";
@@ -156,35 +156,48 @@ test("een groep lijnen kiest uit bepaalde lijsten (leeg: elke); van vroeger éé
   assert.deepEqual(fillsLists({ parts, does: [] }), ["wijnen", "kelder", "winkels"]);
 });
 
-test("een groep maakt een nieuwe rij in één lijst (met haar naam uit een tekstveld) of kiest één item", () => {
+test("groepen: zoveel als je wil, ook met dezelfde rol; een nieuwe rij in een of meer lijsten, haar naam uit een tekstveld", () => {
   const parts = cleanParts({
     groups: [
-      { role: "in", label: "Proeverij", lists: ["geproefd"], fresh: true, name: "wijn" },
-      { role: "voor", label: "Ruimte", lists: ["huis"], one: true },
-      { role: "uit", label: "Fles", lists: ["wijnen", "kelder"], fresh: true },
+      { key: "proef", role: "in", label: "Proeverij", lists: ["geproefd"], fresh: true, name: "wijn" },
+      { key: "ruimte", role: "voor", label: "Ruimte", lists: ["huis"], one: true },
+      { key: "fles", role: "uit", label: "Fles", lists: ["wijnen", "kelder"], fresh: true, name: "wijn" },
+      { key: "schilder", role: "voor", label: "Schilder", lists: [] },
+      // Een nieuwe rij zonder lijst kan niet.
+      { key: "los", role: "in", label: "Los", lists: [], fresh: true },
     ],
   })!;
   assert.deepEqual(
-    parts.groups.map((g) => [g.role, g.fresh ?? false, g.name ?? null, g.one ?? false]),
+    parts.groups.map((g) => [g.key, g.role, g.fresh ?? false, g.name ?? null, g.one ?? false]),
     [
-      ["in", true, "wijn", true],
-      ["voor", false, null, true],
-      // Een nieuwe rij kan enkel in één lijst.
-      ["uit", false, null, false],
+      ["proef", "in", true, "wijn", true],
+      ["ruimte", "voor", false, null, true],
+      // Een nieuwe rij in een van meer lijsten (je kiest per lijn); haar naam uit een veld enkel met één lijst.
+      ["fles", "uit", true, null, false],
+      ["schilder", "voor", false, null, false],
+      ["los", "in", false, null, false],
     ],
+  );
+  // Van vroeger: de rol is de sleutel; een rol die al een groep heeft, krijgt een volgnummer.
+  assert.deepEqual(
+    cleanParts({ groups: [{ role: "voor", label: "Wagen" }, { role: "voor", label: "Bestuurder" }, { key: "Fout!", role: "bij", label: "Waar" }] })!.groups.map((g) => g.key),
+    ["voor", "voor_2", "bij"],
   );
   // De naam komt enkel uit een tekstveld van het formulier; zonder dat veld typ je ze bij de groep.
   assert.equal(fitGroups(parts, [{ key: "wijn", type: "text" }]).groups[0].name, "wijn");
   assert.equal(fitGroups(parts, [{ key: "wijn", type: "number" }]).groups[0].name, undefined);
-  // Valt een lijst weg die je niet ziet, dan is het geen nieuwe rij meer.
+  // Valt de lijst weg die je niet ziet, dan is het geen nieuwe rij meer.
   assert.equal(fitGroups({ ...parts, groups: [{ ...parts.groups[0], lists: [] }] }, [{ key: "wijn", type: "text" }]).groups[0].fresh, undefined);
   // Bewaren maakt de rij met de naam uit het veld, tenzij de groep al een lijn heeft of het veld leeg is.
   const kind = { parts };
   assert.deepEqual(namedLines(kind, [], { wijn: " Chablis 2022 " }), [
-    { role: "in", new_item: { list_id: "geproefd", name: "Chablis 2022" }, amount: null, unit: null, price: null, expires: null, owner: null },
+    { role: "in", group: "proef", new_item: { list_id: "geproefd", name: "Chablis 2022" }, amount: null, unit: null, price: null, expires: null, owner: null },
   ]);
-  assert.deepEqual(namedLines(kind, ["in"], { wijn: "Chablis" }), []);
+  assert.deepEqual(namedLines(kind, ["proef"], { wijn: "Chablis" }), []);
   assert.deepEqual(namedLines(kind, [], { wijn: "  " }), []);
+  // De groep van een lijn: met haar sleutel, of (van vroeger) haar rol.
+  assert.equal(groupOf(kind, { group: "schilder", role: "voor" }).label, "Schilder");
+  assert.equal(groupOf(kind, { role: "bij" }).label, "Bij");
 });
 
 test("formulieren samenvoegen: velden, groepen en handelingen van beide", () => {
@@ -194,10 +207,13 @@ test("formulieren samenvoegen: velden, groepen en handelingen van beide", () => 
   assert.equal(same.parts, null);
   assert.deepEqual(same.fields.map((f) => f.label), ["Score", "Notitie"]);
   // Een fles uit Wijnen en een uit de kelder: één groep uit beide lijsten; uit elke lijst wint.
-  const uit = (lists: string[]) => ({ money: false, to: false, duration: false, groups: [{ role: "uit" as const, label: "Fles", lists }] });
-  assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b", { parts: uit(["kelder"]) })).parts?.groups, [{ role: "uit", label: "Fles", lists: ["wijnen", "kelder"] }]);
+  const uit = (lists: string[]) => ({ money: false, to: false, duration: false, groups: [{ key: "uit", role: "uit" as const, label: "Fles", lists }] });
+  assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b", { parts: uit(["kelder"]) })).parts?.groups, [{ key: "uit", role: "uit", label: "Fles", lists: ["wijnen", "kelder"] }]);
+  // Groepen met een andere sleutel blijven elk (ook met dezelfde rol): hun lijnen blijven bij hun groep.
+  const other = { money: false, to: false, duration: false, groups: [{ key: "glas", role: "uit" as const, label: "Glas", lists: ["kelder"] }] };
+  assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b", { parts: other })).parts?.groups.map((g) => g.key), ["uit", "glas"]);
   assert.deepEqual(mergeKinds(kind("a", { parts: uit(["wijnen"]) }), kind("b")).parts?.groups[0].lists, []);
   // Handelingen één keer.
-  const zet = { rows: { from: "lines" as const, role: "uit" as const }, list: "geproefd", field: "score", op: "zet" as const, value: { from: "field" as const, key: "score" } };
+  const zet = { rows: { from: "lines" as const, group: "uit" }, list: "geproefd", field: "score", op: "zet" as const, value: { from: "field" as const, key: "score" } };
   assert.equal(mergeKinds(kind("a", { does: [zet] }), kind("b", { does: [zet] })).does.length, 1);
 });

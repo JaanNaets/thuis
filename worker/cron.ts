@@ -82,8 +82,8 @@ export async function runRepeats(db: D1Database, today: string): Promise<number>
           .bind(copy, day + e.at.slice(10), e.id),
         db
           .prepare(
-            `INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner)
-             SELECT lower(hex(randomblob(16))), ?, position, role, item_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
+            `INSERT INTO lines (id, event_id, position, role, grp, item_id, text, amount, unit, price, expires, owner)
+             SELECT lower(hex(randomblob(16))), ?, position, role, grp, item_id, text, amount, unit, price, NULL, owner FROM lines WHERE event_id = ?`,
           )
           .bind(copy, e.id),
       );
@@ -145,7 +145,7 @@ async function collectPlanned(db: D1Database, people: Map<string, string[]>, due
       .bind(e.id)
       .all<{ role: "in"; item_id: string | null; text: string | null; item: string | null }>();
     const names = new Map(lines.flatMap((l) => (l.item_id && l.item ? [[l.item_id, l.item] as const] : [])));
-    const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
+    const title = eventTitle({ name: e.name, lines: lines.map((l) => ({ ...l, group: l.role, id: "", position: 0, amount: null, unit: null, price: null, expires: null, owner: null })) }, kind, (id) => names.get(id));
     const wanted = new Set([e.created_by, e.paid_by, e.to_person, ...(e.split ?? []).map((s) => s.person_id)].filter((x): x is string => Boolean(x)));
     const touched = (await touchedLists(db, [e.id])).get(e.id) ?? [];
     for (const person of wanted) {

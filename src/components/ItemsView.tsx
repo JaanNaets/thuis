@@ -9,7 +9,7 @@ import { formatFieldValue, rangeStatus, refLists, type ChecklistEntry, type Fiel
 import { canEdit, type List, type Role, type ItemRef, type ItemRow } from "../../shared/model";
 import { measureFor } from "../../shared/stock";
 import { formatAmount } from "../../shared/units";
-import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, viewFields, type SavedView, type ViewDef } from "../../shared/views";
+import { canSum, EMPTY_VIEW, groupItems, kindOf, matchesView, NAME, orderItems, sumOf, TAGS, treeOrder, viewFields, type SavedView, type ViewDef } from "../../shared/views";
 import type { Person } from "../../shared/types";
 import { api, apiUrl, useApi } from "../api";
 import { formatNumber, today } from "../format";
@@ -234,10 +234,11 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
     </>
   );
   let index = 0;
-  const row = (t: (typeof shown)[number]) => (
+  const row = (t: (typeof shown)[number], depth = 0) => (
     <li key={t.id} style={stagger(index++)}>
       <ItemRowView
         item={t}
+        depth={depth}
         list={list}
         columns={columns}
         names={names}
@@ -357,7 +358,8 @@ export function ItemsView({ list, role, onChanged }: { list: List; role: Role; o
                     </li>,
                   ]
                 : []),
-              ...g.items.map((t) => row(t)),
+              // Delen onder hun item (Deel van), ingesprongen.
+              ...treeOrder(g.items).map(({ item, depth }) => row(item, depth)),
             ])}
             {summed.length > 0 && shown.length > 1 && (
               <li className="table-sum table-total">
@@ -491,10 +493,25 @@ function SortButton({ field, label, def, onSort }: { field: string; label: strin
 }
 
 /** Eén item als rij: foto of icoon, naam, de kolommen (op gsm in de grijze regel), en rechts de voorraad. */
-export function ItemRowView({ item, list, columns, names, stepper }: { item: ItemRow; list: Pick<List, "icon" | "one" | "id" | "color">; columns: FieldDef[]; names: Names; stepper?: ReactNode }) {
+export function ItemRowView({
+  item,
+  list,
+  columns,
+  names,
+  stepper,
+  depth = 0,
+}: {
+  item: ItemRow;
+  list: Pick<List, "icon" | "one" | "id" | "color">;
+  columns: FieldDef[];
+  names: Names;
+  stepper?: ReactNode;
+  /** Een deel van een item erboven (Deel van): hoe diep, om in te springen. */
+  depth?: number;
+}) {
   const meta = columns.map((c) => formatFieldValue(c, item.data[c.key], names)).filter(Boolean);
   return (
-    <div className="row">
+    <div className={`row${depth ? " is-part" : ""}`} style={depth ? ({ "--depth": Math.min(depth, 4) } as CSSProperties) : undefined}>
       <Link to={`/items/${item.id}`} className="row-link">
         <span className="cell-main">
           {item.photo_version ? (

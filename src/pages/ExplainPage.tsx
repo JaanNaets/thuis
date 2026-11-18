@@ -17,7 +17,7 @@ const PARTS: { title: string; topics: Topic[] }[] = [
         title: "Een lijst bewaart items met dezelfde kolommen",
         points: [
           "Kolommen zijn tekst, getallen, datums, keuzes, personen, verwijzingen naar items in een andere lijst of een berekening.",
-          "Een item is zelf geen lijst. Hoort iets bij iets anders (een filiaal bij een winkel), dan zet je dat met een verwijzing of met Deel van.",
+          "Een item is zelf geen lijst. Hoort iets bij iets anders (een filiaal bij een winkel), dan maak je het een deel ervan: op de fiche van de winkel bij Delen → Toevoegen. In de lijst staat het dan ingesprongen eronder.",
           "Tags groeperen lijsten en formulieren; een lijst kan meer tags hebben. Een tag toont al de items van haar lijsten samen.",
           "Een lijst is een tabel: filteren (ook op een periode, zoals vorige maand of de laatste 7 dagen), sorteren op meer kolommen, kolommen tonen of verbergen, groeperen, als agenda, en dat bewaren als weergave.",
         ],
@@ -35,7 +35,7 @@ const PARTS: { title: string; topics: Topic[] }[] = [
       {
         title: "Een formulier kiest items uit lijsten en vult hun kolommen in",
         points: [
-          "Per lijst kies je: een bestaand item kiezen of telkens een nieuwe rij maken, en één item of meerdere.",
+          "Per lijst kies je: een bestaand item kiezen of telkens een nieuwe rij maken, en één item of meerdere. Zoveel lijsten als je wil, ook dezelfde lijst twee keer (een wagen en een aanhangwagen).",
           "Elke kolom koppel je aan een veld, de datum, hoeveel, de prijs, het bedrag of een vaste waarde: Zet op, of bij een getal Tel bij of Tel af. Een kolom zonder koppeling verschijnt niet.",
           "Eén veld kan kolommen in meer lijsten tegelijk invullen.",
           "Kies je bij het loggen een item, dan begint zo'n veld met wat het item nu heeft.",

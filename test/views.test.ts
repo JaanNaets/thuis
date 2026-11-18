@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { FieldDef } from "../shared/fields.ts";
-import { canSum, cleanView, conditionText, groupItems, matchesView, orderItems, periodRange, periodText, sortItems, sumOf, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
+import { canSum, cleanView, conditionText, groupItems, matchesView, orderItems, periodRange, periodText, sortItems, sumOf, treeOrder, viewFields, weekday, weekOfMonth, type ViewDef } from "../shared/views.ts";
 
 const names = { person: (id: string) => ({ a: "Jaan", b: "Ana" })[id] ?? "?", item: (id: string) => ({ c: "Colruyt", d: "Aldi" })[id] ?? "?" };
 const ctx = { today: "2026-10-30", me: "a", names };
@@ -193,5 +193,27 @@ test("optellen en volgorde", () => {
   assert.deepEqual(
     orderItems(items, { match: "all", conditions: [], sort: [{ field: "bedrag", dir: "desc" }] }, fields, names).map((i) => i.name),
     ["Huur", "Cinema", "Brood", "Melk"],
+  );
+});
+
+test("delen onder hun item: in de volgorde van de lijst, ingesprongen, ook dieper; zonder hun item gewoon op hun plaats", () => {
+  const t = (id: string, part_of: string | null = null) => ({ id, part_of });
+  const rows = [t("aldi"), t("colruyt-geel", "colruyt"), t("colruyt"), t("kassa", "colruyt-herentals"), t("colruyt-herentals", "colruyt"), t("pedaal", "fiets")];
+  assert.deepEqual(
+    treeOrder(rows).map((r) => [r.item.id, r.depth]),
+    [
+      ["aldi", 0],
+      ["colruyt", 0],
+      ["colruyt-geel", 1],
+      ["colruyt-herentals", 1],
+      ["kassa", 2],
+      // De fiets staat in een andere lijst (of is weggefilterd).
+      ["pedaal", 0],
+    ],
+  );
+  // Een kring breekt af in plaats van te blijven lopen.
+  assert.deepEqual(
+    treeOrder([t("a", "b"), t("b", "a")]).map((r) => r.item.id),
+    ["a", "b"],
   );
 });

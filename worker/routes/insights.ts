@@ -9,7 +9,7 @@ import { cleanViewBlock, evaluateView, LIST_KEY, MAX_SHIFT, sourceFields, viewSp
 import { computeLocal } from "../../shared/calc";
 import { canAgenda, occurrences } from "../../shared/agenda";
 import type { Attributes, FieldDef } from "../../shared/fields";
-import { eatenRoles, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
+import { eatenGroups, foodPerPerson, formEats, hasKcal, isFood, type FoodEvent, type Nutrition } from "../../shared/food";
 import { buildLinks, formNode, linkProblems, type BoardUse, type LineItem, type LinkForm, type LinkKindDef, type LinkPersonView, type LineStat, type LinksResponse, type LogStat, type MirrorUse } from "../../shared/links";
 import { settleUp } from "../../shared/ledger";
 import { LOG_KEYS, logItem } from "../../shared/logview";
@@ -130,7 +130,7 @@ async function foodPeriod(db: D1Database, seen: Seen, lists: string[] | null, fr
   for (const e of page.events) {
     const kind = kinds.get(e.kind);
     if (!kind) continue;
-    const eaten = eatenRoles(kind);
+    const eaten = eatenGroups(kind);
     const fe: FoodEvent = {
       eats: formEats(kind),
       status: e.status,
@@ -138,7 +138,7 @@ async function foodPeriod(db: D1Database, seen: Seen, lists: string[] | null, fr
       created_by: e.created_by,
       fields: kind.fields,
       data: e.data,
-      lines: e.lines.filter((l) => eaten.includes(l.role)).map((l) => ({ amount: l.amount, unit: l.unit, item: l.item_id ? (items.get(l.item_id) ?? null) : null })),
+      lines: e.lines.filter((l) => eaten.includes(l.group)).map((l) => ({ amount: l.amount, unit: l.unit, item: l.item_id ? (items.get(l.item_id) ?? null) : null })),
     };
     if (!isFood(fe)) continue;
     food.add(e.id);

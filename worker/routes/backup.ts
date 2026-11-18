@@ -54,6 +54,7 @@ backup.get("/backup", async (c) => {
   for (const l of lines.results) {
     const line: BackupLine = {
       role: l.role as BackupLine["role"],
+      grp: (l.grp as string | null) || (l.role as string),
       item_id: (l.item_id as string | null) ?? null,
       text: (l.text as string | null) ?? null,
       amount: (l.amount as number | null) ?? null,
@@ -257,8 +258,8 @@ backup.post("/restore", async (c) => {
     e.lines.forEach((l, i) =>
       st.push(
         db
-          .prepare("INSERT INTO lines (id, event_id, position, role, item_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(crypto.randomUUID(), e.id, i, l.role, l.item_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
+          .prepare("INSERT INTO lines (id, event_id, position, role, grp, item_id, text, amount, unit, price, expires, owner) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(crypto.randomUUID(), e.id, i, l.role, l.grp || l.role, l.item_id, l.text, l.amount, l.unit, l.price, l.expires, l.owner),
       ),
     );
   }

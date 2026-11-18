@@ -1272,6 +1272,22 @@ dialog.sheet.menu-sheet {
   padding-left: 18px;
 }
 
+/* Een deel van een item erboven (Deel van, ItemsView): ingesprongen per niveau, met een hoekje ervoor. */
+.row.is-part .cell-main {
+  padding-left: calc((var(--depth) - 1) * 22px);
+}
+
+.row.is-part .cell-main::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 14px;
+  margin: -14px -2px 0 6px;
+  border-bottom: 1.5px solid var(--faint);
+  border-left: 1.5px solid var(--faint);
+  border-bottom-left-radius: 5px;
+}
+
 .rows > li + li {
   border-top: 1px solid var(--divider);
 }

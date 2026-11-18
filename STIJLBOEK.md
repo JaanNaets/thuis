@@ -833,7 +833,10 @@ in het logformulier, het palet en een actie op een bord (de schakelaar Gepland v
 **Items** (`ItemsView`): bovenaan zoeken, ⋯ (weergaven en CSV), de bewaarde weergaven als filterpillen ("Alles",
 "Van mij"), Filters en per veld met `filter` een `FilterSelect`. Op gsm rijen (`ItemRowView`: icoon of foto, naam, de
 kolommen als grijze meta), op tablet een tabel (`card table`, `--cols`; kolommen = velden met `column`, of die van de
-weergave; de cellen van de rij-link staan in de kolommen). Met een datumveld kan een weergave een agenda zijn.
+weergave; de cellen van de rij-link staan in de kolommen). Met een datumveld kan een weergave een agenda zijn. Een
+**deel** van een item in dezelfde lijst (Deel van) staat meteen onder zijn item, ingesprongen per niveau met een grijs
+hoekje ervoor (`.row.is-part`, `--depth`, `treeOrder`); ook gesorteerd, gegroepeerd of gefilterd, en zonder zijn item
+erbij gewoon op zijn plaats.
 
 **Logboek** (`EventLog`, `LogList`, `EventRow` in `Log.tsx`; van een lijst of een formulier): per dag (Vandaag,
 Gisteren, "4 nov 2026") rijen met het icoon van het formulier in de toon van zijn vertrekpunt (`BASE_TONES`), de titel
@@ -854,16 +857,18 @@ tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen
 - **Lijsten** (`FormLists`): je vormt het formulier vanuit de lijsten. "+ Lijst" (een keuzelijst op haar eigen breedte,
   `.map-add`) zet een lijst erbij als groep lijnen; per groep een wit kaartje zoals een lijn (`.line-row`, bovenaan
   `.line-main.is-plain`: de naam van de groep, standaard hoe één item heet, met ×), eronder **Rol** (Waarover, Wat
-  erbij komt, Wat eraf gaat, Waar of bij wie; elke rol één keer), **Item** (`Segmented`: Bestaand of Nieuwe rij, enkel
-  met één lijst), **Aantal** (Eén of Meerdere; een nieuwe rij is er altijd één) en **Ook uit** (nog een lijst in
-  dezelfde groep: een fles uit Wijnen of de Gedeelde wijnkelder); die vier zijn `.line-field.is-double`. Daaronder
+  erbij komt, Wat eraf gaat, Waar of bij wie; meer groepen mogen dezelfde rol hebben, ook uit dezelfde lijst: Wagen én
+  Bestuurder), **Item** (`Segmented`: Bestaand of Nieuwe rij, met minstens één lijst), **Aantal** (Eén of Meerdere;
+  niet bij een nieuwe rij die haar naam uit een veld haalt: die is er één) en **Ook uit** (nog een lijst in dezelfde
+  groep: een fles uit Wijnen of de Gedeelde wijnkelder; een nieuwe rij komt dan in de lijst die je per lijn kiest);
+  die vier zijn `.line-field.is-double`. Daaronder
   (`.map-list`, met een haarlijn) per lijst haar naam (`.map-head`) en **al haar kolommen** (`.map-row`): de naam en
   waarmee het formulier ze invult: — (de kolom verschijnt niet), een veld van het formulier (enkel van dezelfde soort,
   tekst bij tekst), **+ Nieuw veld** (een veld dat de kolom overneemt: naam, soort, eenheid, keuzes), De datum, Hoeveel,
   De prijs, Het bedrag of Een vaste waarde (dan met een invulvak); bij een getal ernaast **Zet op**, **Tel bij** of
   **Tel af** (`.map-how`). Een gekoppelde kolom staat zwart, de rest grijs. Eén veld kan zo kolommen in meer lijsten
-  tegelijk invullen (de Score van de Wijn én van de Proeverij). Een nieuwe rij heeft bovenaan **Naam** (— : je typt ze
-  bij de groep; of een tekstveld van het formulier). De **Voorraad** van elke lijst in de groep staat boven de lijsten
+  tegelijk invullen (de Score van de Wijn én van de Proeverij). Een nieuwe rij in één lijst heeft bovenaan **Naam** (— :
+  je typt ze bij de groep; of een tekstveld van het formulier). De **Voorraad** van elke lijst in de groep staat boven de lijsten
   (niet bij Waar of bij wie). Op de gsm staat de naam van de kolom boven haar keuzes. Enkel lijsten waar je items mag
   aanpassen (`GET /me/columns`).
 - **Saldo** (`DoesEditor` met enkel de mensen): per handeling een kaartje met het saldo (een lijst met een saldo per
@@ -883,9 +888,9 @@ De lijnen staan per **groep van het formulier** (`shownGroups`): de naam van de 
 eronder haar lijnen en "+ Lijn" (bij een groep uit lijsten die één item hetzelfde noemen: "+ Ruimte", "+ Wijn"; bij een
 groep van één item enkel zolang er geen lijn is). Een nieuwe gebeurtenis begint met een lege lijn in de eerste groep en
 in elke groep van één item (`startLines`). Een **nieuwe rij** is een gewoon invulvak voor haar naam (geen items om te
-kiezen, geen Nieuw in); haalt ze haar naam uit een veld, dan staat de groep er niet (bewaren maakt de lijn,
-`namedLines`). Kies je een item, dan beginnen de velden waarmee het formulier zijn kolommen zet met wat het item nu heeft
-(enkel als ze nog leeg zijn). Een rol die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij. Elke lijn is een wit kaartje in
+kiezen, geen Nieuw in), met **In** eronder als de groep meer lijsten heeft; haalt ze haar naam uit een veld, dan staat
+de groep er niet (bewaren maakt de lijn, `namedLines`). Kies je een item, dan beginnen de velden waarmee het formulier zijn kolommen zet met wat het item nu heeft
+(enkel als ze nog leeg zijn). Een groep die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij (met de naam van haar rol). Elke lijn is een wit kaartje in
 de groep (`.line-row`): bovenaan met wat (`Combo` met `typeFirst`: de items pas als je typt, met hun lijst ernaast;
 uit de lijsten van de groep, met de lijst ernaast als het er meer zijn; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven
 (`.line-field`): Hoeveel en Eenheid als de lijn de voorraad verandert of het formulier ermee iets invult, Prijs bij geld,
@@ -1159,7 +1164,8 @@ je nog moet kopen) → `split split-main-first`: het logboek, in de zijkolom Wie
 **Item** (`/items/:id`): `PageHead` met een knop per formulier ([`LogButtons`](#loggen-logbuttons), dit item al
 ingevuld) en Bewerken → `split`: in de zijkolom de foto, de voorraad en de
 velden (`dl`), rechts de **Tijdlijn** (alles wat ermee gebeurde: wanneer, waar, erbij of eraf, prijs per eenheid;
-gaat een gebeurtenis enkel over dit item, dan haar bedrag), de delen, wat ernaar verwijst en bestanden → onderaan
+gaat een gebeurtenis enkel over dit item, dan haar bedrag), **Delen** (met Toevoegen als je mag wijzigen: een nieuw
+item in deze lijst dat er een deel van is, daarna terug naar dit item), wat ernaar verwijst en bestanden → onderaan
 Archiveren en Verwijderen.
 
 **Gebeurtenis** (`/gebeurtenissen/:id`): de velden (formulier, met een link, wanneer, bedrag, betaald door, gedeeld

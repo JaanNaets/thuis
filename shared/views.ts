@@ -474,6 +474,30 @@ const MONTHS = ["januari", "februari", "maart", "april", "mei", "juni", "juli", 
 export type Group<T> = { key: string; label: string; items: T[] };
 
 /**
+ * Delen onder hun item (Colruyt Herentals onder Colruyt, de pedalen onder de fiets): elk item met hoe diep het staat.
+ * De volgorde van `items` blijft (gesorteerd, gefilterd); een deel komt meteen na zijn item, in die volgorde. Staat
+ * het item waarvan het een deel is er niet tussen (een andere lijst, weggefilterd), dan staat het deel gewoon op zijn
+ * plaats. Een kring (die de server weigert) breekt af.
+ */
+export function treeOrder<T extends { id: string; part_of?: string | null }>(items: T[]): { item: T; depth: number }[] {
+  const here = new Set(items.map((t) => t.id));
+  const children = new Map<string, T[]>();
+  for (const t of items) if (t.part_of && t.part_of !== t.id && here.has(t.part_of)) children.set(t.part_of, [...(children.get(t.part_of) ?? []), t]);
+  const out: { item: T; depth: number }[] = [];
+  const placed = new Set<string>();
+  const place = (t: T, depth: number) => {
+    if (placed.has(t.id)) return;
+    placed.add(t.id);
+    out.push({ item: t, depth });
+    for (const c of children.get(t.id) ?? []) place(c, depth + 1);
+  };
+  for (const t of items) if (!t.part_of || !here.has(t.part_of) || t.part_of === t.id) place(t, 0);
+  // Wat in een kring zat (geen begin), op zijn plaats.
+  for (const t of items) place(t, 0);
+  return out;
+}
+
+/**
  * Items per groep, in een vaste volgorde: keuzes zoals ze ingesteld zijn, datums per maand (de nieuwste eerst), de rest
  * op naam; zonder waarde achteraan ("Zonder …"). Binnen een groep blijft de volgorde van `items`.
  */

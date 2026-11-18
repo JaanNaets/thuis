@@ -108,10 +108,23 @@ listItems.post("/:id/items", async (c) => {
   return c.json({ id }, 201);
 });
 
+/**
+ * Waarvan een item een deel is: een item dat je ziet, en geen kring (de fiets kan geen deel zijn van haar eigen pedaal,
+ * ook niet langs andere delen).
+ */
 async function checkPartOf(db: D1Database, seen: Map<string, Role>, partOf: string | null, self: string): Promise<string | null> {
   if (!partOf || partOf === self) return null;
   const row = await db.prepare("SELECT id, list_id FROM items WHERE id = ?").bind(partOf).first<{ id: string; list_id: string }>();
-  return row && seen.has(row.list_id) ? row.id : null;
+  if (!row || !seen.has(row.list_id)) return null;
+  const { results } = await db
+    .prepare(
+      `WITH RECURSIVE up(id, depth) AS (SELECT ?1, 0 UNION SELECT i.part_of, up.depth + 1 FROM items i JOIN up ON i.id = up.id WHERE i.part_of IS NOT NULL AND up.depth < 50)
+       SELECT id FROM up WHERE id = ?2 LIMIT 1`,
+    )
+    .bind(row.id, self)
+    .all<{ id: string }>();
+  if (results.length) throw new ValidationError("Dat item is zelf al een deel hiervan");
+  return row.id;
 }
 
 /** Items uit een tabel (zie src/pages/ImportPage.tsx): elke rij zoals een gewoon nieuw item; wat niet lukt, slaat over. */
@@ -451,7 +464,7 @@ items.post("/:id/count", async (c) => {
     db
       .prepare("INSERT INTO events (id, kind, base, name, status, at, data, created_by) VALUES (?, ?, 'meting', 'Telling', 'gebeurd', ?, '{}', ?)")
       .bind(eventId, ADJUST, brusselsNow(), me.id),
-    db.prepare("INSERT INTO lines (id, event_id, position, role, item_id, amount, unit) VALUES (?, ?, 0, 'voor', ?, ?, ?)").bind(crypto.randomUUID(), eventId, item.id, amount, unit),
+    db.prepare("INSERT INTO lines (id, event_id, position, role, grp, item_id, amount, unit) VALUES (?, ?, 0, 'voor', 'voor', ?, ?, ?)").bind(crypto.randomUUID(), eventId, item.id, amount, unit),
   ]);
   await rebuildEffects(db, [eventId]);
   return c.json({ id: eventId }, 201);

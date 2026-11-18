@@ -14,6 +14,8 @@ import { Icon } from "./Icon";
 export type LineDraft = {
   key: string;
   role: LineRole;
+  /** De groep van het formulier (haar `key`). */
+  group: string;
   item: ItemRef | null;
   text: string;
   newIn: string;
@@ -27,9 +29,10 @@ export type LineDraft = {
 };
 
 let counter = 0;
-export const emptyLine = (role: LineRole, item: ItemRef | null = null): LineDraft => ({
+export const emptyLine = (group: Pick<LineGroup, "key" | "role">, item: ItemRef | null = null): LineDraft => ({
   key: `l${++counter}`,
-  role,
+  role: group.role,
+  group: group.key,
   item,
   text: "",
   newIn: "",
@@ -50,6 +53,7 @@ export function buildLine(l: LineDraft): Record<string, unknown> | null | { erro
   if (price !== null && Number.isNaN(price)) return { error: `De prijs bij ${l.item?.name ?? l.text} klopt niet` };
   return {
     role: l.role,
+    group: l.group,
     ...(l.item
       ? { item_id: l.item.id }
       : l.newIn
@@ -70,6 +74,7 @@ export const renamed = (l: LineDraft): boolean => Boolean(l.ticket && fold(l.tic
 export function lineDraft(
   l: {
     role: LineRole;
+    group?: string | null;
     item_id: string | null;
     text: string | null;
     amount: number | null;
@@ -81,7 +86,7 @@ export function lineDraft(
   item: ItemRef | undefined,
 ): LineDraft {
   return {
-    ...emptyLine(l.role, l.item_id && item ? item : null),
+    ...emptyLine({ key: l.group || l.role, role: l.role }, l.item_id && item ? item : null),
     text: l.item_id ? "" : (l.text ?? ""),
     amount: l.amount !== null ? String(l.amount).replace(".", ",") : "",
     unit: l.unit ?? "",
@@ -92,19 +97,23 @@ export function lineDraft(
 }
 
 /**
- * De groepen om te tonen: die van het formulier, en een rol die een bewaarde lijn heeft maar het formulier niet. Een
- * nieuwe rij met haar naam uit een veld niet: die lijn maakt het bewaren (`namedLines`).
+ * De groepen om te tonen: die van het formulier, en de groep van een bewaarde lijn die het formulier niet meer heeft
+ * (met de naam van haar rol). Een nieuwe rij met haar naam uit een veld niet: die lijn maakt het bewaren (`namedLines`).
  */
-export function shownGroups(kind: Pick<KindInfo, "parts">, lines: Pick<LineDraft, "role">[]): LineGroup[] {
-  const extra = [...new Set(lines.map((l) => l.role))].filter((r) => !kind.parts.groups.some((g) => g.role === r));
-  return [...kind.parts.groups.filter((g) => !(g.fresh && g.name)), ...extra.map((r) => groupOf(kind, r))];
+export function shownGroups(kind: Pick<KindInfo, "parts">, lines: Pick<LineDraft, "role" | "group">[]): LineGroup[] {
+  const extra = new Map<string, LineGroup>();
+  for (const l of lines) if (!kind.parts.groups.some((g) => g.key === l.group) && !extra.has(l.group)) extra.set(l.group, groupOf(kind, l));
+  return [...kind.parts.groups.filter((g) => !(g.fresh && g.name)), ...extra.values()];
 }
 
-/** De lijnen waarmee een nieuwe gebeurtenis begint: één lege in de eerste groep en in elke groep van één item. */
-export function startLines(kind: Pick<KindInfo, "parts">, main: LineRole): LineDraft[] {
+/** Een lege lijn in een groep (een nieuwe rij staat meteen in de eerste lijst van de groep). */
+export const groupLine = (g: LineGroup): LineDraft => ({ ...emptyLine(g), newIn: g.fresh ? (g.lists[0] ?? "") : "" });
+
+/** De lijnen waarmee een nieuwe gebeurtenis begint: één lege in de eerste groep (`main`) en in elke groep van één item. */
+export function startLines(kind: Pick<KindInfo, "parts">, main: string): LineDraft[] {
   return shownGroups(kind, [])
-    .filter((g) => g.role === main || g.one)
-    .map((g) => ({ ...emptyLine(g.role), newIn: g.fresh ? g.lists[0] : "" }));
+    .filter((g) => g.key === main || g.one)
+    .map(groupLine);
 }
 
 /**
@@ -130,23 +139,23 @@ export function LinesEditor({
   /** Waar iets nieuws dat erbij komt standaard in komt (de lijst waar je vandaan kwam); leeg: enkel tekst. */
   defaultNew?: string;
   /** Een gekozen item (om velden in te vullen met wat het nu heeft). */
-  onPick?: (item: ItemRef, role: LineRole) => void;
+  onPick?: (item: ItemRef, group: LineGroup) => void;
 }) {
   const set = (key: string, patch: Partial<LineDraft>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const groups = shownGroups(kind, lines);
   return (
     <>
       {groups.map((g) => {
-        const own = lines.filter((l) => l.role === g.role);
-        const op = stockOp(kind.does, g.role);
+        const own = lines.filter((l) => l.group === g.key);
+        const op = stockOp(kind.does, g.key);
         // Hoeveel doet ertoe als de lijn de voorraad verandert of het formulier ermee iets invult.
-        const counted = op !== null || kind.does.some((h) => h.rows.from === "lines" && h.rows.role === g.role && h.value.from === "qty");
+        const counted = op !== null || kind.does.some((h) => h.rows.from === "lines" && h.rows.group === g.key && h.value.from === "qty");
         // Een groep uit bepaalde lijsten: iets nieuws komt in een van die lijsten (waar je vandaan kwam, anders de eerste
         // waarin je mag toevoegen); uit elke lijst: waar je vandaan kwam (een wijn in Wijnen).
         const into = g.lists.length ? targets.filter((t) => g.lists.includes(t.id)) : targets;
         const startIn = defaultNew && into.some((t) => t.id === defaultNew) ? defaultNew : g.lists.length ? (into[0]?.id ?? "") : "";
         return (
-          <div key={g.role} className="field">
+          <div key={g.key} className="field">
             <span className="label">{g.label}</span>
             {own.length > 0 && (
               <ul className="line-rows">
@@ -161,7 +170,7 @@ export function LinesEditor({
                     people={people}
                     targets={into}
                     startIn={startIn}
-                    onPick={(t) => onPick?.(t, g.role)}
+                    onPick={(t) => onPick?.(t, g)}
                     onChange={(p) => set(l.key, p)}
                     onRemove={() => onChange(lines.filter((x) => x.key !== l.key))}
                   />
@@ -170,12 +179,7 @@ export function LinesEditor({
             )}
             {/* Eén item of een nieuwe rij: geen tweede lijn. */}
             {!(g.one && own.length) && (
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                style={{ justifySelf: "start" }}
-                onClick={() => onChange([...lines, { ...emptyLine(g.role), newIn: g.fresh ? g.lists[0] : "" }])}
-              >
+              <button type="button" className="btn btn-outline btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange([...lines, groupLine(g)])}>
                 <Icon name="plus" size={15} /> {oneOf(into, g.lists) ?? "Lijn"}
               </button>
             )}
@@ -236,7 +240,7 @@ function LineRow({
             disabled={Boolean(line.item)}
             maxLength={120}
             placeholder="Typ een naam…"
-            onChange={(e) => onChange({ text: e.target.value, newIn: group.lists[0] })}
+            onChange={(e) => onChange({ text: e.target.value, newIn: line.newIn || group.lists[0] })}
           />
         ) : (
           <Combo
@@ -319,6 +323,19 @@ function LineRow({
             </label>
           )}
         </div>
+      )}
+      {/* Een nieuwe rij in een groep met meer lijsten: in welke. */}
+      {group.fresh && !line.item && targets.length > 1 && (
+        <label className="line-field">
+          <span>In</span>
+          <select aria-label={`${line.text || group.label}: in`} value={line.newIn} onChange={(e) => onChange({ newIn: e.target.value })}>
+            {targets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       {free && !group.fresh && (op === "bij" || op === "af" || group.lists.length > 0) && targets.length > 0 && (
         <label className="line-field">

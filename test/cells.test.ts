@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ADJUST_DOES, BALANCE, cleanDoes, effectsOf, foldCell, presetDoes, STOCK, touchesCell, type CellEntry, type Handeling, type ListColumns } from "../shared/cells.ts";
+import { ADJUST_DOES, BALANCE, cleanDoes, effectsOf, foldCell, presetDoes, readDoes, STOCK, touchesCell, type CellEntry, type Handeling, type ListColumns } from "../shared/cells.ts";
 import type { FieldDef } from "../shared/fields.ts";
 import { settleUp } from "../shared/ledger.ts";
 import { baseKind, kindInfo } from "../shared/model.ts";
@@ -21,7 +21,7 @@ const FORM: FieldDef[] = [
   { key: "kleur", label: "Kleur", type: "text" },
   { key: "lagen", label: "Lagen", type: "number" },
 ];
-const voor = { from: "lines", role: "voor" } as const;
+const voor = { from: "lines", group: "voor" } as const;
 const zetKleur: Handeling = { rows: voor, list: "huis", field: "kleur", op: "zet", value: { from: "field", key: "kleur" } };
 
 test("handelingen nakijken: enkel kolommen van lijsten waar je mag aanpassen, tellen enkel bij getallen", () => {
@@ -35,7 +35,7 @@ test("handelingen nakijken: enkel kolommen van lijsten waar je mag aanpassen, te
   assert.throws(() => cleanDoes([{ ...zetKleur, field: "geschilderd", value: { from: "field", key: "weg" } }], [HUIS], FORM), /veld van het formulier/);
   assert.throws(() => cleanDoes([{ ...zetKleur, field: "lagen", op: "bij", value: { from: "at" } }], [HUIS], FORM), /datum/);
   // De voorraad: van elke lijst (geen lijst), of van een lijst die telt.
-  const stock: Handeling = { rows: { from: "lines", role: "in" }, list: null, field: STOCK, op: "bij", value: { from: "qty" } };
+  const stock: Handeling = { rows: { from: "lines", group: "in" }, list: null, field: STOCK, op: "bij", value: { from: "qty" } };
   assert.deepEqual(cleanDoes([stock, { ...stock, list: "wijnen" }], [HUIS, WIJNEN], FORM), [stock, { ...stock, list: "wijnen" }]);
   assert.throws(() => cleanDoes([{ ...stock, list: "huis" }], [HUIS, WIJNEN], FORM), /voorraad/);
   // Een vaste waarde: een getal om te tellen, tekst enkel om te zetten.
@@ -43,12 +43,12 @@ test("handelingen nakijken: enkel kolommen van lijsten waar je mag aanpassen, te
   assert.throws(() => cleanDoes([{ ...zetKleur, field: "lagen", op: "bij", value: { from: "fixed", value: "twee" } }], [HUIS], FORM));
 });
 
-const event = (data: Record<string, unknown>, lines: { role: "in" | "uit" | "voor" | "bij"; item: string; list: string; amount?: number | null; unit?: string; price?: number }[], at = "2026-11-12", amount: number | null = null) => ({
+const event = (data: Record<string, unknown>, lines: { role: "in" | "uit" | "voor" | "bij"; group?: string; item: string; list: string; amount?: number | null; unit?: string; price?: number }[], at = "2026-11-12", amount: number | null = null) => ({
   list_id: "uitgaven",
   at,
   amount,
   data: data as never,
-  lines: lines.map((l) => ({ role: l.role, item_id: l.item, item_list: l.list, amount: l.amount ?? null, unit: l.unit ?? null, price: l.price ?? null, expires: null })),
+  lines: lines.map((l) => ({ role: l.role, group: l.group ?? l.role, item_id: l.item, item_list: l.list, amount: l.amount ?? null, unit: l.unit ?? null, price: l.price ?? null, expires: null })),
 });
 
 test("wat een gebeurtenis doet: Schilderwerk zet de kleur en de datum van elke ruimte in de lijn Voor", () => {
@@ -105,6 +105,27 @@ const entry = (at: string, op: CellEntry["op"], v: number | string | null, i = 0
   event_id: `e${at}${i}`,
 });
 
+test("groepen met een eigen sleutel: twee groepen met dezelfde rol vullen elk hun eigen items in", () => {
+  // Een Rit: de Wagen en de Bestuurder zijn allebei Waarover; de km-stand gaat enkel naar de wagen.
+  const wagens: ListColumns = { id: "wagens", name: "Wagens", stock: false, fields: [{ key: "km", label: "Km-stand", type: "number" }] };
+  const km: Handeling = { rows: { from: "lines", group: "wagen" }, list: "wagens", field: "km", op: "zet", value: { from: "field", key: "km" } };
+  const fields: FieldDef[] = [{ key: "km", label: "Km-stand", type: "number" }];
+  assert.deepEqual(cleanDoes([km], [wagens], fields), [km]);
+  const rit = event({ km: 52000 }, [
+    { role: "voor", group: "wagen", item: "fiat", list: "wagens" },
+    { role: "voor", group: "bestuurder", item: "bart", list: "wagens" },
+  ]);
+  assert.deepEqual(
+    effectsOf([km], rit).map((e) => [e.item_id, e.num]),
+    [["fiat", 52000]],
+  );
+  // Handelingen van vroeger wijzen met hun rol: die is de sleutel van de groep van vroeger.
+  const old = { ...km, rows: { from: "lines", role: "voor" } };
+  assert.deepEqual(cleanDoes([old], [wagens], fields)[0].rows, { from: "lines", group: "voor" });
+  assert.deepEqual(readDoes([old])[0].rows, { from: "lines", group: "voor" });
+  assert.deepEqual(readDoes([km]), [km]);
+});
+
 test("de waarde van een cel: de laatste Zet plus wat er daarna bij en af ging, in volgorde van de datum", () => {
   // In eender welke volgorde bewaard; wat er in het item stond, is het begin.
   const km = foldCell([entry("2026-11-03", "bij", 120), entry("2026-11-01", "zet", 52000), entry("2026-11-02", "bij", 80.5)], 50000);
@@ -147,7 +168,7 @@ test("geld als cellen: wie betaalde telt het bedrag bij, wie deelt zijn deel af,
     { amount: 4600, paid_by: "jaan", split: half },
     { amount: 2000, paid_by: "jana", split: half },
     { amount: 9900, paid_by: "jaan" },
-    { amount: 1000, paid_by: "jana", split: half, lines: [{ role: "in", item_id: null, item_list: null, amount: null, unit: null, price: 400, expires: null, owner: "jaan" }] },
+    { amount: 1000, paid_by: "jana", split: half, lines: [{ role: "in", group: "in", item_id: null, item_list: null, amount: null, unit: null, price: 400, expires: null, owner: "jaan" }] },
   ]);
   // Jaan: +4600 −2300 −1000 (deel) +9900 −9900 −400 −300 = 600; Jana: −2300 +2000 −1000 +1000 −300 = −600.
   assert.deepEqual([...net], [

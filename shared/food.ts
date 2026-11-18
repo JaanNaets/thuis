@@ -7,7 +7,7 @@
 
 import { stockOp, STOCK } from "./cells.ts";
 import type { Attributes, FieldDef, Share } from "./fields.ts";
-import type { KindInfo, LineRole, Status } from "./model.ts";
+import type { KindInfo, Status } from "./model.ts";
 import type { ProductKey } from "./product.ts";
 import { measureFor, type StockDef } from "./stock.ts";
 import { convert, converts, normalizeUnit } from "./units.ts";
@@ -58,7 +58,8 @@ export const formEats = (kind: Pick<KindInfo, "parts" | "does" | "fields">) =>
   !kind.parts.money && (hasKcal(kind.fields) || kind.does.some((h) => h.rows.from === "lines" && h.field === STOCK && h.op === "af"));
 
 /** De rollen van de lijnen die eraf gaan (wat gegeten werd). */
-export const eatenRoles = (kind: Pick<KindInfo, "does">): LineRole[] => (["in", "uit", "voor", "bij"] as const).filter((r) => stockOp(kind.does, r) === "af");
+export const eatenGroups = (kind: Pick<KindInfo, "does">): string[] =>
+  [...new Set(kind.does.flatMap((h) => (h.rows.from === "lines" ? [h.rows.group] : [])))].filter((g) => stockOp(kind.does, g) === "af");
 
 /** Is dit eten? Een formulier dat eet, met een veld voor kcal of dat iets gebruikte uit een lijst met kcal (geen pellets). */
 export const isFood = (e: Pick<FoodEvent, "eats" | "fields" | "lines">) => e.eats && (hasKcal(e.fields) || e.lines.some((l) => l.item !== null && hasKcal(l.item.fields)));

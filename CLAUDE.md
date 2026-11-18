@@ -39,10 +39,12 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   Instellen: `FormSettings`), loggen op `/loggen?formulier=…`; het menu heeft onder Formulieren je formulieren.
 - Een formulier is velden plus
   **onderdelen** (`parts`: `money` = bedrag, wie betaalde, verdeling en een prijs per lijn; `to` = naar iemand, een
-  overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen** met een naam en de
-  lijsten waaruit ze kiezen, `lists` (leeg: uit elke lijst; van vroeger één `list`): Wat, Waar, "Ruimte uit Huis", "Fles
-  uit Wijnen of de Gedeelde wijnkelder"; `one` = één item; `fresh` = elke keer een nieuwe rij in haar enige lijst, met
-  als naam het tekstveld `name` of wat je bij de groep typt, `namedLines`, `fitGroups`) plus **handelingen** (`does`,
+  overdracht; `duration` = een einde, een activiteit of timer; `groups` = zijn **groepen lijnen**, zoveel als je wil
+  (`MAX_GROUPS` is een vangnet), elk met een eigen sleutel (`key`; van vroeger de rol), een rol (meer groepen mogen
+  dezelfde hebben: Wagen én Bestuurder), een naam en de lijsten waaruit ze kiezen, `lists` (leeg: uit elke lijst; van
+  vroeger één `list`): Wat, Waar, "Ruimte uit Huis", "Fles uit Wijnen of de Gedeelde wijnkelder"; `one` = één item;
+  `fresh` = elke keer een nieuwe rij in een van haar lijsten (met meer lijsten kies je per lijn), met één lijst ook met
+  als naam het tekstveld `name`, `namedLines`, `fitGroups`) plus **handelingen** (`does`,
   zie Cellen). De bouwer (`FormLists`) vormt het formulier vanuit de lijsten: per lijst al haar kolommen, elk
   gekoppeld aan een veld (ook een nieuw dat de kolom overneemt; één veld kan kolommen in meer lijsten invullen), de
   datum, hoeveel, de prijs, het bedrag of een vaste waarde, met Zet op en bij een getal Tel bij of Tel af; het worden
@@ -54,7 +56,8 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   afvinken), `movesStock`, `formEats`, `stockOp`. Wat een formulier invult, zeggen zijn groepen en handelingen
   (`fillsLists`); kiezen gebeurt in `FormPicker`: de formulieren die de lijst invullen, de rest onder Ander formulier
   (`formsOf`). Twee formulieren voeg je samen in Instellen (`POST /forms/:id/merge`, `mergeKinds`: het logboek, de
-  mensen, de tags, de velden, groepen en handelingen komen bij het ene, het andere verdwijnt). **Lijnen** (`lines`) staan in de groep van hun rol
+  mensen, de tags, de velden, groepen en handelingen komen bij het ene, het andere verdwijnt). **Lijnen** (`lines`) staan in hun groep (`grp`, de
+  `key` van een groep; van vroeger leeg of de rol: `toLine`, `lineGroup`, `groupOf`) en hebben de rol van die groep
   (`in`, `uit`, `voor`, `bij`; `bij` = waar of bij wie, enkel met de hele gebeurtenis te zien), naar een item of als
   tekst, met hoeveel, eenheid, prijs, houdbaar tot en eventueel `owner` (enkel van die persoon); wat een lijn doet,
   zeggen de handelingen, niet haar rol. Een groep met lijsten kiest enkel daaruit (de server kijkt het na). Status:
@@ -67,6 +70,9 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   voorraad, saldo, voeding, datums; uitgerekend in `worker/routes/insights.ts`, `GET /insights/view`). Je borden staan
   met naam en icoon in het menu, in jouw volgorde (`placesOf`: `/` en `/bord/:id`; ⋯ → Volgorde); Alle lijsten staat niet
   tussen de borden maar bovenaan de lijsten (`LINKS_PLACE`: `/lijsten`, je lijsten en hun verbanden).
+- Een item is geen lijst. Een **deel** van een item (`items.part_of`, Deel van: Colruyt Herentals bij Colruyt, de
+  pedalen bij de fiets) staat in de tabel ingesprongen onder zijn item (`treeOrder` in `shared/views.ts`, getest), en
+  de fiche heeft Delen met Toevoegen (`?deel_van=`); de server weigert een kring.
 - Items houden bij het overzetten de id van hun oude item (foto's in R2: `items/{id}/photo`); een gebeurtenis
   gebruikt `events/{id}/photo` (`worker/media.ts`).
 
@@ -98,7 +104,8 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
 ### Wat afgeleid wordt (nooit bewaard)
 
 - **Cellen** (`shared/cells.ts`, `worker/cells.ts`, getest): een formulier zegt wat het doet met de kolommen van de
-  items in zijn lijnen (`kinds.does`, handelingen in "Wat het doet": welke lijn, welke kolom, **Zet op**, **Tel bij**
+  items in zijn lijnen (`kinds.does`, handelingen: welke groep lijnen (`rows.group`; van vroeger `rows.role`, bij het
+  lezen omgezet met `readDoes`), welke kolom, **Zet op**, **Tel bij**
   of **Tel af**, met een veld, de datum, het bedrag, hoeveel of de prijs, of een vaste waarde). Schilderwerk zet de
   Kleur van de Ruimte; een Tankbeurt zet de Km-stand. Wat een gebeurtenis zo doet, staat in `effects` (afgeleid: bij
   elk bewaren uitgerekend met `rebuildEffects`, opnieuw voor alle gebeurtenissen van een formulier dat verandert, en

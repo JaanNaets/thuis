@@ -41,7 +41,7 @@ export const EACH = "*";
  * Welke rijen een handeling raakt: de items van de lijnen met deze rol, of de rij van een persoon in een lijst met een
  * saldo per persoon: wie betaalde, wie deelt (elk met zijn deel) of naar wie het gaat.
  */
-export type Rows = { from: "lines"; role: LineRole } | { from: "payer" } | { from: "sharers" } | { from: "to" };
+export type Rows = { from: "lines"; group: string } | { from: "payer" } | { from: "sharers" } | { from: "to" };
 export type PersonRows = Exclude<Rows["from"], "lines">;
 export const PERSON_ROWS: Record<PersonRows, { label: string }> = {
   payer: { label: "Wie betaalde" },
@@ -107,10 +107,10 @@ export function cleanDoes(raw: unknown, lists: ListColumns[], fields: FieldDef[]
   return raw.map((r) => {
     const o = (r ?? {}) as Record<string, unknown>;
     const from = ((o.rows ?? {}) as Record<string, unknown>).from;
-    const role = ((o.rows ?? {}) as Record<string, unknown>).role;
+    const group = groupOfRows(o.rows);
     const person = isPersonRows(from);
-    if (!person && !(from === "lines" && ROLES.includes(role as LineRole))) throw new Error("Kies welke items het formulier aanpast");
-    const rows: Rows = person ? { from } : { from: "lines", role: role as LineRole };
+    if (!person && !(from === "lines" && group)) throw new Error("Kies welke items het formulier aanpast");
+    const rows: Rows = person ? { from } : { from: "lines", group: group! };
     if (!isOp(o.op)) throw new Error("Kies wat het formulier doet");
     const field = typeof o.field === "string" ? o.field : "";
     let list: string | null = null;
@@ -178,7 +178,8 @@ function cleanValue(raw: unknown, fields: FieldDef[], op: Op): Value {
 export function presetDoes(base: string, ledger: string | null = null): Handeling[] {
   const qty: Value = { from: "qty" };
   const amount: Value = { from: "amount" };
-  const lines = (role: LineRole, op: Op): Handeling => ({ rows: { from: "lines", role }, list: null, field: STOCK, op, value: qty });
+  // De groepen van een vertrekpunt hebben hun rol als sleutel (BASES in shared/model.ts).
+  const lines = (group: LineRole, op: Op): Handeling => ({ rows: { from: "lines", group }, list: null, field: STOCK, op, value: qty });
   const money = (from: PersonRows, op: Op): Handeling[] => (ledger ? [{ rows: { from }, list: ledger, field: BALANCE, op, value: amount }] : []);
   switch (base) {
     case "aankoop":
@@ -202,21 +203,38 @@ export function presetDoes(base: string, ledger: string | null = null): Handelin
  */
 export const ADJUST = "aanpassing";
 export const ADJUST_DOES: Handeling[] = [
-  { rows: { from: "lines", role: "voor" }, list: null, field: EACH, op: "zet", value: { from: "field", key: EACH } },
-  { rows: { from: "lines", role: "voor" }, list: null, field: STOCK, op: "zet", value: { from: "qty" } },
+  { rows: { from: "lines", group: "voor" }, list: null, field: EACH, op: "zet", value: { from: "field", key: EACH } },
+  { rows: { from: "lines", group: "voor" }, list: null, field: STOCK, op: "zet", value: { from: "qty" } },
 ];
 
 /**
- * Raakt een lijn met deze rol een cel van een item in deze lijst? Dan moet wie bewaart die lijst mogen wijzigen.
+ * Raakt een lijn in deze groep een cel van een item in deze lijst? Dan moet wie bewaart die lijst mogen wijzigen.
  * `counts`: de lijst telt voorraad.
  */
-export function touchesCell(does: Handeling[], role: LineRole, list: string, counts: boolean): boolean {
-  return does.some((h) => h.rows.from === "lines" && h.rows.role === role && (h.field === STOCK ? counts && (!h.list || h.list === list) : h.list === list || h.field === EACH));
+export function touchesCell(does: Handeling[], group: string, list: string, counts: boolean): boolean {
+  return does.some((h) => h.rows.from === "lines" && h.rows.group === group && (h.field === STOCK ? counts && (!h.list || h.list === list) : h.list === list || h.field === EACH));
 }
 
-/** Wat lijnen met deze rol met de voorraad van hun item doen (Tel bij, Tel af, Zet), of niets. */
-export const stockOp = (does: Handeling[], role: LineRole): Op | null =>
-  does.find((h) => h.rows.from === "lines" && h.rows.role === role && h.field === STOCK)?.op ?? null;
+/** Wat lijnen in deze groep met de voorraad van hun item doen (Tel bij, Tel af, Zet), of niets. */
+export const stockOp = (does: Handeling[], group: string): Op | null =>
+  does.find((h) => h.rows.from === "lines" && h.rows.group === group && h.field === STOCK)?.op ?? null;
+
+/** De groep waarnaar rijen van lijnen wijzen; van vroeger (`role`) de groep met die rol als sleutel. */
+function groupOfRows(raw: unknown): string | null {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  if (typeof r.group === "string" && KEY_RE.test(r.group)) return r.group;
+  return ROLES.includes(r.role as LineRole) ? (r.role as string) : null;
+}
+
+/** Bewaarde handelingen lezen: die van vroeger (rijen met een `role`) wijzen naar de groep met die rol als sleutel. */
+export function readDoes(raw: unknown): Handeling[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((h: Handeling & { rows: { role?: string } }) => {
+    if (h?.rows?.from !== "lines" || typeof h.rows.group === "string") return h;
+    const group = groupOfRows(h.rows);
+    return { ...h, rows: { from: "lines", group: group ?? "voor" } };
+  });
+}
 
 /** In welke lijsten een formulier een saldo bijhoudt (handelingen op personen). */
 export const ledgerLists = (does: Handeling[]): string[] => [...new Set(does.flatMap((h) => (h.rows.from !== "lines" && h.list ? [h.list] : [])))];
@@ -239,6 +257,8 @@ export type Effect = {
 
 export type EffectLine = {
   role: LineRole;
+  /** De groep van de lijn (van vroeger: haar rol). */
+  group: string;
   item_id: string | null;
   /** De lijst van het item. */
   item_list: string | null;
@@ -303,9 +323,9 @@ export function effectsOf(does: Handeling[], e: EffectEvent, ledgers: Map<string
       }
       continue;
     }
-    const role = h.rows.role;
+    const group = h.rows.group;
     for (const l of e.lines) {
-      if (l.role !== role || !l.item_id) continue;
+      if (l.group !== group || !l.item_id) continue;
       if (h.list && l.item_list !== h.list) continue;
       if (h.field === EACH) {
         for (const [key, v] of Object.entries(e.data)) {

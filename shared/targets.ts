@@ -122,7 +122,7 @@ export const movesStock = (k: Pick<KindInfo, "does">) => k.does.some((h) => h.ro
 
 /** Vult dit formulier de lijst in: uitdrukkelijk (een groep of handeling uit die lijst), of telt het in haar voorraad? */
 export const fillsList = (k: Pick<KindInfo, "parts" | "does">, list: Pick<TargetList, "id" | "stock">) =>
-  fillsLists(k).includes(list.id) || (list.stock && movesStock(k) && k.parts.groups.some((g) => !g.lists.length && k.does.some((h) => h.rows.from === "lines" && h.rows.role === g.role && h.field === STOCK && !h.list)));
+  fillsLists(k).includes(list.id) || (list.stock && movesStock(k) && k.parts.groups.some((g) => !g.lists.length && k.does.some((h) => h.rows.from === "lines" && h.rows.group === g.key && h.field === STOCK && !h.list)));
 
 /**
  * Waarmee je logt bij een lijst of een item ervan: de formulieren die die lijst uitdrukkelijk invullen (Schilderwerk bij

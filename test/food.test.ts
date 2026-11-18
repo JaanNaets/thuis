@@ -60,9 +60,9 @@ test("eten is een gebruik met kcal (in de soort of in het item), geen pellets", 
 
 test("een formulier eet: zonder geld, en het trekt af van de voorraad of heeft kcal", async () => {
   const { baseKind } = await import("../shared/model.ts");
-  const { formEats, eatenRoles } = await import("../shared/food.ts");
+  const { formEats, eatenGroups } = await import("../shared/food.ts");
   assert.equal(formEats(baseKind("gebruik")), true);
-  assert.deepEqual(eatenRoles(baseKind("gebruik")), ["uit"]);
+  assert.deepEqual(eatenGroups(baseKind("gebruik")), ["uit"]);
   assert.equal(formEats(baseKind("aankoop")), false);
   assert.equal(formEats({ ...baseKind("meting"), fields: [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }] }), true);
   assert.equal(formEats({ ...baseKind("aankoop"), fields: [{ key: "kcal", label: "Kcal", type: "number", product: "kcal" }] }), false);

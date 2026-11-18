@@ -10,7 +10,7 @@ import { stockLevel } from "../shared/stock";
 import { ids, parseJson, toKind, type KindRowDb } from "./access";
 
 /** Verhoog dit als wat een gebeurtenis doet anders uitgerekend wordt: dan bouwt de Worker alles opnieuw op. */
-export const EFFECTS_VERSION = "2";
+export const EFFECTS_VERSION = "3";
 const CHUNK = 40;
 
 async function kindsById(db: D1Database, kindIds: string[]): Promise<Map<string, KindInfo>> {
@@ -75,7 +75,7 @@ export async function rebuildEffects(db: D1Database, eventIds: string[]): Promis
         .bind(ids(chunk)),
       db
         .prepare(
-          `SELECT l.event_id, l.role, l.item_id, t.list_id AS item_list, l.amount, l.unit, l.price, l.expires, l.owner
+          `SELECT l.event_id, l.role, COALESCE(l.grp, l.role) AS "group", l.item_id, t.list_id AS item_list, l.amount, l.unit, l.price, l.expires, l.owner
            FROM lines l LEFT JOIN items t ON t.id = l.item_id WHERE l.event_id IN (SELECT value FROM json_each(?)) ORDER BY l.position`,
         )
         .bind(ids(chunk)),
@@ -254,7 +254,7 @@ export function adjustStatements(db: D1Database, meId: string, itemId: string, f
     db
       .prepare("INSERT INTO events (id, kind, base, name, status, at, data, created_by) VALUES (?, ?, ?, ?, 'gebeurd', ?, ?, ?)")
       .bind(eventId, ADJUST_KIND.id, ADJUST_KIND.base, name, brusselsNow(), JSON.stringify(data), meId),
-    db.prepare("INSERT INTO lines (id, event_id, position, role, item_id) VALUES (?, ?, 0, 'voor', ?)").bind(crypto.randomUUID(), eventId, itemId),
+    db.prepare("INSERT INTO lines (id, event_id, position, role, grp, item_id) VALUES (?, ?, 0, 'voor', 'voor', ?)").bind(crypto.randomUUID(), eventId, itemId),
   ];
   return { statements, eventId };
 }

@@ -1,13 +1,13 @@
 // De lijsten van een formulier en wat het met hun kolommen doet (zie STIJLBOEK.md → Wat een formulier doet). Per groep
-// lijnen een kaartje: de naam, de rol, of je een bestaand item kiest of een nieuwe rij maakt, één of meerdere, en per
-// lijst al haar kolommen. Elke kolom koppel je aan een veld van het formulier (een bestaand of een nieuw, dat de kolom
+// lijnen (zoveel als je wil, ook met dezelfde rol of uit dezelfde lijst) een kaartje: de naam, de rol, of je een
+// bestaand item kiest of een nieuwe rij maakt, één of meerdere, en per lijst al haar kolommen. Elke kolom koppel je aan een veld van het formulier (een bestaand of een nieuw, dat de kolom
 // overneemt), de datum, hoeveel, de prijs, het bedrag of een vaste waarde: Zet op, en bij een getal ook Tel bij of
 // Tel af. Een kolom zonder koppeling verschijnt niet. Eén veld kan zo kolommen in meer lijsten tegelijk invullen. Het
 // blijven gewone groepen (`parts.groups`) en handelingen (`does`, shared/cells.ts).
 
 import { COUNTABLE, OPS, STOCK, type Handeling, type ListColumns, type Op, type Value } from "../../shared/cells";
 import { FIELD_TYPES, type FieldDef } from "../../shared/fields";
-import type { LineGroup, LineRole, Parts } from "../../shared/model";
+import { MAX_GROUPS, type LineGroup, type LineRole, type Parts } from "../../shared/model";
 import { Segmented } from "./Controls";
 import { newDoes, type DoesDraft } from "./Does";
 import type { FieldDraft } from "./Fields";
@@ -50,8 +50,15 @@ export function fieldFrom(col: Pick<Column, "label" | "type" | "unit" | "options
 }
 
 /** Is een handeling er een van deze groep (haar lijnen), op deze kolom? */
-const on = (h: Handeling, role: LineRole, list: string | null, field: string) =>
-  h.rows.from === "lines" && h.rows.role === role && h.list === list && h.field === field;
+const on = (h: Handeling, group: string, list: string | null, field: string) =>
+  h.rows.from === "lines" && h.rows.group === group && h.list === list && h.field === field;
+const inGroup = (h: Handeling, group: string) => h.rows.from === "lines" && h.rows.group === group;
+/** Een nieuwe sleutel voor een groep: willekeurig, zodat lijnen van een weggehaalde groep nooit bij een nieuwe komen. */
+const newKey = (groups: LineGroup[]): string => {
+  let key = "";
+  while (!key || groups.some((g) => g.key === key)) key = `g${Math.random().toString(36).slice(2, 8)}`;
+  return key;
+};
 
 export function FormLists({
   parts,
@@ -72,7 +79,6 @@ export function FormLists({
   columns: ListColumns[];
 }) {
   const groups = parts.groups;
-  const free = ROLE_ORDER.filter((r) => !groups.some((g) => g.role === r));
   const listOf = (id: string) => columns.find((l) => l.id === id);
   const setGroups = (next: LineGroup[]) => onParts({ ...parts, groups: next });
   const setGroup = (i: number, patch: Partial<LineGroup>) =>
@@ -80,44 +86,30 @@ export function FormLists({
       groups.map((g, k) => {
         if (k !== i) return g;
         const n = { ...g, ...patch };
-        // Een nieuwe rij kan enkel in één lijst, en is altijd één item.
-        const fresh = n.fresh && n.lists.length === 1;
+        // Een nieuwe rij heeft minstens één lijst; haar naam uit een veld enkel met één lijst, en dan is ze één item.
+        const fresh = n.fresh && n.lists.length > 0;
+        const named = fresh && n.lists.length === 1 && n.name;
         const { fresh: _f, name: _n, one: _o, ...rest } = n;
-        return {
-          ...rest,
-          ...(fresh
-            ? {
-                fresh: true as const,
-                one: true as const,
-                ...(n.name ? { name: n.name } : {}),
-              }
-            : n.one
-              ? { one: true as const }
-              : {}),
-        };
+        return { ...rest, ...(fresh ? { fresh: true as const } : {}), ...(named ? { name: n.name } : {}), ...(named || n.one ? { one: true as const } : {}) };
       }),
     );
 
   function add(id: string) {
-    const role = free[0];
-    if (!role) return;
+    if (groups.length >= MAX_GROUPS) return;
+    // Een rol die het formulier nog niet heeft, anders Waarover; je kiest ze erna zelf.
+    const role = ROLE_ORDER.find((r) => !groups.some((g) => g.role === r)) ?? "voor";
     const l = id === "*" ? undefined : listOf(id);
-    setGroups([...groups, { role, label: l ? (l.one ?? l.name) : "", lists: l ? [l.id] : [] }]);
+    setGroups([...groups, { key: newKey(groups), role, label: l ? (l.one ?? l.name) : "", lists: l ? [l.id] : [] }]);
   }
   function remove(i: number) {
     const g = groups[i];
     setGroups(groups.filter((_, k) => k !== i));
-    onDoes(does.filter((h) => !(h.rows.from === "lines" && h.rows.role === g.role)));
-  }
-  function role(i: number, r: LineRole) {
-    const old = groups[i].role;
-    setGroup(i, { role: r });
-    onDoes(does.map((h) => (h.rows.from === "lines" && h.rows.role === old ? { ...h, rows: { from: "lines", role: r } } : h)));
+    onDoes(does.filter((h) => !inGroup(h, g.key)));
   }
   function dropList(i: number, id: string) {
     const g = groups[i];
     setGroup(i, { lists: g.lists.filter((l) => l !== id) });
-    onDoes(does.filter((h) => !(h.rows.from === "lines" && h.rows.role === g.role && h.list === id)));
+    onDoes(does.filter((h) => !(inGroup(h, g.key) && h.list === id)));
   }
 
   /** De naam van de nieuwe rij uit een nieuw tekstveld (dat heet zoals één item van de lijst). */
@@ -129,8 +121,8 @@ export function FormLists({
 
   /** Een kolom koppelen (`value`), loskoppelen (null) of aan een nieuw veld dat de kolom overneemt ("new"). */
   function map(g: LineGroup, list: string | null, field: string, type: ColType, next: { op: Op; value: Value } | null | "new", col?: Column) {
-    const rest = does.filter((h) => !on(h, g.role, list, field));
-    const had = does.find((h) => on(h, g.role, list, field));
+    const rest = does.filter((h) => !on(h, g.key, list, field));
+    const had = does.find((h) => on(h, g.key, list, field));
     if (next === null) return onDoes(rest);
     let choice = next;
     if (choice === "new") {
@@ -140,7 +132,7 @@ export function FormLists({
       choice = { op: had?.op ?? "zet", value: { from: "field", key: f.key } };
     }
     const h: Handeling = {
-      rows: { from: "lines", role: g.role },
+      rows: { from: "lines", group: g.key },
       list,
       field,
       op: countable(type) ? choice.op : "zet",
@@ -157,16 +149,15 @@ export function FormLists({
         <ul className="line-rows">
           {groups.map((g, i) => {
             // De lijsten van de groep; uit elke lijst: die waarvan het formulier al een kolom invult.
-            const shown = g.lists.length
-              ? g.lists
-              : [...new Set(does.filter((h) => h.rows.from === "lines" && h.rows.role === g.role && h.list && h.field !== STOCK).map((h) => h.list!))];
+            const shown = g.lists.length ? g.lists : [...new Set(does.filter((h) => inGroup(h, g.key) && h.list && h.field !== STOCK).map((h) => h.list!))];
             // De voorraad van elke lijst: niet bij Waar of bij wie (een winkel telt geen voorraad), tenzij ze al ingevuld is.
-            const stocked = (g.role !== "bij" && (!g.lists.length || g.lists.some((l) => listOf(l)?.stock))) || does.some((h) => on(h, g.role, null, STOCK));
+            const stocked = (g.role !== "bij" && (!g.lists.length || g.lists.some((l) => listOf(l)?.stock))) || does.some((h) => on(h, g.key, null, STOCK));
             const fresh = Boolean(g.fresh);
             const others = columns.filter((l) => !g.lists.includes(l.id));
+            const named = fresh && g.lists.length === 1;
             const title = g.label || "Groep";
             return (
-              <li key={g.role} className="line-row">
+              <li key={g.key} className="line-row">
                 <div className="line-main is-plain">
                   <input
                     aria-label="Naam van de groep"
@@ -182,15 +173,15 @@ export function FormLists({
                 <div className="line-details">
                   <label className="line-field is-double">
                     <span>Rol</span>
-                    <select aria-label={`${title}: rol`} value={g.role} onChange={(e) => role(i, e.target.value as LineRole)}>
-                      {ROLE_ORDER.filter((r) => r === g.role || free.includes(r)).map((r) => (
+                    <select aria-label={`${title}: rol`} value={g.role} onChange={(e) => setGroup(i, { role: e.target.value as LineRole })}>
+                      {ROLE_ORDER.map((r) => (
                         <option key={r} value={r}>
                           {ROLE_CHOICES[r]}
                         </option>
                       ))}
                     </select>
                   </label>
-                  {g.lists.length === 1 && (
+                  {g.lists.length > 0 && (
                     <div className="line-field is-double">
                       <span>Item</span>
                       <Segmented
@@ -208,7 +199,7 @@ export function FormLists({
                       />
                     </div>
                   )}
-                  {!fresh && (
+                  {!(named && g.name) && (
                     <div className="line-field is-double">
                       <span>Aantal</span>
                       <Segmented
@@ -222,7 +213,7 @@ export function FormLists({
                       />
                     </div>
                   )}
-                  {!fresh && others.length > 0 && (
+                  {others.length > 0 && (
                     <label className="line-field is-double">
                       <span>{g.lists.length ? "Ook uit" : "Enkel uit"}</span>
                       <select
@@ -247,7 +238,7 @@ export function FormLists({
                       <MapRow
                         label="Voorraad"
                         type="stock"
-                        h={does.find((h) => on(h, g.role, null, STOCK))}
+                        h={does.find((h) => on(h, g.key, null, STOCK))}
                         fields={fields}
                         money={parts.money}
                         start={stockStart(g.role)}
@@ -281,24 +272,24 @@ export function FormLists({
                         )}
                       </div>
                       <ul className="map-rows">
-                        {fresh && <NameRow g={g} fields={fields} onName={(name) => setGroup(i, { name })} onNew={() => newName(i, l)} />}
+                        {named && <NameRow g={g} fields={fields} onName={(name) => setGroup(i, { name })} onNew={() => newName(i, l)} />}
                         {cols.map((c) => (
                           <MapRow
                             key={c.key}
                             label={c.label}
                             type={c.type}
                             col={c}
-                            h={does.find((h) => on(h, g.role, id, c.key))}
+                            h={does.find((h) => on(h, g.key, id, c.key))}
                             fields={fields}
                             money={parts.money}
                             onChange={(n) => map(g, id, c.key, c.type, n, c)}
                           />
                         ))}
-                        {does.some((h) => on(h, g.role, id, STOCK)) && (
+                        {does.some((h) => on(h, g.key, id, STOCK)) && (
                           <MapRow
                             label="Voorraad"
                             type="stock"
-                            h={does.find((h) => on(h, g.role, id, STOCK))}
+                            h={does.find((h) => on(h, g.key, id, STOCK))}
                             fields={fields}
                             money={parts.money}
                             start={stockStart(g.role)}
@@ -314,17 +305,15 @@ export function FormLists({
           })}
         </ul>
       )}
-      {free.length > 0 && (
+      {groups.length < MAX_GROUPS && (
         <select aria-label="Lijst toevoegen" className="map-add" value="" onChange={(e) => e.target.value && add(e.target.value)}>
           <option value="">+ Lijst</option>
-          {columns
-            .filter((l) => !groups.some((g) => g.lists.length === 1 && g.lists[0] === l.id))
-            .map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          {!groups.some((g) => !g.lists.length) && <option value="*">Elke lijst</option>}
+          {columns.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+          <option value="*">Elke lijst</option>
         </select>
       )}
     </div>

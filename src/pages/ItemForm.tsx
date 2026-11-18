@@ -72,7 +72,9 @@ function ItemForm({ detail, item, locked }: { detail: ListDetail; item: Item | n
     if (!item && field && day && list.fields.some((f) => f.key === field && f.type === "date")) data[field] = day;
     return attributesDraft(list.fields, data);
   });
-  const [partOf, setPartOf] = useState<string | null>(item?.part_of ?? null);
+  // Toevoegen vanop de Delen van een item (`?deel_van=`): het nieuwe item is er een deel van.
+  const partParent = item ? null : params.get("deel_van");
+  const [partOf, setPartOf] = useState<string | null>(item?.part_of ?? partParent);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string>();
   // Gekoppeld: wat uit de bron komt, toon je enkel (de server houdt het zo).
@@ -183,8 +185,8 @@ function ItemForm({ detail, item, locked }: { detail: ListDetail; item: Item | n
           setSource(null);
           setName("");
           setDraft(attributesDraft(list.fields, {}));
-          setPartOf(null);
-        } else navigate(`/items/${id}`, { replace: true });
+          setPartOf(partParent);
+        } else navigate(`/items/${partParent ?? id}`, { replace: true });
       }
     } catch (err) {
       if (!item && isOffline(err)) {
