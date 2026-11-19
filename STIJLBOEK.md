@@ -859,7 +859,8 @@ tags; Opslaan; onderaan Archiveren en Verwijderen (met zijn logboek). Er is geen
   `.line-main.is-plain`: de naam van de groep, standaard hoe één item heet, met ×), eronder **Rol** (Waarover, Wat
   erbij komt, Wat eraf gaat, Waar of bij wie; meer groepen mogen dezelfde rol hebben, ook uit dezelfde lijst: Wagen én
   Bestuurder), **Item** (`Segmented`: Bestaand of Nieuwe rij, met minstens één lijst), **Aantal** (Eén of Meerdere;
-  niet bij een nieuwe rij die haar naam uit een veld haalt: die is er één) en **Ook uit** (nog een lijst in dezelfde
+  niet bij een nieuwe rij die haar naam uit een veld haalt: die is er één, en heeft **Bij het loggen** Aan of Uit:
+  zo begint haar schakelaar) en **Ook uit** (nog een lijst in dezelfde
   groep: een fles uit Wijnen of de Gedeelde wijnkelder; een nieuwe rij komt dan in de lijst die je per lijn kiest);
   die vier zijn `.line-field.is-double`. Daaronder
   (`.map-list`, met een haarlijn) per lijst haar naam (`.map-head`) en **al haar kolommen** (`.map-row`): de naam en
@@ -889,7 +890,9 @@ eronder haar lijnen en "+ Lijn" (bij een groep uit lijsten die één item hetzel
 groep van één item enkel zolang er geen lijn is). Een nieuwe gebeurtenis begint met een lege lijn in de eerste groep en
 in elke groep van één item (`startLines`). Een **nieuwe rij** is een gewoon invulvak voor haar naam (geen items om te
 kiezen, geen Nieuw in), met **In** eronder als de groep meer lijsten heeft; haalt ze haar naam uit een veld, dan staat
-de groep er niet (bewaren maakt de lijn, `namedLines`). Kies je een item, dan beginnen de velden waarmee het formulier zijn kolommen zet met wat het item nu heeft
+de groep er als **schakelaar** met haar naam ("In Wijnkelder (Jaan)", `.switch-list` boven de lijnen; aan of uit zoals
+het formulier zegt, `off`) en maakt bewaren de lijn voor elke schakelaar die aan staat (`namedLines`). Staan ze allemaal
+uit en is er geen andere lijn, dan zegt het formulier "Zet minstens één lijst aan". Kies je een item, dan beginnen de velden waarmee het formulier zijn kolommen zet met wat het item nu heeft
 (enkel als ze nog leeg zijn). Een groep die een bewaarde lijn heeft maar het formulier niet meer, staat er als eigen groep bij (met de naam van haar rol). Elke lijn is een wit kaartje in
 de groep (`.line-row`): bovenaan met wat (`Combo` met `typeFirst`: de items pas als je typt, met hun lijst ernaast;
 uit de lijsten van de groep, met de lijst ernaast als het er meer zijn; of laat tekst staan) met × om weg te halen; eronder elk veld met zijn naam erboven

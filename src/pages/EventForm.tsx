@@ -4,7 +4,7 @@ import { FIELD_TYPES, type Attributes, type FieldDef, type Interval } from "../.
 import { defaultSharers } from "../../shared/ledger";
 import { stockOp } from "../../shared/cells";
 import { formEats } from "../../shared/food";
-import { brusselsNow, fillsLists, mainGroup, namedLines, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineGroup, type Status, type ItemRef } from "../../shared/model";
+import { brusselsNow, fillsLists, mainGroup, namedGroups, namedLines, startsPlanned, type EventView, type FormDetail, type KindInfo, type LineGroup, type Status, type ItemRef } from "../../shared/model";
 import { fold, readEvent, type ParsedEvent } from "../../shared/parse";
 import { formReads } from "../../shared/photoread";
 import { buysWith, hasPrice, receiptForms, type Targets } from "../../shared/targets";
@@ -177,6 +177,9 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
         )
       : startLines(kind, main),
   );
+  // Nieuwe rijen met hun naam uit een veld (Wijn toevoegen: in welke lijsten): welke staan aan. Begint zoals het formulier zegt.
+  const [namedOn, setNamedOn] = useState<string[]>(() => namedGroups(kind).filter((g) => !g.off).map((g) => g.key));
+  useEffect(() => setNamedOn(namedGroups(kind).filter((g) => !g.off).map((g) => g.key)), [kind.id]);
   const [repeat, setRepeat] = useState(() => {
     const r = event?.repeat?.every;
     return r ? (EVERY.find((e) => e.every?.n === r.n && e.every.unit === r.unit)?.value ?? "") : "";
@@ -441,7 +444,8 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
       if (b && "error" in b) return setProblem(b.error as string);
       if (b) builtLines.push(b);
     }
-    builtLines.push(...namedLines(kind, lines.filter((l) => l.item || l.text.trim()).map((l) => l.group), built.data));
+    builtLines.push(...namedLines(kind, lines.filter((l) => l.item || l.text.trim()).map((l) => l.group), built.data, event ? undefined : namedOn));
+    if (!event && namedGroups(kind).length && !builtLines.length) return setProblem("Zet minstens één lijst aan");
     const cents = amount.trim() ? parseEuro(amount) : null;
     if (cents !== null && Number.isNaN(cents)) return setProblem("Het bedrag klopt niet");
     const split = buildShares(shares);
@@ -644,6 +648,14 @@ function EventForm({ kinds, targets: logTargets, existing }: { kinds: KindInfo[]
 
       {(kind.parts.groups.length > 0 || lines.length > 0) && (
         <section className="card form-section">
+          {/* Een nieuwe rij met haar naam uit een veld: aan of uit (in welke lijsten het komt). */}
+          {!event && namedGroups(kind).length > 0 && (
+            <div className="switch-list">
+              {namedGroups(kind).map((g) => (
+                <Switch key={g.key} label={g.label} checked={namedOn.includes(g.key)} onChange={(on) => setNamedOn((cur) => (on ? [...cur, g.key] : cur.filter((k) => k !== g.key)))} />
+              ))}
+            </div>
+          )}
           <LinesEditor kind={kind} lines={lines} onChange={setLines} people={shareWith} targets={targets} defaultNew={newIn} onPick={pickItem} />
         </section>
       )}

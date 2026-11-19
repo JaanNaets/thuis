@@ -44,7 +44,7 @@ const PARTS: { title: string; topics: Topic[] }[] = [
       {
         title: "Een formulier kiest items uit lijsten en vult hun kolommen in",
         points: [
-          "Per lijst kies je: een bestaand item kiezen of telkens een nieuwe rij maken, en één item of meerdere. Zoveel lijsten als je wil, ook dezelfde lijst twee keer (een wagen en een aanhangwagen).",
+          "Per lijst kies je: een bestaand item kiezen of telkens een nieuwe rij maken, en één item of meerdere. Haalt een nieuwe rij haar naam uit een veld, dan zet je bij het loggen met een schakelaar aan in welke lijsten ze komt (een wijn in je eigen wijnkelder, de gedeelde of de voorraad). Zoveel lijsten als je wil, ook dezelfde lijst twee keer (een wagen en een aanhangwagen).",
           "Elke kolom koppel je aan een veld, de datum, hoeveel, de prijs, het bedrag of een vaste waarde: Zet op, of bij een getal Tel bij of Tel af. Een kolom zonder koppeling verschijnt niet.",
           "Eén veld kan kolommen in meer lijsten tegelijk invullen.",
           "Kies je bij het loggen een item, dan begint zo'n veld met wat het item nu heeft.",

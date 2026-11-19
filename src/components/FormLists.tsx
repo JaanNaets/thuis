@@ -95,8 +95,15 @@ export function FormLists({
         // Een nieuwe rij heeft minstens één lijst; haar naam uit een veld enkel met één lijst, en dan is ze één item.
         const fresh = n.fresh && n.lists.length > 0;
         const named = fresh && n.lists.length === 1 && n.name;
-        const { fresh: _f, name: _n, one: _o, ...rest } = n;
-        return { ...rest, ...(fresh ? { fresh: true as const } : {}), ...(named ? { name: n.name } : {}), ...(named || n.one ? { one: true as const } : {}) };
+        const { fresh: _f, name: _n, one: _o, off: _x, ...rest } = n;
+        return {
+          ...rest,
+          ...(fresh ? { fresh: true as const } : {}),
+          ...(named ? { name: n.name } : {}),
+          ...(named || n.one ? { one: true as const } : {}),
+          // Een rij met haar naam uit een veld is bij het loggen een schakelaar, die aan of uit begint.
+          ...(named && n.off ? { off: true as const } : {}),
+        };
       }),
     );
 
@@ -216,6 +223,20 @@ export function FormLists({
                           { value: "meer", label: "Meerdere" },
                         ]}
                         onChange={(v) => setGroup(i, { one: v === "een" ? true : undefined })}
+                      />
+                    </div>
+                  )}
+                  {named && g.name && (
+                    <div className="line-field is-double">
+                      <span>Bij het loggen</span>
+                      <Segmented
+                        label={`${title}: bij het loggen`}
+                        value={g.off ? "uit" : "aan"}
+                        options={[
+                          { value: "aan", label: "Aan" },
+                          { value: "uit", label: "Uit" },
+                        ]}
+                        onChange={(v) => setGroup(i, { off: v === "uit" ? true : undefined })}
                       />
                     </div>
                   )}

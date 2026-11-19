@@ -198,6 +198,31 @@ test("groepen: zoveel als je wil, ook met dezelfde rol; een nieuwe rij in een of
   ]);
   assert.deepEqual(namedLines(kind, ["proef"], { wijn: "Chablis" }), []);
   assert.deepEqual(namedLines(kind, [], { wijn: "  " }), []);
+  // Een nieuwe rij met haar naam uit een veld is bij het loggen een schakelaar: `off` begint uit, `on` zegt wat aan staat.
+  const three = cleanParts({
+    groups: [
+      { key: "eigen", role: "in", label: "In Wijnkelder (Jaan)", lists: ["eigen"], fresh: true, name: "wijn" },
+      { key: "samen", role: "in", label: "In Wijnkelder (samen)", lists: ["samen"], fresh: true, name: "wijn", off: true },
+      { key: "los", role: "in", label: "Los", lists: ["x", "y"], fresh: true, off: true },
+    ],
+  })!;
+  assert.deepEqual(
+    three.groups.map((g) => g.off ?? false),
+    [false, true, false],
+  );
+  const wines = { parts: three };
+  assert.deepEqual(
+    namedLines(wines, [], { wijn: "Chablis" }).map((l) => l.group),
+    ["eigen"],
+  );
+  assert.deepEqual(
+    namedLines(wines, [], { wijn: "Chablis" }, ["eigen", "samen"]).map((l) => [l.group, l.new_item.list_id]),
+    [
+      ["eigen", "eigen"],
+      ["samen", "samen"],
+    ],
+  );
+  assert.deepEqual(namedLines(wines, [], { wijn: "Chablis" }, []), []);
   // De groep van een lijn: met haar sleutel, of (van vroeger) haar rol.
   assert.equal(groupOf(kind, { group: "schilder", role: "voor" }).label, "Schilder");
   assert.equal(groupOf(kind, { role: "bij" }).label, "Bij");

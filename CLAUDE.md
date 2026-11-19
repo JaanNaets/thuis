@@ -47,7 +47,8 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   dezelfde hebben: Wagen én Bestuurder), een naam en de lijsten waaruit ze kiezen, `lists` (leeg: uit elke lijst; van
   vroeger één `list`): Wat, Waar, "Ruimte uit Huis", "Fles uit Wijnen of de Gedeelde wijnkelder"; `one` = één item;
   `fresh` = elke keer een nieuwe rij in een van haar lijsten (met meer lijsten kies je per lijn), met één lijst ook met
-  als naam het tekstveld `name`, `namedLines`, `fitGroups`) plus **handelingen** (`does`,
+  als naam het tekstveld `name`: dan is ze bij het loggen een schakelaar, `off` = die begint uit (Wijn toevoegen: in welke
+  wijnkelders en de voorraad), `namedGroups`, `namedLines`, `fitGroups`) plus **handelingen** (`does`,
   zie Cellen). De bouwer (`FormLists`) vormt het formulier vanuit de lijsten: per lijst al haar kolommen, elk
   gekoppeld aan een veld (ook een nieuw dat de kolom overneemt; één veld kan kolommen in meer lijsten invullen), de
   datum, hoeveel, de prijs, het bedrag of een vaste waarde, met Zet op en bij een getal Tel bij of Tel af; het worden
@@ -118,7 +119,8 @@ formulieren met een logboek, mensen per lijst en per formulier, tags om te groep
   het logboek invult en die je in het item aanpast, wordt een **Aanpassing** (`ADJUST`: een gebeurtenis die zet). Wie
   bewaart, moet de lijst van wat het formulier invult mogen wijzigen (`touchesCell`). **Een nieuwe plek die
   gebeurtenissen of lijnen schrijft, roept `rebuildEffects` op.**
-- **Voorraad** (`shared/stock.ts`, `stock` op een lijst): een cel (`STOCK`) zoals de andere: een aankoop telt bij,
+- **Voorraad** (`shared/stock.ts`, `stock` op een lijst, uitgerekend met de kolommen zoals het logboek ze invult: een
+  eenheid die een formulier zet, telt mee): een cel (`STOCK`) zoals de andere: een aankoop telt bij,
   gebruik telt af en een telling (een meting `voor` het item) zet (`presetDoes`), enkel `gebeurd`, omgerekend met
   `convert` (`shared/units.ts`: kg/g/l/ml/stuk, een verpakking). Bijna op onder het minimum; zonder minimum enkel in een
   lijst met een minimumveld en als er ooit iets was.

@@ -58,7 +58,7 @@ export const isLineRole = (v: unknown): v is LineRole => typeof v === "string" &
  * `fresh`: elke keer een nieuwe rij in een van haar lijsten in plaats van een bestaand item kiezen; met één lijst kan
  * haar naam uit het tekstveld `name` komen. `one`: hoogstens één item (een Ruimte, een wagen) in plaats van meerdere.
  */
-export type LineGroup = { key: string; role: LineRole; label: string; lists: string[]; fresh?: true; name?: string; one?: true };
+export type LineGroup = { key: string; role: LineRole; label: string; lists: string[]; fresh?: true; name?: string; one?: true; off?: true };
 /** Hoeveel groepen een formulier hoogstens heeft (een vangnet, geen ontwerpgrens). */
 export const MAX_GROUPS = 20;
 export const GROUP_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -100,11 +100,15 @@ export const BASES = {
 export type Base = keyof typeof BASES;
 export const isBase = (v: unknown): v is Base => typeof v === "string" && Object.hasOwn(BASES, v);
 
-/** Een nieuwe rij en haar naam rechtgezet: een nieuwe rij heeft minstens één lijst, een naam uit een veld enkel met één. */
-function fitGroup({ fresh, name, one, ...g }: LineGroup, text: (key: string | undefined) => boolean): LineGroup {
+/**
+ * Een nieuwe rij en haar naam rechtgezet: een nieuwe rij heeft minstens één lijst, een naam uit een veld enkel met één.
+ * Zo'n rij met haar naam uit een veld is bij het loggen een schakelaar; `off`: die begint uit (Wijn toevoegen: aan in
+ * je eigen wijnkelder, uit in de gedeelde en in de voorraad).
+ */
+function fitGroup({ fresh, name, one, off, ...g }: LineGroup, text: (key: string | undefined) => boolean): LineGroup {
   const isFresh = fresh === true && g.lists.length > 0;
   const named = isFresh && g.lists.length === 1 && text(name);
-  return { ...g, ...(isFresh ? { fresh: true as const } : {}), ...(named ? { name } : {}), ...(named || one ? { one: true as const } : {}) };
+  return { ...g, ...(isFresh ? { fresh: true as const } : {}), ...(named ? { name } : {}), ...(named || one ? { one: true as const } : {}), ...(named && off ? { off: true as const } : {}) };
 }
 
 /**
@@ -136,7 +140,16 @@ export function cleanParts(raw: unknown): Parts | null {
     const raw = Array.isArray(x.lists) ? x.lists : typeof x.list === "string" ? [x.list] : [];
     const lists = [...new Set(raw.filter((l): l is string => typeof l === "string" && /^[A-Za-z0-9-]{1,64}$/.test(l)))].slice(0, 20);
     const name = typeof x.name === "string" && GROUP_KEY.test(x.name) ? x.name : undefined;
-    const group: LineGroup = { key, role, label, lists, ...(x.fresh === true ? { fresh: true as const } : {}), ...(name ? { name } : {}), ...(x.one === true ? { one: true as const } : {}) };
+    const group: LineGroup = {
+      key,
+      role,
+      label,
+      lists,
+      ...(x.fresh === true ? { fresh: true as const } : {}),
+      ...(name ? { name } : {}),
+      ...(x.one === true ? { one: true as const } : {}),
+      ...(x.off === true ? { off: true as const } : {}),
+    };
     // De naam uit een veld kijkt fitGroups na (met de velden van het formulier); hier enkel of hij er kan staan.
     groups.push(fitGroup(group, () => true));
   }
@@ -265,13 +278,18 @@ export function fillsLists(kind: Pick<KindInfo, "parts" | "does">): string[] {
 /** De eerste groep lijnen van een formulier (waar een item komt als je logt vanaf dat item). */
 export const mainGroup = (kind: Pick<KindInfo, "parts">): LineGroup => kind.parts.groups[0] ?? baseGroup("voor", LINE_ROLES.voor.label);
 
+/** De groepen met een nieuwe rij die haar naam uit een veld haalt: bij het loggen een schakelaar. */
+export const namedGroups = (kind: Pick<KindInfo, "parts">): LineGroup[] => kind.parts.groups.filter((g) => g.fresh && g.name && g.lists.length === 1);
+
 /**
- * De lijnen van de nieuwe rijen die hun naam uit een veld halen (een Proeverij in Geproefd met de Wijn als naam): enkel
- * als het veld ingevuld is en de gebeurtenis nog geen lijn in die groep heeft (`taken`: de sleutels van de groepen).
+ * De lijnen van de nieuwe rijen die hun naam uit een veld halen (een wijn in je wijnkelder met de Wijn als naam): enkel
+ * als het veld ingevuld is, de schakelaar aan staat (`on`: de sleutels; zonder: wat niet `off` begint) en de gebeurtenis
+ * nog geen lijn in die groep heeft (`taken`: de sleutels van de groepen).
  */
-export function namedLines(kind: Pick<KindInfo, "parts">, taken: string[], data: Record<string, unknown>) {
-  return kind.parts.groups.flatMap((g) => {
-    const name = g.fresh && g.name && g.lists.length === 1 ? data[g.name] : null;
+export function namedLines(kind: Pick<KindInfo, "parts">, taken: string[], data: Record<string, unknown>, on?: string[]) {
+  return namedGroups(kind).flatMap((g) => {
+    const name = data[g.name!];
+    if (on ? !on.includes(g.key) : g.off) return [];
     if (typeof name !== "string" || !name.trim() || taken.includes(g.key)) return [];
     return [{ role: g.role, group: g.key, new_item: { list_id: g.lists[0], name: name.trim().slice(0, 120) }, amount: null, unit: null, price: null, expires: null, owner: null }];
   });

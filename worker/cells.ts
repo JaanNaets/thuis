@@ -174,19 +174,20 @@ export async function cellsOf(db: D1Database, list: Pick<List, "fields" | "stock
   }
   for (const row of rows) {
     const fields = byItem.get(row.id);
-    if (list.stock) {
-      const entries = fields?.get(STOCK) ?? [];
-      out.stock.set(row.id, stockLevel(list.stock, row.data, entries.map((e) => ({ at: e.at, created_at: e.created_at, position: e.position, op: e.op, amount: e.num, unit: e.unit, expires: e.expires }))));
-    }
-    if (!fields) continue;
     const values: Record<string, FieldValue | undefined> = {};
     const from: Record<string, string> = {};
-    for (const [key, entries] of fields) {
+    for (const [key, entries] of fields ?? []) {
       if (key === STOCK) continue;
       const cell = foldCell(entries, row.data[key]);
       values[key] = cell.value;
       if (cell.from) from[key] = cell.from;
     }
+    // De voorraad met de kolommen zoals het logboek ze invulde (een eenheid die een formulier zet, telt mee).
+    if (list.stock) {
+      const entries = fields?.get(STOCK) ?? [];
+      out.stock.set(row.id, stockLevel(list.stock, withValues(row.data, values), entries.map((e) => ({ at: e.at, created_at: e.created_at, position: e.position, op: e.op, amount: e.num, unit: e.unit, expires: e.expires }))));
+    }
+    if (!fields) continue;
     out.values.set(row.id, values);
     out.from.set(row.id, from);
   }
